@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-这个 Host 包持有当前 ManturHub 线上或测试部署，为每个已配置 origin 注册一个 `ctx.authorization` 设备码 flow，并把所有 `manturAccount.request()` 统一路由到已选部署。每个 origin 使用独立的 Host 凭据记录。生成的 `manturAccount` Remote 返回设备登录说明、账号邮箱、进度和本机退出能力，绝不返回 API Key 或环境配置。
+这个 Host 包把 ManturHub 请求路由到已选的线上或测试部署。`standalone` 身份拥有逐 origin 的凭据记录与设备码 flow；`desktop-managed` 身份委托 Electron Main，绝不读取这些记录。生成的 Remote 暴露身份模式与脱敏账号状态，不返回 API Key 或环境配置。
 
 ## 目录
 
@@ -26,9 +26,11 @@ kind: "package-reference"
 
 `environment` 默认为 `production`。`baseUrl` 默认为 `https://hub.mantur.ai`，用于命名线上 origin；`testBaseUrl` 用于命名可选测试 origin，选择 `test` 前必须先配置。两个值都必须是不含凭据、路径、查询或片段的 HTTP(S) origin，且测试 origin 必须与线上不同。维护者通过本机 `cordis.patch.yml` 的 `mantur-account` 条目选择环境；账号浏览器 Remote 无法读取或更改环境。变更后重启桌面应用会清空内存中的账号与广场状态。
 
-公共线上 origin 保留原凭据 key，因此现有线上登录仍然有效。其他线上或测试 origin 都使用由环境与 origin 共同区分的凭据 key。更换测试 URL 后会从未登录状态开始，不会把旧测试授权发送给新服务器。授权仍留在凭据提供方中，绝不应写入 patch 文件。
+`identity` 默认为 `standalone`。此模式下，公共线上 origin 保留原凭据 key，其他 origin 使用由环境与 origin 共同区分的 key。更换测试 URL 后会从未登录状态开始。授权保留在凭据提供方中，不写入 patch 文件。
 
-来自其他 origin 的验证地址会被拒绝。会话缺少 `interval` 或 `expires_in` 时使用 5 秒与 600 秒。`slow_down` 会给当前轮询间隔增加 5 秒；拒绝与过期会在不写入凭据的情况下结束本次尝试。
+`desktop-managed` 要求 Electron 父进程 IPC 通道，以及显式的 `native` 配置：`environmentLabel`、`requestTimeoutMs`、`maxResponseBytes`、`leaseMs` 与 `revocationRetryMs`。漫途桌面 profile 提供这些预算。provider 可用前，Main 会校验所选 origin。需要认证的 GET 会持有 broker scope，直到响应 EOF 或取消。命令环境租约只有在命令 consumer 确认整棵进程树清理后才能释放。连接销毁会中止 scope，并等待这些回执。Main 缺失或托管身份无效时明确失败，不查询独立凭据存储。原生账号操作属于受保护的 preload bridge，旧设备登录 Remote 会拒绝这些操作。
+
+独立设备登录会拒绝来自其他 origin 的验证地址。会话缺少 `interval` 或 `expires_in` 时使用 5 秒与 600 秒。`slow_down` 会给当前轮询间隔增加 5 秒；拒绝与过期会在不写入凭据的情况下结束本次尝试。
 
 <a id="model-experience"></a>
 ## 模型体验
@@ -51,8 +53,8 @@ kind: "package-reference"
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- 登录尝试只存在于当前进程中，Host 停止时会被取消。
-- 退出登录只删除本机授权；服务端撤销不在本 MVP 范围内。
+- 独立登录尝试只存在于当前进程中，独立退出登录仅删除本机授权。
+- 桌面传输已在源码中连接，但原生表单、真实 shell consumer 与打包 CLI 接入尚未完成。详见[原生账号提案](../../../.agents/notes/proposed/architecture/2026-09-07-desktop-native-account-identity.zh.md)。
 
 <a id="dev-note"></a>
 ### 开发备注

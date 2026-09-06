@@ -277,6 +277,10 @@ Requires: `authorization` · `credentials`
 ```ts config-catalog
 /** ManturHub deployment endpoint. */
 export interface Config {
+  /** Standalone credential storage or Electron Main ownership; no cross-mode credential lookup. */
+  readonly identity?: ManturIdentityMode
+  /** Explicit Main transport and command budgets, required for desktop-managed identity. */
+  readonly native?: Omit<NativeAccountConfiguration, 'origin' | 'environment'> | undefined
   /** Active ManturHub deployment; defaults to production. */
   readonly environment?: ManturEnvironment
   /** Production HTTP origin serving the ManturHub APIs. */
@@ -285,11 +289,32 @@ export interface Config {
   readonly testBaseUrl?: string
 }
 
+/** Explicit identity owner selected by the application profile, never an automatic fallback. */
+export type ManturIdentityMode = 'standalone' | 'desktop-managed'
+
+/** Profile-owned transport budgets sent to Main once, before account or command requests. */
+export interface NativeAccountConfiguration {
+  /** Canonical API origin selected by the machine-local profile. */
+  readonly origin: string
+  /** Named deployment owning this device grant. */
+  readonly environment: 'production' | 'test'
+  /** Human-readable deployment label included in each local broker descriptor. */
+  readonly environmentLabel: string
+  /** Complete network-operation and IPC-reply deadline in milliseconds. */
+  readonly requestTimeoutMs: number
+  /** Maximum buffered native-account protocol response bytes. */
+  readonly maxResponseBytes: number
+  /** Maximum command capability lifetime in milliseconds, capped by the original device expiry. */
+  readonly leaseMs: number
+  /** Interval between attempts to finish encrypted pending remote revocations. */
+  readonly revocationRetryMs: number
+}
+
 /** Named ManturHub deployment selected for every online Mantur request. */
 export type ManturEnvironment = 'production' | 'test'
 ```
 
-Source: [`packages/credentials/authorization-manturhub/src/index.ts:29`](../packages/credentials/authorization-manturhub/src/index.ts)
+Source: [`packages/credentials/authorization-manturhub/src/index.ts:31`](../packages/credentials/authorization-manturhub/src/index.ts)
 
 <a id="deepseek-aidsh-bash-local"></a>
 

@@ -1,0 +1,108 @@
+/** Frame-bound native account operations; renderer input cannot select a URL, secret store, command or IPC channel. */
+import type { BrowserWindow, IpcMain, IpcMainInvokeEvent } from 'electron'
+import { z } from 'zod'
+import { assertNever } from '@deepseek-ai/dsh-util-values'
+import { NativeAccountController, NativeAccountFailure, type NativeAccountSnapshot } from './controller.ts'
+import { NativeHttpFailure } from './http.ts'
+
+const action = z.discriminatedUnion('kind', [
+  z.strictObject({ kind: z.enum(['snapshot', 'refresh', 'browser', 'poll', 'skip', 'sign-out', 'retry-revocations']) }),
+  z.strictObject({ kind: z.literal('password'), email: z.email().max(320), password: z.string().min(1).max(1_024), consent: z.literal(true) }),
+  z.strictObject({ kind: z.literal('send-code'), email: z.email().max(320) }),
+  z.strictObject({ kind: z.literal('register'), email: z.email().max(320), password: z.string().min(1).max(1_024),
+    code: z.string().min(1).max(100), invite_code: z.string().min(1).max(128).optional() }),
+])
+
+/** Revisioned, secret-free account state and a fixed operation result. */
+export interface NativeAccountReply {
+  readonly ok: boolean
+  readonly revision: number
+  readonly snapshot?: NativeAccountSnapshot
+  readonly codeExpirySeconds?: number
+  readonly failure?: { readonly kind: string; readonly code?: string; readonly retryAfterMs?: number }
+}
+
+/** Electron Main owns both the active controller and the currently trusted local frame. */
+export interface NativeAccountBridgeOptions {
+  readonly ipc: IpcMain
+  readonly window: () => BrowserWindow | undefined
+  readonly origin: () => string | undefined
+  readonly controller: () => NativeAccountController | undefined
+}
+
+/**
+ * Install the narrow account command channel after Main creates its profile owner.
+ * @param options - Main-owned controller, local frame and IPC registration.
+ * @returns publication and disposal operations; disposal removes the command channel before closing its controller elsewhere.
+ */
+export function installNativeAccountBridge(options: NativeAccountBridgeOptions): { publish: () => void; dispose: () => void } {
+  let revision = 0
+  let disposed = false
+  const localWindow = (): BrowserWindow | undefined => {
+    const window = options.window()
+    const origin = options.origin()
+    if (disposed || window === undefined || origin === undefined
+      || window.isDestroyed() || window.webContents.isDestroyed()) return undefined
+    let actual: string
+    try { actual = new URL(window.webContents.mainFrame.url).origin } catch { return undefined }
+    return actual === origin ? window : undefined
+  }
+  const authorize = (event: IpcMainInvokeEvent): void => {
+    const window = localWindow()
+    if (window === undefined || event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame) {
+      throw new Error('Native account IPC is restricted to the current local main frame')
+    }
+  }
+  const invoke = async (event: IpcMainInvokeEvent, input: unknown): Promise<NativeAccountReply> => {
+    authorize(event)
+    const parsed = action.safeParse(input)
+    if (!parsed.success) return { ok: false, revision, failure: { kind: 'invalid-request' } }
+    const controller = options.controller()
+    if (controller === undefined) return { ok: false, revision, failure: { kind: 'unavailable' } }
+    let codeExpirySeconds: number | undefined
+    let failure: NativeAccountReply['failure']
+    const request = parsed.data
+    try {
+      switch (request.kind) {
+        case 'snapshot': break
+        case 'refresh': await controller.refresh(); break
+        case 'browser': await controller.startBrowser(); break
+        case 'poll': await controller.poll(); break
+        case 'skip': await controller.skip(); break
+        case 'sign-out': await controller.signOut(); break
+        case 'retry-revocations': await controller.retryRevocations(); break
+        case 'password': await controller.password({ email: request.email, password: request.password, consent: request.consent }); break
+        case 'send-code': codeExpirySeconds = (await controller.sendCode(request.email)).expiresInSec; break
+        case 'register': {
+          await controller.register({ email: request.email, password: request.password, code: request.code,
+            ...(request.invite_code === undefined ? {} : { invite_code: request.invite_code }) })
+          break
+        }
+        default: assertNever(request)
+      }
+    } catch (error) {
+      failure = error instanceof NativeHttpFailure
+        ? { kind: error.kind, ...(error.code === undefined ? {} : { code: error.code }),
+          ...(error.retryAfterMs === undefined ? {} : { retryAfterMs: error.retryAfterMs }) }
+        : { kind: error instanceof NativeAccountFailure ? error.kind : 'local' }
+    }
+    authorize(event)
+    if (controller !== options.controller()) return { ok: false, revision, failure: { kind: 'unavailable' } }
+    return { ok: failure === undefined, revision, snapshot: controller.getSnapshot(),
+      ...(codeExpirySeconds === undefined ? {} : { codeExpirySeconds }), ...(failure === undefined ? {} : { failure }) }
+  }
+  options.ipc.handle('mantur:account:invoke', invoke)
+  return {
+    publish: () => {
+      revision++
+      const window = localWindow()
+      const controller = options.controller()
+      if (window === undefined || controller === undefined) return
+      window.webContents.send('mantur:account:changed', { revision, snapshot: controller.getSnapshot() })
+    },
+    dispose: () => {
+      disposed = true
+      options.ipc.removeHandler('mantur:account:invoke')
+    },
+  }
+}

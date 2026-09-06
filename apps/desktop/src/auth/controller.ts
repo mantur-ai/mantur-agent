@@ -11,6 +11,8 @@ import { NativeAccountStore, type NativeRecord } from './store.ts'
 export interface NativeAccountSnapshot {
   readonly phase: 'idle' | 'signed-out' | 'authorizing' | 'signed-in' | 'pending-activation' | 'link-required' | 'failed'
   readonly busy: boolean
+  /** A locally active, unexpired grant; a recoverable offline check failure does not change this fact. */
+  readonly authenticated: boolean
   readonly skipped: boolean
   readonly pendingRevocations: number
   readonly account?: { readonly email: string; readonly expiresAt: number }
@@ -67,6 +69,7 @@ export class NativeAccountController {
     const attempt = current?.metadata.attempt
     return {
       phase: this.phase, busy: this.foreground !== undefined || this.cancellation !== undefined,
+      authenticated: current?.phase === 'active' && account !== undefined && account.expiresAt > this.options.now(),
       skipped: this.store.skipped(),
       pendingRevocations: records.filter(record => record.phase === 'pending-cancel' || record.phase === 'pending-revoke').length,
       ...(account === undefined ? {} : { account: { email: account.email, expiresAt: account.expiresAt } }),
@@ -203,7 +206,8 @@ export class NativeAccountController {
   }
 
   /** Run a Host-only credentialed operation through complete response-body cleanup. */
-  withCredential(signal: AbortSignal, consume: (secrets: NativeSecrets, lifetime: AbortSignal) => Promise<void>): Promise<void> {
+  withCredential(signal: AbortSignal,
+    consume: (secrets: NativeSecrets, lifetime: AbortSignal, expiresAt: number) => Promise<void>): Promise<void> {
     this.requireOpen()
     return this.access.withCredential(signal, consume)
   }

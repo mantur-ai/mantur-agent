@@ -1,7 +1,7 @@
 /** ManturHub device authorization and browser-safe account Remote. */
 
 import { createHash, randomUUID } from 'node:crypto'
-import { Context } from '@deepseek-ai/cordis'
+import { Context, Service } from '@deepseek-ai/cordis'
 import s from '@deepseek-ai/schemastery'
 import type { AuthorizationSession } from '@deepseek-ai/dsh-authorization'
 import { credentialKey, type CredentialKey, type CredentialRecord } from '@deepseek-ai/dsh-credentials'
@@ -12,10 +12,12 @@ import type {
   ManturAccount,
   ManturAccountStatus,
   ManturEnvironment,
+  ManturIdentityMode,
   ManturLoginAttemptId,
   ManturLoginProgress,
   ManturLoginStart,
 } from './types.ts'
+import { NativeAccountConnection, type NativeAccountConfiguration } from './native.ts'
 
 export type * from './types.ts'
 
@@ -27,6 +29,10 @@ export const MANTUR_PRODUCTION_BASE_URL = 'https://hub.mantur.ai'
 
 /** ManturHub deployment endpoint. */
 export interface Config {
+  /** Standalone credential storage or Electron Main ownership; no cross-mode credential lookup. */
+  readonly identity?: ManturIdentityMode
+  /** Explicit Main transport and command budgets, required for desktop-managed identity. */
+  readonly native?: Omit<NativeAccountConfiguration, 'origin' | 'environment'> | undefined
   /** Active ManturHub deployment; defaults to production. */
   readonly environment?: ManturEnvironment
   /** Production HTTP origin serving the ManturHub APIs. */
@@ -42,6 +48,7 @@ interface ResolvedEnvironment {
 }
 
 interface ResolvedConfig {
+  readonly native?: NativeAccountConfiguration
   readonly active: ResolvedEnvironment
   readonly production: ResolvedEnvironment
   readonly test?: ResolvedEnvironment
@@ -74,6 +81,11 @@ export interface ManturHubRequestOptions {
 
 const authorizationResponseLimitBytes = 64 * 1024
 const environments = ['production', 'test'] as const satisfies readonly ManturEnvironment[]
+const nativeConfigurationSchema = z.strictObject({
+  environmentLabel: z.string().min(1).max(80), requestTimeoutMs: z.number().int().min(1).max(2_147_483_647),
+  maxResponseBytes: z.number().int().positive(), leaseMs: z.number().int().positive(),
+  revocationRetryMs: z.number().int().min(1).max(2_147_483_647),
+})
 
 const deviceSessionSchema = z.object({
   device_code: z.string().min(1),
@@ -173,13 +185,16 @@ function resolveConfig(config: Config): ResolvedConfig {
   if (!environments.includes(environment)) {
     throw new TypeError('authorization-manturhub: environment must be "production" or "test"')
   }
+  const native = config.identity === 'desktop-managed' ? nativeConfigurationSchema.parse(config.native) : undefined
   if (environment === 'test') {
     if (test === undefined) {
       throw new TypeError('authorization-manturhub: testBaseUrl is required when environment is "test"')
     }
-    return { active: test, production, test }
+    return { active: test, production, test,
+      ...(native === undefined ? {} : { native: { ...native, origin: test.baseUrl.origin, environment } }) }
   }
-  return { active: production, production, ...(test === undefined ? {} : { test }) }
+  return { active: production, production, ...(test === undefined ? {} : { test }),
+    ...(native === undefined ? {} : { native: { ...native, origin: production.baseUrl.origin, environment } }) }
 }
 
 /**
@@ -265,12 +280,16 @@ export class ManturHubAuthorization extends TypertRemoteService {
   static inject = ['authorization', 'credentials']
 
   static Config: s<Config> = s.object({
+    identity: s.union(['standalone', 'desktop-managed']).default('standalone'),
+    native: s.union([s.const(undefined), s.object({ environmentLabel: s.string().required(), requestTimeoutMs: s.number().required(),
+      maxResponseBytes: s.number().required(), leaseMs: s.number().required(), revocationRetryMs: s.number().required() })]),
     environment: s.union(environments).default('production'),
     baseUrl: s.string().default(MANTUR_PRODUCTION_BASE_URL),
     testBaseUrl: s.string(),
   })
 
   private readonly config: ResolvedConfig
+  private native: NativeAccountConnection | undefined
   private currentAttempt: Attempt | undefined
   private lastAttempt: Attempt | undefined
 
@@ -281,6 +300,15 @@ export class ManturHubAuthorization extends TypertRemoteService {
   constructor(ctx: Context, config: Config = {}) {
     super(ctx, 'manturAccount', { namespace: 'manturAccount' })
     this.config = resolveConfig(config)
+    const native = this.config.native
+    if (native !== undefined) {
+      ctx.effect(() => {
+        const connection = new NativeAccountConnection(native)
+        this.native = connection
+        return () => connection.close()
+      }, 'authorization-manturhub: native Main connection')
+      return
+    }
     ctx.effect(() => {
       const deployments = [
         this.config.production,
@@ -305,6 +333,26 @@ export class ManturHubAuthorization extends TypertRemoteService {
     }, 'authorization-manturhub: cancel active attempt')
   }
 
+  protected async [Service.init](): Promise<void> {
+    if (this.config.native !== undefined) await this.nativeConnection().initialize()
+  }
+
+  /**
+   * Read the profile-selected identity owner without probing credentials or browser globals.
+   * @returns the configured identity mode.
+   */
+  @Remote
+  identityMode(): ManturIdentityMode { return this.config.native === undefined ? 'standalone' : 'desktop-managed' }
+
+  private nativeConnection(): NativeAccountConnection {
+    if (this.native === undefined) throw new Error('Native command preparation requires the configured Main connection')
+    return this.native
+  }
+
+  private requireStandalone(): void {
+    if (this.config.native !== undefined) throw new RemoteError('gateway/bad-request', 'Use the native account window for this desktop identity', {})
+  }
+
   /**
    * Send a Host-only GET to this account provider's configured deployment.
    *
@@ -323,6 +371,9 @@ export class ManturHubAuthorization extends TypertRemoteService {
     }
     const headers = new Headers(options.headers)
     if (options.authenticated) {
+      if (this.config.native !== undefined) {
+        return await this.nativeConnection().requestApi(pathname, headers, options.signal ?? new AbortController().signal)
+      }
       const grant = parseGrant(await this.ctx.credentials.readRecord(deployment.credential))
       if (grant === undefined) return undefined
       headers.set('x-api-key', grant.apiKey)
@@ -341,6 +392,12 @@ export class ManturHubAuthorization extends TypertRemoteService {
   @Remote
   async status(): Promise<ManturAccountStatus> {
     try {
+      if (this.config.native !== undefined) {
+        const snapshot = await this.nativeConnection().status()
+        if (!snapshot.authenticated) return { status: 'signed-out' }
+        if (snapshot.account === undefined) throw new Error('Native account metadata is missing')
+        return { status: 'signed-in', account: { email: snapshot.account.email } }
+      }
       const grant = parseGrant(await this.ctx.credentials.readRecord(this.config.active.credential))
       return grant === undefined
         ? { status: 'signed-out' }
@@ -356,6 +413,7 @@ export class ManturHubAuthorization extends TypertRemoteService {
    */
   @Remote
   async startLogin(): Promise<ManturLoginStart> {
+    this.requireStandalone()
     if (this.currentAttempt !== undefined) {
       throw new RemoteError('gateway/bad-request', 'a ManturHub login attempt is already running', {})
     }
@@ -406,6 +464,7 @@ export class ManturHubAuthorization extends TypertRemoteService {
    */
   @Remote
   loginProgress(attemptId: ManturLoginAttemptId): ManturLoginProgress {
+    this.requireStandalone()
     if (this.lastAttempt?.id !== attemptId) {
       throw new RemoteError('gateway/bad-request', 'unknown ManturHub login attempt', {})
     }
@@ -418,6 +477,7 @@ export class ManturHubAuthorization extends TypertRemoteService {
    */
   @Remote
   cancelLogin(attemptId: ManturLoginAttemptId): void {
+    this.requireStandalone()
     if (this.currentAttempt?.id !== attemptId) return
     this.ctx.authorization.cancel(this.currentAttempt.deployment.credential)
   }
@@ -425,6 +485,7 @@ export class ManturHubAuthorization extends TypertRemoteService {
   /** Remove the local ManturHub grant and cancel any unfinished login. */
   @Remote
   async signOut(): Promise<void> {
+    this.requireStandalone()
     const deployment = this.config.active
     if (this.currentAttempt !== undefined) this.ctx.authorization.cancel(this.currentAttempt.deployment.credential)
     try {

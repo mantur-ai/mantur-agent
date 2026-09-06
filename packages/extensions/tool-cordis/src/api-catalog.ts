@@ -1211,6 +1211,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Host service registering the ManturHub authorization flow and account Remote.',
     methods: [
       {
+        signature: '@Remote identityMode(): ManturIdentityMode',
+        description: 'Read the profile-selected identity owner without probing credentials or browser globals.',
+        parameters: [],
+        returns: 'the configured identity mode.',
+      },
+      {
         signature: 'async request(pathname: string, options: ManturHubRequestOptions): Promise<Response | undefined>',
         description: 'Send a Host-only GET to this account provider\'s configured deployment.\n\nThe method accepts only root-relative paths so a stored grant cannot be forwarded to another origin. It is intentionally not a browser Remote.',
         parameters: [{ name: 'pathname', description: 'root-relative ManturHub API path.' }, { name: 'options', description: 'authentication, headers, cancellation, and redirect policy.' }],
@@ -4442,6 +4448,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ManturHubRequestOptions',
     declaration: 'export interface ManturHubRequestOptions {\n    readonly authenticated: boolean;\n    readonly headers?: HeadersInit;\n    readonly signal?: AbortSignal;\n    readonly redirect?: RequestRedirect;\n}',
+  },
+  {
+    name: 'ManturIdentityMode',
+    declaration: 'export type ManturIdentityMode = \'standalone\' | \'desktop-managed\';',
   },
   {
     name: 'ManturLoginAttemptId',

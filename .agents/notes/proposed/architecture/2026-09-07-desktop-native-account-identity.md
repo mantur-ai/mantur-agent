@@ -18,7 +18,9 @@ Local logout disables the exact record and aborts its accepted requests before r
 
 ## Partial implementation
 
-The desktop [store](../../../../apps/desktop/src/auth/store.ts), [HTTP client](../../../../apps/desktop/src/auth/http.ts), [request ownership](../../../../apps/desktop/src/auth/access.ts) and [login controller](../../../../apps/desktop/src/auth/controller.ts) implement these internal operations. Electron Main, preload, the Mantur account provider, native UI and bundled CLI are not connected to these modules. Calling the controller's poll or revocation operation requires an explicit owner; the modules do not start background retry timers themselves.
+The desktop store, HTTP client, request owner and login controller implement provisioning and exact-grant cleanup. [Main](../../../../apps/desktop/src/auth/host.ts) configures them from the Mantur provider over child IPC, owns the revocation retry timer and exposes frame-bound preload operations. The [Host connection](../../../../packages/credentials/authorization-manturhub/src/native.ts) retains streaming responses through EOF or cancellation. Its disposal aborts command scopes but cannot send cleanup receipts on behalf of a command consumer. Main retains each private broker-v2 descriptor until that consumer releases it. The public snapshot reports a locally active, unexpired grant independently of an offline validation failure.
+
+Real loopback and child-IPC tests exercise these owners. Fixed, unpacked CLI tests cover balance, streaming, presigned upload and logout cancellation against the broker. Native forms, Bash/PowerShell/PTY consumers and packaged CLI invocation remain incomplete; these tests do not substitute for the real assembled entry or native OS acceptance.
 
 ## Alternatives considered
 
@@ -34,6 +36,6 @@ The actual Main/preload/provider/UI path must exercise login, Skip, registration
 
 ## Risks
 
-The controller relies on its Main caller to await complete response consumption and command cleanup. Poll and revoke scheduling, guarded IPC, real OS integration and native UI remain required; internal unit tests alone do not make this proposal available in the client.
+The controller relies on its Main caller to await complete response consumption and command cleanup. A disconnected child cannot attest that orphan descendants have stopped; shutdown must report that missing proof. Native UI polling, actual shell and PTY cleanup, packaging and OS integration remain required; internal tests alone do not make this proposal available in the client.
 
-The [existing account onboarding](../../implemented/feature/2026-09-03-mantur-account-onboarding.md), [environment isolation](../../implemented/architecture/2026-09-03-mantur-environment-isolation.md) and [bounded marketplace JSON reader](../../implemented/simplification/2026-09-03-share-manturhub-json-reader.md) retain their current consumers and rationale. This partial desktop implementation does not replace those paths or authorize a legacy-credential fallback.
+The [existing account onboarding](../../implemented/feature/2026-09-03-mantur-account-onboarding.md) retains its standalone consumers. [Environment isolation](../../implemented/architecture/2026-09-03-mantur-environment-isolation.md) and the [bounded marketplace JSON reader](../../implemented/simplification/2026-09-03-share-manturhub-json-reader.md) still apply. Desktop-managed identity replaces the desktop credential source explicitly; it never falls back to standalone credentials.

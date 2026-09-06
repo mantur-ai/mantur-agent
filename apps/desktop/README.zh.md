@@ -67,6 +67,8 @@ smoke 会从解包应用自己的依赖目录启动 `dsh`，把打印出的进�
 
 安装包携带既有运行时依赖闭包和已构建 Web 前端。Loader profile、插件 manifest、原生模块与 subprocess helper 都需要普通文件，因此 `asar` 保持禁用。关闭或重启应用时，Electron 会等待子进程终止后再退出。Electron 父进程通过 Node IPC 通道连接子进程；各功能模块负责校验自己的消息。
 
+Main 持有操作系统加密的原生账号存储，并校验来自当前本地主 frame 的账号操作。桌面启动显式选择漫途 provider 的 `desktop-managed` 身份。Host API 响应通过逐请求 loopback broker 流式传输，仅 Main 向上游发送设备 bearer。命令描述文件保持私有，直至 consumer 确认整棵进程树清理完成。退出登录会取消已接受的流与命令，但保留加密的远端清理记录，直到 HTTP 204 或原始到期时间。
+
 永久应用标识为 `ai.mantur.agent`。Electron 就绪前，载体会在操作系统的应用数据根目录下设置稳定的 `mantur-agent` 用户数据目录。其 `harness` 子目录是已安装应用使用的唯一 `DSH_HOME`，因此 `~/.dsh` 中的 CLI 或开发数据不会影响桌面启动。子进程从应用自有的中性目录启动，并把 stdout、stderr、恢复与 updater 诊断追加到同一用户数据根下的 `logs/harness.log`。
 
 如果启动错误只识别到过期的 `session_projcache` schema，载体会先关闭失败的子进程并完成日志写入，再由本地化原生对话框在用户明确同意后删除这份可丢弃的投影缓存并重试。它不会删除会话日志、设置、凭据、profile 或 workspace。其他启动错误只提供查看日志与退出，不猜测修复方式。
@@ -87,7 +89,7 @@ macOS Intel、macOS Apple Silicon 与 Windows 使用同一个更新控制器。m
 
 ## 已知限制
 
-- 内部[原生账号控制器](src/auth/controller.ts)尚未连接 Main、preload、账号界面与随附 CLI。其操作系统加密存储、冻结 HTTP 协议与请求清理测试不能证明原生登录已经可用；[接入提案](../../.agents/notes/proposed/architecture/2026-09-07-desktop-native-account-identity.zh.md)记录剩余验收条件。
+- 原生账号 Main、preload 与 provider 传输已在源码中连接。原生表单、Bash、PowerShell、PTY 命令 consumer 与打包 CLI 路径尚未完成。Loopback IPC 和固定 CLI 传输测试不能证明完整原生登录已可用；[接入提案](../../.agents/notes/proposed/architecture/2026-09-07-desktop-native-account-identity.zh.md)记录剩余验收条件。
 - `Desktop package` 产物仍是未签名的内部安装包。macOS Gatekeeper 与 Windows SmartScreen 可能对这些文件显示警告；对外分发 macOS 客户端时只能使用 `Desktop release` 产物。
 - 原生图标源文件是带白色圆角底和透明外角的 1024 px PNG，Web 客户端单独使用透明 Logo。macOS 和 Windows 包会在原生构建时生成各自的平台图标格式；当前没有矢量源文件。
 - 已签名的 release 工作流只发布 macOS。Windows 在具备代码签名身份与受保护的发布路径之前不支持外部更新。

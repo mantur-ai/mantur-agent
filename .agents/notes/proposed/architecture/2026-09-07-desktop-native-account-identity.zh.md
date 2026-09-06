@@ -18,7 +18,9 @@ Main 将提供原生密码登录、公共待激活注册，以及同源的系统
 
 ## 部分实现
 
-桌面端的[存储](../../../../apps/desktop/src/auth/store.ts)、[HTTP 客户端](../../../../apps/desktop/src/auth/http.ts)、[请求归属](../../../../apps/desktop/src/auth/access.ts)与[登录控制器](../../../../apps/desktop/src/auth/controller.ts)实现了这些内部操作。Electron Main、preload、漫途账号 provider、原生界面与随附 CLI 尚未连接这些模块。控制器的轮询和撤销操作需要明确的调用者；这些模块不自行启动后台重试定时器。
+桌面存储、HTTP 客户端、请求所有者与登录控制器实现了授权创建和精确凭据清理。[Main](../../../../apps/desktop/src/auth/host.ts)通过子进程 IPC 接收漫途 provider 配置，拥有撤销重试定时器，并暴露 frame 绑定的 preload 操作。[Host 连接](../../../../packages/credentials/authorization-manturhub/src/native.ts)持有流式响应直到 EOF 或取消。其销毁会中止命令 scope，但不能替命令 consumer 发出清理回执。Main 会保留每个私有 broker-v2 描述文件，直到该 consumer 释放。公开快照独立报告本地已激活且未过期的凭据，不把离线验证失败当成失效。
+
+真实 loopback 与子进程 IPC 测试覆盖这些所有者。固定解包 CLI 的测试通过 broker 覆盖余额、流式读取、预签名上传和退出登录取消。原生表单、Bash、PowerShell、PTY consumer 与打包 CLI 调用仍未完成；这些测试不能代替真实组装入口或原生操作系统验收。
 
 ## 考虑过的替代方案
 
@@ -34,6 +36,6 @@ Main 将提供原生密码登录、公共待激活注册，以及同源的系统
 
 ## 风险
 
-控制器依赖 Main 调用者等待完整响应读取与命令清理。轮询和撤销调度、受保护 IPC、真实操作系统接入与原生界面仍是必要条件；内部单元测试不足以证明客户端已可用。
+控制器依赖 Main 调用者等待完整响应读取与命令清理。失联的子进程无法证明孤立后代已停止，关闭必须报告缺少该证明。原生界面轮询、真实 shell 与 PTY 清理、打包和操作系统接入仍是必要条件；内部测试不足以证明客户端已可用。
 
-既有[账号引导](../../implemented/feature/2026-09-03-mantur-account-onboarding.zh.md)、[环境隔离](../../implemented/architecture/2026-09-03-mantur-environment-isolation.zh.md)与[有界广场 JSON 读取器](../../implemented/simplification/2026-09-03-share-manturhub-json-reader.zh.md)仍有各自的当前调用者与理由。这份部分桌面实现不替换这些路径，也不授权回退到旧凭据。
+既有[账号引导](../../implemented/feature/2026-09-03-mantur-account-onboarding.zh.md)保留独立客户端调用者。[环境隔离](../../implemented/architecture/2026-09-03-mantur-environment-isolation.zh.md)与[有界广场 JSON 读取器](../../implemented/simplification/2026-09-03-share-manturhub-json-reader.zh.md)仍然适用。桌面托管身份显式替换桌面凭据来源，绝不回退到独立凭据。

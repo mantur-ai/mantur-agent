@@ -87,7 +87,12 @@ export interface NativeHttpOptions {
   readonly maxResponseBytes: number
 }
 
-function originFor(options: NativeHttpOptions): string {
+/**
+ * Validate the Main-selected deployment before any native credential can be attached.
+ * @param options - configured origin and explicit production or test environment.
+ * @returns canonical HTTPS origin, or an explicitly selected HTTP loopback test origin.
+ */
+export function nativeAccountOrigin(options: Pick<NativeHttpOptions, 'origin' | 'environment'>): string {
   let url: URL
   try { url = new URL(options.origin) } catch { throw new Error('Native account origin is invalid') }
   const loopback = ['127.0.0.1', '[::1]', 'localhost'].includes(url.hostname)
@@ -109,7 +114,7 @@ export class NativeHttpClient {
    */
   constructor(options: NativeHttpOptions, private readonly transport: typeof fetch) {
     this.options = { ...options }
-    this.origin = originFor(options)
+    this.origin = nativeAccountOrigin(options)
     if (!Number.isSafeInteger(options.timeoutMs) || options.timeoutMs < 1 || options.timeoutMs > 2_147_483_647
       || !Number.isSafeInteger(options.maxResponseBytes) || options.maxResponseBytes < 1) {
       throw new Error('Native account network budgets must be positive integers')

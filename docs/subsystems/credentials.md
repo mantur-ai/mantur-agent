@@ -261,6 +261,12 @@ Host service registering the ManturHub authorization flow and account Remote.
 
 ```ts cordis-catalog
 /**
+ * Read the profile-selected identity owner without probing credentials or browser globals.
+ * @returns the configured identity mode.
+ */
+@Remote identityMode(): ManturIdentityMode
+
+/**
  * Send a Host-only GET to this account provider's configured deployment.
  *
  * The method accepts only root-relative paths so a stored grant cannot be

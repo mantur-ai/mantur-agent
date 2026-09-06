@@ -573,6 +573,7 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   AuthorizationSettlement: 'credentials.md',
   AuthorizationStatus: 'credentials.md',
   ManturAccountStatus: 'credentials.md',
+  ManturIdentityMode: 'credentials.md',
   ManturLoginAttemptId: 'credentials.md',
   ManturLoginProgress: 'credentials.md',
   ManturLoginStart: 'credentials.md',

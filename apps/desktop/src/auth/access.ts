@@ -39,7 +39,8 @@ export class NativeAccountAccess {
    * @param consume - Host-only operation that awaits body consumption and child cleanup before returning; it must not expose secrets.
    * @returns quiescent completion, not a still-readable response or a credential.
    */
-  withCredential(signal: AbortSignal, consume: (secrets: NativeSecrets, lifetime: AbortSignal) => Promise<void>): Promise<void> {
+  withCredential(signal: AbortSignal,
+    consume: (secrets: NativeSecrets, lifetime: AbortSignal, expiresAt: number) => Promise<void>): Promise<void> {
     this.requireOpen()
     const record = this.store.records(this.http.origin).find(value => value.phase === 'active')
     if (record === undefined || this.blocked.has(record.requestId)) throw new Error('Native account is signed out')
@@ -66,7 +67,7 @@ export class NativeAccountAccess {
         const secrets = await this.store.secrets(record.requestId, 'request')
         lifetime.throwIfAborted()
         if (expiresAt <= this.now()) throw new Error('Native account has expired')
-        await consume(secrets, lifetime)
+        await consume(secrets, lifetime, expiresAt)
         lifetime.throwIfAborted()
       } finally {
         if (timer !== undefined) clearTimeout(timer)

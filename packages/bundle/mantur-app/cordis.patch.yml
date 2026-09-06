@@ -39,6 +39,12 @@
       name: '@deepseek-ai/dsh-authorization'
     - id: mantur-account
       name: '@deepseek-ai/dsh-authorization-manturhub'
+      config:
+        identity: !!js process.env.DSH_MANTUR_NATIVE_ACCOUNT === '1' ? 'desktop-managed' : 'standalone'
+        native: !!js >-
+          process.env.DSH_MANTUR_NATIVE_ACCOUNT === '1'
+            ? { environmentLabel: 'ManturHub', requestTimeoutMs: 30000, maxResponseBytes: 65536, leaseMs: 86400000, revocationRetryMs: 60000 }
+            : undefined
     - id: mantur-marketplace
       name: '@deepseek-ai/dsh-manturhub-marketplace'
     - id: mantur-projects

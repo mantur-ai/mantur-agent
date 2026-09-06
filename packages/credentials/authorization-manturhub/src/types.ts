@@ -5,6 +5,9 @@ import type { Branded } from '@deepseek-ai/dsh-brand'
 /** Named ManturHub deployment selected for every online Mantur request. */
 export type ManturEnvironment = 'production' | 'test'
 
+/** Explicit identity owner selected by the application profile, never an automatic fallback. */
+export type ManturIdentityMode = 'standalone' | 'desktop-managed'
+
 /** Opaque identity for one process-local ManturHub device-login attempt. */
 export type ManturLoginAttemptId = Branded<'ManturLoginAttemptId'>
 
