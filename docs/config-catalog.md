@@ -381,6 +381,25 @@ export interface Config {
 
 Source: [`packages/client/hmr/src/index.ts:31`](../packages/client/hmr/src/index.ts)
 
+<a id="deepseek-aidsh-client-ui-mantur-editing"></a>
+
+## `@deepseek-ai/dsh-client-ui-mantur-editing`
+
+Requires: `settings`
+
+```ts config-catalog
+/** Explicit local editor address selected by the application profile. */
+export type Config = EditingSettings
+
+/** Configured address; never contains the host-only MCP bearer token. */
+export interface EditingSettings {
+  /** Absolute loopback HTTP address of the running OpenChatCut editor. */
+  editorUrl: string
+}
+```
+
+Source: [`packages/client/ui-mantur-editing/src/index.ts:8`](../packages/client/ui-mantur-editing/src/index.ts)
+
 <a id="deepseek-aidsh-client-ui-mantur-navigation"></a>
 
 ## `@deepseek-ai/dsh-client-ui-mantur-navigation`

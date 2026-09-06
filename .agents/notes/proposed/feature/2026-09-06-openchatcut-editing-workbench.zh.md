@@ -10,11 +10,11 @@ Status: proposed
 
 ## Proposal
 
-在添加产品代码前，验证固定提交 `19cba6e1a70a3e589545ce02de975f6494c918f6` 的 OpenChatCut 0.2.14。漫途继续负责推理，复用现有插件、profile、工具和 UI 扩展点。上游 Skill 文档中的外部入口是 MCP；浏览器桥属于内部接口，未找到受支持的剪辑 CLI（命令行界面）或已发布 SDK。实验 MCP 连接需要用户明确批准，目前尚未实现。
+在添加产品代码前，验证固定提交 `19cba6e1a70a3e589545ce02de975f6494c918f6` 的 OpenChatCut 0.2.14。漫途继续负责推理，复用现有插件、profile、工具和 UI 扩展点。上游 Skill 文档中的外部入口是 MCP；浏览器桥属于内部接口，未找到受支持的剪辑 CLI（命令行界面）或已发布 SDK。用户已授权实验 MCP 连接。[本地工作台实现](../../implemented/feature/2026-09-06-mantur-local-editing-workbench.zh.md)记录浏览器、持久化和导出证据；生产打包与多工程绑定仍待实现。
 
 源码使用 `useEditor`、`buildCommands`、`makeDraft` 和项目/历史 reducer，并没有单独发布的 EditorCore 包。源码级检查导入三段合成 MP4 的素材引用，在 30 fps 下各裁至 60 帧，使用 `edit_track/reorder_items` 将 C、A、B 放在第 0、60、120 帧。原子撤销/重做、直接命令改动后工具读回及 JSON 往返检查通过。这些结果不能证明浏览器导入、用户手势、应用持久化、渲染、导出或漫途接入。
 
-隔离的 Node 24 服务在回环地址返回 HTTP 200，使用显式空白数据目录且不带模型凭据。九项上游聚焦检查通过。Codex 内置浏览器返回 `ERR_BLOCKED_BY_CLIENT`；这是验证环境阻碍，不能据此认定 OpenChatCut 有缺陷。单条 `move_item` 可能报告成功，但碰撞约束会改变最终帧位置，因此接入方必须在修改后验证状态。
+隔离的 Node 24 服务在回环地址返回 HTTP 200，使用显式空白数据目录且不带模型凭据。九项上游聚焦检查通过。接入验证中内置浏览器可用；此前的 `ERR_BLOCKED_BY_CLIENT` 不能据此认定为 OpenChatCut 缺陷。单条 `move_item` 可能报告成功，但碰撞约束会改变最终帧位置，因此接入方必须在修改后验证状态。
 
 ## Alternatives considered
 

@@ -165,6 +165,7 @@ root
 │  └─ conversation.hero.agentPreset
 ├─ details
 │  └─ conversation.details.tool
+├─ main.workbench
 └─ shell.overlay
 ```
 

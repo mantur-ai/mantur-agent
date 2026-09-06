@@ -76,6 +76,12 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      */
     'details': { kind: 'single'; scope: 'session'; owner: DetailsOwnerProps }
     /**
+     * Optional work area beside the mounted conversation, including the home screen.
+     * Receives closeWorkbench to dismiss itself; absence renders an empty work area.
+     * Registering replaces the single workbench occupant, independent of session details.
+     */
+    'main.workbench': { kind: 'single'; scope: 'root'; owner: { closeWorkbench: () => void } }
+    /**
      * Root-level page replacing the center conversation surface while active.
      * The layout keeps the conversation mounted but hidden, and the transient
      * selection resets to conversation on reload.
@@ -141,6 +147,7 @@ export function apply(ctx: ClientContext): void {
         'sidebar': { kind: 'single', scope: 'root' },
         'conversation': { kind: 'single', scope: 'session-maybe' },
         'details': { kind: 'single', scope: 'session' },
+        'main.workbench': { kind: 'single', scope: 'root' },
         'main.page': { kind: 'single', scope: 'root' },
         'shell.overlay': { kind: 'list', scope: 'root' },
       },

@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/proposed/feature/2026-09-06-openchatcut-editing-workbench.md
-2026-09-06-openchatcut-editing-workbench.md: 04059e3fa23f7b833cd69645f594fdfd4d82ecdd
-2026-09-06-openchatcut-editing-workbench.zh.md: 35c3443396408cb6c8bbc4633646e17aad55a906
+2026-09-06-openchatcut-editing-workbench.md: 6b352576894a59da8fec71de22e8e3ff83af68f1
+2026-09-06-openchatcut-editing-workbench.zh.md: 6326b2602041b00f65d8650f0fa6a47620248b7b

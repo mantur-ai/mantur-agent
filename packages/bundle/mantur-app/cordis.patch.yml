@@ -47,3 +47,9 @@
           assets: [character-forge, mantur-image-prompt-director, chinese-wonderland-director, four-dimensional-voice-director]
     - id: ui-mantur-account
       name: '@deepseek-ai/dsh-client-ui-mantur-account'
+
+# Enabled only by a profile that supplies a local editor URL.
+- insert:
+    - id: ui-mantur-editing
+      name: '@deepseek-ai/dsh-client-ui-mantur-editing'
+      disabled: true

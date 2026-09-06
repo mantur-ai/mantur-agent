@@ -10,11 +10,11 @@ Mantur users need an editable timeline beside the existing conversation, with ma
 
 ## Proposal
 
-Evaluate OpenChatCut 0.2.14 at commit `19cba6e1a70a3e589545ce02de975f6494c918f6` before adding product code. Keep Mantur responsible for reasoning and use existing plugin, profile, tool, and UI extension points. The external entry documented by the upstream Skill is MCP; the browser bridge is internal, and no supported editing CLI or published SDK was found. An experimental MCP connection requires explicit user approval and remains unimplemented.
+Evaluate OpenChatCut 0.2.14 at commit `19cba6e1a70a3e589545ce02de975f6494c918f6` before adding product code. Keep Mantur responsible for reasoning and use existing plugin, profile, tool, and UI extension points. The external entry documented by the upstream Skill is MCP; the browser bridge is internal, and no supported editing CLI or published SDK was found. The user authorized the experimental MCP connection. The [local workbench implementation](../../implemented/feature/2026-09-06-mantur-local-editing-workbench.md) records browser, persistence, and export evidence; production packaging and multi-project binding remain proposed.
 
 The source uses `useEditor`, `buildCommands`, `makeDraft`, and project/history reducers, rather than a separately published EditorCore package. A source-level check imports three synthetic MP4 asset references, trims each to 60 frames at 30 fps, and uses `edit_track/reorder_items` to place C, A, B at frames 0, 60, 120. Atomic undo/redo, direct command mutation followed by tool readback, and a JSON roundtrip pass. This does not prove browser import, human gestures, application persistence, rendering, export, or Mantur integration.
 
-The isolated Node 24 service returns HTTP 200 on loopback with an explicit empty data directory and no model credentials. Nine focused upstream checks pass. Codex's embedded browser reports `ERR_BLOCKED_BY_CLIENT`; that is a verification-environment obstacle, not an attributed OpenChatCut defect. Individual `move_item` calls can report success while collision constraints alter the final frame, so integrations must verify state after mutations.
+The isolated Node 24 service returns HTTP 200 on loopback with an explicit empty data directory and no model credentials. Nine focused upstream checks pass. The embedded browser is usable in the integration verification; an earlier `ERR_BLOCKED_BY_CLIENT` is not an attributed OpenChatCut defect. Individual `move_item` calls can report success while collision constraints alter the final frame, so integrations must verify state after mutations.
 
 ## Alternatives considered
 
