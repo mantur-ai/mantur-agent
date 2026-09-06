@@ -364,6 +364,14 @@ Concrete agent factory and driver service.
 
 ```ts cordis-catalog
 /**
+ * Freeze admission, join owned startup and teardown, and verify closed writer offsets.
+ * This covers agent-loop ownership only; the Host must separately stop other producers.
+ * @returns immutable checkpoints after all owned work settles; repeated calls share the result.
+ * @throws if any writer or owned cleanup failed, including a previously closed writer.
+ */
+stopForShutdown(): Promise<readonly AgentShutdownCheckpoint[]>
+
+/**
  * Create an agent and session under one caller-supplied identity, owned by
  * the accessing fiber. Constructor-driven config calls mint a fresh combined
  * id before entering this boundary. When a persistence backend is mounted,
@@ -709,6 +717,16 @@ withoutInitiator<T>(operation: () => T): T
  *   yield it directly — exact identity nests the teardown in order.
  */
 setFactory(factory: AgentFactory): () => void
+
+/** Permanently close agent creation, publication, and live inbox mutation admission for Host shutdown. */
+freezeAdmission(): void
+
+/**
+ * Reject work after Host shutdown has frozen admission.
+ * Drivers check this before accepting input or starting maintenance.
+ * @throws when this registry has been frozen for shutdown.
+ */
+assertAdmission(): void
 
 /**
  * Create and publish a new agent through the registered factory.

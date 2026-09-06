@@ -105,6 +105,162 @@ function throwUnknown(value: unknown): never {
 }
 
 describe('the session-persistence Agent Note: AgentLoop factory create/resume', () => {
+  it.each(['before-stop', 'during-detach', 'after-close'] as const)('rejects a caught sealed write %s', async (phase) => {
+    const { ctx } = await persistentHarness(new MockAdapter([]))
+    const handle = await ctx.agents.create({ sessionId: SessionId(`sealed-write-${phase}`) })
+    let failure: unknown
+    const lateWrite = (): void => {
+      try { handle.agent.session.append('turn/start', { turn: 1 }) } catch (error: unknown) { failure = error }
+    }
+    try {
+      if (phase === 'before-stop') {
+        handle.agent.session.seal()
+        lateWrite()
+      } else if (phase === 'after-close') {
+        await handle.dispose()
+        lateWrite()
+      } else {
+        ctx.on('session/disposed', (session) => { if (session === handle.agent.session) lateWrite() })
+      }
+      const result = await ctx.agentLoop.stopForShutdown().then(() => undefined, (error: unknown) => error)
+      expect(failure).toBeInstanceOf(Error)
+      expect(result).toMatchObject({ errors: expect.arrayContaining([failure]) as unknown })
+      expect(ctx.sessions.get(handle.agent.id)).toBeUndefined()
+      expect((await readStoredEvents(ctx, handle.agent.id)).some(event => event.type === 'turn/start')).toBe(false)
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('joins setup work that finishes after its public creation was cancelled', async () => {
+    const { ctx } = await persistentHarness(new MockAdapter([]))
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const failure = new Error('late setup producer failed')
+    const creating = ctx.agents.create({
+      sessionId: SessionId('shutdown-late-setup'),
+      setup: async () => {
+        entered.resolve(undefined)
+        await release.promise
+        throw failure
+      },
+    }).then(() => undefined, (error: unknown) => error)
+    let stopped = false
+    try {
+      await entered.promise
+      const stopping = ctx.agentLoop.stopForShutdown()
+      const result = stopping.then(() => { stopped = true; return undefined }, (error: unknown) => { stopped = true; return error })
+      await creating
+      expect(stopped).toBe(false)
+      release.resolve(undefined)
+      expect(await result).toMatchObject({ errors: expect.arrayContaining([failure]) as unknown })
+    } finally {
+      release.resolve(undefined)
+      await creating
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('joins and retains an abandoned writer close after shutdown rejects publication', async () => {
+    const { ctx } = await persistentHarness(new MockAdapter([]))
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const create = ctx.sessionPersistence.create.bind(ctx.sessionPersistence)
+    const failure = new Error('abandoned writer close failed')
+    const spy = vi.spyOn(ctx.sessionPersistence, 'create').mockImplementation(async (...args) => {
+      const writer = await create(...args)
+      const close = writer.close.bind(writer)
+      vi.spyOn(writer, 'close').mockImplementation(async () => { await close(); throw failure })
+      entered.resolve(undefined)
+      await release.promise
+      return writer
+    })
+    const creating = ctx.agentLoop.create(SessionId('shutdown-late-writer')).then(() => undefined, (error: unknown) => error)
+    try {
+      await entered.promise
+      const result = ctx.agentLoop.stopForShutdown().then(() => undefined, (error: unknown) => error)
+      release.resolve(undefined)
+      expect(await creating).toMatchObject({ message: 'agent loop is not active' })
+      expect(await result).toMatchObject({ errors: expect.arrayContaining([failure]) as unknown })
+    } finally {
+      release.resolve(undefined)
+      await creating
+      spy.mockRestore()
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('returns the final closed writer offset and preserves pending input during shutdown', async () => {
+    const { ctx } = await persistentHarness(new MockAdapter([]))
+    try {
+      const handle = await ctx.agents.create({ sessionId: SessionId('shutdown-checkpoint') })
+      const message = createUserMessage({ content: [{ type: 'text', text: 'pending' }], source: { kind: 'user' } })
+      handle.agent.inbox.append('next-turn', message)
+      const stopping = ctx.agentLoop.stopForShutdown()
+      expect(ctx.agentLoop.stopForShutdown()).toBe(stopping)
+      const checkpoints = await stopping
+      expect(checkpoints).toEqual([{ sessionId: handle.agent.id, nextSeq: handle.agent.session.seq }])
+      const events = await readStoredEvents(ctx, handle.agent.id)
+      expect(events).toEqual(handle.agent.session.snapshotEvents())
+      expect(handle.agent.inbox.nextTurn).toEqual([message])
+      expect(ctx.agents.list()).toEqual([])
+      await expect(ctx.agentLoop.create(SessionId('after-shutdown'))).rejects.toThrow('not active')
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('closes its writer even when the final materialization flush fails', async () => {
+    const { ctx } = await persistentHarness(new MockAdapter([]))
+    const create = ctx.sessionPersistence.create.bind(ctx.sessionPersistence)
+    const failure = new Error('final flush failed')
+    let closed = false
+    const spy = vi.spyOn(ctx.sessionPersistence, 'create').mockImplementation(async (...args) => {
+      const writer = await create(...args)
+      const close = writer.close.bind(writer)
+      vi.spyOn(writer, 'flush').mockRejectedValue(failure)
+      vi.spyOn(writer, 'close').mockImplementation(async () => { await close(); closed = true })
+      return writer
+    })
+    try {
+      await ctx.agents.create({ sessionId: SessionId('shutdown-flush-failure') })
+      await expect(ctx.agentLoop.stopForShutdown()).rejects.toMatchObject({ errors: expect.arrayContaining([failure]) as unknown })
+      expect(closed).toBe(true)
+      expect(ctx.agents.list()).toEqual([])
+    } finally {
+      spy.mockRestore()
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('retains a writer close failure after its agent has left both registries', async () => {
+    const { ctx } = await persistentHarness(new MockAdapter([]))
+    const create = ctx.sessionPersistence.create.bind(ctx.sessionPersistence)
+    const failure = new Error('writer final sync failed')
+    const restoreClose: Array<() => void> = []
+    const spy = vi.spyOn(ctx.sessionPersistence, 'create').mockImplementation(async (...args) => {
+      const writer = await create(...args)
+      const close = writer.close.bind(writer)
+      const closeSpy = vi.spyOn(writer, 'close').mockImplementation(async () => {
+        await close()
+        throw failure
+      })
+      restoreClose.push(() => { closeSpy.mockRestore() })
+      return writer
+    })
+    try {
+      const handle = await ctx.agents.create({ sessionId: SessionId('shutdown-closed-failure') })
+      await expect(handle.dispose()).rejects.toBe(failure)
+      expect(ctx.agents.list()).toEqual([])
+      expect(ctx.sessions.get(handle.agent.id)).toBeUndefined()
+      await expect(ctx.agentLoop.stopForShutdown()).rejects.toMatchObject({ errors: expect.arrayContaining([failure]) as unknown })
+    } finally {
+      spy.mockRestore()
+      for (const restore of restoreClose) restore()
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('normalizes a non-Error resume publication failure for rollback and releases the write handle', async () => {
     const sessionId = SessionId('unknown-resume-failure-s')
     const root = await persistSession(sessionId)
@@ -192,12 +348,12 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     })
 
     await expect(handle.dispose()).rejects.toThrow('close exploded')
-    // Teardown reached quiescence before the rejection: the agent and session
-    // are unregistered, and write ownership is released — the never-flushed
-    // session reports absence, not an ownership conflict.
+    // The published empty session is materialized, and failed close still releases ownership.
     expect(ctx.agents.get(sessionId)).toBeUndefined()
     expect(ctx.sessions.get(sessionId)).toBeUndefined()
-    await expect(ctx.sessionPersistence.open(sessionId, 'write')).rejects.toThrow('not found')
+    const reopened = await ctx.sessionPersistence.open(sessionId, 'write')
+    expect(await reopened.read()).toEqual([])
+    await reopened.close()
     await ctx.fiber.dispose()
   })
 

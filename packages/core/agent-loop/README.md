@@ -103,7 +103,9 @@ After `agent/request`, `ctx.llm.prepareCall()` validates adapter-owned fields an
 
 ### Creation and teardown
 
-Creation is one rollback-covered transaction: construct a private session, concrete agent, and scoped context; await optional setup; enter both registries; announce `session/created` then `agent/created`; emit `agent/session-start`; only then start the driver. A setup throw, commit failure, or owner disposal rolls the transaction back without publishing either id. Teardown runs stop-and-drain, closes the session's write path, unwinds the scope, detaches the agent, then detaches the session, and every detach is bound to the exact entered object so a stale disposer cannot remove a later same-id replacement.
+Creation is one rollback-covered transaction: construct a private session, concrete agent, and scoped context; await optional setup; enter both registries; announce `session/created` then `agent/created`; emit `agent/session-start`; only then start the driver. A setup throw, commit failure, or owner disposal rolls the transaction back without publishing either id. Teardown runs stop-and-drain, unwinds the scope, seals session appends, closes the session's write path, detaches the agent, then detaches the session, and every detach is bound to the exact entered object so a stale disposer cannot remove a later same-id replacement.
+
+`stopForShutdown()` permanently freezes admission and joins tracked startup operations, including work that outlives public creation cancellation. It preserves unexecuted inbox input and returns final exclusive writer offsets only after closure; earlier writer failures and writes attempted after sealing invalidate the result. These offsets cover agent-loop writers, not all Host producers: Cordis scope disposal alone does not prove successful resource cleanup, and the Host must obtain separate producer results before issuing an installation receipt.
 
 ### Persistence integration
 

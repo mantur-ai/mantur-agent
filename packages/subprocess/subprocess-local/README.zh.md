@@ -50,6 +50,8 @@ kind: "package-reference"
 
 ### 关闭行为
 
+`stopForShutdown()` 同步关闭本地 spawn 准入，并等待所拥有的进程树和 PTY。重复调用返回同一个完成结果，包括失败。失败目标仍保有所有权，同步 Host 退出信号不被当作成功关闭。调用方仍需停止其他工作，并在安装更新前取得最终会话持久化结果。
+
 正常 dispose 会终止每棵仍在运行的进程树与终端并等待其退出。在 JavaScript 可观察的宿主退出期间——直接 `process.exit()`、默认未捕获异常、默认未处理 rejection——同步最终清理会强制终止所有仍归本包所有的对象（对进程组发送 SIGKILL，Windows 上运行 `taskkill /T /F`），且不创建任何 Promise 或定时器。未处理的 `SIGTERM`/`SIGINT`/`SIGHUP`、`SIGKILL`、fatal OOM、native crash 与断电则需要外部 supervisor。
 
 ### 可能出错的地方

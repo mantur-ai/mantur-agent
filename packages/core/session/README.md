@@ -61,6 +61,8 @@ Session log positions use two numeric types. `SessionSeq` identifies an existing
 
 The logical `SessionHeader.isSeeded` field reports whether fork history exists without exposing a positional integer. `Session.inheritedEventCount` retains the exact checked `SessionLogOffset`; `ownEvents()` returns events at and after that cut, and `isOwnSeq(seq)` accepts only an existing child-owned position. A low-level seeded constructor must supply an explicit `seed` and `inheritedEventCount` because the constructor seed can contain child-owned setup events after the inherited prefix.
 
+`session.seal()` permanently rejects future appends and returns the exclusive final event offset. It refuses sealing during event publication. A rejected late append leaves the log unchanged but invalidates subsequent seal verification, even if its caller caught the error. Stop producers before sealing; the seal itself does not write storage.
+
 ### Flush durable state
 
 `ctx.sessions.flush(session)` dispatches the awaited durability checkpoint: every persistence listener flushes and the call settles after all of them. A producer that needs an immediate durability barrier awaits it instead of assuming the write-behind drained.

@@ -258,7 +258,7 @@ function baselineEvents(agent: Agent): SessionEvent[] {
 async function appendAdditionalContexts(ctx: Context, agent: Agent): Promise<SessionSeq | undefined> {
   await syncedWorkspaceContext(ctx, agent)
   let lastSeq: SessionSeq | undefined
-  for (const claimed of agent.inbox.claim('next-step', 1)) {
+  for (const claimed of agent.inbox.claim('next-step', 1).messages) {
     if (claimed.source.kind !== 'agent-instructions') continue
     const event = agent.session.append('user/message', claimed, { surfaceOp: 'append' })
     ctx.emit('session/event', agent.session, event)
@@ -276,7 +276,7 @@ async function composeBaselinePrefix(ctx: Context, agent: Agent): Promise<Messag
     { messages: [], turn: 1, step: 1, signal },
     () => Promise.resolve({ kind: 'enter' as const, messages: [] }),
   )
-  const claimed = agent.inbox.claim('next-step', 1)
+  const claimed = agent.inbox.claim('next-step', 1).messages
   const decision = await agentEvents(ctx, agent).waterfall(
     'agent/pre-step',
     { messages: claimed, turn: 1, step: 2, signal },
@@ -1389,7 +1389,7 @@ describe('workspace context request injection', () => {
       await mountWorkspaceContextPlugin(ctx, { dshHome: home, maxBytes: 65536 })
       const resumed = stubAgent(root, original.session.snapshotEvents())
       agentEvents(ctx, resumed).emit('agent/session-start', { source: 'resume' })
-      const claimed = resumed.inbox.claim('next-step', 1)
+      const claimed = resumed.inbox.claim('next-step', 1).messages
       const decision = await agentEvents(ctx, resumed).waterfall(
         'agent/pre-step',
         { messages: claimed, turn: 1, step: 1, signal: AbortSignal.timeout(requestTimeoutMs) },
@@ -1435,7 +1435,7 @@ describe('workspace context request injection', () => {
       await mountWorkspaceContextPlugin(ctx, { dshHome: home, maxBytes: 65536 })
       const resumed = stubAgent(root, original.session.snapshotEvents())
       agentEvents(ctx, resumed).emit('agent/session-start', { source: 'resume' })
-      const staleClaim = resumed.inbox.claim('next-step', 1)
+      const staleClaim = resumed.inbox.claim('next-step', 1).messages
       const staleDecision = await agentEvents(ctx, resumed).waterfall(
         'agent/pre-step',
         { messages: staleClaim, turn: 1, step: 1, signal: AbortSignal.timeout(requestTimeoutMs) },
@@ -1488,7 +1488,7 @@ describe('workspace context request injection', () => {
       await mountWorkspaceContextPlugin(resumedCtx, { dshHome: home, maxBytes })
       const resumed = stubAgent(root, original.session.snapshotEvents())
       agentEvents(resumedCtx, resumed).emit('agent/session-start', { source: 'resume' })
-      const claimed = resumed.inbox.claim('next-step', 1)
+      const claimed = resumed.inbox.claim('next-step', 1).messages
       const decision = await agentEvents(resumedCtx, resumed).waterfall(
         'agent/pre-step',
         { messages: claimed, turn: 1, step: 1, signal: AbortSignal.timeout(requestTimeoutMs) },
@@ -4642,7 +4642,7 @@ describe('workspace context inbox synchronization', () => {
       await mountFileToolsAndWorkspaceContext(ctx, { dshHome: home, maxBytes: 65536 })
       const agent = stubAgent(join(root, 'pkg'))
       await syncedWorkspaceContext(ctx, agent)
-      const claimed = agent.inbox.claim('next-step', 1)
+      const claimed = agent.inbox.claim('next-step', 1).messages
       await write(join(root, 'pkg/AGENTS.md'), 'new claimed rule with more detail')
       const downstream = { kind: 'enter' as const, messages: claimed }
 

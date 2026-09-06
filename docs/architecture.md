@@ -63,6 +63,8 @@ Here are some core packages that contribute to the Cordis tree.
 | [`llm/llm`](subsystems/llm-streaming.md) | Message and stream vocabulary plus the adapter seam | `ctx.llm` |
 | [`webhook/webhook`](subsystems/webhook.md) | Authenticated-delivery dispatch and Workspace Session creation | `ctx.webhookRuntime` |
 
+Shutdown admission and input ownership live in `core/agent`; `core/agent-loop` joins its startup and writer lifecycles, and `core/session` seals the final append offset. These owner results do not authorize installation without separate Host producer convergence; see the [shutdown writer decision](../.agents/notes/implemented/architecture/2026-09-07-agent-shutdown-writers.md).
+
 ## Events
 
 Events are the extension points, and picking the right domain is the first decision in most changes.

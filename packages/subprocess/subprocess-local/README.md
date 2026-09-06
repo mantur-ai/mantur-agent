@@ -50,6 +50,8 @@ Collect mode keeps the last `maxBytes` of a stream in memory — errors and fina
 
 ### Shutdown behavior
 
+`stopForShutdown()` synchronously closes local spawn admission and waits for owned process trees and PTYs. Repeated calls return the same completion, including a failure. Failed targets remain owned and no synchronous host-exit signal is treated as successful shutdown. Callers still need to stop other work and obtain final session persistence results before installing an update.
+
 Normal disposal terminates every running tree and terminal and awaits their exit. During a JavaScript-observable host exit — direct `process.exit()`, default uncaught exceptions, default unhandled rejections — a synchronous finalization force-terminates everything still owned (SIGKILL to the group, `taskkill /T /F` on Windows) without creating promises or timers. Unhandled `SIGTERM`/`SIGINT`/`SIGHUP`, `SIGKILL`, fatal OOM, native crashes, and power loss need an external supervisor.
 
 ### What can go wrong
