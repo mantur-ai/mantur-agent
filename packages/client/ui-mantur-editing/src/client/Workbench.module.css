@@ -1,0 +1,6 @@
+.workbench { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; background: var(--dsw-alias-bg-base); }
+.header { display: flex; align-items: center; gap: 8px; padding: 12px; border-bottom: 1px solid var(--dsw-alias-border-l3); }
+.header strong { margin-right: auto; }
+.header button { color: inherit; background: var(--dsw-alias-bg-base); border: 1px solid var(--dsw-alias-border-l3); border-radius: 6px; padding: 6px 8px; cursor: pointer; }
+.help { font-size: 12px; margin: 8px 12px; color: var(--dsw-alias-label-secondary); }
+.editor { flex: 1; width: 100%; min-height: 0; border: 0; }

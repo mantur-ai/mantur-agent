@@ -23,7 +23,7 @@ import css from './AppFrame.module.css'
 /** Full composed props: runtime share + child-slot render share + store share. */
 export type AppFrameProps =
   & PropsRuntime<'root'>
-  & PropsRenderSlots<'sidebar' | 'conversation' | 'details' | 'main.page' | 'shell.overlay'>
+  & PropsRenderSlots<'sidebar' | 'conversation' | 'details' | 'main.page' | 'main.workbench' | 'shell.overlay'>
   & PropsStore<ReturnType<typeof createLayoutStore>>
   & PropsLocale<'common'>
 
@@ -150,6 +150,7 @@ export function AppFrame({
     ? 0
     : panels.sidebar === 0 ? SIDEBAR_DEFAULT : panels.sidebar
   const mainPageOpen = panels.mainPage !== undefined
+  const workbenchOpen = panels.workbench && !mainPageOpen
   const detailsPreference = mainPageOpen || detailsSession === undefined ? 0 : panels.details
   const cols = computeColumns(viewport, sidebarPreference, detailsPreference)
   const colsRef = useRef(cols)
@@ -208,8 +209,13 @@ export function AppFrame({
             is session-maybe; SessionProvider withholds the strict details
             entry while no session is current. */}
         <CenterColumn>
-          <div className={css.conversationSurface} hidden={mainPageOpen}>
-            {renderSlot('conversation', {})}
+          <div className={css.conversationSurface} hidden={mainPageOpen} data-workbench-open={workbenchOpen || undefined}>
+            <div className={css.conversationPane}>{renderSlot('conversation', {})}</div>
+            {panels.workbench && (
+              <div className={css.workbenchPane}>
+                {renderSlot('main.workbench', { closeWorkbench: actions.closeWorkbench })}
+              </div>
+            )}
           </div>
           {panels.mainPage !== undefined && (
             <div className={css.mainPageSurface}>

@@ -39,6 +39,8 @@ kind: "package-reference"
 
 -----
 
+用户明确选择模式且保存成功后，会发出 `mantur/creation-mode-selected`，重复选择当前模式也会通知。保存失败或设置恢复不会通知。可选剪辑工作台消费这个事件，不启动模型回合。
+
 <a id="understand-the-implementation"></a>
 ## 了解实现
 

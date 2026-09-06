@@ -26,6 +26,7 @@ type LayoutState = {
   details: number
   narrow: boolean
   narrowExpanded: boolean
+  workbench: boolean
   mainPage: MainPageId | undefined
 }
 
@@ -34,6 +35,8 @@ type LayoutState = {
  * return type); drift fails assignability at the defineStore call.
  */
 type LayoutActions = {
+  openWorkbench: (draft: LayoutState) => void
+  closeWorkbench: (draft: LayoutState) => void
   setSidebar: (draft: LayoutState, px: number) => void
   setDetails: (draft: LayoutState, px: number) => void
   toggleSidebar: (draft: LayoutState) => void
@@ -62,8 +65,11 @@ export function createLayoutStore(): EngineStoreHandle<LayoutState, LayoutAction
       narrow: false,
       narrowExpanded: false,
       mainPage: undefined,
+      workbench: false,
     }),
     actions: {
+      openWorkbench: (d) => { d.workbench = true; d.mainPage = undefined },
+      closeWorkbench: (d) => { d.workbench = false },
       setSidebar: (d, px: number) => { d.sidebar = clampWidth(px, SIDEBAR_MIN, SIDEBAR_MAX) },
       setDetails: (d, px: number) => { d.details = clampWidth(px, DETAILS_MIN, DETAILS_MAX) },
       // Narrow toggles flip only the override: the width preference survives

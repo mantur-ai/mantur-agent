@@ -39,6 +39,8 @@ The home workspace picker sits in a left-aligned footer directly below the input
 
 -----
 
+An accepted explicit mode selection emits `mantur/creation-mode-selected`, including a repeated selection of the active mode. A failed save or settings hydration emits nothing. The optional editing workbench consumes this event without starting a model turn.
+
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 

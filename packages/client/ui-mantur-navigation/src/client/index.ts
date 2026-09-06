@@ -15,7 +15,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ReferenceInsert } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import { GUIDE_NAMESPACE, type GuideSettings } from '../guide-settings.ts'
+import { GUIDE_NAMESPACE, type CreationMode, type GuideSettings } from '../guide-settings.ts'
 import { CreationGuide, CreationModes, type GuidePreferencesInjected } from './CreationGuide.tsx'
 import { ManturComposerLayout } from './ManturComposerLayout.tsx'
 import { en as guideEn, zh as guideZh, type GuideKey } from './guide-locales.ts'
@@ -24,6 +24,17 @@ import {
 } from './MarketplaceNavigation.tsx'
 import { en, zh, type ManturNavigationKey } from './locales.ts'
 import { ManturMarketplaceStore } from './store.ts'
+
+declare module '@deepseek-ai/cordis' {
+  interface Events {
+    /**
+     * An explicit mode selection was accepted by the settings host, including repeated selections.
+     * @param mode - accepted creation mode; hydration does not emit this event.
+     * @mode emit
+     */
+    'mantur/creation-mode-selected'(mode: CreationMode): void
+  }
+}
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -54,7 +65,9 @@ export async function apply(ctx: Context): Promise<void> {
       hooks: { preferences },
       saveMode: async (mode) => {
         await preferences.set('mode', mode)
-        return preferences.getSnapshot().value?.mode === mode
+        const accepted = preferences.getSnapshot().value?.mode === mode
+        if (accepted) scope.emit('mantur/creation-mode-selected', mode)
+        return accepted
       },
       saveClosed: async (closed) => {
         await preferences.set('closed', closed)
