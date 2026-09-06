@@ -348,6 +348,7 @@ export function ConversationRoot({
       {hero && <HeroShell t={t} renderSlot={renderSlot} />}
       {hero && heroWorkspaceRow}
       {zone !== undefined && renderSlot('conversation.input.dock', zone)}
+      {renderSlot('conversation.composer.guide', { hero, disabled: inert || blocked })}
       {inputBar}
     </div>
   )

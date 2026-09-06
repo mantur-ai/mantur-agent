@@ -1,0 +1,29 @@
+# Agent Note: Mantur creation modes and assistant guide
+
+Status: implemented
+
+English | [中文](2026-09-06-mantur-creation-guide.zh.md)
+
+## Problem
+
+Drama creators need an entry point organized around writing, production, editing, and assets. A shortcut must help compose the current request without replacing an existing draft or silently changing the Agent's identity, model, or permissions.
+
+## Decision
+
+The Mantur navigation plugin occupies two generic conversation slots: creation choices below the headline and contextual guidance above the resident composer. Host settings persist the last mode and explicit dismissal. Mode selection changes only the catalog recommendation filter and locale-owned guide copy; it never selects an Agent preset or adds model context.
+
+The product composition supplies ordered real marketplace slugs. The browser intersects those lists with the current Host catalog and keeps fewer recommendations when matching Skills are absent. Catalog failures remain visible with Retry. Shortcut insertion uses the Session input facade to append a titled reference and deduplicate its source/ref identity. It never submits. Installation must succeed before insertion, and a Session switch invalidates the pending insertion. Marketplace Use retains the separate new-Session behavior described in the [marketplace decision](2026-09-03-mantur-marketplace-navigation.md).
+
+馒头仔 presents fixed copy in a bubble with layout space above the shortcuts, not an overlay over editable content. Dismissal persists without forcing the bubble open after mode changes. The first message collapses the welcome region. The [Mantur brand identity](2026-09-02-mantur-brand-identity.md) remains unchanged; the assistant is not a replacement product logo.
+
+## Alternatives considered
+
+**Use modes as Agent presets.** Preset selection can change tools, identity, and model-visible context. The requested navigation choices do not authorize those changes.
+
+**Reuse marketplace Use for shortcuts.** That action creates a new Session. Current-composer reference insertion preserves the user's draft and attachments.
+
+**Invent capability labels to fill every row.** The catalog does not contain four independent writing Skills. Intersecting configured real IDs with live metadata keeps availability and names truthful.
+
+## Consequences
+
+The shared conversation adds placement slots and one append-reference operation; product copy and recommendation policy remain in the Mantur plugin. Preferences use the existing Host settings transport. Guide details have their own open state because the conversation remains mounted behind marketplace pages. Focused tests cover dismissal, late installation settlement, draft preservation, and duplicate insertion; the built browser expectation checks the real Loader, Remote, composer, and narrow-window layout. No guide copy or mode change consumes model tokens.

@@ -157,6 +157,8 @@ root
 │  ├─ conversation.hero.brand.mark
 │  ├─ conversation.hero.headline
 │  ├─ conversation.hero.badge
+│  ├─ conversation.hero.modes
+│  ├─ conversation.composer.guide
 │  ├─ conversation.hero.workspace
 │  │  └─ conversation.hero.workspace.directoryFlow
 │  └─ conversation.hero.agentPreset

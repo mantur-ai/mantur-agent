@@ -206,6 +206,8 @@ export function apply(ctx: Context): void {
       'conversation.hero.brand.mark': { kind: 'single', scope: 'root' },
       'conversation.hero.headline': { kind: 'single', scope: 'root' },
       'conversation.hero.badge': { kind: 'single', scope: 'root' },
+      'conversation.hero.modes': { kind: 'single', scope: 'root' },
+      'conversation.composer.guide': { kind: 'single', scope: 'session-maybe' },
       'conversation.hero.workspace': { kind: 'single', scope: 'root' },
       'conversation.hero.agentPreset': { kind: 'single', scope: 'root' },
     },

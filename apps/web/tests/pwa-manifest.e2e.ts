@@ -72,3 +72,13 @@ it('ships the profile-owned favicon', async () => {
   expect(favicon).toMatch(/@media \(prefers-color-scheme: dark\)\s*{\s*path\s*{[^}]*fill:\s*#fff/i)
   expect(favicon).toContain('fill="#000"')
 })
+
+it('ships the transparent assistant artwork only in the Mantur profile', async () => {
+  const asset = join(DIST_ROOT, 'mantou-clapper.png')
+  expect(existsSync(asset)).toBe(PROFILE === 'mantur')
+  if (PROFILE !== 'mantur') return
+  const png = await readFile(asset)
+  expect(png.readUInt32BE(16)).toBe(552)
+  expect(png.readUInt32BE(20)).toBe(300)
+  expect(png[25]).toBe(6)
+})
