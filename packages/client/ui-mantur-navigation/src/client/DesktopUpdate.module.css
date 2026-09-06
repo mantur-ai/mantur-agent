@@ -1,0 +1,13 @@
+.update { width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 10px; background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); }
+.title { margin: 0 0 6px; font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
+.update button, .rail button { border: 0; border-radius: 7px; padding: 7px 9px; font: inherit; font-size: 12px; cursor: pointer; background: var(--dsw-alias-button-info-fill); color: var(--dsw-alias-label-primary-inverted); }
+.update button:disabled, .rail button:disabled { cursor: default; opacity: 0.65; }
+.update button:focus-visible, .rail button:focus-visible { outline: 2px solid var(--dsw-alias-button-info-fill); outline-offset: 3px; }
+.progress { height: 3px; border-radius: 2px; background: var(--dsw-alias-border-l1); overflow: hidden; }
+.progress span { display: block; height: 100%; background: var(--dsw-alias-button-info-fill); }
+.progress:not([aria-valuenow]) { background: repeating-linear-gradient(100deg, var(--dsw-alias-border-l1) 0 6px, var(--dsw-alias-button-info-fill) 6px 12px); }
+.bytes { margin: 5px 0 0; font-size: 11px; color: var(--dsw-alias-label-secondary); font-variant-numeric: tabular-nums; }
+.error { margin: 5px 0; font-size: 11px; overflow-wrap: anywhere; }
+.rail { width: 36px; position: relative; }
+.rail button { display: grid; place-items: center; width: 36px; height: 36px; }
+.railPercent { display: block; text-align: center; font-size: 10px; line-height: 16px; font-variant-numeric: tabular-nums; }
