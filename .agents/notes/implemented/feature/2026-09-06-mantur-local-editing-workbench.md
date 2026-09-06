@@ -16,6 +16,8 @@ Navigation emits the typed `mantur/creation-mode-selected` event only after sett
 
 The isolated experiment mounts the existing `dsh-mcp-client` through a profile overlay against OpenChatCut 0.2.14, commit `19cba6e1a70a3e589545ce02de975f6494c918f6`. Its bearer credential remains on the Host. This transport is a single-project experiment; production session-to-project binding and process packaging are not implemented by the presentation plugin.
 
+The workbench subscribes to the resolved theme service. A fixed initial URL carries the first color scheme; subsequent changes use origin- and window-checked messages without navigating the frame. A deployment-loaded OpenChatCut adapter owns the light/dark UI tokens and leaves project state, exported pixels, and standalone skin storage untouched. The adapter is maintained in the presentation package; the upstream editor core is unchanged. The package payload allowlist in `scripts/check-workspace-constraints.ts` includes its standalone module and declaration because the external editor does not use the Mantur client loader; the payload test verifies both files remain published.
+
 ## Alternatives considered
 
 The existing details seat is too narrow and unavailable on the home screen; a main page hides the conversation. Copying editor state would duplicate its persistence and undo logic. The generic workbench seat keeps those responsibilities with their existing owners.

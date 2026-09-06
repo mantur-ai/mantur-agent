@@ -16,6 +16,7 @@ function mount(editorUrl: string, dictionary = en) {
   const preferences = settings.scope
   const props = {
     usePreferences: (select: (value: ReturnType<typeof preferences.getSnapshot>) => unknown) => select(preferences.getSnapshot()),
+    getColorScheme: () => 'light' as const, subscribeTheme: () => () => {},
     closeWorkbench: vi.fn(), t: (key: keyof typeof en) => dictionary[key],
   } as ComponentProps<typeof Workbench>
   return { ...render(<Workbench {...props} />), props }
@@ -30,7 +31,7 @@ describe('local editor workbench', () => {
   it('embeds the configured project and keeps close and reload explicit', () => {
     const { getByTitle, getByRole, props } = mount('http://127.0.0.1:5299/#/editor/test')
     const frame = getByTitle(en.title)
-    expect(frame.getAttribute('src')).toBe('http://127.0.0.1:5299/#/editor/test')
+    expect(frame.getAttribute('src')).toBe('http://127.0.0.1:5299/?manturTheme=light#/editor/test')
     fireEvent.click(getByRole('button', { name: en.reload }))
     expect(getByTitle(en.title)).not.toBe(frame)
     fireEvent.click(getByRole('button', { name: en.close }))
@@ -46,4 +47,24 @@ describe('local editor workbench', () => {
   it.each(['https://127.0.0.1/', 'http://127.0.0.1.evil.test/', 'http://user:secret@127.0.0.1/', 'http://localhost/?token=secret'])('rejects an unsupported editor address %s', (url) => {
     expect(() => localEditorUrl(url)).toThrow()
   })
+})
+
+it('updates theme without replacing the iframe or changing its project URL', () => {
+  const { getByTitle, props, rerender, unmount } = mount('http://127.0.0.1:5299/#/editor/test')
+  const frame = getByTitle(en.title) as HTMLIFrameElement
+  const send = vi.spyOn(frame.contentWindow!, 'postMessage')
+  fireEvent.load(frame)
+  expect(send).toHaveBeenLastCalledWith({ type: 'mantur:theme', version: 1, scheme: 'light' }, 'http://127.0.0.1:5299')
+  rerender(<Workbench {...props} getColorScheme={() => 'dark'} />)
+  expect(getByTitle(en.title)).toBe(frame)
+  expect(frame.src).toContain('manturTheme=light#/editor/test')
+  expect(send).toHaveBeenLastCalledWith({ type: 'mantur:theme', version: 1, scheme: 'dark' }, 'http://127.0.0.1:5299')
+  send.mockClear()
+  const ready = { type: 'mantur:theme-ready', version: 1 }
+  fireEvent(window, new MessageEvent('message', { source: frame.contentWindow, origin: 'http://evil.test', data: ready }))
+  fireEvent(window, new MessageEvent('message', { source: window, origin: 'http://127.0.0.1:5299', data: ready }))
+  expect(send).not.toHaveBeenCalled()
+  fireEvent(window, new MessageEvent('message', { source: frame.contentWindow, origin: 'http://127.0.0.1:5299', data: ready }))
+  expect(send).toHaveBeenCalledOnce()
+  unmount()
 })

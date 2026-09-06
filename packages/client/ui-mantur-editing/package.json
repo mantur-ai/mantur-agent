@@ -32,7 +32,8 @@
         "@deepseek-ai/dsh-client-ui-layout",
         "@deepseek-ai/dsh-client-ui-mantur-navigation",
         "@deepseek-ai/dsh-client-ui-renderer",
-        "@deepseek-ai/dsh-client-ui-settings"
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-theme"
       ],
       "platform": "web"
     }
@@ -61,11 +62,14 @@
     "@deepseek-ai/dsh-client-ui-layout": "workspace:^",
     "@deepseek-ai/dsh-client-ui-mantur-navigation": "workspace:^",
     "@deepseek-ai/dsh-client-ui-renderer": "workspace:^",
-    "@deepseek-ai/dsh-client-ui-settings": "workspace:^"
+    "@deepseek-ai/dsh-client-ui-settings": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-theme": "workspace:^"
   },
   "files": [
     "lib/index.js",
     "lib/client.js",
+    "adapters/openchatcut-theme.mjs",
+    "adapters/openchatcut-theme.d.mts",
     "lib/types/**/*.d.ts"
   ]
 }

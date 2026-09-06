@@ -99,6 +99,19 @@ describe('package payload constraints', () => {
     ])
   })
 
+  it('ships the external editor theme module and its declaration', () => {
+    expect(expectedDshPackageFiles({
+      name: '@deepseek-ai/dsh-client-ui-mantur-editing',
+      exports: { './client': { default: './lib/client.js' } },
+    })).toEqual([
+      'lib/index.js',
+      'lib/client.js',
+      'adapters/openchatcut-theme.mjs',
+      'adapters/openchatcut-theme.d.mts',
+      'lib/types/**/*.d.ts',
+    ])
+  })
+
   it('includes a declared profile patch without a package-name allowlist', () => {
     expect(expectedDshPackageFiles({
       name: '@deepseek-ai/dsh-private-profile',

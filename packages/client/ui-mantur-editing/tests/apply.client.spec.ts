@@ -14,6 +14,7 @@ describe('editing workbench composition', () => {
     const locale = new LocaleRuntime(ctx)
     locale.setLocale('zh')
     ctx.provide('locale', locale)
+    ctx.provide('theme', { getTheme: () => ({ active: { colorScheme: 'light' } }) } as never)
     const layout = { openWorkbench: vi.fn(), closeWorkbench: vi.fn() }
     ctx.provide('layout', layout as never)
     const settings = stubSettingsScope<EditingSettings>()
