@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-07-live-write-test-barrier.md
+2026-09-07-live-write-test-barrier.md: b531666f4e6649636a154b49fe62f6cd24020479
+2026-09-07-live-write-test-barrier.zh.md: a46109eaf7566988a820de686ad1827aa3ce6f97
