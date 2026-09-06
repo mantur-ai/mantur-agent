@@ -12,6 +12,8 @@ The desktop starts its Web application on a random loopback port. Browser-local 
 
 The [desktop carrier](../../../../apps/desktop/README.md#draft-checkpoints) owns one private, versioned draft file. Its narrow preload messages carry complete editor documents and selected image bytes, never arbitrary paths or browser object URLs. Main-frame authorization, whole-checkpoint revision comparison, attachment digests, and file synchronization precede each save receipt. Input locks cover restart saves and two-owner transfers; cancellation and failures release them. Full Lexical documents retain Skill identities and display labels, while separately recorded occurrence ids bind to the restored document order.
 
+Each restart preparation owns a distinct set of input-lock releases. Cancellation detaches that ownership before unlocking; a late failure can release only the same preparation, and a late success cannot return its cancelled receipt. A newer preparation remains locked until its own release. Deterministic barriers cover cancellation followed by both delayed failure and delayed success while a newer save is pending.
+
 The update installer refuses to proceed without a verified final Host checkpoint. It does not treat draft persistence, process closure, log messages, or `fiber.dispose()` resolution as that checkpoint. The refusal stops neither local tasks nor remote work. Windows draft durability and the unassigned-composer integration remain explicit limitations; neither receives simulated success.
 
 ## Alternatives considered

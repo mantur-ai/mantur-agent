@@ -19,7 +19,7 @@ export class DraftPersistence {
   private readonly shellSubscriptions = new Map<string, () => void>()
   private readonly initializing = new Set<string>()
   private scheduled = false
-  private releases: (() => void)[] = []
+  private releases: (() => void)[] | undefined
   private readonly off: (() => void)[]
   private error: unknown
   private disposed = false
@@ -152,7 +152,7 @@ export class DraftPersistence {
   }
 
   private schedule(): void {
-    if (this.scheduled || this.disposed || this.releases.length !== 0) return
+    if (this.scheduled || this.disposed || this.releases !== undefined) return
     this.scheduled = true
     queueMicrotask(() => {
       this.scheduled = false
@@ -200,21 +200,29 @@ export class DraftPersistence {
 
   /**
    * Lock current composers and return only the exact revision committed for this restart request.
-   * @returns - The committed checkpoint revision.
+   * @returns - The committed checkpoint revision; cancellation rejects without releasing a newer request's locks.
    */
   async prepare(): Promise<number> {
-    if (this.releases.length !== 0) throw new Error('Draft save is already preparing a restart')
+    if (this.releases !== undefined) throw new Error('Draft save is already preparing a restart')
+    const releases: (() => void)[] = []
+    this.releases = releases
     try {
-      for (const shell of this.shells.values()) this.releases.push(shell.lockDraft())
+      for (const shell of this.shells.values()) releases.push(shell.lockDraft())
       await this.save()
+      if (this.releases !== releases) throw new Error('Draft save preparation was cancelled')
       if (this.error !== undefined) throw this.error instanceof Error ? this.error : new Error('Draft checkpoint failed')
       return this.checkpoint.revision
-    } catch (error) { this.release(); throw error }
+    } catch (error) {
+      if (this.releases === releases) this.release()
+      throw error
+    }
   }
 
   /** Release a cancelled or failed restart's input locks. */
   release(): void {
-    for (const release of this.releases.splice(0)) release()
+    const releases = this.releases
+    this.releases = undefined
+    for (const release of releases ?? []) release()
   }
 
   /** Remove native listeners and input locks when the UI plugin unloads. */
