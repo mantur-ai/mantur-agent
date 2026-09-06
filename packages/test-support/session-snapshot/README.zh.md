@@ -86,6 +86,8 @@ defineAcpSnapshotSuite({
 
 ### 可能出什么问题
 
+`waitForSubagentTurnEnd` 在配置的截止时间停止轮询，超时时报告子会话序号与所需轮次。已开始的文件系统收集会在场景清理前完成，因此慢 I/O 可能使错误报告晚于该截止时间。
+
 - **fixture 保护拒绝已提交文件**——遗留场景目录、缺失文件、一个 header 类别包含多个 pin、重复的伴随文件内容、未擦除的 JSONL header 与格式错误的 pin header 都会在比较运行前使套件失败。
 - **会话收集需要原始 JSONL mode**——快照配置使用 JSONL 后端的 `compression: 'none'`；压缩 JSONL 没有快照收集路径。
 - **构建 mode 需要当前产物**——选择 `DSH_EXAMPLE_MODE=lib` 前先运行 `pnpm run build`；源 mode 仍是零构建路径。

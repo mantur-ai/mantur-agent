@@ -16,6 +16,8 @@ The [Team mailbox fixture](../../../../packages/experimental/agent-team/tests/te
 
 The [npm benchmark](../../../../scripts/benchmark-npm-resolution.ts) removes its consumer directory with the existing [junction-safe cleanup helper](../../../../scripts/test-fixture-cleanup.ts) after the child and registry server close. The helper's bounded retry handles delayed Windows file release and still propagates exhausted cleanup failures. The [npm test deadlines](2026-09-04-windows-npm-resolution-test-budget.md) remain unchanged.
 
+The [snapshot child-turn waiter](../../../../packages/test-support/session-snapshot/src/harness.ts) owns its polling deadline and awaits each filesystem harvest. Vitest can time out an asynchronous callback before it has produced a child-specific diagnostic; an owned loop reports the child and required turn after the current read settles. Expiration never permits an already-started read to overlap scenario cleanup, and a completed read after the deadline cannot turn expiration into success.
+
 ## Alternatives considered
 
 Longer per-fixture polling deadlines still measure storage latency instead of completed writes. Repeating a mailbox scenario does not ensure it takes the cold-receipt path. Ignoring cleanup errors leaves temporary data behind. None of these establishes the required result.
