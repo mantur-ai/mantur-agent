@@ -31,7 +31,6 @@ function clientDocumentMetadata(): Plugin {
     async closeBundle() {
       if (!isMantur) {
         await rm(src('./dist/mantur-logo.png'), { force: true })
-        await rm(src('./dist/mantou-clapper.png'), { force: true })
         return
       }
       await Promise.all([

@@ -1,10 +1,13 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { readFileSync } from 'node:fs'
+import { load as parseYaml } from 'js-yaml'
+import { entryListSchema } from '@deepseek-ai/cordis-plugin-include'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { CreationGuide, CreationModes, type CreationGuideProps, type CreationModesProps } from '../src/client/CreationGuide.tsx'
-import { zh } from '../src/client/guide-locales.ts'
+import { en, GUIDE_SKILL_LABELS, zh } from '../src/client/guide-locales.ts'
 import { zh as marketZh } from '../src/client/locales.ts'
 import type { GuideSettings } from '../src/guide-settings.ts'
 import type { ManturMarketplaceState } from '../src/client/store.ts'
@@ -40,9 +43,9 @@ describe('Mantur creation guide', () => {
     expect(screen.getByText(zh['welcome.title'])).toBeTruthy()
     expect(screen.getByText(zh['welcome.body'])).toBeTruthy()
     expect(screen.getByRole('button', { name: '馒头仔' }).querySelector('img')?.getAttribute('src')).toBe('./mantou-clapper.png')
-    expect(screen.getByRole('button', { name: skill.name })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '短剧编剧' }).getAttribute('title')).toBe(skill.name)
     expect(screen.queryByText('not-in-catalog')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: skill.name }))
+    fireEvent.click(screen.getByRole('button', { name: '短剧编剧' }))
     expect(p.inputActions.appendReference).toHaveBeenCalledWith({ source: 'skill', ref: skill.slug, label: skill.name, clipboardText: '/short-drama' })
     expect(p.inputActions.submit).not.toHaveBeenCalled()
     expect(screen.getByText(zh.selected.replace('{name}', skill.name))).toBeTruthy()
@@ -69,7 +72,7 @@ describe('Mantur creation guide', () => {
     view.rerender(guide(props({ ...settings, mode: 'editing' })))
     expect(screen.getByText(zh['intro.editing'])).toBeTruthy()
     view.rerender(guide({ ...props(), hero: false }))
-    expect(screen.queryByRole('button', { name: skill.name })).toBeNull()
+    expect(screen.queryByRole('button', { name: '短剧编剧' })).toBeNull()
     expect(screen.getByRole('button', { name: '馒头仔' }).getAttribute('aria-expanded')).toBe('false')
     expect(screen.getByRole('button', { name: '馒头仔' }).getAttribute('data-hero')).toBe('false')
   })
@@ -78,7 +81,7 @@ describe('Mantur creation guide', () => {
     const uninstalled = { ...skill, installed: false }
     const p = props(settings, { phase: 'ready', catalog: { skills: [uninstalled], installedCount: 0, signedIn: true } })
     const view = render(guide(p))
-    fireEvent.click(screen.getByRole('button', { name: skill.name }))
+    fireEvent.click(screen.getByRole('button', { name: '短剧编剧' }))
     expect(p.openDetail).toHaveBeenCalledWith(skill.slug)
     expect(p.install).not.toHaveBeenCalled()
     const detailProps = props(settings, { phase: 'ready', catalog: { skills: [uninstalled], installedCount: 0, signedIn: true }, detail: { ...uninstalled, usesOperators: [] } })
@@ -98,7 +101,7 @@ describe('Mantur creation guide', () => {
     let finish!: (value: boolean) => void
     p.install.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
     const view = render(guide(p))
-    fireEvent.click(screen.getByRole('button', { name: skill.name }))
+    fireEvent.click(screen.getByRole('button', { name: '短剧编剧' }))
     fireEvent.click(screen.getByRole('button', { name: '安装并使用' }))
     view.rerender(guide({ ...p, sessionId: 's2' }))
     finish(true)
@@ -138,5 +141,169 @@ describe('Mantur creation guide', () => {
     expect(document.activeElement).toBe(screen.getByRole('tab', { name: '漫剧制作' }))
     expect(p.inputActions.appendReference).not.toHaveBeenCalled()
     expect(p.inputActions.submit).not.toHaveBeenCalled()
+  })
+
+  it('curates at most four Chinese characters for every configured recommendation while preserving real references', () => {
+    const composition = parseYaml(readFileSync('packages/bundle/mantur-app/cordis.patch.yml', 'utf8'), { schema: entryListSchema }) as { insert?: { id: string; config?: { recommendations: GuideSettings['recommendations'] } }[] }[]
+    const recommendations = composition.flatMap(patch => patch.insert ?? []).find(plugin => plugin.id === 'ui-mantur-navigation')?.config?.recommendations
+    expect(recommendations).toBeDefined()
+    const slugs = [...new Set(Object.values(recommendations!).flat())]
+    expect(slugs.sort()).toEqual([...GUIDE_SKILL_LABELS.keys()].sort())
+    for (const slug of slugs) {
+      const key = GUIDE_SKILL_LABELS.get(slug)!
+      expect(zh[key]).toMatch(/^[\p{Script=Han}]{1,4}$/u)
+      expect(en[key].length).toBeGreaterThan(4)
+      const actual = { ...skill, slug, name: `完整技能名称 ${slug}` }
+      const p = props({ ...settings, recommendations: { ...settings.recommendations, script: [slug] } }, { phase: 'ready', catalog: { skills: [actual], installedCount: 1, signedIn: true } })
+      const view = render(guide(p))
+      fireEvent.click(screen.getByRole('button', { name: zh[key] }))
+      expect(p.appendReference).toHaveBeenCalledWith({ source: 'skill', ref: slug, label: actual.name, clipboardText: `/${slug}` })
+      expect(p.inputActions.submit).not.toHaveBeenCalled()
+      view.unmount()
+    }
+  })
+
+  it('reports an unmapped recommendation instead of substituting or truncating its catalog name', () => {
+    const unknown = { ...skill, slug: 'unmapped', name: '不能截断或回退的完整名称' }
+    render(guide(props({ ...settings, recommendations: { ...settings.recommendations, script: [unknown.slug] } }, { phase: 'ready', catalog: { skills: [unknown], installedCount: 1, signedIn: true } })))
+    expect(screen.getByRole('alert').textContent).toBe(zh.aliasMissing)
+    expect(screen.queryByRole('button', { name: unknown.name })).toBeNull()
+  })
+
+  it('does not choose a guessed mode while preferences load or fail', () => {
+    const p = props()
+    const usePreferences = (select: (value: unknown) => unknown) => select({ status: 'loading', value: undefined })
+    const view = render(<CreationModes {...{ ...p, usePreferences } as unknown as CreationModesProps} />)
+    expect(screen.getByText(zh.preferencesLoading)).toBeTruthy()
+    view.rerender(<CreationModes {...{ ...p, usePreferences: (select: (value: unknown) => unknown) => select({ status: 'error', value: undefined }) } as unknown as CreationModesProps} />)
+    expect(screen.getByText(zh.preferencesUnavailable)).toBeTruthy()
+    view.rerender(guide({ ...p, usePreferences }))
+    expect(screen.queryByRole('button')).toBeNull()
+  })
+
+  it('wraps keyboard navigation, handles Home and End, and reports failed saves', async () => {
+    const p = props()
+    p.saveMode.mockResolvedValue(false)
+    render(<CreationModes {...p as unknown as CreationModesProps} />)
+    const first = screen.getByRole('tab', { name: '剧本创作' })
+    const last = screen.getByRole('tab', { name: '素材创作' })
+    fireEvent.keyDown(first, { key: 'ArrowLeft' })
+    expect(p.saveMode).toHaveBeenLastCalledWith('assets')
+    fireEvent.keyDown(last, { key: 'ArrowRight' })
+    expect(p.saveMode).toHaveBeenLastCalledWith('script')
+    fireEvent.keyDown(last, { key: 'ArrowLeft' })
+    expect(p.saveMode).toHaveBeenLastCalledWith('editing')
+    fireEvent.keyDown(first, { key: 'End' })
+    expect(p.saveMode).toHaveBeenLastCalledWith('assets')
+    fireEvent.keyDown(last, { key: 'Home' })
+    expect(p.saveMode).toHaveBeenLastCalledWith('script')
+    const calls = p.saveMode.mock.calls.length
+    fireEvent.keyDown(first, { key: 'Tab' })
+    expect(p.saveMode).toHaveBeenCalledTimes(calls)
+    fireEvent.click(first)
+    await waitFor(() => { expect(screen.getByRole('alert').textContent).toBe(zh.saveFailed) })
+  })
+
+  it('reports failed dismissal and insertion without sending or replacing the draft', async () => {
+    const p = props()
+    p.saveClosed.mockResolvedValue(false)
+    p.appendReference.mockReturnValue(false)
+    render(guide(p))
+    fireEvent.keyDown(document, { key: 'Tab' })
+    expect(p.saveClosed).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: '馒头仔' }))
+    await waitFor(() => { expect(screen.getByText(zh.saveFailed)).toBeTruthy() })
+    fireEvent.click(screen.getByRole('button', { name: '短剧编剧' }))
+    expect(screen.getByText(zh.insertFailed)).toBeTruthy()
+    expect(p.inputActions.submit).not.toHaveBeenCalled()
+  })
+
+  it('reads occurrence identity, tolerates no input binding, and closes the complete Skill list', () => {
+    const p = props()
+    const withOccurrences = { ...p, useInput: (select: (value: unknown) => unknown) => select({ occurrences: [
+      { source: 'file', ref: skill.slug }, { source: 'skill', ref: 'another' }, { source: 'skill', ref: skill.slug },
+    ] }) }
+    const view = render(guide(withOccurrences))
+    expect(screen.getByRole('button', { name: '短剧编剧' }).getAttribute('aria-pressed')).toBe('true')
+    view.rerender(guide({ ...p, useInput: (select: (value: unknown) => unknown) => select(undefined) }))
+    expect(screen.getByRole('button', { name: '短剧编剧' }).getAttribute('aria-pressed')).toBe('false')
+    fireEvent.click(screen.getByRole('button', { name: zh.more }))
+    fireEvent.click(screen.getByRole('button', { name: zh.close }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: zh.more }))
+    fireEvent.click(screen.getByRole('button', { name: skill.name }))
+    expect(p.appendReference).toHaveBeenCalledOnce()
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it.each(['idle', 'loading', 'failed'] as const)('shows the real %s catalog state in the complete list', (phase) => {
+    const p = props(settings, { phase })
+    render(guide(p))
+    fireEvent.click(screen.getByRole('button', { name: zh.more }))
+    const dialog = screen.getByRole('dialog')
+    expect(dialog.textContent).toContain(marketZh[phase === 'failed' ? 'skills.failed' : 'skills.loading'])
+    if (phase === 'failed') {
+      fireEvent.click(dialog.querySelector('button:not([aria-label])')!)
+      expect(p.load).toHaveBeenCalledOnce()
+    }
+  })
+
+  it('retries detail failures, uses installed details, and closes detail explicitly', () => {
+    const uninstalled = { ...skill, installed: false }
+    const p = props(settings, { ...ready, detailError: skill.slug, catalog: { skills: [uninstalled], installedCount: 0, signedIn: true } })
+    const view = render(guide(p))
+    fireEvent.click(screen.getByRole('button', { name: zh.more }))
+    fireEvent.click(screen.getByRole('button', { name: skill.name }))
+    fireEvent.click(screen.getByRole('button', { name: marketZh['skills.retry'] }))
+    expect(p.openDetail).toHaveBeenCalledTimes(2)
+    view.rerender(guide(props(settings, { ...ready, detail: { ...skill, introduction: '完整使用说明', usesOperators: [] } })))
+    expect(screen.getByText('完整使用说明')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: zh.use }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    view.rerender(guide(p))
+    fireEvent.click(screen.getByRole('button', { name: '短剧编剧' }))
+    fireEvent.click(screen.getByRole('button', { name: zh.close }))
+    expect(p.closeDetail).toHaveBeenCalled()
+  })
+
+  it('shows installation conflicts and login progress without hiding the failure', () => {
+    const uninstalled = { ...skill, installed: false }
+    const state = { phase: 'ready', catalog: { skills: [uninstalled], installedCount: 0, signedIn: false }, detail: { ...uninstalled, usesOperators: [] } } as const
+    const p = props(settings, state)
+    const view = render(guide(p))
+    fireEvent.click(screen.getByRole('button', { name: '短剧编剧' }))
+    fireEvent.click(screen.getByRole('button', { name: marketZh['skills.loginToInstall'] }))
+    expect(p.startLogin).toHaveBeenCalledOnce()
+    view.rerender(guide(props(settings, { ...state, loginPhase: 'starting' })))
+    expect(screen.getByRole('button', { name: marketZh['skills.loginPreparing'] }).hasAttribute('disabled')).toBe(true)
+    view.rerender(guide(props(settings, { ...state, loginPhase: 'authorizing' })))
+    expect(screen.queryByRole('link')).toBeNull()
+    view.rerender(guide({ ...p, useMarketplace: (select: (value: unknown) => unknown) => select({ ...state, loginPhase: 'authorizing', login: { userCode: 'TEST-CODE', verificationUrl: 'https://example.test/login' } }) }))
+    expect(screen.getByRole('link').getAttribute('href')).toBe('https://example.test/login')
+    fireEvent.click(screen.getByRole('button', { name: marketZh['skills.cancelLogin'] }))
+    expect(p.cancelLogin).toHaveBeenCalledOnce()
+    view.rerender(guide(props(settings, { ...state, loginPhase: 'failed', installError: 'local-conflict' })))
+    expect(screen.getByText(marketZh['skills.loginFailed'])).toBeTruthy()
+    expect(screen.getByText(zh.installFailed + marketZh['skills.localConflict'])).toBeTruthy()
+    view.rerender(guide(props(settings, { ...state, installError: 'failed' })))
+    expect(screen.getByText(zh.installFailed)).toBeTruthy()
+    view.rerender(guide(props(settings, { ...state, catalog: { ...state.catalog, signedIn: true }, installing: skill.slug })))
+    expect(screen.getByRole('button', { name: marketZh['skills.installing'] }).hasAttribute('disabled')).toBe(true)
+  })
+
+  it.each([true, false])('does not insert after a late installation resolves %s into a changed composer', async (result) => {
+    const uninstalled = { ...skill, installed: false }
+    const p = props(settings, {
+      ...ready, catalog: { skills: [uninstalled], installedCount: 0, signedIn: true }, detail: { ...uninstalled, usesOperators: [] },
+    })
+    let finish!: (value: boolean) => void
+    p.install.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
+    const view = render(guide(p))
+    fireEvent.click(screen.getByRole('button', { name: '短剧编剧' }))
+    fireEvent.click(screen.getByRole('button', { name: zh.installAndUse }))
+    view.rerender(guide({ ...p, sessionId: 's2' }))
+    await act(async () => { finish(result) })
+    expect(p.appendReference).not.toHaveBeenCalled()
+    expect(screen.queryByText(zh.installFailed)).toBeNull()
   })
 })

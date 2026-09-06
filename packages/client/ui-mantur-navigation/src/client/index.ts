@@ -17,6 +17,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ReferenceInsert } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { GUIDE_NAMESPACE, type GuideSettings } from '../guide-settings.ts'
 import { CreationGuide, CreationModes, type GuidePreferencesInjected } from './CreationGuide.tsx'
+import { ManturComposerLayout } from './ManturComposerLayout.tsx'
 import { en as guideEn, zh as guideZh, type GuideKey } from './guide-locales.ts'
 import {
   MarketplaceNavigation, MarketplacePage, ProjectsHeading,
@@ -63,6 +64,9 @@ export async function apply(ctx: Context): Promise<void> {
     scope.slots.inject('conversation.hero.modes', () => scope.slots.register({
       name: 'conversation.hero.modes', locale: 'guide.mantur', inject: () => guidePreferences,
     }, CreationModes))
+    scope.slots.inject('conversation.composer.layout', () => scope.slots.register({
+      name: 'conversation.composer.layout',
+    }, ManturComposerLayout))
     scope.slots.inject('conversation.composer.guide', () => scope.slots.register({
       name: 'conversation.composer.guide', locale: 'guide.mantur',
       inject: (sessionId: SessionId | undefined) => ({

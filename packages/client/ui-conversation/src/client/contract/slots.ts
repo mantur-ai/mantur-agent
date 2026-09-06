@@ -129,6 +129,12 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     'conversation.hero.modes': { kind: 'single'; scope: 'root' }
     /** Product guidance above the resident composer; never owns the editor. */
     'conversation.composer.guide': { kind: 'single'; scope: 'session-maybe'; owner: { hero: boolean; disabled: boolean } }
+    /** Arrange owner-created composer parts without replacing the editor or workspace behavior. */
+    'conversation.composer.layout': {
+      kind: 'single'
+      scope: 'session-maybe'
+      owner: { hero: boolean; heading: ReactNode; workspace: ReactNode; content: ReactNode }
+    }
     /** Agent-preset control staged for a New Session. */
     'conversation.hero.agentPreset': { kind: 'single'; scope: 'root'; owner: HeroAgentPresetOwnerProps }
     /** Full-width entries above the composer card. */
@@ -334,6 +340,7 @@ export type ConversationSlotProps =
     | 'conversation.hero.badge'
     | 'conversation.hero.modes'
     | 'conversation.composer.guide'
+    | 'conversation.composer.layout'
     | 'conversation.hero.workspace'
     | 'conversation.hero.agentPreset'
   >

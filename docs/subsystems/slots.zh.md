@@ -158,6 +158,7 @@ root
 │  ├─ conversation.hero.headline
 │  ├─ conversation.hero.badge
 │  ├─ conversation.hero.modes
+│  ├─ conversation.composer.layout
 │  ├─ conversation.composer.guide
 │  ├─ conversation.hero.workspace
 │  │  └─ conversation.hero.workspace.directoryFlow
