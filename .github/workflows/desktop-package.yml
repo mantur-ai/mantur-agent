@@ -34,7 +34,10 @@ jobs:
           - target: windows-x64
             runner: windows-2025
             script: desktop:dist:win:x64
-            artifacts: apps/desktop/dist/Mantur-Agent-Windows-x64.exe
+            artifacts: |
+              apps/desktop/dist/Mantur-Agent-Windows-x64.exe
+              apps/desktop/dist/Mantur-Agent-Windows-x64.exe.blockmap
+              apps/desktop/dist/latest.yml
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       DSH_TELEMETRY_DISABLED: '1'

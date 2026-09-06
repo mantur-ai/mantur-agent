@@ -28,7 +28,7 @@ client 构建 profile `mantur` 会把 `DSH_CLIENT_TITLE` 固定为 `漫途Agent`
 
 内部打包工作流会生成未签名的 DMG、macOS 更新 ZIP 与一键 NSIS 安装包。私有 desktop workspace 仍不属于 npm release family；该工作流只把文件作为私有 Actions artifact 保留，不创建 tag 或 GitHub release。只有某个目标的原生打包和 packaged smoke 都通过后，才可认为该目标完成验证。
 
-macOS release 工作流通过受保护的 GitHub 环境 secret 为原生 arm64 与 x64 构建执行签名和 notarization。它会先验证 Developer ID 签名、Gatekeeper 评估、stapled ticket 与 packaged smoke，再合并两份架构专属通道文件。只有从精确 `v<version>` tag 发起的显式发布任务才会创建 GitHub release，其中包含两份 DMG、两份更新 ZIP、对应 blockmap、合并后的更新元数据与 SHA-256 哈希。electron-updater 可以从 GitHub feed 中选择这种兼容 semver 的 alpha、beta 与 RC release。工作流会拒绝已存在的 release；发布前还必须启用仓库级 Release Immutability，以阻止之后修改 tag 和产物。在 Windows 具备独立签名身份与发布路径之前，它不会进入外部更新通道。
+桌面端 release 工作流为原生 macOS 与 Windows 签名使用不同的受保护 GitHub 环境。macOS 任务会验证 Developer ID 签名、Gatekeeper 评估、stapled ticket 与 packaged smoke，再合并两份架构专属通道文件。Windows 任务使用已配置的 PFX 签名解包应用与 NSIS 安装器，要求两份签名都具有预期证书指纹与时间戳，并运行 packaged smoke。只有从精确 `v<version>` tag 发起的显式发布任务才会创建一份 GitHub release，其中包含三个原生安装包、更新 archive、blockmap、平台元数据与 SHA-256 哈希。electron-updater 可以从 GitHub feed 中选择这种兼容 semver 的 alpha、beta 与 RC release。工作流会拒绝已存在的 release；发布前还必须启用仓库级 Release Immutability，以阻止之后修改 tag 和产物。
 
 ## Alternatives considered
 
@@ -49,7 +49,7 @@ macOS release 工作流通过受保护的 GitHub 环境 secret 为原生 arm64 �
 - 桌面用户可以获得普通安装包，而 Web profile 仍是唯一的交互式 Harness 应用实现。
 - loopback 子进程增加了一条本地 HTTP 生命周期，并通过本地化原生对话框显式呈现启动失败。
 - 已安装桌面状态与 CLI 状态隔离；schema 无效的会话投影缓存可执行一次由用户同意的可丢弃重置，而不是无期阻止应用启动。
-- 更新检查会自动运行，也可由用户手动触发，但下载与重启安装仍由用户决定。stable 用户不会收到预发布版本。只有已签名的 macOS release 产物构成外部更新通道；Windows 对外更新仍需签名凭据与受保护的发布路径。
+- 更新检查会自动运行，也可由用户手动触发，但下载与重启安装仍由用户决定。stable 用户不会收到预发布版本。外部更新需要对应平台的受保护签名环境；缺少 macOS 或 Windows 身份时，release 工作流会失败。
 - 桌面端改动通过一条受监听的开发命令运行，不生成安装包；开发数据与已安装数据保持分离。
 - 完整运行时依赖闭包与解包文件使安装包大于专用客户端；这项成本避免了第二套应用运行时，并让 Loader 与原生模块路径保持为普通文件路径。
-- 签名与 notarization 凭据仍是受保护的部署输入。内部打包工作流无法访问这些凭据，也不能发布 release。
+- 签名、notarization 与预期签名者身份仍是受保护的部署输入。内部打包工作流无法访问这些凭据，也不能发布 release。
