@@ -485,13 +485,22 @@ importers:
       '@deepseek-ai/dsh-session-title-llm':
         specifier: workspace:^
         version: link:../../packages/session/session-title-llm
+      '@deepseek-ai/dsh-util-values':
+        specifier: workspace:^
+        version: link:../../packages/util/values
       dsh-python-runtime-closure:
         specifier: workspace:*
         version: link:../../python/sdk-runtime
       electron-updater:
         specifier: 6.8.9
         version: 6.8.9
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
     devDependencies:
+      '@deepseek-ai/dsh-brand':
+        specifier: workspace:^
+        version: link:../../packages/util/brand
       '@types/node':
         specifier: ^22.20.0
         version: 22.20.0

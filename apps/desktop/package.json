@@ -19,10 +19,13 @@
     "@deepseek-ai/cordis-plugin-group": "workspace:^",
     "@deepseek-ai/dsh": "workspace:^",
     "@deepseek-ai/dsh-session-title-llm": "workspace:^",
+    "@deepseek-ai/dsh-util-values": "workspace:^",
     "dsh-python-runtime-closure": "workspace:*",
-    "electron-updater": "6.8.9"
+    "electron-updater": "6.8.9",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@deepseek-ai/dsh-brand": "workspace:^",
     "@types/node": "^22.20.0",
     "electron": "43.4.0",
     "electron-builder": "26.15.7",

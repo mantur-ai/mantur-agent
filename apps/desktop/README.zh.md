@@ -87,6 +87,7 @@ macOS Intel、macOS Apple Silicon 与 Windows 使用同一个更新控制器。m
 
 ## 已知限制
 
+- 内部[原生账号控制器](src/auth/controller.ts)尚未连接 Main、preload、账号界面与随附 CLI。其操作系统加密存储、冻结 HTTP 协议与请求清理测试不能证明原生登录已经可用；[接入提案](../../.agents/notes/proposed/architecture/2026-09-07-desktop-native-account-identity.zh.md)记录剩余验收条件。
 - `Desktop package` 产物仍是未签名的内部安装包。macOS Gatekeeper 与 Windows SmartScreen 可能对这些文件显示警告；对外分发 macOS 客户端时只能使用 `Desktop release` 产物。
 - 原生图标源文件是带白色圆角底和透明外角的 1024 px PNG，Web 客户端单独使用透明 Logo。macOS 和 Windows 包会在原生构建时生成各自的平台图标格式；当前没有矢量源文件。
 - 已签名的 release 工作流只发布 macOS。Windows 在具备代码签名身份与受保护的发布路径之前不支持外部更新。

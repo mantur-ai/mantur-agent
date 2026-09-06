@@ -87,6 +87,7 @@ The carrier passes `app.getPath('documents')` with a `漫途项目` child to the
 
 ## Known limitations
 
+- The internal [native account controller](src/auth/controller.ts) is not connected to Main, preload, the account UI or the bundled CLI. Its OS-sealed storage, frozen HTTP protocol and request cleanup tests do not establish native login availability; the [integration proposal](../../.agents/notes/proposed/architecture/2026-09-07-desktop-native-account-identity.md) owns the remaining acceptance conditions.
 - The `Desktop package` artifacts remain unsigned internal installers. macOS Gatekeeper and Windows SmartScreen can warn for those files; use only the `Desktop release` artifacts for external macOS distribution.
 - The native icon source is a 1024 px PNG with a white rounded tile and transparent outer corners. The Web client uses the transparent logo separately. macOS and Windows packages derive their platform icon formats during the native build; a vector source remains unavailable.
 - The signed release workflow publishes macOS only. Windows external updates remain unsupported until a Windows code-signing identity and protected publication path exist.
