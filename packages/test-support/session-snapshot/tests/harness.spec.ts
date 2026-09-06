@@ -8,13 +8,33 @@ import { PROTOCOL_VERSION } from '@agentclientprotocol/sdk'
 import { runScenario, snapshotSpillRoot, type AgentUnderTest, type InputStep } from '../src/harness.ts'
 import { launchAcpTestAgent } from '../src/launcher.ts'
 
-const fsControl = vi.hoisted(() => ({ cleanupFailure: undefined as Error | undefined }))
+const fsControl = vi.hoisted(() => ({
+  cleanupFailure: undefined as Error | undefined,
+  harvestActive: false,
+  cleanupDuringHarvest: false,
+  harvestGate: undefined as { enter(): void; wait: Promise<void>; finish(): void } | undefined,
+}))
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>()
   return {
     ...actual,
+    async readdir(...args: Parameters<typeof actual.readdir>) {
+      const gate = String(args[0]).includes('acp-snap-sessions-') ? fsControl.harvestGate : undefined
+      if (gate === undefined) return await actual.readdir(...args)
+      fsControl.harvestGate = undefined
+      fsControl.harvestActive = true
+      gate.enter()
+      try {
+        await gate.wait
+        return await actual.readdir(...args)
+      } finally {
+        fsControl.harvestActive = false
+        gate.finish()
+      }
+    },
     async rm(...args: Parameters<typeof actual.rm>): Promise<void> {
+      if (String(args[0]).includes('acp-snap-') && fsControl.harvestActive) fsControl.cleanupDuringHarvest = true
       if (String(args[0]).includes('acp-snap-cwd-') && fsControl.cleanupFailure !== undefined) {
         const failure = fsControl.cleanupFailure
         fsControl.cleanupFailure = undefined
@@ -952,6 +972,39 @@ describe('runScenario', () => {
       { steps: [...boot, { op: 'waitForGoalPhase', phase: 'blocked', timeoutMs: 20 }] },
       { agent: AGENT, mode: 'replay', fixtureFile: missing.fixtureFile },
     )).rejects.toThrow(/did not persist goal phase "blocked" within 20ms/)
+  })
+
+  it('reports the child-turn deadline after an in-flight log harvest settles', async () => {
+    const missing = await scenario({})
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const finished = Promise.withResolvers<undefined>()
+    let harvesting = false
+    fsControl.cleanupDuringHarvest = false
+    fsControl.harvestGate = {
+      enter: () => { harvesting = true; entered.resolve(undefined) },
+      wait: release.promise,
+      finish: () => { finished.resolve(undefined) },
+    }
+    const running = runScenario(
+      { steps: [...boot, { op: 'waitForSubagentTurnEnd', child: 2, timeoutMs: 20 }] },
+      { agent: AGENT, mode: 'replay', fixtureFile: missing.fixtureFile },
+    ).then(() => undefined, (error: unknown) => error)
+    try {
+      await Promise.race([entered.promise, running.then(() => { throw new Error('scenario ended before harvesting') })])
+      await new Promise(resolve => setTimeout(resolve, 100))
+      release.resolve(undefined)
+      expect(await running).toEqual(expect.objectContaining({
+        message: 'snapshot-harness: subagent child #2 did not persist closed turn 1 within 20ms',
+      }))
+      expect(fsControl.cleanupDuringHarvest).toBe(false)
+      expect(fsControl.harvestActive).toBe(false)
+    } finally {
+      fsControl.harvestGate = undefined
+      release.resolve(undefined)
+      if (harvesting) await finished.promise
+      await running
+    }
   })
 
   it('waitForSubagentTurnEnd requires a closed child work turn', { timeout: 20_000 }, async () => {
