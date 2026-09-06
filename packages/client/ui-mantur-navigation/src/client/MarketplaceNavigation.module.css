@@ -504,7 +504,7 @@
   overflow: hidden;
   padding: 0;
   border: 0;
-  background: var(--dsw-alias-bg-base);
+  background: var(--dsh-media-preview-background, var(--dsw-alias-bg-base));
   cursor: pointer;
 }
 
@@ -683,6 +683,10 @@
   place-items: center;
   overflow: hidden;
   border-radius: 16px;
+  background: var(--dsh-media-preview-background, #10131a);
+}
+
+.recipeDetailMedia:has(video) {
   background: #10131a;
 }
 

@@ -8,6 +8,7 @@ import {
   ManturHeroBadge, ManturHeroBrand, ManturHeroHeadline, ManturSidebarMark, ManturSidebarName,
 } from './Brand.tsx'
 import { en, zh, type ManturBrandKey } from './locales.ts'
+import storyboard from './storyboard.css?inline'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -27,6 +28,17 @@ export const inject = ['slots', 'locale']
  * @param ctx - Client root context.
  */
 export function apply(ctx: ClientContext): void {
+  ctx.effect(() => {
+    const style = document.createElement('style')
+    style.dataset.pluginCss = '@deepseek-ai/dsh-client-ui-brand-mantur/storyboard.css'
+    style.textContent = storyboard
+    document.head.append(style)
+    document.body.dataset.manturTheme = 'storyboard'
+    return () => {
+      style.remove()
+      delete document.body.dataset.manturTheme
+    }
+  }, 'ui-brand-mantur: storyboard palette')
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-brand-mantur: dictionaries')
   ctx.slots.inject('sidebar.brand.mark', () =>
     ctx.slots.inject('sidebar.brand.name', () =>

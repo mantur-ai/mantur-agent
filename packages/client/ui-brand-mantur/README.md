@@ -25,6 +25,8 @@ This package fills the generic sidebar and blank-session hero with the approved 
 
 Compose this row only through [`dsh-mantur-app`](../../bundle/mantur-app/README.md). The browser half registers `sidebar.brand.mark`, `sidebar.brand.name`, `conversation.hero.brand.mark`, `conversation.hero.headline`, and `conversation.hero.badge` after their owners declare them. Both locales render the confirmed product name `漫途Agent` in the sidebar, while the hero places the approved logo before the Chinese headline `故事起于一念，余下交给漫途` or its English equivalent. The Mantur Web application must serve `mantur-logo.png` beside its built page.
 
+The light appearance uses the approved vermilion-and-blue storyboard palette: warm paper, cobalt actions, and darker status text. The application serves `mantur-storyboard-background.svg` beside its built page; decorative marks occupy only the outer frame edges and disappear below 900 px. Image previews use a neutral background; video letterboxing stays dark. Dark appearance and body-portaled onboarding retain their own palettes. The plugin removes its stylesheet and body marker when unloaded; [the theme decision](../../../.agents/notes/implemented/feature/2026-09-06-mantur-storyboard-theme.md) records the contrast and scoping constraints.
+
 <a id="model-experience"></a>
 ## Model Experience
 
