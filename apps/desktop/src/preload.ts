@@ -1,4 +1,4 @@
-/** Sandboxed preload: expose only draft storage and correlated save acknowledgements. */
+/** Sandboxed preload: expose only named draft and updater capabilities. */
 import { contextBridge, ipcRenderer } from 'electron'
 
 contextBridge.exposeInMainWorld('manturDrafts', {
@@ -18,5 +18,17 @@ contextBridge.exposeInMainWorld('manturDrafts', {
     const listener = (): void => { handler() }
     ipcRenderer.on('mantur:drafts:release', listener)
     return () => { ipcRenderer.removeListener('mantur:drafts:release', listener) }
+  },
+})
+
+contextBridge.exposeInMainWorld('manturUpdates', {
+  getSnapshot: () => ipcRenderer.invoke('mantur:updates:snapshot'),
+  check: () => ipcRenderer.invoke('mantur:updates:check'),
+  download: () => ipcRenderer.invoke('mantur:updates:download'),
+  install: () => ipcRenderer.invoke('mantur:updates:install'),
+  subscribe: (handler: (snapshot: unknown) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, snapshot: unknown): void => { handler(snapshot) }
+    ipcRenderer.on('mantur:updates:changed', listener)
+    return () => { ipcRenderer.removeListener('mantur:updates:changed', listener) }
   },
 })

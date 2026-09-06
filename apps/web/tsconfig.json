@@ -24,6 +24,7 @@
   "exclude": [
     "tests/scaffold.ts",
     "tests/desktop-drafts.e2e.ts",
+    "tests/desktop-updates.e2e.ts",
     "tests/scaffold-hermetic.e2e.ts",
     "tests/startup-rpc-budget.e2e.ts",
     "tests/minimal-preset.snapshot.ts",
@@ -44,6 +45,7 @@
     "tests/models-settings.e2e.ts",
     "tests/mantur-brand.snapshot.ts",
     "tests/mantur-guide.expected.e2e.ts",
+    "tests/mantur-automatic-project.expected.e2e.ts",
     "tests/default-model.e2e.ts",
     "tests/github-ready-review.e2e.ts",
     "tests/streaming-fence-highlight.e2e.ts",

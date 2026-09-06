@@ -150,6 +150,8 @@ async function scopedBench(register?: (inputTriggers: InputTriggerService) => vo
     useProjection: (() => undefined),
     useConversation: bindSnapshotSelector(createSnapshotStore(conversationSnapshot())),
     useInput: bindSnapshotSelector(shell.state),
+    useComposerInput: bindSnapshotSelector(shell.state),
+    unassignedActions: undefined,
     inputActions: shell.actions,
     keyboard: shell,
     addImages: () => null,

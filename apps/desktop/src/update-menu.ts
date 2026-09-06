@@ -14,7 +14,8 @@ export interface UpdateMenuCopy {
   checkForUpdates: string
   checkingForUpdates: string
   updateAvailableStatus: (version: string) => string
-  downloadProgress: (version: string, percent: number) => string
+  downloadUpdate: (version: string) => string
+  downloadProgress: (version: string, percent: number | null) => string
   updateReadyStatus: (version: string) => string
   installUpdate: (version: string) => string
   upToDateStatus: string
@@ -29,6 +30,7 @@ export interface BuildApplicationMenuOptions {
   updatesEnabled: boolean
   state: DesktopUpdateState
   copy: UpdateMenuCopy
+  onDownload: () => void
   onCheck: () => void
   onInstall: () => void
 }
@@ -67,6 +69,13 @@ function updateItems(options: BuildApplicationMenuOptions): MenuItemConstructorO
       label: copy.checkForUpdates,
       enabled: options.updatesEnabled && !busy && state.kind !== 'ready',
       click: options.onCheck,
+    },
+    {
+      id: 'desktop-download-update',
+      label: state.kind === 'available' ? copy.downloadUpdate(state.version) : '',
+      enabled: options.updatesEnabled && state.kind === 'available',
+      visible: state.kind === 'available',
+      click: options.onDownload,
     },
     {
       id: 'desktop-install-update',

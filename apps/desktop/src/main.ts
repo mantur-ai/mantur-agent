@@ -1,11 +1,13 @@
 /** Thin native window over the shipped Mantur profile. */
 
 import { appendFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron'
 import electronUpdater from 'electron-updater'
 import { DesktopDraftStorage } from './draft-storage.ts'
 import { installDraftBridge } from './draft-bridge.ts'
+import { installUpdateBridge } from './update-bridge.ts'
 import {
   canResetProjectionCache,
   desktopPaths,
@@ -40,6 +42,11 @@ const drafts = installDraftBridge({ ipc: ipcMain, window: () => mainWindow,
   storage: new DesktopDraftStorage(paths.userData),
 })
 
+const updateBridge = installUpdateBridge({ ipc: ipcMain, window: () => mainWindow,
+  origin: () => serviceUrl === undefined ? undefined : new URL(serviceUrl).origin,
+  controller: () => updates, version: app.getVersion(),
+})
+
 function writeDesktopLog(message: string): void {
   void appendFile(paths.logPath, `${new Date().toISOString()} ${message}\n`).catch((error: unknown) => {
     console.error(error)
@@ -65,18 +72,21 @@ function renderApplicationMenu(): void {
     state: updateState,
     copy,
     onCheck: () => { updates?.checkNow() },
+    onDownload: () => { updates?.downloadAvailableUpdate() },
     onInstall: () => { updates?.installReadyUpdate() },
   })))
 }
 
 function showUpdateFeedback(state: DesktopUpdateState): void {
-  if ((state.kind !== 'up-to-date' && state.kind !== 'error') || !state.requestedByUser) return
+  const failure = state.kind === 'ready' ? state.error
+    : state.kind === 'error' && state.requestedByUser ? state.detail : undefined
+  if (failure === undefined && !(state.kind === 'up-to-date' && state.requestedByUser)) return
   const copy = desktopCopy(app.getLocale())
-  const error = state.kind === 'error'
+  const error = failure !== undefined
   void dialog.showMessageBox({
     type: error ? 'error' : 'info',
     title: error ? copy.updateErrorTitle : copy.upToDateTitle,
-    message: error ? copy.updateErrorMessage(state.detail) : copy.upToDateMessage(app.getVersion()),
+    message: error ? copy.updateErrorMessage(failure) : copy.upToDateMessage(app.getVersion()),
     buttons: [copy.okButton],
     defaultId: 0,
     cancelId: 0,
@@ -153,7 +163,11 @@ async function launch(): Promise<void> {
     service = startDesktopService({
       electronExecutable: process.execPath,
       cwd: paths.launchRoot,
-      environment: { ...process.env, DSH_HOME: paths.dshHome },
+      environment: {
+        ...process.env,
+        DSH_HOME: paths.dshHome,
+        DSH_MANTUR_PROJECTS_ROOT: join(app.getPath('documents'), '漫途项目'),
+      },
       logPath: paths.logPath,
       mirrorOutput: !app.isPackaged,
     })
@@ -204,6 +218,7 @@ function startUpdates(): void {
     log: writeDesktopLog,
     onStateChange: (state) => {
       updateState = state
+      updateBridge.publish(state)
       renderApplicationMenu()
       showUpdateFeedback(state)
     },
@@ -217,18 +232,6 @@ function startUpdates(): void {
       }
     },
     prompts: {
-      confirmDownload: async (version) => {
-        const result = await dialog.showMessageBox({
-          type: 'info',
-          title: copy.updateAvailableTitle,
-          message: copy.updateAvailableMessage(version),
-          buttons: [copy.downloadButton, copy.laterButton],
-          defaultId: 1,
-          cancelId: 1,
-          noLink: true,
-        })
-        return result.response === 0
-      },
       confirmInstall: async (version) => {
         const result = await dialog.showMessageBox({
           type: 'info',
@@ -243,6 +246,7 @@ function startUpdates(): void {
       },
     },
   })
+  updateBridge.publish(updateState)
   renderApplicationMenu()
 }
 

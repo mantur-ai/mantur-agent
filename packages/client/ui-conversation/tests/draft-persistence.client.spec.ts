@@ -64,6 +64,98 @@ describe('native draft persistence', () => {
     }
   })
 
+  it('uses a durable identity during automatic preparation without releasing its editor lock', async () => {
+    const native = nativeBridge()
+    const target = shell()
+    const store = new DraftPersistence(native.bridge, images)
+    const finished = Promise.withResolvers<undefined>()
+    const source = new SessionInputShell({
+      actx: {} as Context, defaultSink: vi.fn(),
+      prepareSubmit: async () => {
+        const id = await store.prepareIdentity()
+        expect(native.read().drafts.find(draft => draft.owner === 'unassigned')?.prepareId).toBe(id)
+        expect(source.editor.isEditable()).toBe(false)
+        await store.commitTransfer('target', () => { source.moveDraftTo(target) })
+        expect(source.editor.isEditable()).toBe(false)
+        finished.resolve(undefined)
+      },
+      commandImages: { serialize: async () => [], release: () => {}, unsupportedNotice: () => 'unsupported' },
+    })
+    try {
+      await store.attachDraft('unassigned', source)
+      await store.attachDraft('session:target', target)
+      source.appendReference({ source: 'skill', ref: 'script', label: '中文编剧', clipboardText: '/script' })
+      source.submit()
+      await finished.promise
+      await vi.waitFor(() => { expect(source.snapshot.phase).toBe('plain') })
+      expect(target.snapshot.occurrences[0]?.label).toBe('中文编剧')
+      expect(native.read().drafts.find(draft => draft.owner === 'unassigned')?.prepareId).toBeUndefined()
+      await store.save()
+    } finally { store.dispose(); source.dispose(); target.dispose() }
+  })
+
+  it.each(['cancelled', 'navigation changed'])('checks %s after a queued save and before publishing the transfer', async (message) => {
+    const native = nativeBridge()
+    const source = shell()
+    const target = shell()
+    const store = new DraftPersistence(native.bridge, images)
+    try {
+      await store.attachDraft('unassigned', source)
+      await store.attachDraft('session:target', target)
+      source.setDraft('retained source')
+      await store.prepareIdentity()
+      const saved = structuredClone(native.read())
+      const entered = Promise.withResolvers<undefined>()
+      const release = Promise.withResolvers<undefined>()
+      // The actual save queue is held inside image capture; cancellation arrives while transfer awaits it.
+      const captureSpy = vi.spyOn(images, 'capture').mockImplementationOnce(async () => {
+        entered.resolve(undefined)
+        await release.promise
+        return []
+      })
+      const move = vi.fn(() => { source.moveDraftTo(target) })
+      let cancelled = false
+      const transfer = store.commitTransfer('target', move, () => { if (cancelled) throw new Error(message) })
+      const rejected = expect(transfer).rejects.toThrow(message)
+      try {
+        await entered.promise
+        cancelled = true
+        release.resolve(undefined)
+        await rejected
+        expect(move).not.toHaveBeenCalled()
+        expect(native.read().drafts).toEqual(saved.drafts)
+        expect(source.snapshot.draft).toBe('retained source')
+        expect(target.snapshot.draft).toBe('')
+      } finally { release.resolve(undefined); captureSpy.mockRestore() }
+    } finally { store.dispose(); source.dispose(); target.dispose() }
+  })
+
+  it('confirms an exact committed transfer after its save receipt is lost without writing it again', async () => {
+    const native = nativeBridge()
+    const source = shell()
+    const target = shell()
+    const store = new DraftPersistence(native.bridge, images)
+    try {
+      await store.attachDraft('unassigned', source)
+      await store.attachDraft('session:target', target)
+      source.setDraft('recover the exact transfer')
+      await store.prepareIdentity()
+      const save = vi.spyOn(native.bridge, 'save')
+      const original = save.getMockImplementation()!
+      save.mockClear()
+      save.mockImplementationOnce(async (next) => {
+        await original(next)
+        throw new Error('receipt lost after publication')
+      })
+      const move = vi.fn(() => { source.moveDraftTo(target) })
+      const result = await store.commitTransfer('target', move)
+      expect(save).toHaveBeenCalledOnce()
+      expect(move).toHaveBeenCalledOnce()
+      expect(result.revision).toBe(native.read().revision)
+      expect(target.snapshot.draft).toBe('recover the exact transfer')
+    } finally { store.dispose(); source.dispose(); target.dispose() }
+  })
+
   it('preserves full Skill references and occurrence identities across a new editor instance', () => {
     const original = shell()
     original.appendReference({ source: 'skill', ref: 'drama-write', label: '短剧编剧', clipboardText: '/drama-write' })

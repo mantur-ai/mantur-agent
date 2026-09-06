@@ -29,6 +29,8 @@ kind: "package-reference"
 
 ### 重排序与视图选项
 
+Host 的 `newSessionWorkspace` 配置默认为 `recent`：首次进入和未指定范围的新会话使用当前或最近 Workspace。`explicit` 保持未关联状态，直到用户选择 Workspace 或产品准备策略创建项目。明确指定 Workspace 的操作仍选择该目标。客户端等待设置就绪后才自动选择，不会在配置加载期间猜测最近目标。
+
 视图选项把分组方式和每个记账各自的一份浏览器持久化 Session 顺序放在一起：**手动排序**和**最近更新**在两种呈现方式下都可用。进入最近更新时会执行一次完整的时间排序，后续 user prompt 或 steer 会将对应 Session 置顶一次；进入手动排序则保留所有当前位置并停用后续置顶。两种模式下的拖拽都会编辑当前顺序；真实 Workspace 在手动模式下的拖拽还会更新 Host Session 记账，而 Ungrouped 和单列表的顺序始终只保存在浏览器本地。折叠分组的拖拽边界按渲染行确定，并把来源行放在中间隐藏行之前，因此拖拽不会隐藏来源行。无论采用哪种 Session 顺序，Workspace 拖拽顺序都由 Host 持久化。
 
 ### 搜索

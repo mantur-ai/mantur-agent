@@ -12,6 +12,8 @@ Status: implemented
 
 ## 决策
 
+本决策适用于共享 Workspace 选择器。漫途的[自动首次发送策略](../feature/2026-09-06-mantur-automatic-project.zh.md)独立为未关联草稿创建项目，不向此选择器增加另一个入口，也不恢复 `workspace.create` 的按名称创建功能。
+
 添加 Workspace 只有一条路径：通过组合的目录流程选一个宿主机目录，新建的或已存在的都可以。入口是 `menu.addWorkspace`（「添加工作区…」/ "Add workspace…"）；按名称创建的对话框及其 `create.*`／`menu.createWorkspace`／`workspace.new` 文案全部删除。标签命名的是结果而非机制，因为它现在是通往该结果的唯一一扇门——找「新建」的用户必须能找到它。
 
 **菜单的存在是为了在多个目标之间消歧。** 当只剩添加这一个入口时——仅添加的侧边栏表层，或列表为空的主视觉区——锚点手势*就是*该动作：直接拉起流程，不渲染浮层。只有一行的浮层多花一次点击，却没有任何可选项。这条规则是一个谓词（`addIsTheOnlyEntry`）覆盖两处表层，而不是逐表层特判。

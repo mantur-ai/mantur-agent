@@ -68,6 +68,8 @@ export interface SessionInputDeps {
     mode: InputSubmitMode,
     signal: AbortSignal,
   ): Promise<SubmitOutcome>
+  /** Materialize a draft's Session before handing it to the ordinary submit path. */
+  prepareSubmit?: (mode: InputSubmitMode, signal: AbortSignal) => Promise<void>
   /** Command-plane image plumbing (the hub owns the conversation face and the copy). */
   commandImages: {
     /** Resolve ordered draft ids to wire payloads without sending them; rejects when an id no longer resolves. */
@@ -167,6 +169,8 @@ export class SessionInputShell implements SessionInput {
   private failedRestoreRev: number | undefined
   private restoringFailures = false
   private imageFlightSeq = 0
+  /** One Session-preparation operation; its draft remains resident until handoff. */
+  private preparation: AbortController | undefined
   /** Image-only sends retained until admission settles or scope disposal releases their images. */
   private readonly imageFlights = new Map<number, {
     readonly controller: AbortController
@@ -248,7 +252,7 @@ export class SessionInputShell implements SessionInput {
     const caret = this.projection.caret
     if (caret !== null) {
       this.deps.inputTriggers?.()?.track(
-        this.projection.detectText, caret, { tier: guardOf(this.core.state.phase) }, this.rev,
+        this.projection.detectText, caret, { tier: guardOf(this.snapshot.phase) }, this.rev,
       )
     }
   }
@@ -270,7 +274,7 @@ export class SessionInputShell implements SessionInput {
    * @param text - the full next draft.
    */
   setDraft(text: string): void {
-    if (this.draftLocks !== 0) return
+    if (this.draftLocks !== 0 || this.preparation !== undefined) return
     const clean = text.replace(REFERENCE_PLACEHOLDER_RE, '')
     if (clean === this.projection.clipboardText) return
     this.editor.update(() => {
@@ -343,7 +347,7 @@ export class SessionInputShell implements SessionInput {
    * @param text - pasted plain text.
    */
   paste(text: string): void {
-    if (this.draftLocks !== 0) return
+    if (this.draftLocks !== 0 || this.preparation !== undefined) return
     const clean = text.replace(REFERENCE_PLACEHOLDER_RE, '')
     if (clean === '') return
     this.applyEdit(() => {
@@ -367,7 +371,24 @@ export class SessionInputShell implements SessionInput {
    * dismisses and the menu tracks frozen.
    */
   submit(mode: InputSubmitMode = 'queue'): void {
-    if (this.draftLocks !== 0) return
+    if (this.disposed || this.draftLocks !== 0 || this.preparation !== undefined) return
+    if (this.deps.prepareSubmit !== undefined) {
+      if (this.snapshot.draft.trim() === '' && this.imageIds.length === 0) return
+      const controller = new AbortController()
+      this.preparation = controller
+      this.editor.setEditable(false)
+      this.publish()
+      void this.deps.prepareSubmit(mode, controller.signal).catch((error: unknown) => {
+        if (!this.disposed && !controller.signal.aborted) {
+          this.notify('error', error instanceof Error ? error.message : String(error))
+        }
+      }).finally(() => {
+        if (this.preparation === controller) this.preparation = undefined
+        if (this.preparation === undefined && this.draftLocks === 0) this.editor.setEditable(true)
+        if (!this.disposed) this.publish()
+      })
+      return
+    }
     if (this.snapshot.draft.trim() === '' && this.imageIds.length > 0) {
       if (this.snapshot.phase === 'plain') {
         const imageIds = [...this.imageIds]
@@ -479,8 +500,8 @@ export class SessionInputShell implements SessionInput {
    * @returns whether the edit applied (phase, span CAS, and leading guard passed).
    */
   beginCommand(claim: CommandClaim, span: TokenSpan): boolean {
-    if (this.draftLocks !== 0) return false
-    const phase = this.core.state.phase
+    if (this.draftLocks !== 0 || this.preparation !== undefined) return false
+    const phase = this.snapshot.phase
     if (phase !== 'plain' && phase !== 'claimed') return false
     if (span.draftRev !== this.rev) return false
     // Leading-trigger contract: only whitespace may precede the span; the
@@ -504,8 +525,8 @@ export class SessionInputShell implements SessionInput {
    * @returns whether the edit applied.
    */
   insertReference(ref: ReferenceInsert, span: TokenSpan): boolean {
-    if (this.draftLocks !== 0) return false
-    const phase = this.core.state.phase
+    if (this.draftLocks !== 0 || this.preparation !== undefined) return false
+    const phase = this.snapshot.phase
     if (phase !== 'plain' && phase !== 'claimed') return false
     if (span.draftRev !== this.rev) return false
     const tail = this.projection.detectText.slice(span.end, span.end + 1)
@@ -525,8 +546,8 @@ export class SessionInputShell implements SessionInput {
    * @returns whether the reference is present and the editor accepted focus.
    */
   appendReference(reference: ReferenceInsert): boolean {
-    if (this.draftLocks !== 0) return false
-    if (this.core.state.phase !== 'plain' && this.core.state.phase !== 'claimed') return false
+    if (this.draftLocks !== 0 || this.preparation !== undefined) return false
+    if (this.snapshot.phase !== 'plain' && this.snapshot.phase !== 'claimed') return false
     const present = this.projection.occurrences.some(item =>
       item.source === reference.source && item.ref === reference.ref)
     const end = this.projection.detectText.length
@@ -544,7 +565,7 @@ export class SessionInputShell implements SessionInput {
    * @returns whether the token was consumed.
    */
   consumeToken(guard: ConsumeTokenRequest['guard']): boolean {
-    if (this.draftLocks !== 0) return false
+    if (this.draftLocks !== 0 || this.preparation !== undefined) return false
     if (guard.kind === 'span') {
       if (guard.span.draftRev !== this.rev || guard.span.start === guard.span.end) return false
       let applied = false
@@ -572,7 +593,7 @@ export class SessionInputShell implements SessionInput {
    * @returns whether the text was applied.
    */
   insertText(text: string, span: TokenSpan, keepCompleting = false): boolean {
-    if (this.draftLocks !== 0) return false
+    if (this.draftLocks !== 0 || this.preparation !== undefined) return false
     void keepCompleting
     if (span.draftRev !== this.rev) return false
     let applied = false
@@ -611,7 +632,7 @@ export class SessionInputShell implements SessionInput {
       if (!active) return
       active = false
       this.draftLocks -= 1
-      if (this.draftLocks === 0) this.editor.setEditable(true)
+      if (this.draftLocks === 0 && this.preparation === undefined) this.editor.setEditable(true)
       this.publish()
     }
   }
@@ -674,6 +695,7 @@ export class SessionInputShell implements SessionInput {
    */
   dispose(): readonly DraftAttachmentId[] {
     if (this.disposed) return []
+    this.preparation?.abort()
     const retained = new Set(this.imageIds)
     for (const record of this.detachedDrafts.values()) {
       for (const imageId of record.imageIds) retained.add(imageId)
@@ -695,6 +717,38 @@ export class SessionInputShell implements SessionInput {
   /** Read the live input state (guard derivation reads here). */
   get snapshot(): InputState {
     return this.state.getSnapshot()
+  }
+
+  /**
+   * Move the complete editor and attachment draft into an empty Session composer.
+   * @param target - distinct, idle composer which does not own another draft.
+   * @param commitTransfer - optional final precondition; rejection leaves both drafts unchanged.
+   */
+  moveDraftTo(target: SessionInputShell, commitTransfer?: () => void): void {
+    if (target === this) return
+    if (target.snapshot.phase !== 'plain' || target.snapshot.draft !== '' || target.imageIds.length > 0) {
+      throw new Error('The destination conversation already has a draft; the current draft was retained.')
+    }
+    commitTransfer?.()
+    target.occurrenceIds.clear()
+    for (const [key, id] of this.occurrenceIds) target.occurrenceIds.set(key, id)
+    target.occurrenceSeq = this.occurrenceSeq
+    target.imageIds = this.imageIds
+    if (this.snapshot.draft !== '') target.editor.setEditorState(this.editor.getEditorState())
+    target.onEditorUpdate()
+    target.publish()
+    this.imageIds = []
+    this.commitDraft(null)
+    this.publish()
+  }
+
+  /** Cancel Session preparation while retaining the current editor and attachments. */
+  cancelPreparation(): void {
+    if (this.preparation === undefined) return
+    this.preparation.abort()
+    this.preparation = undefined
+    if (this.draftLocks === 0) this.editor.setEditable(true)
+    this.publish()
   }
 
   /**
@@ -1013,7 +1067,7 @@ export class SessionInputShell implements SessionInput {
       draft: this.projection.clipboardText,
       imageIds: this.imageIds,
       draftRev: this.rev,
-      phase: this.draftLocks === 0 ? core.phase : 'adjudicating',
+      phase: this.preparation === undefined && this.draftLocks === 0 ? core.phase : 'adjudicating',
       ...(core.claim !== undefined ? { claim: core.claim } : {}),
       occurrences: this.projection.occurrences,
       queue: this.deps.queue?.getSnapshot() ?? EMPTY_QUEUE,

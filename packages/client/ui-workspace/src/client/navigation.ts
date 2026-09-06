@@ -10,6 +10,8 @@ import type {
   IWorkspaces, WorkspaceId, WorkspaceView,
 } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
+import type { Config } from '../navigation-settings.ts'
 
 /** Workspace archive and directory operations consumed by Client UI domains. */
 export interface UiWorkspace {
@@ -21,7 +23,7 @@ export interface UiWorkspace {
   connectWorkspace(workspaceId: WorkspaceId): Promise<SessionId>
   /**
    * Start a New Session flow and navigate to its Session.
-   * @param workspaceId - explicit target; absent inherits the current or most recent Workspace.
+   * @param workspaceId - explicit target; absent follows the deployment's selection policy.
    */
   startSession(workspaceId?: WorkspaceId): void
   /**
@@ -76,12 +78,14 @@ class UiWorkspaceService extends Service implements UiWorkspace {
    * @param directoryPicker - the directory-picking Remote namespace.
    * @param workspaces - pure Workspace Controller.
    * @param sessions - pure Session Controller.
+   * @param navigation - resolved selection policy; undefined while Host settings load.
    */
   constructor(
     ctx: Context,
     private readonly directoryPicker: ClientRemote['directoryPicker'],
     private readonly workspaces: IWorkspaces,
     private readonly sessions: ISessions,
+    private readonly navigation: ObservableSnapshot<Config['newSessionWorkspace'] | undefined>,
   ) {
     super(ctx, 'uiWorkspace')
     ctx.effect(() => this.watchNavigation(), 'ui-workspace: Workspace navigation policy')
@@ -121,7 +125,7 @@ class UiWorkspaceService extends Service implements UiWorkspace {
     const recent = workspace.phase === 'ready' && sessions.phase === 'ready'
       ? recentWorkspace(workspace.items, sessions.byId)
       : undefined
-    const target = workspaceId ?? currentWorkspaceId ?? recent
+    const target = workspaceId ?? (this.navigation.getSnapshot() === 'recent' ? currentWorkspaceId ?? recent : undefined)
     if (target === undefined) {
       this.sessions.clear()
       return
@@ -161,6 +165,12 @@ class UiWorkspaceService extends Service implements UiWorkspace {
       if (disposed) return
       if (this.clearArchivedCurrent()) return
       if (initial !== 'waiting') return
+      const navigation = this.navigation.getSnapshot()
+      if (navigation === undefined) return
+      if (navigation === 'explicit') {
+        initial = 'done'
+        return
+      }
       const workspace = this.workspaces.list.getSnapshot()
       const sessions = this.sessions.list.getSnapshot()
       if (workspace.phase !== 'ready' || sessions.phase !== 'ready') return
@@ -177,7 +187,7 @@ class UiWorkspaceService extends Service implements UiWorkspace {
       void this.connectWorkspace(target).then(
         (sessionId) => {
           if (disposed) return
-          if (this.sessions.list.getSnapshot().current === undefined) {
+          if (this.navigation.getSnapshot() === 'recent' && this.sessions.list.getSnapshot().current === undefined) {
             this.sessions.open(sessionId)
           }
           initial = 'done'
@@ -191,9 +201,11 @@ class UiWorkspaceService extends Service implements UiWorkspace {
     }
     const disposeWorkspaces = this.workspaces.list.subscribe(reconcile)
     const disposeSessions = this.sessions.list.subscribe(reconcile)
+    const disposeNavigation = this.navigation.subscribe(reconcile)
     reconcile()
     return () => {
       disposed = true
+      disposeNavigation()
       disposeSessions()
       disposeWorkspaces()
     }

@@ -23,6 +23,10 @@
 - id: ui-plan
   disabled: true
 
+- id: ui-workspace
+  config:
+    newSessionWorkspace: explicit
+
 - insert:
     - id: mantur-identity
       name: '@deepseek-ai/dsh-mantur-app'
@@ -37,6 +41,10 @@
       name: '@deepseek-ai/dsh-authorization-manturhub'
     - id: mantur-marketplace
       name: '@deepseek-ai/dsh-manturhub-marketplace'
+    - id: mantur-projects
+      name: '@deepseek-ai/dsh-mantur-projects'
+      config:
+        defaultRoot: !!js process.env.DSH_MANTUR_PROJECTS_ROOT
     - id: ui-mantur-navigation
       name: '@deepseek-ai/dsh-client-ui-mantur-navigation'
       config:

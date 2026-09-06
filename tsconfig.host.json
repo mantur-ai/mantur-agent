@@ -10,6 +10,7 @@
   "include": [
     "apps/web/tests/scaffold.ts",
     "apps/web/tests/desktop-drafts.e2e.ts",
+    "apps/web/tests/desktop-updates.e2e.ts",
     "apps/web/tests/default-model.e2e.ts",
     "apps/web/tests/github-ready-review.e2e.ts",
     "apps/web/tests/streaming-fence-highlight.e2e.ts",
@@ -35,6 +36,7 @@
     "apps/web/tests/models-settings.e2e.ts",
     "apps/web/tests/mantur-brand.snapshot.ts",
     "apps/web/tests/mantur-guide.expected.e2e.ts",
+    "apps/web/tests/mantur-automatic-project.expected.e2e.ts",
     "apps/web/tests/onboarding-deepseek-config.e2e.ts",
     "apps/web/tests/onboarding-usable-provider.e2e.ts",
     "apps/web/tests/remote-welcome.e2e.ts",
@@ -272,6 +274,7 @@
     { "path": "./packages/test-support/agent-loop-testkit" },
     { "path": "./packages/acp/acp" },
     { "path": "./packages/credentials/authorization-manturhub" },
+    { "path": "./packages/workspace/mantur-projects" },
     { "path": "./packages/skill/manturhub-marketplace" },
     { "path": "./packages/bundle/acp-app" },
     { "path": "./packages/bundle/base" },
