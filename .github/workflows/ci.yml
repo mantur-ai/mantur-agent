@@ -557,7 +557,17 @@ jobs:
       # unbuilt checkouts.
       - name: Run Windows coverage
         shell: pwsh
-        run: pnpm run check:ci:coverage
+        run: |
+          $env:DSH_VITEST_FORK_DIAGNOSTICS = Join-Path $env:RUNNER_TEMP 'vitest-fork-exits.jsonl'
+          pnpm run check:ci:coverage
+          exit $LASTEXITCODE
+      - name: Preserve Windows Vitest fork exit facts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-vitest-fork-exits
+          path: ${{ runner.temp }}/vitest-fork-exits.jsonl
+          retention-days: 7
       - name: Save coverage duration history
         # Coverage flakes must not prevent the cache from building; the
         # measured durations remain useful even when a partition failed. The
