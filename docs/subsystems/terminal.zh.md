@@ -106,6 +106,13 @@ In-process registry for replaceable PTY backends and exact-Agent sessions.
 
 ```ts cordis-catalog
 /**
+ * Freeze terminal admission and await pending setup rollback and every owned close.
+ * Cleanup failures remain observable after ordinary teardown removes their records.
+ * @returns one shared completion; rejects if any owned cleanup failed.
+ */
+stopForShutdown(): Promise<void>
+
+/**
  * Register one backend type for this effect scope.
  * @param backend - provider with a non-empty unique type.
  * @returns disposer that removes exactly this contribution.

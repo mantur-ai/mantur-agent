@@ -16,9 +16,11 @@ Host 停机必须先调用明确的所有者操作，才能授权安装。agent 
 
 本地子进程所有者独立关闭 spawn 准入并等待整棵进程树和 PTY，保留失败对象的所有权。这些操作不取消远程付费任务，也不构成全局 Host 回执：Cordis 会吞掉作用域 disposer 错误，其余生产方所有者必须独立提供成功结果。桌面安装器在完成该协调之前保持阻断。
 
+终端注册表也提供显式停止：拒绝新的创建和发送，等待待处理后端分配及回滚，并关闭已发布终端。即使普通释放或成功重试已移除记录，清理错误仍会保留。
+
 ## 上游所有权
 
-现有观察钩子无法冻结直接收件箱修改、恢复驱动器内部持有的领取批次、封存直接 Session 追加，或在工厂释放 writer 后继续保留它。因此改动位于 `packages/core/agent/src/{index,inbox}.ts`、`packages/core/agent-loop/src/{index,agent}.ts`、`packages/core/session/src/index.ts` 和 `packages/subprocess/subprocess-local/src/index.ts`。不修改 vendored Cordis 行为。工厂在自身生命周期结束前保留已关闭会话对象，以检测关闭后的写入；这是验证先前已关闭 writer 的保留成本。
+现有观察钩子无法冻结直接收件箱修改、恢复驱动器内部持有的领取批次、封存直接 Session 追加，或在工厂释放 writer 后继续保留它。因此改动位于 `packages/core/agent/src/{index,inbox}.ts`、`packages/core/agent-loop/src/{index,agent}.ts`、`packages/core/session/src/index.ts` 和 `packages/subprocess/subprocess-local/src/index.ts`。终端注册表操作位于 `packages/terminal/terminal/src/index.ts`，因为外部钩子无法冻结发送或保留已移除分配的失败；受控晚到分配、等待关闭和失败保留测试用于验证上游升级。不修改 vendored Cordis 行为。工厂在自身生命周期结束前保留已关闭会话对象，以检测关闭后的写入；这是验证先前已关闭 writer 的保留成本。
 
 ## 验证
 

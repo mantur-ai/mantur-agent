@@ -16,9 +16,11 @@ The factory joins raw setup and persistence acquisitions even when their public 
 
 The local subprocess owner separately closes spawn admission and joins whole process trees and PTYs, retaining failed ownership. These operations do not cancel remote paid jobs. They do not constitute a global Host receipt: Cordis contains scope disposer errors, and other producer owners must supply independent successful results. The desktop installer remains blocked until that coordination exists.
 
+The terminal registry also provides explicit shutdown: it rejects new spawns and sends, joins pending backend allocation and rollback, and closes published terminals. It retains cleanup errors even after ordinary disposal or a successful retry removes their records.
+
 ## Upstream ownership
 
-Existing observer hooks cannot freeze direct inbox mutation, recover a claim held inside the driver, seal direct Session append, or retain a writer after the factory releases it. The changes therefore belong in `packages/core/agent/src/{index,inbox}.ts`, `packages/core/agent-loop/src/{index,agent}.ts`, `packages/core/session/src/index.ts`, and `packages/subprocess/subprocess-local/src/index.ts`. No vendored Cordis behavior changes. The factory retains closed session objects until its lifetime ends so it can detect post-close writes; that retention is the cost of verifying previously closed writers.
+Existing observer hooks cannot freeze direct inbox mutation, recover a claim held inside the driver, seal direct Session append, or retain a writer after the factory releases it. The changes therefore belong in `packages/core/agent/src/{index,inbox}.ts`, `packages/core/agent-loop/src/{index,agent}.ts`, `packages/core/session/src/index.ts`, and `packages/subprocess/subprocess-local/src/index.ts`. The terminal registry operation belongs in `packages/terminal/terminal/src/index.ts` because external hooks cannot freeze sends or retain removed allocation failures; its controlled late-allocation, close-join, and retained-failure tests are the upgrade checks. No vendored Cordis behavior changes. The factory retains closed session objects until its lifetime ends so it can detect post-close writes; that retention is the cost of verifying previously closed writers.
 
 ## Verification
 

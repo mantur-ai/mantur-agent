@@ -2422,6 +2422,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'In-process registry for replaceable PTY backends and exact-Agent sessions.',
     methods: [
       {
+        signature: 'stopForShutdown(): Promise<void>',
+        description: 'Freeze terminal admission and await pending setup rollback and every owned close. Cleanup failures remain observable after ordinary teardown removes their records.',
+        parameters: [],
+        returns: 'one shared completion; rejects if any owned cleanup failed.',
+      },
+      {
         signature: 'registerBackend(backend: TerminalBackend): () => void',
         description: 'Register one backend type for this effect scope.',
         parameters: [{ name: 'backend', description: 'provider with a non-empty unique type.' }],

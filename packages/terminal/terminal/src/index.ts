@@ -111,10 +111,38 @@ export class TerminalSessionService extends Service {
   private readonly disposedOwners = new WeakSet<Agent>()
   private nextId = 0
   private disposing = false
+  private shutdown: Promise<void> | undefined
+  private readonly cleanupFailures: unknown[] = []
 
   constructor(ctx: Context) {
     super(ctx, 'terminals')
     ctx.effect(() => () => this.disposeAll(), 'pty teardown')
+  }
+
+  /**
+   * Freeze terminal admission and await pending setup rollback and every owned close.
+   * Cleanup failures remain observable after ordinary teardown removes their records.
+   * @returns one shared completion; rejects if any owned cleanup failed.
+   */
+  stopForShutdown(): Promise<void> {
+    if (this.shutdown !== undefined) return this.shutdown
+    const completion = Promise.withResolvers<void>()
+    this.shutdown = completion.promise
+    this.disposing = true
+    const stop = async (): Promise<void> => {
+      try {
+        await this.abortAndClose(
+          undefined,
+          new TerminalError('PTY service is disposing', 'SERVICE_DISPOSING'),
+          'PTY service stopping for shutdown',
+        )
+      } catch (error: unknown) {
+        this.cleanupFailures.push(error)
+      }
+      if (this.cleanupFailures.length > 0) throw new AggregateError(this.cleanupFailures, 'PTY shutdown failed')
+    }
+    stop().then(completion.resolve, completion.reject)
+    return completion.promise
   }
 
   /**
@@ -241,6 +269,7 @@ export class TerminalSessionService extends Service {
    * @returns live operation handle for foreground await or task registration.
    */
   startSend(owner: Agent, id: TerminalSessionId, request: TerminalSendRequest): TerminalSendOperation {
+    this.assertActive()
     const record = this.expectOwned(owner, id)
     if (record.closing !== undefined) throw new Error(`PTY session ${id} is closing`)
     if (record.active !== undefined) throw new TerminalError(`PTY session ${id} already has an active send`, 'SEND_ACTIVE')
@@ -295,6 +324,7 @@ export class TerminalSessionService extends Service {
       this.sessions.delete(id)
       return true
     } catch (error) {
+      this.cleanupFailures.push(error)
       record.closing = undefined
       throw error
     }
@@ -358,6 +388,7 @@ export class TerminalSessionService extends Service {
       signal: controller.signal,
       release: (cleanupFailure) => {
         pending.cleanupFailure = cleanupFailure
+        if (cleanupFailure !== undefined) this.cleanupFailures.push(cleanupFailure.error)
         if (cleanupFailure === undefined) this.removePendingSpawn(pending)
         settlement.resolve()
       },
@@ -461,6 +492,7 @@ export class TerminalSessionService extends Service {
         await closing
         this.sessions.delete(record.id)
       } catch (error: unknown) {
+        this.cleanupFailures.push(error)
         // A concurrent retry may already own a newer fence; never clear it.
         if (record.closing === closing) record.closing = undefined
         throw error
