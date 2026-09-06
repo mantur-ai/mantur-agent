@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ISession } from '@deepseek-ai/dsh-api-session-controller/client'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import {
   SlotTestRuntime, stubSettingsScope, usePinnedBrowserLanguages,
 } from '@deepseek-ai/dsh-client-test-runtime'
@@ -15,6 +16,8 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import { createConversationStore } from '../src/client/stores.ts'
 import { RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
+import type { InputTriggerController } from '../src/client/contract/input.ts'
+import type { DraftCheckpoint } from '../src/client/contract/draft-persistence.ts'
 
 usePinnedBrowserLanguages('zh-CN')
 
@@ -92,6 +95,63 @@ async function bench() {
 }
 
 describe('Conversation inject API', () => {
+  it.each(['cancel', 'navigate', 'navigate-back'] as const)('retains a durably transferred draft without sending after %s during the native write', async (action) => {
+    const previous = window.manturDrafts
+    let checkpoint: DraftCheckpoint = { format: 1, revision: 0, drafts: [] }
+    const entered = Promise.withResolvers<undefined>()
+    const finish = Promise.withResolvers<undefined>()
+    let prepareSave: (() => Promise<number>) | undefined
+    let releaseSave: (() => void) | undefined
+    let b: Awaited<ReturnType<typeof bench>> | undefined
+    window.manturDrafts = {
+      load: async () => structuredClone(checkpoint),
+      save: async (next) => {
+        if (next.drafts.some(draft => draft.owner === `session:${ROOT}` && draft.editor.includes('未发送正文'))) {
+          entered.resolve(undefined)
+          await finish.promise
+        }
+        checkpoint = structuredClone(next)
+        return next.revision
+      },
+      onPrepare: (handler) => { prepareSave = handler; return () => { prepareSave = undefined } },
+      onRelease: (handler) => { releaseSave = handler; return () => { releaseSave = undefined } },
+    }
+    try {
+      b = await bench()
+      const runtime = b.runtime
+      const other = 'other-conversation' as SessionId
+      await runtime.sessions.add({ id: other }, { current: false })
+      const drafts = runtime.ctx.conversationDrafts
+      const remove = drafts.register({ prepare: async () => {
+        await runtime.ctx.conversation.draftPersistence!.prepareIdentity()
+        return ROOT
+      } })
+      await vi.waitFor(() => { expect(drafts.enabled.getSnapshot()).toBe(true) })
+      drafts.input.setDraft('未发送正文')
+      drafts.input.submit()
+      await entered.promise
+      if (action === 'cancel') remove()
+      else runtime.sessions.open(other)
+      if (action === 'navigate-back') runtime.sessions.clear()
+      finish.resolve(undefined)
+      await vi.waitFor(() => { expect(b!.inputApi(ROOT).state.getSnapshot().draft).toBe('未发送正文') })
+      expect(drafts.input.state.getSnapshot().draft).toBe('')
+      expect(b.sessionFake.prompt).not.toHaveBeenCalled()
+      expect(runtime.sessions.list.getSnapshot().current).toBe(action === 'navigate' ? other : undefined)
+      expect(checkpoint.drafts.find(draft => draft.owner === `session:${ROOT}`)?.editor).toContain('未发送正文')
+      expect(b.composerApi(ROOT).hooks.notices.getSnapshot()?.text).toContain('尚未发送')
+      await prepareSave?.()
+      releaseSave?.()
+    } finally {
+      finish.resolve(undefined)
+      try { await b?.runtime.dispose() }
+      finally {
+        if (previous === undefined) delete window.manturDrafts
+        else window.manturDrafts = previous
+      }
+    }
+  })
+
   it('assembles the target-neutral read face without Session side effects', async () => {
     const b = await bench()
     const { injected } = b.conversationApi(ROOT)
@@ -222,7 +282,8 @@ describe('Conversation inject API', () => {
     expect(() => { injectBar('ghost' as SessionId).stop!() }).toThrow(/resolved no binding/)
 
     const absent = injectBar(undefined)
-    expect(absent.keyboard).toBeUndefined()
+    expect(absent.keyboard).toBeDefined()
+    expect(absent.hooks.composerInput.getSnapshot()?.draft).toBe('')
     expect(absent.toggleCommandMenu).toBeUndefined()
     expect(absent.stop).toBeUndefined()
     expect(absent.hooks.notices.getSnapshot()).toBeNull()
@@ -268,6 +329,117 @@ describe('Conversation inject API', () => {
       .rejects.toThrow('offline')
     expect(b.runtime.sessions.calls.filter(call => call.method === 'open')).toHaveLength(opens)
     await b.runtime.dispose()
+  })
+
+  it('waits for native destination restoration when moving a real Session draft', async () => {
+    const previous = window.manturDrafts
+    let b: Awaited<ReturnType<typeof bench>> | undefined
+    let checkpoint: DraftCheckpoint = { format: 1, revision: 0, drafts: [] }
+    window.manturDrafts = {
+      load: async () => structuredClone(checkpoint),
+      save: async (next) => { checkpoint = structuredClone(next); return next.revision },
+      onPrepare: () => () => {}, onRelease: () => () => {},
+    }
+    try {
+      b = await bench()
+      const source = b.inputApi(ROOT)
+      await vi.waitFor(() => { expect(source.state.getSnapshot().phase).toBe('plain') })
+      source.actions.setDraft('carry native draft')
+      const other = 'native-destination' as SessionId
+      await b.runtime.sessions.add({ id: other }, { current: false })
+      b.connectWorkspace.mockResolvedValueOnce(other)
+      await b.residentApi(ROOT).selectWorkspace('workspace-native' as WorkspaceId)
+      expect(source.state.getSnapshot().draft).toBe('')
+      expect(b.inputApi(other).state.getSnapshot().draft).toBe('carry native draft')
+    } finally {
+      try { await b?.runtime.dispose() }
+      finally {
+        if (previous === undefined) delete window.manturDrafts
+        else window.manturDrafts = previous
+      }
+    }
+  })
+
+  it('prepares an unassigned draft once and submits it through the real Session', async () => {
+    const b = await bench()
+    try {
+      const serializeReference = vi.fn<InputTriggerController['serializeReference']>(async (_source, ref) => `/${ref}`)
+      const controller: InputTriggerController = {
+        launcher: createSnapshotStore(null), lexicon: createSnapshotStore(new Map()),
+        track: () => {}, arbitrate: () => 'pass', onSpace: () => false,
+        serializeReference, adjudicate: async () => undefined, toggleSource: () => {},
+      }
+      b.runtime.ctx.provide('inputTriggers', { sessionOf: () => controller } as never)
+      expect(b.inputApi(ROOT).state.getSnapshot().draft).toBe('')
+      const drafts = b.runtime.ctx.conversationDrafts
+      const pending = Promise.withResolvers<SessionId>()
+      const prepare = vi.fn(() => pending.promise)
+      expect(drafts.enabled.getSnapshot()).toBe(false)
+      const remove = drafts.register({ prepare })
+      expect(drafts.enabled.getSnapshot()).toBe(true)
+      drafts.input.setDraft('写一个故事 ')
+      drafts.input.appendReference({ source: 'skill', ref: 'short-drama', label: '短剧编剧', clipboardText: '/short-drama' })
+      const original = drafts.input.state.getSnapshot()
+      expect(prepare).not.toHaveBeenCalled()
+      expect(b.sessionFake.prompt).not.toHaveBeenCalled()
+      drafts.input.submit()
+      drafts.input.submit()
+      expect(prepare).toHaveBeenCalledOnce()
+      expect(drafts.input.state.getSnapshot().phase).toBe('adjudicating')
+      pending.resolve(ROOT)
+      await vi.waitFor(() => { expect(drafts.input.state.getSnapshot().phase).toBe('plain') })
+      expect(b.composerApi(undefined).hooks.notices.getSnapshot()).toBeNull()
+      expect(b.composerApi(ROOT).hooks.notices.getSnapshot()).toBeNull()
+      expect(b.inputApi(ROOT).state.getSnapshot().draft).toBe('')
+      await vi.waitFor(() => { expect(b.sessionFake.prompt).toHaveBeenCalledOnce() })
+      expect(b.sessionFake.prompt).toHaveBeenCalledWith(
+        [{ type: 'text', text: original.draft.trim() }], 'queue', expect.any(AbortSignal), expect.any(String),
+      )
+      expect(serializeReference).toHaveBeenCalledWith('skill', 'short-drama', expect.any(AbortSignal))
+      expect(b.runtime.sessions.calls).toContainEqual({ method: 'open', args: [ROOT] })
+      expect(drafts.input.state.getSnapshot()).toMatchObject({ draft: '', occurrences: [] })
+      remove()
+      expect(drafts.enabled.getSnapshot()).toBe(false)
+    } finally { await b.runtime.dispose() }
+  })
+
+  it('moves titled references from an unassigned draft into a manually chosen Workspace without sending', async () => {
+    const b = await bench()
+    try {
+      const drafts = b.runtime.ctx.conversationDrafts
+      const prepare = vi.fn(async () => ROOT)
+      const remove = drafts.register({ prepare })
+      drafts.input.setDraft('保留标题 ')
+      drafts.input.appendReference({ source: 'skill', ref: 'short-drama', label: '短剧编剧', clipboardText: '/short-drama' })
+      const original = drafts.input.state.getSnapshot()
+      await b.residentApi(undefined).selectWorkspace('workspace-0' as WorkspaceId)
+      expect(b.inputApi(ROOT).state.getSnapshot()).toMatchObject({ draft: original.draft, occurrences: original.occurrences })
+      expect(drafts.input.state.getSnapshot()).toMatchObject({ draft: '', occurrences: [] })
+      expect(prepare).not.toHaveBeenCalled()
+      expect(b.sessionFake.prompt).not.toHaveBeenCalled()
+      remove()
+    } finally { await b.runtime.dispose() }
+  })
+
+  it('retains a pending draft when its creation policy is removed', async () => {
+    const b = await bench()
+    try {
+      const drafts = b.runtime.ctx.conversationDrafts
+      const pending = Promise.withResolvers<SessionId>()
+      const prepare = vi.fn((_signal: AbortSignal) => pending.promise)
+      const remove = drafts.register({ prepare })
+      drafts.input.setDraft('未发送')
+      drafts.input.submit()
+      const signal = prepare.mock.calls[0]![0]
+      remove()
+      expect(signal.aborted).toBe(true)
+      pending.resolve(ROOT)
+      await pending.promise
+      await b.runtime.flush()
+      expect(drafts.input.state.getSnapshot()).toMatchObject({ draft: '未发送', phase: 'plain' })
+      expect(b.sessionFake.prompt).not.toHaveBeenCalled()
+      expect(b.composerApi(undefined).hooks.notices.getSnapshot()).toBeNull()
+    } finally { await b.runtime.dispose() }
   })
 
   it('projects the dynamic View registration ledger', async () => {

@@ -60,7 +60,8 @@ export interface ConversationDraftPersistence {
    * Persist both draft owners before a prevalidated synchronous memory move.
    * @param targetSessionId - Real destination Session id.
    * @param move - Synchronous, already-validated memory move.
+   * @param beforeCommit - Final synchronous cancellation and navigation check before the native write.
    * @returns the committed owner and revision; a committed memory failure requires reload.
    */
-  commitTransfer(targetSessionId: string, move: () => void): Promise<{ owner: string; revision: number }>
+  commitTransfer(targetSessionId: string, move: () => void, beforeCommit?: () => void): Promise<{ owner: string; revision: number }>
 }

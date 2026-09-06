@@ -251,6 +251,8 @@ function mount(
           useInput={useInput}
           inputActions={inputActions}
           keyboard={wiring}
+          useComposerInput={useInput}
+          unassignedActions={undefined}
           addImages={() => null}
           removeImage={() => {}}
           draftImages={() => []}
@@ -296,6 +298,7 @@ function mount(
     useWorkspaces: bindSnapshotSelector(workspaces),
     useProjection: (() => undefined),
     useComposerBlock: select => select(options.composerBlock),
+    useDraftEnabled: select => select(false),
     useInput,
     inputActions,
     renderSlot,

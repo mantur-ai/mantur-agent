@@ -52,6 +52,7 @@ export class InputHub implements SessionInputResolver {
   /** Native persistence adapter, installed by the owning Conversation plugin. */
   persistence: DraftPersistence | undefined
   private readonly shells = new Map<SessionId, SessionInputShell>()
+  private readonly draftReadiness = new Map<SessionId, Promise<void>>()
 
   /**
    * @param ctx - client root context (services resolved lazily per call — boot order stays free).
@@ -118,7 +119,9 @@ export class InputHub implements SessionInputResolver {
     })
     this.shells.set(id, shell)
     if (this.persistence !== undefined) {
-      void this.persistence.attachDraft(`session:${id}`, shell).catch((error: unknown) => {
+      const ready = this.persistence.attachDraft(`session:${id}`, shell)
+      this.draftReadiness.set(id, ready)
+      void ready.catch((error: unknown) => {
         shell.notify('error', this.t('draft.saveFailed', { detail: String(error) }))
       })
     }
@@ -139,6 +142,7 @@ export class InputHub implements SessionInputResolver {
         for (const off of offs) off()
         const drafts = shell.dispose()
         this.shells.delete(id)
+        this.draftReadiness.delete(id)
         this.persistence?.detachDraft(`session:${id}`)
         const conversation = this.rootCtx.get('conversation') as ConversationAttachmentFace | undefined
         for (const imageId of drafts) conversation?.releaseDraftImage(imageId)
@@ -159,6 +163,16 @@ export class InputHub implements SessionInputResolver {
     const binding = this.sessions().binding(id)
     if (binding === undefined) throw new Error(`conversation.input: session "${id}" resolved no binding`)
     return this.shellFor(binding)
+  }
+
+  /**
+   * Await the target composer's native restoration before transferring a draft into it.
+   * @param id - A materialized Session id.
+   * @returns completion of its restoration; failure rejects without moving source input.
+   */
+  async waitForDraft(id: SessionId): Promise<void> {
+    this.shell(id)
+    await this.draftReadiness.get(id)
   }
 
   /**

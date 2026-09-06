@@ -39,6 +39,8 @@ describe('dsh-mantur-app bundle', () => {
     })
     expect(row('authorization')).toMatchObject({ name: '@deepseek-ai/dsh-authorization' })
     expect(row('mantur-account')).toMatchObject({ name: '@deepseek-ai/dsh-authorization-manturhub' })
+    expect(row('mantur-projects')).toMatchObject({ name: '@deepseek-ai/dsh-mantur-projects' })
+    expect(row('ui-workspace')?.config).toMatchObject({ newSessionWorkspace: 'explicit' })
     expect(row('ui-mantur-account')).toMatchObject({ name: '@deepseek-ai/dsh-client-ui-mantur-account' })
     expect(row('mantur-identity')).toMatchObject({
       name: '@deepseek-ai/dsh-mantur-app',

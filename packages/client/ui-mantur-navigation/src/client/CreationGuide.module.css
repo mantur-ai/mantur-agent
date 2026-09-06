@@ -157,6 +157,13 @@
   background: var(--dsw-alias-bg-layer-1);
 }
 .workspaceFooter > div { margin-top: 0; padding-left: 8px; }
+.automaticProject { padding: 8px; color: var(--dsw-alias-label-secondary); font-size: 12px; }
+.automaticProject summary { width: fit-content; cursor: pointer; }
+.projectLocation { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 12px 0 4px; }
+.projectLocation code { overflow-wrap: anywhere; white-space: normal; }
+.automaticProject p { margin: 8px 0 0; line-height: 1.5; }
+.automaticProject button { color: var(--dsw-alias-brand-primary); border: 0; background: transparent; font: inherit; cursor: pointer; }
+.automaticProject summary:focus-visible, .automaticProject button:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 2px; }
 
 @media (max-width: 640px) {
   .modes { width: 100%; box-sizing: border-box; gap: 0; }

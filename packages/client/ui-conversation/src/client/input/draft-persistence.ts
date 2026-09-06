@@ -116,9 +116,10 @@ export class DraftPersistence {
    * Commit both owners in one revision before an already-validated synchronous memory transfer.
    * @param targetSessionId - Real destination Session id, already attached and empty.
    * @param move - Synchronous memory move with no further business validation or asynchronous work.
+   * @param beforeCommit - Final synchronous check; rejection leaves the transfer uncommitted.
    * @returns the committed destination owner and checkpoint revision.
    */
-  async commitTransfer(targetSessionId: string, move: () => void): Promise<{ owner: string; revision: number }> {
+  async commitTransfer(targetSessionId: string, move: () => void, beforeCommit?: () => void): Promise<{ owner: string; revision: number }> {
     const owner = `session:${targetSessionId}`
     const source = this.shells.get('unassigned')
     const target = this.shells.get(owner)
@@ -136,7 +137,7 @@ export class DraftPersistence {
         const { prepareId: _prepareId, ...content } = saved
         const drafts = this.checkpoint.drafts.filter(item => item.owner !== 'unassigned' && item.owner !== owner)
         drafts.push({ ...content, owner }, { owner: 'unassigned', editor: empty.editor, occurrenceIds: [], nextOccurrenceId: 0, images: [] })
-        await this.commit(drafts)
+        await this.commit(drafts, beforeCommit)
         for (const release of releases.splice(0)) release()
         try { move() }
         catch (error) { this.recoveryRequired = true; throw new Error(`Draft transfer was saved to ${owner}, but memory transfer failed; reload to recover: ${String(error)}`) }
@@ -185,8 +186,9 @@ export class DraftPersistence {
     })
   }
 
-  private async commit(drafts: PersistedDraft[]): Promise<void> {
+  private async commit(drafts: PersistedDraft[], beforeCommit?: () => void): Promise<void> {
     const candidate: DraftCheckpoint = { format: 1, revision: this.checkpoint.revision + 1, drafts }
+    beforeCommit?.()
     let revision: number
     try { revision = await this.bridge.save(candidate) }
     catch (error) {

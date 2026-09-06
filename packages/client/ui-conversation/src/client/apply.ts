@@ -15,7 +15,6 @@ import type {
   ComposerBarInjected, ConversationInjected, ConversationSessionHeaderInjected,
   ConversationSessionInjected,
 } from './contract/slots.ts'
-import type { InputNotice } from './contract/input.ts'
 import { createConversationStore, readConversationViewPreference } from './stores.ts'
 import { ConversationController, UnsupportedImageMediaTypeError } from './service.ts'
 import type { IConversation } from './service.ts'
@@ -23,6 +22,7 @@ import { ComposerBlockRegistry } from './input/blocks.ts'
 import type { ComposerBlock } from './contract/composer-blocks.ts'
 import { DraftPersistence } from './input/draft-persistence.ts'
 import { InputHub } from './input/hub.ts'
+import { ConversationDraftController } from './input/draft.ts'
 import { ComposerSubmissionPolicy } from './input/submission-policy.ts'
 import { queueDockEntry } from './queue/QueueDock.tsx'
 import { EnterBehaviorRow } from './settings/EnterBehaviorRow.tsx'
@@ -49,17 +49,8 @@ export const inject = [
 
 // Stable no-session sources keep the renderer's observable-hook cache and
 // hook order unchanged across current-Session transitions.
-const ABSENT_NOTICES = {
-  getSnapshot: (): InputNotice | null => null,
-  subscribe: () => () => {},
-}
 const ABSENT_BLOCK = {
   getSnapshot: (): ComposerBlock | undefined => undefined,
-  subscribe: () => () => {},
-}
-const EMPTY_LEXICON: ReadonlyMap<'/' | '@', readonly string[]> = new Map()
-const ABSENT_LEXICON = {
-  getSnapshot: () => EMPTY_LEXICON,
   subscribe: () => () => {},
 }
 const ABSENT_MENU_LAUNCHER = {
@@ -179,11 +170,19 @@ export function apply(ctx: Context): void {
     const persistence = new DraftPersistence(window.manturDrafts, {
       capture: ids => concreteConversation(ctx).captureDraftImages(ids),
       restore: images => concreteConversation(ctx).restoreDraftImages(images),
-    }, (error) => { inputHub.reportPersistenceError(t('draft.saveFailed', { detail: String(error) })) })
+    }, (error) => {
+      const message = t('draft.saveFailed', { detail: String(error) })
+      inputHub.reportPersistenceError(message)
+      drafts.input.notify('error', message)
+    })
     inputHub.persistence = persistence
     ctx.effect(() => () => { persistence.dispose() }, 'ui-conversation: native draft persistence')
   }
 
+  const drafts = new ConversationDraftController(ctx, sessions, inputHub, (ids) => {
+    const conversation = ctx.get('conversation') as ConversationController | undefined
+    for (const id of ids) conversation?.releaseDraftImage(id)
+  }, t)
 
   // Conversation assembly and input share the Session binding lifecycle. The
   // source roster is installed before any consuming Slot entry.
@@ -225,23 +224,22 @@ export function apply(ctx: Context): void {
     inject: (sessionId: SessionId | undefined): ConversationInjected => ({
       hooks: {
         composerBlock: sessionId === undefined ? ABSENT_BLOCK : composerBlocks.storeFor(sessionId),
+        draftEnabled: drafts.enabled,
       },
       selectWorkspace: async (workspaceId) => {
         const nextId = await workspaceNavigation.connectWorkspace(workspaceId)
-        if (sessionId !== undefined && nextId !== sessionId) {
-          const from = inputHub.shell(sessionId)
-          const draft = from.snapshot.draft
-          const imageIds = from.snapshot.imageIds
-          const next = inputHub.shell(nextId)
-          if (imageIds.length === 0 || next.addImages(imageIds)) {
-            if (draft !== '') {
-              next.setDraft(draft)
-              from.setDraft('')
-            }
-            if (imageIds.length > 0) {
-              for (const id of imageIds) from.removeImage(id)
+        const from = sessionId === undefined ? drafts.input : inputHub.shell(sessionId)
+        try {
+          if (nextId !== sessionId && (from.snapshot.draft !== '' || from.snapshot.imageIds.length > 0)) {
+            if (sessionId === undefined) await drafts.moveTo(nextId)
+            else {
+              await inputHub.waitForDraft(nextId)
+              from.moveDraftTo(inputHub.shell(nextId))
             }
           }
+        } catch (error) {
+          from.notify('error', error instanceof Error ? error.message : String(error))
+          throw error
         }
         sessions.open(nextId)
       },
@@ -296,29 +294,12 @@ export function apply(ctx: Context): void {
       'conversation.composer.dock': { kind: 'list', scope: 'session' },
     },
     inject: (sessionId: SessionId | undefined): ComposerBarInjected => {
-      if (sessionId === undefined) {
-        return {
-          keyboard: undefined,
-          addImages: undefined,
-          removeImage: undefined,
-          draftImages: undefined,
-          resolveSubmitMode: (running, gesture, steeringAvailable) =>
-            submissionPolicy.resolve(running, gesture, steeringAvailable),
-          toggleCommandMenu: undefined,
-          stop: undefined,
-          command: undefined,
-          hooks: {
-            notices: ABSENT_NOTICES,
-            lexicon: ABSENT_LEXICON,
-            menuLauncher: ABSENT_MENU_LAUNCHER,
-          },
-        }
-      }
       const conversation = concreteConversation(ctx)
-      const shell = inputHub.shell(sessionId)
-      const inputTriggers = inputHub.inputTriggers(sessionId)
+      const shell = sessionId === undefined ? drafts.input : inputHub.shell(sessionId)
+      const inputTriggers = sessionId === undefined ? undefined : inputHub.inputTriggers(sessionId)
       return {
         keyboard: shell,
+        unassignedActions: sessionId === undefined ? shell.actions : undefined,
         addImages: (files) => {
           try {
             const images = conversation.createDraftImages(files)
@@ -351,18 +332,19 @@ export function apply(ctx: Context): void {
               span: { ...selection, draftRev: snapshot.draftRev },
             })
           },
-        stop: () => {
+        stop: sessionId === undefined ? undefined : () => {
           scopedConversation(sessions, sessionId).cancel().catch(() => {
             // Stop failure is published through Session promptError.
           })
         },
-        command: async (line) => {
+        command: sessionId === undefined ? undefined : async (line) => {
           const session = sessions.binding(sessionId)?.session
           if (session === undefined) return false
           const result = await session.command(line)
           return result.ok && result.value.matched
         },
         hooks: {
+          composerInput: shell.state,
           notices: shell.notices,
           lexicon: shell.lexicon,
           menuLauncher: inputTriggers?.launcher ?? ABSENT_MENU_LAUNCHER,

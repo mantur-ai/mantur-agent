@@ -35,6 +35,8 @@ Recommendation buttons use curated locale-owned labels of at most four Chinese c
 
 The home workspace picker sits in a left-aligned footer directly below the input card. It uses the conversation owner's existing control and workspace-switch action, preserving draft and attachment transfer. Keyboard focus reaches the footer after the input controls; the official composition keeps its original order.
 
+Without a selected project, the desktop restores a native unassigned draft and accepts text, images, and titled Skills. The footer shows “Create a project automatically” with an expandable save location and a location picker. First send prepares a project through [mantur-projects](../../workspace/mantur-projects/README.md), transfers the complete draft, and submits through the ordinary Session input. Failed creation retains the same durable identity for retry; missing native persistence blocks creation explicitly. Choosing an existing project remains available.
+
 馒头仔 uses fixed localized copy and the approved transparent blue-scarf/clapperboard artwork shipped in the Mantur Web assets. Its fixed-position bubble sits above/right of the mascot without adding a layout row; opening, closing, or changing mode keeps the shortcut row and input card stationary. Narrow windows constrain the scrollable body below the mode tabs and above the mascot, keeping the close button visible. The close button and Escape persist dismissal; a mode change does not reopen a closed guide. The first message collapses the welcome region while keeping a compact helper entry. An installation completed after switching Sessions does not insert into either conversation.
 
 -----
