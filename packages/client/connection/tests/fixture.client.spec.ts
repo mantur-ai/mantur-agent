@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import Schema from '@deepseek-ai/schemastery'
 import type {
   RpcRequest,
   RpcResponse,
@@ -764,7 +765,7 @@ describe('createFixtureApi', () => {
     expect(JSON.stringify(after.result.value.records)).toContain('openai/gpt-5')
   })
 
-  it('serves configured DeepSeek readiness and keeps credential values write-only', async () => {
+  it('serves configured DeepSeek readiness and Web navigation while keeping credential values write-only', async () => {
     const api = createFixtureApi()
     const settings = await api.settingsRemote.describe()
     if (!settings.ok) throw new Error('settings describe failed')
@@ -772,7 +773,17 @@ describe('createFixtureApi', () => {
       ns: 'llm-deepseek',
       value: { apiKeyEnv: 'DEEPSEEK_API_KEY' },
       secrets: [{ path: ['apiKey'], set: false }],
+    }, {
+      ns: 'ui-workspace',
+      value: { newSessionWorkspace: 'recent' },
+      secrets: [],
     }])
+    const navigation = (settings.value as { namespaces: Array<{ ns: string; schema: Schema; value: unknown }> })
+      .namespaces.find(view => view.ns === 'ui-workspace')
+    if (navigation === undefined) throw new Error('fixture navigation settings missing')
+    const validate = new Schema(navigation.schema)
+    expect(validate(navigation.value)).toEqual({ newSessionWorkspace: 'recent' })
+    expect(() => { validate({ newSessionWorkspace: 'unknown' }) }).toThrow()
     for (const result of [
       await api.settingsRemote.update('llm-deepseek', {}, undefined),
       await api.settingsRemote.replace('llm-deepseek', {}, undefined),
