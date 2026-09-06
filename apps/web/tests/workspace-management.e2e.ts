@@ -43,6 +43,20 @@ describe('web e2e: workspace management (create / rename / flat view / hover aff
   let page: Page
   let tripwire: ReturnType<typeof watchConsole>
 
+  /** Wait for the newly selected Session before another action can move the tree rows. */
+  async function selectNewSession(action: () => Promise<void>): Promise<void> {
+    const selected = page.getByRole('treeitem', { selected: true })
+    const previous = (await selected.elementHandles())[0] ?? null
+    try {
+      await action()
+      await expect.poll(() => selected.evaluateAll(
+        (elements, before) => elements.length === 1 && elements[0] !== before, previous,
+      )).toBe(true)
+    } finally {
+      await previous?.dispose()
+    }
+  }
+
   /**
    * Raise the region header's directory dialog and drive it to a directory via
    * the path-edit affordance. Adding is the header button's only action, so
@@ -70,7 +84,7 @@ describe('web e2e: workspace management (create / rename / flat view / hover aff
     await page.getByLabel('Folder name').fill(name)
     await page.getByRole('button', { name: 'Create', exact: true }).click()
     // Creating selects the new folder in the listing; Open adopts it.
-    await dialog.getByRole('button', { name: 'Open', exact: true }).click()
+    await selectNewSession(() => dialog.getByRole('button', { name: 'Open', exact: true }).click())
     await dialog.waitFor({ state: 'hidden', timeout: 10_000 })
     await expect.poll(
       () => scaffold.ctx.workspaceRegistry.resolveByPath(join(parent, name)),
@@ -88,7 +102,9 @@ describe('web e2e: workspace management (create / rename / flat view / hover aff
   async function adoptDirectory(path: string, options: { waitForAgent?: boolean } = {}): Promise<void> {
     const agentsBefore = scaffold.ctx.agents.list().length
     const dialog = await browseTo(path)
-    await dialog.getByRole('button', { name: 'Open', exact: true }).click()
+    const open = () => dialog.getByRole('button', { name: 'Open', exact: true }).click()
+    if (options.waitForAgent === true) await selectNewSession(open)
+    else await open()
     await dialog.waitFor({ state: 'hidden', timeout: 10_000 })
     await expect.poll(
       () => scaffold.ctx.workspaceRegistry.resolveByPath(path),

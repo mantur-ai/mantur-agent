@@ -61,13 +61,26 @@ it('preserves a live draft, attachments and controls while changing modes and ad
     await workspaceButton.waitFor()
     expect(await page.getByRole('button', { name: '发送消息', exact: true }).isDisabled()).toBe(true)
     expect(await workspaceButton.innerText()).toContain('选择工作区')
+    const selectWorkspace = async (pick: () => Promise<void>): Promise<void> => {
+      const selected = page.getByRole('treeitem', { selected: true })
+      const previous = (await selected.elementHandles())[0] ?? null
+      try {
+        await pick()
+        // The chip changes optimistically; only the selected Session proves that draft handoff has settled.
+        await expect.poll(() => selected.evaluateAll(
+          (elements, before) => elements.length === 1 && elements[0] !== before, previous,
+        )).toBe(true)
+      } finally {
+        await previous?.dispose()
+      }
+    }
     const chooseDirectory = async (path: string): Promise<void> => {
       const dialog = page.getByRole('dialog', { name: '选择工作区目录' })
       await dialog.getByRole('button', { name: '编辑路径' }).click()
       const pathInput = dialog.getByRole('textbox', { name: '编辑路径' })
       await pathInput.fill(path)
       await pathInput.press('Enter')
-      await dialog.getByRole('button', { name: '打开', exact: true }).click()
+      await selectWorkspace(() => dialog.getByRole('button', { name: '打开', exact: true }).click())
       await page.locator('[data-composer-input][contenteditable="true"]').waitFor()
     }
     const firstWorkspace = join(scaffold.workspaceCwd, 'workspace')
@@ -139,7 +152,7 @@ it('preserves a live draft, attachments and controls while changing modes and ad
       const rect = element.getBoundingClientRect()
       return rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight
     })).toBe(true)
-    await menu.getByRole('menuitem', { name: 'workspace', exact: true }).click()
+    await selectWorkspace(() => menu.getByRole('menuitem', { name: 'workspace', exact: true }).click())
     await expect.poll(() => workspaceButton.innerText()).toBe('workspace')
     expect(await editor.innerText()).toContain('保留这个故事和参考图')
     expect(await page.getByRole('img', { name: 'reference.png' }).count()).toBe(attachments)
@@ -239,6 +252,10 @@ it('preserves a live draft, attachments and controls while changing modes and ad
     await page.keyboard.press('Escape')
     await compareOrRefreshGolden(expected, initial, webSnapshotMode())
     expect(console.pageErrors).toEqual([])
+  } catch (error) {
+    const page = browser?.contexts()[0]?.pages()[0]
+    if (page === undefined) throw error
+    throw new Error(`${String(error)}\nVisible guide state:\n${await page.locator('body').ariaSnapshot()}`, { cause: error })
   } finally {
     await browser?.close()
     await scaffold?.close()
