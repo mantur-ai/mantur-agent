@@ -34,6 +34,13 @@ export class NativeAccountAccess {
     private readonly now: () => number) {}
 
   /**
+   * Read immediate local disallowance, including a disable whose persistence failed.
+   * @param requestId - exact grant or attempt whose local request authority is being projected.
+   * @returns whether this owner has blocked the identity before remote cleanup.
+   */
+  isLocallyBlocked(requestId: NativeRequestId): boolean { return this.blocked.has(requestId) }
+
+  /**
    * Run one Main-owned request with the current active grant, including its entire response-body lifetime.
    * @param signal - cancellation of the caller's command or UI operation.
    * @param consume - Host-only operation that awaits body consumption and child cleanup before returning; it must not expose secrets.
@@ -43,7 +50,7 @@ export class NativeAccountAccess {
     consume: (secrets: NativeSecrets, lifetime: AbortSignal, expiresAt: number) => Promise<void>): Promise<void> {
     this.requireOpen()
     const record = this.store.records(this.http.origin).find(value => value.phase === 'active')
-    if (record === undefined || this.blocked.has(record.requestId)) throw new Error('Native account is signed out')
+    if (record === undefined || this.isLocallyBlocked(record.requestId)) throw new Error('Native account is signed out')
     const expiresAt = record.metadata.credential?.expiresAt
     if (expiresAt === undefined) throw new Error('Native account has no confirmed expiry')
     if (expiresAt <= this.now()) throw new Error('Native account has expired')

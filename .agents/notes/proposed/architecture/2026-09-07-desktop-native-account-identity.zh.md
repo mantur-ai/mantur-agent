@@ -20,6 +20,8 @@ Main 将提供原生密码登录、公共待激活注册，以及同源的系统
 
 桌面存储、HTTP 客户端、请求所有者与登录控制器实现了授权创建和精确凭据清理。[Main](../../../../apps/desktop/src/auth/host.ts)通过子进程 IPC 接收漫途 provider 配置，拥有撤销重试定时器，并暴露 frame 绑定的 preload 操作。[Host 连接](../../../../packages/credentials/authorization-manturhub/src/native.ts)持有流式响应直到 EOF 或取消。其销毁会中止命令 scope，但不能替命令 consumer 发出清理回执。Main 会保留每个私有 broker-v2 描述文件，直到该 consumer 释放。公开快照独立报告本地已激活且未过期的凭据，不把离线验证失败当成失效。
 
+公开快照与命令准入以本地禁用状态优先于持久 active 元数据。退出写盘失败时，本地访问保持阻止并报告 `logout-storage`，不称退出已持久保存或远端已确认撤销。保留记录允许用户明确重试。
+
 真实 loopback 与子进程 IPC 测试覆盖这些所有者。固定解包 CLI 的测试通过 broker 覆盖余额、流式读取、预签名上传和退出登录取消。原生表单、Bash、PowerShell、PTY consumer 与打包 CLI 调用仍未完成；这些测试不能代替真实组装入口或原生操作系统验收。
 
 ## 考虑过的替代方案

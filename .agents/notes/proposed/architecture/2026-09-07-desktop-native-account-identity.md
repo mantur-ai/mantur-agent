@@ -20,6 +20,8 @@ Local logout disables the exact record and aborts its accepted requests before r
 
 The desktop store, HTTP client, request owner and login controller implement provisioning and exact-grant cleanup. [Main](../../../../apps/desktop/src/auth/host.ts) configures them from the Mantur provider over child IPC, owns the revocation retry timer and exposes frame-bound preload operations. The [Host connection](../../../../packages/credentials/authorization-manturhub/src/native.ts) retains streaming responses through EOF or cancellation. Its disposal aborts command scopes but cannot send cleanup receipts on behalf of a command consumer. Main retains each private broker-v2 descriptor until that consumer releases it. The public snapshot reports a locally active, unexpired grant independently of an offline validation failure.
 
+Local disallowance takes precedence over persisted active metadata in the public snapshot and command admission. A failed logout write leaves local access blocked and reports `logout-storage`; it does not report durable logout or confirmed remote revocation. The retained record permits an explicit retry.
+
 Real loopback and child-IPC tests exercise these owners. Fixed, unpacked CLI tests cover balance, streaming, presigned upload and logout cancellation against the broker. Native forms, Bash/PowerShell/PTY consumers and packaged CLI invocation remain incomplete; these tests do not substitute for the real assembled entry or native OS acceptance.
 
 ## Alternatives considered

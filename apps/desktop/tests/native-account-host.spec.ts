@@ -6,10 +6,11 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { describe, expect, it, onTestFinished } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { z } from 'zod'
 import { NativeAccountHost } from '../src/auth/host.ts'
 import type { NativeAccountController } from '../src/auth/controller.ts'
+import { NativeAccountStore } from '../src/auth/store.ts'
 import { nativeBrokerBench } from './native-account-broker-support.ts'
 import { nativeTestCipher } from './native-account-test-support.ts'
 
@@ -85,6 +86,19 @@ async function hostFixture(api: (request: IncomingMessage, response: ServerRespo
 }
 
 describe('native account Main and dsh IPC', () => {
+  it('reports blocked authority to the dsh child when saving logout fails', async () => {
+    const b = await hostFixture((_request, response) => { response.end('unexpected') })
+    await b.login()
+    const write = vi.spyOn(NativeAccountStore.prototype, 'disable').mockImplementationOnce(() => { throw new Error('Isolated write failure') })
+    onTestFinished(() => { write.mockRestore() })
+    expect(() => b.controller.signOut()).toThrow('logout-storage')
+    expect(await b.send('status').result).toMatchObject({
+      ok: true, result: { authenticated: false, phase: 'failed', failure: { kind: 'logout-storage' } },
+    })
+    expect(await b.send('read', { path: '/api/v1/me' }).result).toMatchObject({ ok: true, result: { signedOut: true } })
+    expect(b.backend.observed).toEqual([])
+  })
+
   it('keeps explicitly skipped local commands managed and unsigned instead of consulting standalone credentials', async () => {
     const b = await hostFixture((_request, response) => { response.end('unexpected') })
     await b.controller.skip()

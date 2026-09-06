@@ -39,6 +39,28 @@ async function bench() {
 }
 
 describe('native account controller', () => {
+  it('publishes locally blocked authority and a persistence error when logout cannot be saved, then permits an explicit retry', async () => {
+    const b = await bench()
+    b.queue(b.receipt, b.ready, b.active)
+    await b.controller.password(credentials)
+    const changed = vi.fn()
+    b.controller.subscribe(changed)
+    const write = vi.spyOn(b.store, 'disable').mockImplementationOnce(() => { throw new Error('Isolated logout write failure') })
+    try {
+      expect(() => b.controller.signOut()).toThrow('logout-storage')
+      expect(() => b.controller.withCredential(new AbortController().signal, async () => {})).toThrow('signed out')
+      expect(b.controller.getSnapshot()).toMatchObject({ authenticated: false, phase: 'failed', failure: { kind: 'logout-storage' } })
+      expect(b.store.records(b.http.origin)).toMatchObject([{ phase: 'active' }])
+      expect(b.transport).toHaveBeenCalledTimes(3)
+      expect(changed).toHaveBeenCalledOnce()
+    } finally { write.mockRestore() }
+    b.transport.mockResolvedValueOnce(new Response(null, { status: 204 }))
+    await b.controller.signOut()
+    expect(b.controller.getSnapshot()).toMatchObject({ authenticated: false, phase: 'signed-out', pendingRevocations: 0 })
+    expect(b.controller.getSnapshot().failure).toBeUndefined()
+    expect(b.store.records(b.http.origin)).toEqual([])
+  })
+
   it('commits OS-sealed secrets before create and ready metadata before activation, without publishing a premature sign-in', async () => {
     const b = await bench()
     const activating = Promise.withResolvers<undefined>()

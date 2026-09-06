@@ -69,7 +69,8 @@ export class NativeAccountController {
     const attempt = current?.metadata.attempt
     return {
       phase: this.phase, busy: this.foreground !== undefined || this.cancellation !== undefined,
-      authenticated: current?.phase === 'active' && account !== undefined && account.expiresAt > this.options.now(),
+      authenticated: current?.phase === 'active' && !this.access.isLocallyBlocked(current.requestId)
+        && account !== undefined && account.expiresAt > this.options.now(),
       skipped: this.store.skipped(),
       pendingRevocations: records.filter(record => record.phase === 'pending-cancel' || record.phase === 'pending-revoke').length,
       ...(account === undefined ? {} : { account: { email: account.email, expiresAt: account.expiresAt } }),
@@ -168,7 +169,14 @@ export class NativeAccountController {
     const foreground = this.foreground
     foreground?.abort.abort()
     const record = this.current()
-    const disabled = record === undefined ? Promise.resolve() : this.access.disable(record.requestId)
+    let disabled: Promise<void>
+    try { disabled = record === undefined ? Promise.resolve() : this.access.disable(record.requestId) }
+    catch {
+      this.phase = 'failed'
+      this.failure = { kind: 'logout-storage' }
+      this.notify()
+      throw new NativeAccountFailure('logout-storage')
+    }
     this.phase = 'signed-out'
     this.failure = undefined
     const operation = (async () => {

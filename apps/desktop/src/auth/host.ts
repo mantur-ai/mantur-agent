@@ -46,7 +46,6 @@ interface Scope {
 /** Owns one configured deployment for one supervised dsh child; a deployment change requires an explicit application restart. */
 export class NativeAccountHost {
   private controller: NativeAccountController | undefined
-  private store: NativeAccountStore | undefined
   private broker: NativeCommandBroker | undefined
   private configured: z.infer<typeof configSchema> | undefined
   private readonly scopes = new Map<ScopeId, Scope>()
@@ -122,13 +121,12 @@ export class NativeAccountHost {
       return
     }
     const controller = this.controller
-    if (controller === undefined || this.configured === undefined || this.store === undefined) throw new Error('Native account Host is not configured')
+    if (controller === undefined || this.configured === undefined) throw new Error('Native account Host is not configured')
     if (request.type === 'mantur:account:status') {
       this.reply(request.id, true, controller.getSnapshot())
       return
     }
-    const active = this.store.records(this.configured.origin).find(record => record.phase === 'active')
-    if (active === undefined || active.metadata.credential === undefined || active.metadata.credential.expiresAt <= Date.now()) {
+    if (!controller.getSnapshot().authenticated) {
       // Skip permits local tools, while managed CLI requests remain denied without a descriptor; no standalone key is read.
       this.reply(request.id, true, { kind: 'signed-out', environment: { MANTURHUB_IDENTITY_MODE: 'desktop-managed' } })
       return
@@ -148,7 +146,6 @@ export class NativeAccountHost {
       environment: config.environment, deviceName: this.options.deviceName, platform: this.options.platform,
       now: Date.now, openBrowser: this.options.openBrowser,
     })
-    this.store = store
     this.controller = controller
     this.broker = new NativeCommandBroker(controller, { ...config, origin: http.origin, now: Date.now }, fetch)
     this.configured = { ...config, origin: http.origin }

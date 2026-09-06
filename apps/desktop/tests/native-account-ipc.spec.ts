@@ -80,6 +80,19 @@ describe('native account Main IPC', () => {
     expect(() => b.controller.withCredential(new AbortController().signal, async () => {})).toThrow('signed out')
   })
 
+  it('reports failed logout persistence without publishing a still-authorized renderer state', async () => {
+    const b = await nativeBrokerBench((_request, response) => { response.end() })
+    const subject = bridgeFixture(b.controller)
+    vi.spyOn(b.store, 'disable').mockImplementationOnce(() => { throw new Error('Isolated logout write failure') })
+    expect(await subject.invoke({ kind: 'sign-out' })).toMatchObject({
+      ok: false, failure: { kind: 'logout-storage' }, snapshot: { authenticated: false, phase: 'failed' },
+    })
+    expect(await subject.invoke({ kind: 'snapshot' })).toMatchObject({
+      ok: true, snapshot: { authenticated: false, failure: { kind: 'logout-storage' } },
+    })
+    expect(b.store.records(b.origin)).toMatchObject([{ phase: 'active' }])
+  })
+
   it('redacts unexpected operation errors and refuses a reply after frame navigation', async () => {
     const b = await nativeBrokerBench((_request, response) => { response.end() })
     const subject = bridgeFixture(b.controller)
