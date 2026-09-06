@@ -77,6 +77,7 @@ The Skill draft contributes no provider tokens until the user submits it. The Re
 
 <a id="known-limitations-and-deferred-work"></a>
 
+- Native desktop updates appear above Settings only when active or actionable, including the collapsed rail. Browser builds expose no installer. Downloads require an explicit click; restart confirmation and save failures remain owned by the native controller. Installation is blocked pending a verified final Host checkpoint.
 - Recipe discovery and handoff are available. Operator execution, quote confirmation, and payment continue inside the Agent and ManturHub capabilities rather than this presentation package.
 - The Skill page supports installation but intentionally provides no forced overwrite or uninstall action. A tracked directory modified after installation and any pre-existing untracked directory require manual resolution.
 
