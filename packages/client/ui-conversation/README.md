@@ -113,7 +113,7 @@ None; Conversation assembly and browser input state do not alter provider-side p
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- **Native draft checkpoints** — the desktop adapter retains full editor references and selected image bytes independently of browser storage. Restoration conflicts and failed saves remain visible; the native update installer requires a separate verified final Host checkpoint, which is not yet available. The unassigned draft transaction API requires its owning feature to attach that composer.
+- **Native draft checkpoints** — the desktop adapter retains full editor references and selected image bytes independently of browser storage. A cancelled preparation cannot return a restart receipt or unlock a newer preparation. Restoration conflicts and failed saves remain visible; the native update installer requires a separate verified final Host checkpoint, which is not yet available. The unassigned draft transaction API requires its owning feature to attach that composer.
 - **Only registered targets can render** — the shell deliberately has no implicit fallback target beyond the registered `chat` preference.
 
 

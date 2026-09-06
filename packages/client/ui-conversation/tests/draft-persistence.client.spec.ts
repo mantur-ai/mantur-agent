@@ -22,6 +22,48 @@ function nativeBridge() {
 const images = { capture: async () => [], restore: async () => [] }
 
 describe('native draft persistence', () => {
+  it.each([true, false])('does not let cancelled preparation settle or unlock a newer one (older failure: %s)', async (fails) => {
+    const native = nativeBridge()
+    const input = shell()
+    const capture = vi.fn(async () => [])
+    const store = new DraftPersistence(native.bridge, { capture, restore: async () => [] })
+    const firstEntered = Promise.withResolvers<undefined>()
+    const firstCapture = Promise.withResolvers<never[]>()
+    const secondEntered = Promise.withResolvers<undefined>()
+    const secondCapture = Promise.withResolvers<never[]>()
+    let currentSettled: Promise<void> | undefined
+    try {
+      await store.attachDraft('session:a', input)
+      input.setDraft('keep locked until current save settles')
+      await store.save()
+      await store.save()
+      capture.mockImplementationOnce(() => { firstEntered.resolve(undefined); return firstCapture.promise })
+        .mockImplementationOnce(() => { secondEntered.resolve(undefined); return secondCapture.promise })
+      const old = store.prepare()
+      const oldRejected = expect(old).rejects.toThrow(fails ? 'old attachment failure' : 'cancelled')
+      await firstEntered.promise
+      store.release()
+      const current = store.prepare()
+      currentSettled = current.then(() => {}, () => {})
+      if (fails) firstCapture.reject(new Error('old attachment failure'))
+      else firstCapture.resolve([])
+      await oldRejected
+      await secondEntered.promise
+      input.setDraft('must remain blocked')
+      expect(input.snapshot.draft).toBe('keep locked until current save settles')
+      await expect(store.prepare()).rejects.toThrow('already preparing')
+      secondCapture.resolve([])
+      expect(await current).toBe(native.read().revision)
+    } finally {
+      firstCapture.resolve([])
+      secondCapture.resolve([])
+      await currentSettled
+      store.release()
+      store.dispose()
+      input.dispose()
+    }
+  })
+
   it('preserves full Skill references and occurrence identities across a new editor instance', () => {
     const original = shell()
     original.appendReference({ source: 'skill', ref: 'drama-write', label: '短剧编剧', clipboardText: '/drama-write' })
