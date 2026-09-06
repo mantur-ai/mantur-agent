@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/proposed/feature/2026-09-06-openchatcut-editing-workbench.md
+2026-09-06-openchatcut-editing-workbench.md: 04059e3fa23f7b833cd69645f594fdfd4d82ecdd
+2026-09-06-openchatcut-editing-workbench.zh.md: 35c3443396408cb6c8bbc4633646e17aad55a906
