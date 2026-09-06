@@ -179,6 +179,8 @@ export interface InputTarget {
 
 /** Per-session input facade owned by the conversation wiring layer. */
 export interface SessionInput extends InputTarget {
+  /** Append a reference once per source/ref and focus after it; busy admission phases refuse. */
+  appendReference(reference: ReferenceInsert): boolean
   /** Replace the whole draft (persisted-draft seed and programmatic writes). */
   setDraft(text: string): void
   /** Append ordered browser-owned image ids; busy admission phases refuse. */

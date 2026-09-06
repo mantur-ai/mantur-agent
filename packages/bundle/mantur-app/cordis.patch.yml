@@ -39,5 +39,11 @@
       name: '@deepseek-ai/dsh-manturhub-marketplace'
     - id: ui-mantur-navigation
       name: '@deepseek-ai/dsh-client-ui-mantur-navigation'
+      config:
+        recommendations:
+          script: [short-drama]
+          production: [drama-asset-seedance-pipeline, character-forge, mantur-video-prompt-director, mantur-acting-director]
+          editing: [mantur-smartclip, four-dimensional-voice-director]
+          assets: [character-forge, mantur-image-prompt-director, chinese-wonderland-director, four-dimensional-voice-director]
     - id: ui-mantur-account
       name: '@deepseek-ai/dsh-client-ui-mantur-account'
