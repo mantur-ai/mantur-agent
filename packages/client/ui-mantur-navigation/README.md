@@ -41,6 +41,8 @@ Without a selected project, the desktop restores a native unassigned draft and a
 
 -----
 
+Below 820px viewport width, the hero recommendation row reserves 32px of additional vertical space for a readable scroll area below the tabs. The same space remains while the guide is closed, so toggling it does not move the input card or automatic-project footer.
+
 An accepted explicit mode selection emits `mantur/creation-mode-selected`, including a repeated selection of the active mode. A failed save or settings hydration emits nothing. The optional editing workbench consumes this event without starting a model turn.
 
 <a id="understand-the-implementation"></a>

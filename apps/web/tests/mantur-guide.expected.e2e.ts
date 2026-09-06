@@ -64,7 +64,7 @@ it('keeps guidance readable at the desktop minimum without moving the composer o
       }))
     const sidebarWidth = () => page.locator('[data-details-collapsed]').evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ')[0])
     const expandedSidebarWidth = await sidebarWidth()
-    for (const [width, height] of [[880, 600], [720, 900], [1280, 820]] as const) {
+    for (const [width, height] of [[880, 600], [800, 900], [720, 900], [1280, 820]] as const) {
       await page.setViewportSize({ width, height })
       await expect.poll(() => page.locator('[data-sidebar-collapsed]').count()).toBe(width < 1024 ? 1 : 0)
       await expect.poll(sidebarWidth).toBe(width < 1024 ? '56px' : expandedSidebarWidth)
@@ -89,10 +89,33 @@ it('keeps guidance readable at the desktop minimum without moving the composer o
               || rect.bottom <= panel.top || rect.top >= panel.bottom),
             near: Math.abs(mascot.top - panel.bottom - 8) < 1,
           }
-        })).toEqual({ readable: true, fits: true, clear: true, near: true })
+        })).toEqual({ readable: true, fits: true, clear: true, near: true }).catch(async (error: unknown) => {
+          await mkdir(images, { recursive: true })
+          await page.screenshot({ path: join(images, 'desktop-minimum-failure.png') })
+          const geometry = await page.getByRole('region', { name: '馒头仔' }).evaluate((element) => {
+            const body = element.querySelector<HTMLElement>('[tabindex="0"]')!
+            const bounds = (node: Element) => {
+              const { x, y, width, height } = node.getBoundingClientRect()
+              return { x, y, width, height }
+            }
+            return { panel: bounds(element), textHeight: body.clientHeight,
+              lineHeight: getComputedStyle(body).lineHeight, controls: [...element.closest('[data-composer-seat]')!
+                .querySelectorAll('[role="tablist"], button[aria-haspopup="menu"], [data-composer-card]')]
+                .map(node => ({ label: node.textContent, bounds: bounds(node) })) }
+          })
+          throw new Error(`Guide at ${width}×${height} (${name}): ${JSON.stringify(geometry)}`, { cause: error })
+        })
         if (width === 880 && name === '漫剧制作') {
           await mkdir(images, { recursive: true })
           await page.screenshot({ path: join(images, 'desktop-minimum.png') })
+        }
+        const body = page.getByRole('region', { name: '馒头仔' }).locator('[tabindex="0"]')
+        if (await body.evaluate(element => element.scrollHeight > element.clientHeight)) {
+          await body.hover()
+          await page.mouse.wheel(0, 400)
+          await expect.poll(() => body.evaluate(element => element.scrollTop)).toBeGreaterThan(0)
+          await page.mouse.wheel(0, -400)
+          await expect.poll(() => body.evaluate(element => element.scrollTop)).toBe(0)
         }
         expect(await positions()).toEqual(before)
         await page.getByRole('button', { name: '关闭引导', exact: true }).click()

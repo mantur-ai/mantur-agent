@@ -175,6 +175,11 @@
   .shortcutRow[data-hero='true'] { height: 120px; }
 }
 
+@media (max-width: 819px) {
+  /* Keep a text line below the mode tabs when their right side is too narrow for the bubble. */
+  .shortcutRow[data-hero='true'] { height: 152px; }
+}
+
 @container (max-width: 400px) {
   .modes { width: 100%; box-sizing: border-box; gap: 0; }
   .modes button { flex: 1; padding: 9px 4px; font-size: 12px; white-space: nowrap; }

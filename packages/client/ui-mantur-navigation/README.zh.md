@@ -41,6 +41,8 @@ kind: "package-reference"
 
 -----
 
+视口宽度小于 820px 时，首页推荐行额外预留 32px 高度，让标签下方的滚动正文保持可读。引导关闭时也保留相同空间，因此展开或关闭不会移动输入卡或自动项目页脚。
+
 用户明确选择模式且保存成功后，会发出 `mantur/creation-mode-selected`，重复选择当前模式也会通知。保存失败或设置恢复不会通知。可选剪辑工作台消费这个事件，不启动模型回合。
 
 <a id="understand-the-implementation"></a>

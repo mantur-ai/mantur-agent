@@ -93,6 +93,13 @@ it('disconnects observation and removes listeners when closed or unmounted', () 
   expect(disconnect).toHaveBeenCalledTimes(2)
 })
 
+it('uses viewport placement when the anchor has no composer ancestor', () => {
+  const fixture = elements()
+  fixture.seat.removeAttribute('data-composer-seat')
+  const view = renderHook(() => useGuidePopover(true, fixture.anchor, fixture.panel))
+  expect(view.result.current).toEqual({ left: 624, top: 232, width: 240, maxHeight: 240 })
+})
+
 it('does not subscribe before the anchor and panel content mount', () => {
   const fixture = elements()
   const missing = renderHook(() => useGuidePopover(true, { current: null }, fixture.panel))

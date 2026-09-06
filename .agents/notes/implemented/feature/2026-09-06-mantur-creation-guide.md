@@ -20,6 +20,8 @@ Recommendation buttons use a curated localized short name, at most four Chinese 
 
 馒头仔 presents fixed copy in a fixed-position bubble anchored above/right of the mascot. It does not occupy a layout row, so its visibility and copy cannot move the recommendation row or composer. A constrained gap below the mode tabs uses the space beside them when it provides at least 180px of reading width; narrower windows keep the scrollable body below the tabs. This avoids clipping guidance to less than one line at the desktop's 880×600 minimum without changing text size, composer layout, or distance above the mascot. The close button stays outside the scroll area. Dismissal persists without forcing the bubble open after mode changes. The first message collapses the welcome region. The [Mantur brand identity](2026-09-02-mantur-brand-identity.md) remains unchanged; the assistant is not a replacement product logo.
 
+Below 820px viewport width, the hero recommendation row reserves an additional 32px whether the guide is open or closed. This preserves a readable body below the tabs when the right-hand placement is too narrow, including the unassigned editor's automatic-project footer. The original font size and mascot-to-card overlap stay unchanged; guide interaction cannot change the reserved height.
+
 ## Alternatives considered
 
 **Use modes as Agent presets.** Preset selection can change tools, identity, and model-visible context. The requested navigation choices do not authorize those changes.
