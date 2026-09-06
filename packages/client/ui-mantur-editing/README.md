@@ -27,6 +27,8 @@ Open the local editor beside the Mantur conversation by selecting Editing on the
 
 The Mantur bundle contains a disabled row. Enable `ui-mantur-editing` in a profile patch and supply `config.editorUrl`. The address must use loopback HTTP without credentials or query parameters; a project hash is allowed. Selecting Editing opens the workbench after the mode preference is saved. Selecting another mode or closing the workbench releases the embedded page; selecting Editing again reopens it.
 
+The workbench header, buttons, and conversation divider use Mantur's 0.5px neutral borders.
+
 The embedded editor follows Mantur's resolved light/dark theme, including system preference changes, without reloading its page. The OpenChatCut deployment must load [the theme adapter](adapters/openchatcut-theme.mjs) before its application renders and call `installManturTheme(window, parentOrigin)` with the exact trusted Mantur loopback origin. Import this module into the editor entry or inject an equivalent module script from its server; include the adapter in the editor's deployed assets. Standalone editor windows keep their own skin preference. The adapter changes UI tokens only, preserves media colors and project state, and never writes the standalone skin preference.
 
 | Field | Default | Meaning |
