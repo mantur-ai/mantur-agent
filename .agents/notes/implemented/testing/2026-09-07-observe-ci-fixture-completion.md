@@ -18,6 +18,10 @@ The [npm benchmark](../../../../scripts/benchmark-npm-resolution.ts) removes its
 
 The [snapshot child-turn waiter](../../../../packages/test-support/session-snapshot/src/harness.ts) owns its polling deadline and awaits each filesystem harvest. Vitest can time out an asynchronous callback before it has produced a child-specific diagnostic; an owned loop reports the child and required turn after the current read settles. Expiration never permits an already-started read to overlap scenario cleanup, and a completed read after the deadline cannot turn expiration into success.
 
+The [Team recovery fixture](../../../../packages/experimental/agent-team/tests/persistence.spec.ts) separates child registry removal from mailbox acknowledgement completion. Its barrier delays the return from a real target flush, then joins the registered acknowledgement operations before checking delivery. The target can leave the registry while that acknowledgement is pending; a one-second poll does not establish completion.
+
+Windows coverage loads a [fork diagnostic preload](../../../../scripts/vitest-fork-diagnostics.cjs) and preserves its JSONL file on failure. Records contain only lifecycle event, parent and worker PIDs, Node version, platform, exit code, and signal. The observer does not change child outcomes or record arguments, environment, test payloads, or raw crash reports. Exit facts narrow an unexplained worker death; collecting them is not a repair.
+
 ## Alternatives considered
 
 Longer per-fixture polling deadlines still measure storage latency instead of completed writes. Repeating a mailbox scenario does not ensure it takes the cold-receipt path. Ignoring cleanup errors leaves temporary data behind. None of these establishes the required result.
