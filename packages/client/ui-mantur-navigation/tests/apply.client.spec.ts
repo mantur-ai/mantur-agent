@@ -14,8 +14,9 @@ import { ManturComposerLayout } from '../src/client/ManturComposerLayout.tsx'
 import { GUIDE_NAMESPACE, type GuideSettings } from '../src/guide-settings.ts'
 import type { ManturMarketplaceStore } from '../src/client/store.ts'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import { DesktopUpdate, type DesktopUpdateInjected } from '../src/client/DesktopUpdate.tsx'
 
-afterEach(() => { vi.restoreAllMocks() })
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
 vi.mock('@deepseek-ai/dsh-manturhub-marketplace/remote', () => ({
   default: { package: '@deepseek-ai/dsh-manturhub-marketplace', descriptors: [] },
@@ -43,6 +44,7 @@ async function bench() {
     name: 'root',
     children: {
       'sidebar.navigation': { kind: 'single', scope: 'root' },
+      'sidebar.footer.action': { kind: 'list', scope: 'root' },
       'sidebar.workspaces.heading': { kind: 'single', scope: 'root' },
       'main.page': { kind: 'single', scope: 'root' },
       'conversation.hero.modes': { kind: 'single', scope: 'root' },
@@ -54,6 +56,36 @@ async function bench() {
 }
 
 describe('ui-mantur-navigation apply', () => {
+  it('owns the native update slot, subscription and dictionaries for its whole lifetime', async () => {
+    const unsubscribe = vi.fn()
+    const snapshot = { revision: 1, enabled: true, currentVersion: '1.0.0', state: { kind: 'idle' } }
+    vi.stubGlobal('window', { manturUpdates: {
+      getSnapshot: async () => snapshot, subscribe: () => unsubscribe,
+      check: async () => {}, download: async () => {}, install: async () => {},
+    } })
+    const subject = await bench()
+    const fiber = subject.ctx.plugin({ inject: [...inject], apply })
+    try {
+      await fiber.await()
+      const entry = subject.slots.entries('sidebar.footer.action')[0]
+      expect(entry?.component).toBe(DesktopUpdate)
+      const value = (entry?.inject as unknown as () => DesktopUpdateInjected)()
+      expect(value.hooks.updates.getSnapshot().snapshot).toEqual(snapshot)
+      expect(value.controller).toBeTruthy()
+      expect(subject.locale.bind('updates.mantur')('download')).toBe('下载更新')
+    } finally { await fiber.dispose() }
+    expect(unsubscribe).toHaveBeenCalledOnce()
+    expect(subject.slots.entries('sidebar.footer.action')).toEqual([])
+  })
+  it('omits native update registration when a browser has no preload capability', async () => {
+    vi.stubGlobal('window', {})
+    const subject = await bench()
+    const fiber = subject.ctx.plugin({ inject: [...inject], apply })
+    try {
+      await fiber.await()
+      expect(subject.slots.entries('sidebar.footer.action')).toEqual([])
+    } finally { await fiber.dispose() }
+  })
   it('registers host preferences and declares browser services', () => {
     const register = vi.fn()
     const ctx = { inject: (_services: string[], callback: (scope: unknown) => void) => { callback({ settings: { register } }) } }
