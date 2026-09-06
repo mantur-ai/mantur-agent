@@ -10,6 +10,7 @@
   "include": [
     "apps/web/tests/scaffold.ts",
     "apps/web/tests/desktop-drafts.e2e.ts",
+    "apps/web/tests/desktop-updates.e2e.ts",
     "apps/web/tests/default-model.e2e.ts",
     "apps/web/tests/github-ready-review.e2e.ts",
     "apps/web/tests/streaming-fence-highlight.e2e.ts",

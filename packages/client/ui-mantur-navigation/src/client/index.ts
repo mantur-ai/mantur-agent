@@ -27,6 +27,9 @@ import {
 } from './MarketplaceNavigation.tsx'
 import { en, zh, type ManturNavigationKey } from './locales.ts'
 import { ManturMarketplaceStore } from './store.ts'
+import { NativeUpdates } from './desktop-updates.ts'
+import { DesktopUpdate } from './DesktopUpdate.tsx'
+import { en as updateEn, zh as updateZh, type UpdateKey } from './update-locales.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Events {
@@ -43,6 +46,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
     /** Mantur marketplace navigation and empty-page copy. */
     'navigation.mantur': ManturNavigationKey
+    /** Native desktop update copy. */
+    'updates.mantur': UpdateKey
     /** Mantur creation-mode and assistant copy. */
     'guide.mantur': GuideKey
     /** Unassigned draft project location and creation status. */
@@ -59,6 +64,15 @@ export const inject = ['slots', 'locale', 'remote', 'sessions', 'workspaces', 'c
 
 /** Fill Mantur navigation, workspace terminology, and the root marketplace page. */
 export async function apply(ctx: Context): Promise<void> {
+  if (typeof window !== 'undefined' && window.manturUpdates !== undefined) {
+    const native = new NativeUpdates(window.manturUpdates)
+    ctx.effect(() => () => { native.dispose() }, 'ui-mantur-navigation: native updates')
+    ctx.effect(() => ctx.locale.register('updates.mantur', { zh: updateZh, en: updateEn }), 'ui-mantur-navigation: update dictionaries')
+    ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({
+      name: 'sidebar.footer.action', id: 'mantur.desktop-update', locale: 'updates.mantur',
+      inject: () => ({ controller: native, hooks: { updates: native.store } }),
+    }, DesktopUpdate))
+  }
   const disposeMarketplace = await ctx.remote.$mount(manturMarketplaceRemote)
   ctx.effect(() => disposeMarketplace, 'ui-mantur-navigation: marketplace Remote')
   const disposeProjects = await ctx.remote.$mount(manturProjectsRemote)

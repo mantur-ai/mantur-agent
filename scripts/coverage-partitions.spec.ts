@@ -1,3 +1,5 @@
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import { access, mkdir, mkdtemp, readFile, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -10,6 +12,7 @@ import {
   assignWeightedPartitions,
   collectPartitionDurations,
   coverageTestTimeoutArgs,
+  coverageTestTimeoutConfig,
   forwardedCoverageArgs,
   parseCoveragePartitionCount,
   parseListOutput,
@@ -91,6 +94,11 @@ describe('coverage partition count', () => {
 
 describe('coverage partition timeout', () => {
   it('applies one configured timeout to tests, polling, and hooks', () => {
+    expect(coverageTestTimeoutConfig('30000')).toEqual({
+      testTimeout: 30000,
+      hookTimeout: 30000,
+      expect: { poll: { timeout: 30000 } },
+    })
     expect(coverageTestTimeoutArgs('30000')).toEqual([
       '--testTimeout=30000',
       '--expect.poll.timeout=30000',
@@ -98,7 +106,26 @@ describe('coverage partition timeout', () => {
     ])
   })
 
+  it('passes the coverage budget to both real inline project configurations', async () => {
+    const { stdout } = await promisify(execFile)(process.execPath, [
+      '--import', 'tsx/esm', '--input-type=module', '-e',
+      "import config from './vitest.config.ts'; console.log(JSON.stringify(config.test.projects.map(({ test }) => ({ name: test.name, testTimeout: test.testTimeout, hookTimeout: test.hookTimeout, expect: test.expect }))))",
+    ], {
+      cwd: join(import.meta.dirname, '..'),
+      env: { ...process.env, [COVERAGE_TEST_TIMEOUT_ENV]: '30000' },
+      timeout: 30_000,
+    })
+    expect(JSON.parse(stdout)).toEqual(['thread-safe', 'process-bound'].map(name => ({
+      name,
+      testTimeout: 30000,
+      hookTimeout: 30000,
+      expect: { poll: { timeout: 30000 } },
+    })))
+  })
+
   it('keeps Vitest defaults when the timeout is absent', () => {
+    expect(coverageTestTimeoutConfig(undefined)).toEqual({})
+    expect(coverageTestTimeoutConfig('')).toEqual({})
     expect(coverageTestTimeoutArgs(undefined)).toEqual([])
   })
 
