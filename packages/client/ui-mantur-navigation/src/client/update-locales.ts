@@ -1,5 +1,8 @@
 /** Locale-owned native updater controls and progress copy. */
 export const zh = {
+  'unit.bytes': 'B',
+  'unit.kibibytes': 'KiB',
+  'unit.mebibytes': 'MiB',
   available: '发现新版本 {version}',
   download: '下载更新',
   downloading: '正在下载 {version}',
@@ -20,6 +23,9 @@ export type UpdateKey = keyof typeof zh
 
 /** English update controls. */
 export const en: Record<UpdateKey, string> = {
+  'unit.bytes': 'B',
+  'unit.kibibytes': 'KiB',
+  'unit.mebibytes': 'MiB',
   available: 'Version {version} is available',
   download: 'Download update',
   downloading: 'Downloading {version}',

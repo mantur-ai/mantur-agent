@@ -14,10 +14,10 @@ export interface DesktopUpdateInjected {
 /** Sidebar geometry, localized copy, and observable native state. */
 export type DesktopUpdateProps = PropsRuntime<'sidebar.footer.action'> & PropsLocale<'updates.mantur'> & InjectFace<DesktopUpdateInjected>
 
-function bytes(value: number): string {
-  if (value < 1024) return `${Math.floor(value)} B`
-  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KiB`
-  return `${(value / (1024 * 1024)).toFixed(1)} MiB`
+function bytes(value: number, t: DesktopUpdateProps['t']): string {
+  if (value < 1024) return `${Math.floor(value)} ${t('unit.bytes')}`
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} ${t('unit.kibibytes')}`
+  return `${(value / (1024 * 1024)).toFixed(1)} ${t('unit.mebibytes')}`
 }
 
 /** Render only actionable or active native update status; normal browser pages render nothing. */
@@ -56,8 +56,8 @@ export function DesktopUpdate({ wide, controller, useUpdates, t }: DesktopUpdate
       {state.kind === 'downloading' && <>
         {progress}
         <p className={css.bytes}>{state.percent !== null && `${state.percent}% · `}{state.total === null
-          ? t('transferred').replace('{bytes}', bytes(state.transferred))
-          : t('known').replace('{received}', bytes(state.transferred)).replace('{total}', bytes(state.total))}</p>
+          ? t('transferred').replace('{bytes}', bytes(state.transferred, t))
+          : t('known').replace('{received}', bytes(state.transferred, t)).replace('{total}', bytes(state.total, t))}</p>
       </>}
       {detail !== undefined && <p className={css.error} role="alert">{t('error').replace('{detail}', detail)}</p>}
       {state.kind !== 'downloading' && state.kind !== 'checking' && <button type="button" disabled={busy} onClick={() => { controller.run(action) }}>{label}</button>}
