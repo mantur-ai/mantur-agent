@@ -6,6 +6,7 @@ import {
   createUserMessage,
 } from '@deepseek-ai/dsh-llm/message'
 import { brandString } from '@deepseek-ai/dsh-brand'
+import Schema from '@deepseek-ai/schemastery'
 import type { MessageId, ToolCallId } from '@deepseek-ai/dsh-llm/brand'
 import type {
   AssistantMessage,
@@ -1795,9 +1796,8 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
 
   /** Canonical fixture implementation of the generated Settings Remote contract. */
   const settingsRemotes = {
-    // Only the resolved DeepSeek address needed by first-run readiness is
-    // represented here. Fixture-backed journeys do not open its Models editor;
-    // real schema-driven forms ride the HTTP transport.
+    // Read-only resolved settings keep fixture boot aligned with standard Web;
+    // editable schema-driven forms use the HTTP transport.
     describe(): RpcResult<SettingsDescribeValue> {
       return {
         ok: true,
@@ -1810,6 +1810,15 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
             value: { apiKeyEnv: 'DEEPSEEK_API_KEY' },
             applies: 'live',
             secrets: [{ path: ['apiKey'], set: false }],
+            revision: 0,
+          }, {
+            ns: 'ui-workspace',
+            schema: JSON.parse(JSON.stringify(
+              Schema.object({ newSessionWorkspace: Schema.union(['recent', 'explicit']).default('recent') }).toJSON(),
+            )) as JsonValue,
+            value: { newSessionWorkspace: 'recent' },
+            applies: 'live',
+            secrets: [],
             revision: 0,
           }],
         },

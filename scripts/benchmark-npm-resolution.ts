@@ -1,12 +1,13 @@
 /** Benchmark npm's dependency-tree resolution against an all-local registry. */
 
 import { execFileSync, spawn, spawnSync, type ChildProcess } from 'node:child_process'
-import { globSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { globSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { createServer, type Server } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { parseArgs } from 'node:util'
+import { removeFixtureSafely } from './test-fixture-cleanup.ts'
 
 const TARGET_PACKAGE = '@deepseek-ai/dsh'
 const DEFAULT_TIMEOUT_MS = 300_000
@@ -417,7 +418,8 @@ async function runNpm(
  * @param index - Package metadata exposed through the local registry.
  * @param dependencies - Root dependencies whose install layout npm computes.
  * @param timeoutMs - Hard wall-clock limit for the npm child process.
- * @returns The package lock plus timing and registry-request observations.
+ * @returns The package lock plus timing and registry-request observations after temporary-directory cleanup.
+ * @throws when npm fails or the bounded cleanup cannot remove its temporary files.
  */
 export async function resolveNpmPackageLock(
   index: RegistryIndex,
@@ -482,7 +484,7 @@ export async function resolveNpmPackageLock(
   } finally {
     server.closeAllConnections()
     await close(server)
-    rmSync(consumer, { recursive: true, force: true })
+    removeFixtureSafely(consumer)
   }
 }
 

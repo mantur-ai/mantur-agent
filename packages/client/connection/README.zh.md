@@ -27,6 +27,8 @@ kind: "package-reference"
 
 浏览器通过 HTTP POST 执行 Remote 一元调用；API Gateway 自己拥有 `/api/remote.mux` WebSocket 及其逻辑流。进程内组合通过 `connection.rpc.open` 提供等价的 Remote 流，不打开 WebSocket。Host half 拥有唯一 `/api` route、Fetch bridge、浏览器认证、Host/Origin 校验与精确 `GET`/`HEAD` 路由注册表。Typert Gateway 认领生成的 Remote endpoint，功能包注册 Session 日志下载等非 JSON 响应，未认领的请求返回 404。Loopback hostname 判定只供浏览器侧当前页面状态使用，留在包内。
 
+无密钥夹具传输提供只读的 DeepSeek 就绪配置和标准 Web 工作区导航配置（`newSessionWorkspace: recent`）。其组装会话采用与 Web profile 相同的当前或最近工作区选择策略；可编辑设置表单使用真实 HTTP 传输。
+
 -----
 
 <a id="browser-authentication-and-request-trust"></a>
