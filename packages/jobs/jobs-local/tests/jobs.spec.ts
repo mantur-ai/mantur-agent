@@ -1135,3 +1135,137 @@ describe('LocalJobRegistry teardown change notifications', () => {
     expect(seen).toEqual([undefined, undefined, undefined])
   })
 })
+
+
+describe('LocalJobRegistry shutdown proof', () => {
+  it('freezes admission and waits for release without cancelling remote work', async () => {
+    const ctx = await harness()
+    const registry = ctx.jobs as LocalJobRegistry
+    const p = producer()
+    const id = registry.start(p.spec)
+    let stopped = false
+    const completion = registry.stopForShutdown()
+    void completion.then(() => { stopped = true })
+    try {
+      expect(registry.stopForShutdown()).toBe(completion)
+      expect(() => registry.start(producer().spec)).toThrow('admission is closed')
+      await tick()
+      expect(stopped).toBe(false)
+      expect(p.cancels).toEqual([])
+      expect(registry.get(id)).toMatchObject({ id, status: 'running', reported: true })
+      p.settle({ status: 'completed' })
+      await completion
+    } finally {
+      p.settle({ status: 'completed' })
+      await completion
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('retains rejected resource release after owner cleanup removes the record', async () => {
+    const ctx = await harness()
+    const registry = ctx.jobs as LocalJobRegistry
+    const owner = stubAgent(ctx, 'rejected-owner')
+    ctx.agents.register(owner)
+    const p = producer({ owner })
+    registry.start(p.spec)
+    try {
+      p.reject(new Error('release failed'))
+      await disposeAgentScope(owner)
+      expect(registry.list()).toEqual([])
+      await expect(registry.stopForShutdown()).rejects.toThrow('background job shutdown failed')
+    } finally {
+      p.settle({ status: 'completed' })
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('joins the producer after ordinary teardown force-fails only its record', async () => {
+    const ctx = await harness()
+    const registry = ctx.jobs as LocalJobRegistry
+    const owner = stubAgent(ctx, 'orphan-owner')
+    ctx.agents.register(owner)
+    const p = producer({ owner, cancel: () => { throw new Error('cancel failed') } })
+    registry.start(p.spec)
+    await disposeAgentScope(owner)
+    const completion = registry.stopForShutdown()
+    let stopped = false
+    const outcome = completion.catch((error: unknown) => { stopped = true; return error })
+    try {
+      await tick()
+      expect(stopped).toBe(false)
+      p.settle({ status: 'completed' })
+      expect(await outcome).toBeInstanceOf(AggregateError)
+    } finally {
+      p.settle({ status: 'completed' })
+      await outcome
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('does not cancel through owner or service disposal after shutdown starts', async () => {
+    const ctx = await harness()
+    const registry = ctx.jobs as LocalJobRegistry
+    const owner = stubAgent(ctx, 'preserved-owner')
+    ctx.agents.register(owner)
+    const owned = producer({ owner })
+    const unowned = producer()
+    registry.start(owned.spec)
+    registry.start(unowned.spec)
+    const completion = registry.stopForShutdown()
+    const dispose = ctx.fiber.dispose()
+    try {
+      await tick()
+      expect(owned.cancels).toEqual([])
+      expect(unowned.cancels).toEqual([])
+    } finally {
+      owned.settle({ status: 'completed' })
+      unowned.settle({ status: 'completed' })
+      await completion
+      await dispose
+    }
+  })
+
+  it('joins a producer whose synchronous start hook requests shutdown', async () => {
+    const ctx = await harness()
+    const registry = ctx.jobs as LocalJobRegistry
+    const p = producer()
+    let completion: Promise<void> | undefined
+    registry.start({ ...p.spec, run: () => { completion = registry.stopForShutdown(); return p.spec.run() } })
+    try {
+      await tick()
+      expect(registry.list()[0]?.reported).toBe(true)
+      p.settle({ status: 'completed' })
+      await completion
+    } finally {
+      p.settle({ status: 'completed' })
+      await completion
+      await ctx.fiber.dispose()
+    }
+  })
+})
+
+
+it('joins asynchronous completion notices and retains their rejected finalization', async () => {
+  const ctx = await harness()
+  const registry = ctx.jobs as LocalJobRegistry
+  const gate = Promise.withResolvers<undefined>()
+  const entered = Promise.withResolvers<undefined>()
+  registry.onJobDone(async () => { entered.resolve(undefined); await gate.promise; throw new Error('notice finalization failed') })
+  const p = producer()
+  registry.start(p.spec)
+  p.settle({ status: 'completed' })
+  await entered.promise
+  let stopped = false
+  const completion = registry.stopForShutdown().catch((error: unknown) => { stopped = true; return error })
+  try {
+    await tick()
+    expect(stopped).toBe(false)
+    gate.resolve(undefined)
+    expect(await completion).toBeInstanceOf(AggregateError)
+  } finally {
+    gate.resolve(undefined)
+    await completion
+    await ctx.fiber.dispose()
+  }
+})

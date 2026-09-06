@@ -18,9 +18,11 @@ Host 停机必须先调用明确的所有者操作，才能授权安装。agent 
 
 终端注册表也提供显式停止：拒绝新的创建和发送，等待待处理后端分配及回滚，并关闭已发布终端。即使普通释放或成功重试已移除记录，清理错误仍会保留。
 
+后台任务注册表冻结新注册，并等待原始生产者释放 Promise 和异步完成监听器。记录离开注册表后仍保留失败。它不会取消工作，后续所有者释放也不会触发取消；本地资源由独立执行所有者停止。注册表记录被强制标记失败不能证明资源已释放。
+
 ## 上游所有权
 
-现有观察钩子无法冻结直接收件箱修改、恢复驱动器内部持有的领取批次、封存直接 Session 追加，或在工厂释放 writer 后继续保留它。因此改动位于 `packages/core/agent/src/{index,inbox}.ts`、`packages/core/agent-loop/src/{index,agent}.ts`、`packages/core/session/src/index.ts` 和 `packages/subprocess/subprocess-local/src/index.ts`。终端注册表操作位于 `packages/terminal/terminal/src/index.ts`，因为外部钩子无法冻结发送或保留已移除分配的失败；受控晚到分配、等待关闭和失败保留测试用于验证上游升级。不修改 vendored Cordis 行为。工厂在自身生命周期结束前保留已关闭会话对象，以检测关闭后的写入；这是验证先前已关闭 writer 的保留成本。
+现有观察钩子无法冻结直接收件箱修改、恢复驱动器内部持有的领取批次、封存直接 Session 追加，或在工厂释放 writer 后继续保留它。因此改动位于 `packages/core/agent/src/{index,inbox}.ts`、`packages/core/agent-loop/src/{index,agent}.ts`、`packages/core/session/src/index.ts` 和 `packages/subprocess/subprocess-local/src/index.ts`。终端注册表操作位于 `packages/terminal/terminal/src/index.ts`，因为外部钩子无法冻结发送或保留已移除分配的失败；受控晚到分配、等待关闭和失败保留测试用于验证上游升级。任务注册表改动位于 `packages/jobs/jobs-local/src/index.ts`；插件无法冻结直接 start 或恢复已丢弃的生产者 Promise。未取消的待处理工作、强制失败记录、晚到释放及完成监听器测试用于验证升级。 不修改 vendored Cordis 行为。工厂在自身生命周期结束前保留已关闭会话对象，以检测关闭后的写入；这是验证先前已关闭 writer 的保留成本。
 
 ## 验证
 
