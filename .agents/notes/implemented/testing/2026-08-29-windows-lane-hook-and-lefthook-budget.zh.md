@@ -16,7 +16,7 @@ Status: implemented
 
 Lefthook 套件取 `{ timeout: 90_000 }`，与 [`.github/workflows/ci.yml`](../../../../.github/workflows/ci.yml) 里的 `DSH_COVERAGE_TEST_TIMEOUT_MS` 一致。逐用例常量被删除而不是被抬高：它只是重述了 `describe` 的取值，而 translation-pairing-merge 的 note 已经否决过逐用例余量——后续新增的用例若不带余量，就会静默继承另一个上限。
 
-`coverageTestTimeoutArgs` 在原有两个参数旁边发出 `--hookTimeout`。一个环境变量管一份预算，覆盖受争抢的 lane 必须完成的工作，无论这份工作位于用例内还是位于它的 setup 与 teardown。
+`coverageTestTimeoutConfig` 从一个环境变量解析测试、轮询和 hook 选项。[vitest.config.ts](../../../../vitest.config.ts) 将这些选项应用到两个内联项目，`coverageTestTimeoutArgs` 则发出匹配的根级 CLI 参数。Vitest 4.1.8 会把 CLI 的 `testTimeout` 传入内联项目，却遗漏 `expect` 和 `hookTimeout`；显式项目选项确保覆盖率分区保留配置的预算。未设置预算时保留 Vitest 默认值，格式错误的预算会导致配置失败。
 
 ## 后果
 
