@@ -1,0 +1,25 @@
+- text: 故事起于一念，余下交给漫途
+- tablist "创作方向":
+  - tab "剧本创作" [selected]
+  - tab "漫剧制作"
+  - tab "剪辑成片"
+  - tab "素材创作"
+- region "馒头仔":
+  - button "关闭引导": ×
+  - strong: 你好呀，我是馒头仔，漫途的创作小助手！
+  - paragraph: 从写剧本、做画面到剪成片，我都会陪着你。选一个创作方向，或者直接告诉我你的想法吧。
+- button "短剧编剧"
+- button "更多技能"
+- button "馒头仔" [expanded]
+- textbox "描述你想要构建的内容… / 调用指令 @ 文件或对话"
+- button "指令":
+  - img
+- button "访问模式，当前：工作区内修改": 工作区内修改
+- button "选择模型，当前 DeepSeek-V4-Flash":
+  - text: DeepSeek-V4-Flash
+  - img
+- button "发送消息" [disabled]
+- button "选择工作区":
+  - img
+  - text: workspace
+  - img

@@ -506,6 +506,22 @@ export class SessionInputShell implements SessionInput {
   }
 
   /**
+   * Append a shortcut reference without replacing a selection or sending the draft.
+   * @param reference - owner identity and display label of the selected reference.
+   * @returns whether the reference is present and the editor accepted focus.
+   */
+  appendReference(reference: ReferenceInsert): boolean {
+    if (this.core.state.phase !== 'plain' && this.core.state.phase !== 'claimed') return false
+    const present = this.projection.occurrences.some(item =>
+      item.source === reference.source && item.ref === reference.ref)
+    const end = this.projection.detectText.length
+    if (!present && !this.insertReference(reference, { start: end, end, draftRev: this.rev })) return false
+    this.applyEdit(() => { $getRoot().selectEnd() })
+    this.editor.focus()
+    return true
+  }
+
+  /**
    * Consume one command token after business success (scoped consume-token
    * event listener body). Span guard: revision CAS then splice; bare-token
    * guard: trimmed-draft equality then clear.

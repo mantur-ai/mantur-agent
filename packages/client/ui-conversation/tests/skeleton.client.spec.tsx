@@ -175,6 +175,7 @@ function mount(
   let pickerOwner: unknown
   const renderSlot = ((key: string, owner: object, opts?: { only?: string; fallback?: ReactNode }) => {
     slotCalls.push(key)
+    if (key === 'conversation.composer.layout') return opts?.fallback ?? null
     if (key === 'conversation.input.model' || key === 'conversation.input.plan') {
       seatOwners.push({ key, owner })
     }
@@ -316,7 +317,7 @@ describe('Hero chrome', () => {
     const view = render(<HeroShell t={makeTranslate(en, commonEn)} renderSlot={renderSlot} />)
     expect(view.getByText('Into the Unknown')).toBeTruthy()
     expect(view.getByText('Preview')).toBeTruthy()
-    expect(renderSlot).toHaveBeenCalledTimes(3)
+    expect(renderSlot).toHaveBeenCalledTimes(4)
     expect(renderSlot.mock.calls[0]?.[0]).toBe('conversation.hero.brand.mark')
     const brandMarkOwner = renderSlot.mock.calls[0]?.[1]
     if (brandMarkOwner === undefined || !('size' in brandMarkOwner) || !('className' in brandMarkOwner)) {
@@ -329,6 +330,7 @@ describe('Hero chrome', () => {
     expect(renderSlot.mock.calls[1]?.[2]?.fallback).toBeTruthy()
     expect(renderSlot.mock.calls[2]?.[0]).toBe('conversation.hero.badge')
     expect(renderSlot.mock.calls[2]?.[2]?.fallback).toBeTruthy()
+    expect(renderSlot.mock.calls[3]?.[0]).toBe('conversation.hero.modes')
   })
 })
 
@@ -598,6 +600,14 @@ describe('ConversationRoot resident composer', () => {
     // The agent-preset chip sits in the same row, for the same reason: both
     // choices are only open before the first message.
     expect(b.slotCalls).toContain('conversation.hero.agentPreset')
+  })
+
+  it('keeps the default workspace picker before the editor without a product layout occupant', () => {
+    const b = mount(sessionSnapshotOf({ blank: true }))
+    const chip = b.view.getByRole('button', { name: '选择工作区' })
+    const editor = b.view.getByRole('textbox')
+    expect(chip.compareDocumentPosition(editor) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(b.slotCalls).toContain('conversation.composer.layout')
   })
 
   it('prompt failure renders the promptError strip (ordinary failure, no transaction UI)', () => {

@@ -42,6 +42,7 @@
     "tests/settings-chrome.e2e.ts",
     "tests/models-settings.e2e.ts",
     "tests/mantur-brand.snapshot.ts",
+    "tests/mantur-guide.expected.e2e.ts",
     "tests/default-model.e2e.ts",
     "tests/github-ready-review.e2e.ts",
     "tests/streaming-fence-highlight.e2e.ts",

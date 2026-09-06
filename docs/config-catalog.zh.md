@@ -383,6 +383,26 @@ export interface Config {
 
 来源：[`packages/client/hmr/src/index.ts:31`](../packages/client/hmr/src/index.ts)
 
+<a id="deepseek-aidsh-client-ui-mantur-navigation"></a>
+
+## `@deepseek-ai/dsh-client-ui-mantur-navigation`
+
+```ts config-catalog
+/** Product-owned recommendation IDs, independent of Agent configuration. */
+export type Config = GuideConfig
+
+/** Ordered real marketplace slugs selected by the product composition. */
+export interface GuideConfig {
+  /** Ordered marketplace Skill slugs for each creation mode. */
+  recommendations: Record<CreationMode, string[]>
+}
+
+/** Persisted creation-mode identifier; not an Agent preset. */
+export type CreationMode = typeof CREATION_MODES[number]
+```
+
+来源：[`packages/client/ui-mantur-navigation/src/index.ts:9`](../packages/client/ui-mantur-navigation/src/index.ts)
+
 <a id="deepseek-aidsh-code-runtime-worker-thread"></a>
 
 ## `@deepseek-ai/dsh-code-runtime-worker-thread`
@@ -3425,7 +3445,6 @@ export interface Config {
 - `@deepseek-ai/dsh-client-ui-jobs`（[`packages/client/ui-jobs/src/index.ts`](../packages/client/ui-jobs/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-layout`（[`packages/client/ui-layout/src/index.ts`](../packages/client/ui-layout/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-mantur-account`（[`packages/client/ui-mantur-account/src/index.ts`](../packages/client/ui-mantur-account/src/index.ts)）
-- `@deepseek-ai/dsh-client-ui-mantur-navigation`（[`packages/client/ui-mantur-navigation/src/index.ts`](../packages/client/ui-mantur-navigation/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-message-feedback`（[`packages/client/ui-message-feedback/src/index.ts`](../packages/client/ui-message-feedback/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-model-selection`（[`packages/client/ui-model-selection/src/index.ts`](../packages/client/ui-model-selection/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-permission-presets`（[`packages/client/ui-permission-presets/src/index.ts`](../packages/client/ui-permission-presets/src/index.ts)）
