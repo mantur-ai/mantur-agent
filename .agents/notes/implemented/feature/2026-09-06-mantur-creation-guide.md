@@ -32,6 +32,6 @@ Recommendation buttons use a curated localized short name, at most four Chinese 
 
 The shared conversation adds placement slots and one append-reference operation; product copy and recommendation policy remain in the Mantur plugin. Preferences use the existing Host settings transport. Guide details have their own open state because the conversation remains mounted behind marketplace pages. Focused tests cover dismissal, late installation settlement, draft preservation, and duplicate insertion; the built browser expectation checks the real Loader, Remote, composer, and narrow-window layout. No guide copy or mode change consumes model tokens.
 
-Workspace switching transfers the existing draft string and images, not reference-occurrence metadata. Switching back can therefore show a Skill slug as plain text instead of its titled chip; this layout does not change that state-transfer behavior.
+Workspace switching transfers the complete editor document, reference occurrences, and images through the conversation owner. The [automatic-project decision](2026-09-06-mantur-automatic-project.md) owns durable transfer from the unassigned editor, including cancellation and retry behavior.
 
 Every Web build includes the assistant PNG because the shipped Mantur overlay can load its UI plugin against the common frontend. Only the Mantur plugin renders the artwork. Document metadata, favicon, and install-manifest branding remain profile-owned.

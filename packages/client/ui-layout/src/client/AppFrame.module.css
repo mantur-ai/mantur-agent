@@ -131,3 +131,34 @@
 .overlayLayer > * {
   pointer-events: auto;
 }
+
+.conversationPane {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.conversationSurface[data-workbench-open] {
+  flex-direction: row;
+}
+
+.conversationSurface[data-workbench-open] .conversationPane {
+  flex: 0 0 auto;
+  width: 35%;
+  min-width: 280px;
+  max-width: 70%;
+  resize: horizontal;
+  overflow: auto;
+  border-right: 0.5px solid var(--dsw-alias-border-l3);
+}
+
+.workbenchPane {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}

@@ -29,6 +29,8 @@ Use the sidebar to browse Workspaces and their Sessions, reorder them, and start
 
 ### Reordering and view options
 
+The Host `newSessionWorkspace` configuration defaults to `recent`: initial entry and an unscoped New Session use the current or most recent Workspace. `explicit` leaves them unassigned until the user chooses a Workspace or a product preparation policy creates one. An explicit Workspace action still selects that target. The client waits for settings before automatic selection; it does not guess a recent target while configuration is loading.
+
 View options combine grouping with one browser-persisted Session order per account: **Manual** and **Last updated** apply in either presentation. Entering Last updated performs a complete recency sort and later user prompts or steers promote their Session once; entering Manual preserves every current position and disables later promotion. Dragging edits the current order in either mode; Manual-mode drags for real Workspaces also update the Host Session account, while Ungrouped and flat-list orders remain browser-local. In a collapsed group, drag boundaries follow rendered rows and place the source before intervening hidden rows, so a drag cannot hide its source. Workspace drag order is Host-durable in either Session order mode.
 
 ### Search

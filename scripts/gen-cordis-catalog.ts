@@ -70,6 +70,7 @@ export const SERVICE_PAGE: Record<string, string> = {
   authorization: 'credentials.md',
   manturAccount: 'credentials.md',
   manturMarketplace: 'skills.md',
+  manturProjects: 'workspace.md',
   credentials: 'credentials.md',
   credentialsController: 'credentials.md',
   settingsController: 'settings.md',
@@ -164,6 +165,7 @@ export const SERVICE_WALK_EXEMPTIONS: Record<string, string> = {
   chatFileMentions: 'client-side slot-contract accessor (ChatFileMentions) — packages/client/ui-chat/README.md owns the API',
   commandUi: 'client-side interface-typed browser service — packages/client/ui-commands/README.md owns the API',
   conversation: 'client-side interface-typed browser service — packages/client/ui-conversation/README.md owns the API',
+  conversationDrafts: 'client-side unassigned editor and preparation policy — packages/client/ui-conversation/README.md owns the API',
   layout: 'client-side interface-typed browser service — packages/client/ui-layout/README.md owns the API',
   locale: 'client-side interface-typed browser service — packages/client/locale/README.md owns the API',
   modelDirectories: 'client-side interface-typed browser service — packages/client/ui-model-selection/README.md owns the API',
@@ -230,6 +232,7 @@ export const EVENT_WALK_EXEMPTIONS: Record<string, string> = {
   'slash/input-insert-text': 'client-face slash-input protocol — packages/client/ui-input-trigger/README.md owns the API',
   'slots/changed': 'client-face slot invalidation signal — packages/client/ui-renderer/README.md owns the API',
   'theme/change': 'client-face theme switch signal — packages/client/ui-theme/README.md owns the API',
+  'mantur/creation-mode-selected': 'client-face explicit mode selection — packages/client/ui-mantur-navigation/README.md owns the API',
 }
 
 /**
@@ -611,6 +614,9 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   DomainChanged: 'storage.md',
   DomainFacility: 'storage.md',
   Workspace: 'workspace.md',
+  PreparedProject: 'workspace.md',
+  ProjectCreationId: 'workspace.md',
+  ProjectRootSettings: 'workspace.md',
   WorkspaceArchiveSessionRequest: 'workspace.md',
   WorkspaceArchiveValue: 'workspace.md',
   WorkspaceCreateRequest: 'workspace.md',

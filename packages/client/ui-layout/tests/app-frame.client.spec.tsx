@@ -62,6 +62,7 @@ function mountFrame() {
     slotCalls.push({ key, props: owner })
     if (key === 'sidebar') return <div data-testid="sidebar-content" />
     if (key === 'conversation') return <div data-testid="center-content" />
+    if (key === 'main.workbench') return <div data-testid="workbench-content" />
     if (key === 'details') return <div data-testid="details-content" />
     if (key === 'main.page') return <div data-testid="main-page-content">marketplace</div>
     if (key === 'conversation.empty') return <div data-testid="empty-content" />
@@ -271,13 +272,29 @@ describe('AppFrame', () => {
     expect(typeof props.closeMainPage).toBe('function')
   })
 
+  it('opens a workbench before the first prompt and keeps the composer surface mounted', () => {
+    selectedSession.current = undefined
+    const { instance, getByTestId, queryByTestId, slotCalls } = mountFrame()
+    const conversation = getByTestId('center-content')
+    expect(queryByTestId('workbench-content')).toBeNull()
+    act(() => { instance.actions.openWorkbench() })
+    expect(getByTestId('workbench-content')).toBeTruthy()
+    expect(getByTestId('center-content')).toBe(conversation)
+    const owner = slotCalls.filter(call => call.key === 'main.workbench').at(-1)?.props as { closeWorkbench: () => void }
+    act(() => { owner.closeWorkbench() })
+    expect(queryByTestId('workbench-content')).toBeNull()
+    expect(getByTestId('center-content')).toBe(conversation)
+    act(() => { instance.actions.openWorkbench() })
+    expect(getByTestId('workbench-content')).toBeTruthy()
+  })
+
   it('switches the center to a main page, keeps conversation state mounted, and returns', () => {
     const { instance, getByTestId, queryByTestId, slotCalls } = mountFrame()
     expect(queryByTestId('main-page-content')).toBeNull()
 
     act(() => { instance.actions.openMainPage('skills' as never) })
     expect(getByTestId('main-page-content')).toBeTruthy()
-    expect(getByTestId('center-content').parentElement?.hidden).toBe(true)
+    expect(getByTestId('center-content').parentElement?.parentElement?.hidden).toBe(true)
     const props = slotCalls.filter(call => call.key === 'main.page').at(-1)?.props as {
       activePage: unknown
       closePage: unknown
@@ -287,7 +304,7 @@ describe('AppFrame', () => {
 
     act(() => { instance.actions.closeMainPage() })
     expect(queryByTestId('main-page-content')).toBeNull()
-    expect(getByTestId('center-content').parentElement?.hidden).toBe(false)
+    expect(getByTestId('center-content').parentElement?.parentElement?.hidden).toBe(false)
   })
 
   it('sidebar drag widens through rAF-batched pointer moves', () => {
