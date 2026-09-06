@@ -16,6 +16,8 @@ Status: implemented
 
 [npm 基准](../../../../scripts/benchmark-npm-resolution.ts) 在子进程和注册表服务器关闭后，使用现有的 [junction 安全清理辅助函数](../../../../scripts/test-fixture-cleanup.ts) 删除消费方目录。辅助函数的有界重试处理 Windows 文件延迟释放，重试耗尽仍传播清理错误。[npm 测试截止时间](2026-09-04-windows-npm-resolution-test-budget.zh.md) 保持不变。
 
+[快照子会话轮次等待器](../../../../packages/test-support/session-snapshot/src/harness.ts) 自行管理轮询截止时间，并等待每次文件系统收集完成。Vitest 可能在异步回调生成子会话诊断之前使其超时；自有循环会在当前读取完成后报告子会话与所需轮次。超时不会让已开始的读取与场景清理重叠，截止时间之后完成的读取也不能将超时变为成功。
+
 ## 考虑过的替代方案
 
 延长各 fixture 的轮询截止时间仍然测量存储延迟，而不是写入是否完成。重复邮箱场景不能确保覆盖冷回执路径。忽略清理错误会留下临时数据。这些做法都不能证明所需结果。
