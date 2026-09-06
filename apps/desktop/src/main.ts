@@ -2,8 +2,10 @@
 
 import { appendFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
-import { app, BrowserWindow, dialog, Menu, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron'
 import electronUpdater from 'electron-updater'
+import { DesktopDraftStorage } from './draft-storage.ts'
+import { installDraftBridge } from './draft-bridge.ts'
 import {
   canResetProjectionCache,
   desktopPaths,
@@ -33,6 +35,10 @@ app.setPath('userData', desktopUserDataPath(
   app.isPackaged ? 'release' : 'development',
 ))
 const paths = desktopPaths(app.getPath('userData'))
+const drafts = installDraftBridge({ ipc: ipcMain, window: () => mainWindow,
+  origin: () => serviceUrl === undefined ? undefined : new URL(serviceUrl).origin,
+  storage: new DesktopDraftStorage(paths.userData),
+})
 
 function writeDesktopLog(message: string): void {
   void appendFile(paths.logPath, `${new Date().toISOString()} ${message}\n`).catch((error: unknown) => {
@@ -91,6 +97,7 @@ function createWindow(target = STARTUP_PAGE): BrowserWindow {
     title: APP_NAME,
     icon: APP_ICON,
     webPreferences: {
+      preload: fileURLToPath(new URL('./preload.cjs', import.meta.url)),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -106,8 +113,11 @@ function createWindow(target = STARTUP_PAGE): BrowserWindow {
     event.preventDefault()
     openExternal(target)
   })
+  window.webContents.on('did-start-navigation', (_event, _url, _isInPlace, isMainFrame) => {
+    if (isMainFrame) drafts.release()
+  })
   window.once('ready-to-show', () => { window.show() })
-  window.on('closed', () => { mainWindow = undefined })
+  window.on('closed', () => { drafts.release(); mainWindow = undefined })
   if (target === STARTUP_PAGE) void window.loadFile(target)
   else void window.loadURL(target)
   mainWindow = window
@@ -198,8 +208,13 @@ function startUpdates(): void {
       showUpdateFeedback(state)
     },
     beforeInstall: async () => {
-      quitting = true
-      await stopService()
+      try {
+        await drafts.prepare()
+        throw new Error(copy.updateShutdownUnavailable)
+      } catch (error) {
+        drafts.release()
+        throw error
+      }
     },
     prompts: {
       confirmDownload: async (version) => {

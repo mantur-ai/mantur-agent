@@ -229,7 +229,7 @@ function mount(
           useStore={bindSnapshotSelector(store)}
           actions={store.actions}
           renderSlot={renderSlot as never}
-          bindDraftMirror={write => wiring.bindMirror(write)}
+          bindDraftMirror={(write, seed) => wiring.bindMirror(write, seed)}
           openView={(view, focus) => { store.actions.openView(view, focus) }}
         />
       )

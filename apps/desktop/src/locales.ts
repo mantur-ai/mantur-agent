@@ -1,6 +1,7 @@
 /** Native desktop copy selected from the operating-system locale. */
 
 const zh = {
+  updateShutdownUnavailable: '草稿已保存，但尚无法确认本地任务最终记录已安全保存。本次未执行安装，也未停止任务。',
   startupFailedTitle: '漫途Agent 启动失败',
   startupFailedMessage: '无法启动本地 Agent 服务。',
   resetCacheButton: '重置缓存并重试',
@@ -41,6 +42,7 @@ type DesktopCopy = {
 }
 
 const en = {
+  updateShutdownUnavailable: 'Drafts were saved, but a verified final task checkpoint is unavailable. Installation was not started and tasks were not stopped.',
   startupFailedTitle: 'Mantur Agent failed to start',
   startupFailedMessage: 'The local agent service could not start.',
   resetCacheButton: 'Reset cache and retry',

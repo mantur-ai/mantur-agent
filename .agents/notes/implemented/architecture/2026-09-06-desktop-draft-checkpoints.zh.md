@@ -1,0 +1,27 @@
+# Agent Note: 桌面草稿检查点与重启拒绝
+
+Status: implemented
+
+[English](2026-09-06-desktop-draft-checkpoints.md) | 中文
+
+## Problem
+
+桌面应用在随机 loopback 端口启动 Web 应用。浏览器本地文本存储无法跨这些 origin 恢复草稿，未发送图片 File 和完整引用元数据也只存在于 renderer。进程成功退出或 Cordis disposer resolve 不等于最终任务事件已持久化：清理流程会捕获错误并写日志。
+
+## Decision
+
+[桌面载体](../../../../apps/desktop/README.zh.md#draft-checkpoints)拥有一个私有、带版本的草稿文件。受限 preload 消息承载完整编辑器文档和已选图片字节，不承载任意路径或浏览器 object URL。主 frame 授权、整体检查点 revision 比较、附件摘要和文件同步均先于保存回执。输入锁覆盖重启保存和两个归属之间的转移；取消与失败会释放锁。完整 Lexical 文档保留 Skill 标识和显示名，另行记录的 occurrence id 按恢复后的文档顺序绑定。
+
+没有可验证的最终 Host 检查点时，更新安装器拒绝继续。草稿持久化、进程关闭、日志消息或 `fiber.dispose()` resolve 均不充当该检查点。拒绝路径不会停止本机任务或远端工作。Windows 草稿持久性和未关联输入框接入仍是明确限制，均不返回模拟成功。
+
+## Alternatives considered
+
+仅保留 localStorage 无法独立于 origin 恢复，也无法保存附件字节。仅保存剪贴板文本会丢失引用元数据。分别写入源和目标可能在转移时重复或丢失未关联草稿。接受清理 promise 会掩盖 Cordis 包含的失败。修改 vendored 清理行为或增加全局任务接收冻结会超出这项有界草稿变更。
+
+## Consequences
+
+草稿检查点按已选图片大小增加私有磁盘占用。文件和目录同步路径仅在 macOS 验证；Windows 发布在提供原生持久重命名实现前保持阻止。草稿格式拒绝不支持的版本。可以导入当前 origin 的旧文本草稿，但内容冲突会明确报错。应用不会扫描其他 origin 或生产 profile。在 Host 能停止接收工作并可靠报告最终持久化失败之前，完整自动安装仍未完成。
+
+## Verification
+
+聚焦测试覆盖真实临时文件持久化与权限、过期 revision、附件损坏、完整 Skill 与 occurrence 恢复、原生 frame 授权、超时、迟到回执和锁释放。真实 Loader 浏览器测试在第二个随机 loopback origin 重开同一 Session，在没有旧 localStorage 的情况下核对正文、原始 PNG 字节和附件摘要。测试图片与原生消息均为隔离 fixture。这些测试不会发布 release、更新已安装应用或重启用户运行时。

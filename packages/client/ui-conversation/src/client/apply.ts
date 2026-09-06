@@ -21,6 +21,7 @@ import { ConversationController, UnsupportedImageMediaTypeError } from './servic
 import type { IConversation } from './service.ts'
 import { ComposerBlockRegistry } from './input/blocks.ts'
 import type { ComposerBlock } from './contract/composer-blocks.ts'
+import { DraftPersistence } from './input/draft-persistence.ts'
 import { InputHub } from './input/hub.ts'
 import { ComposerSubmissionPolicy } from './input/submission-policy.ts'
 import { queueDockEntry } from './queue/QueueDock.tsx'
@@ -174,6 +175,15 @@ export function apply(ctx: Context): void {
 
   const inputHub = new InputHub(ctx, t)
   const composerBlocks = new ComposerBlockRegistry()
+  if (typeof window !== 'undefined' && window.manturDrafts !== undefined) {
+    const persistence = new DraftPersistence(window.manturDrafts, {
+      capture: ids => concreteConversation(ctx).captureDraftImages(ids),
+      restore: images => concreteConversation(ctx).restoreDraftImages(images),
+    }, (error) => { inputHub.reportPersistenceError(t('draft.saveFailed', { detail: String(error) })) })
+    inputHub.persistence = persistence
+    ctx.effect(() => () => { persistence.dispose() }, 'ui-conversation: native draft persistence')
+  }
+
 
   // Conversation assembly and input share the Session binding lifecycle. The
   // source roster is installed before any consuming Slot entry.
@@ -246,7 +256,7 @@ export function apply(ctx: Context): void {
     store: conversationStore,
     inject: (sessionId: SessionId, actions: BoundActions<typeof conversationStore>): ConversationSessionInjected => ({
       hooks: { conversationViews },
-      bindDraftMirror: write => inputHub.shell(sessionId).bindMirror(write),
+      bindDraftMirror: (write, seed) => inputHub.shell(sessionId).bindMirror(write, seed),
       openView: (view, focus) => {
         activateView(sessionId, view)
         actions.openView(view, focus)
@@ -368,7 +378,9 @@ export function apply(ctx: Context): void {
     yield registerComposerBar()
   })
 
-  ctx.plugin(ConversationController, { input: inputHub, blocks: composerBlocks })
+  ctx.plugin(ConversationController, { input: inputHub, blocks: composerBlocks,
+    ...(inputHub.persistence === undefined ? {} : { persistence: inputHub.persistence }),
+  })
   ctx.plugin(todoDockEntry)
   ctx.plugin(queueDockEntry)
 }
