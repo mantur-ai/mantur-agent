@@ -36,6 +36,79 @@ it('does not display Mantur artwork or mode controls without the Mantur plugin',
   }
 })
 
+it('keeps guidance readable at the desktop minimum without moving the composer or covering controls', async () => {
+  const skills = [skill, ...[
+    'drama-asset-seedance-pipeline', 'character-forge', 'mantur-video-prompt-director', 'mantur-acting-director',
+    'mantur-smartclip', 'four-dimensional-voice-director', 'mantur-image-prompt-director', 'chinese-wonderland-director',
+  ].map(slug => ({ ...skill, slug }))]
+  const server = createServer((_request, response) => {
+    response.writeHead(200, { 'content-type': 'application/json' })
+    response.end(JSON.stringify({ skills }))
+  })
+  await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve) })
+  let scaffold: Awaited<ReturnType<typeof launchWebScaffold>> | undefined
+  let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
+  try {
+    const address = server.address() as AddressInfo
+    scaffold = await launchWebScaffold({ extraOverlayPath: overlay, extraInstallAnchors: [anchor], manturHubBaseUrl: `http://127.0.0.1:${address.port}` })
+    browser = await chromium.launch()
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 }, locale: ZH_BROWSER_LOCALE })
+    const console = watchConsole(page)
+    await page.goto(scaffold.authenticatedUrl)
+    await page.getByRole('button', { name: '暂时跳过' }).click()
+    await page.getByRole('button', { name: '短剧编剧', exact: true }).waitFor()
+    const positions = () => page.locator('[data-composer-seat]').evaluate(element =>
+      ['[data-composer-card]', '[aria-label="推荐技能"]'].map((selector) => {
+        const rect = element.querySelector(selector)!.getBoundingClientRect()
+        return { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
+      }))
+    const sidebarWidth = () => page.locator('[data-details-collapsed]').evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ')[0])
+    const expandedSidebarWidth = await sidebarWidth()
+    for (const [width, height] of [[880, 600], [720, 900], [1280, 820]] as const) {
+      await page.setViewportSize({ width, height })
+      await expect.poll(() => page.locator('[data-sidebar-collapsed]').count()).toBe(width < 1024 ? 1 : 0)
+      await expect.poll(sidebarWidth).toBe(width < 1024 ? '56px' : expandedSidebarWidth)
+      const before = await positions()
+      for (const name of ['剧本创作', '漫剧制作', '剪辑成片', '素材创作']) {
+        const tab = page.getByRole('tab', { name, exact: true })
+        await tab.click()
+        await expect.poll(() => tab.getAttribute('aria-selected')).toBe('true')
+        await expect.poll(() => page.getByRole('region', { name: '馒头仔' }).evaluate((element) => {
+          const panel = element.getBoundingClientRect()
+          const body = element.querySelector<HTMLElement>('[tabindex="0"]')!
+          const seat = element.closest('[data-composer-seat]')!
+          const mascot = seat.querySelector('img[src$="mantou-clapper.png"]')!.getBoundingClientRect()
+          const protectedRects = [...seat.querySelectorAll(
+            '[role="tablist"], [aria-label="推荐技能"] > *, [data-composer-card], [data-workspace-footer]',
+          )]
+            .map(node => node.getBoundingClientRect())
+          return {
+            readable: body.clientHeight >= parseFloat(getComputedStyle(body).lineHeight),
+            fits: panel.left >= 0 && panel.right <= innerWidth && panel.top >= 0 && panel.bottom <= innerHeight,
+            clear: protectedRects.every(rect => rect.right <= panel.left || rect.left >= panel.right
+              || rect.bottom <= panel.top || rect.top >= panel.bottom),
+            near: Math.abs(mascot.top - panel.bottom - 8) < 1,
+          }
+        })).toEqual({ readable: true, fits: true, clear: true, near: true })
+        if (width === 880 && name === '漫剧制作') {
+          await mkdir(images, { recursive: true })
+          await page.screenshot({ path: join(images, 'desktop-minimum.png') })
+        }
+        expect(await positions()).toEqual(before)
+        await page.getByRole('button', { name: '关闭引导', exact: true }).click()
+        expect(await positions()).toEqual(before)
+        await page.getByRole('button', { name: '馒头仔', exact: true }).click()
+        expect(await positions()).toEqual(before)
+      }
+    }
+    expect(console.pageErrors).toEqual([])
+  } finally {
+    await browser?.close()
+    await scaffold?.close()
+    await new Promise<void>((resolve, reject) => server.close((error) => { if (error === undefined) resolve(); else reject(error) }))
+  }
+})
+
 it('preserves a live draft, attachments and controls while changing modes and adding a Skill without sending', async () => {
   const server = createServer((request, response) => {
     response.writeHead(200, { 'content-type': 'application/json' })
