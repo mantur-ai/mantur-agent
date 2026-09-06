@@ -102,7 +102,7 @@ describe('desktop update footer', () => {
     render(<DesktopUpdate {...value} />)
     expect(screen.getByText('下载完成，重启安装')).toBeTruthy()
     expect(screen.getByRole('alert').textContent).toContain('保存失败')
-    fireEvent.click(screen.getByRole('button', { name: '重启并安装' }))
+    fireEvent.click(screen.getByRole('button', { name: '重启并更新' }))
     expect(run).toHaveBeenCalledExactlyOnceWith('install')
   })
 })
