@@ -499,6 +499,27 @@ describe('E2B e2e workflow', () => {
 })
 
 describe('Desktop release workflow', () => {
+  it('keys each native Mantur Cut cache to the complete pinned source identity', () => {
+    for (const [file, jobName] of [
+      ['.github/workflows/desktop-package.yml', 'package'],
+      ['.github/workflows/desktop-release.yml', 'macos'],
+    ] as const) {
+      const job = workflowJob(loadWorkflow(file), jobName)
+      if (!Array.isArray(job.steps)) throw new TypeError(`${file} must define ${jobName} steps`)
+      const cache = job.steps.filter(isRecord).find(step => step.name === 'Restore pinned Mantur Cut source cache')
+      expect(cache).toMatchObject({
+        uses: 'actions/cache@v5',
+        with: {
+          path: '.cache/mantur-cut',
+          key: "mantur-cut-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('apps/desktop/mantur-cut/source.json', 'packages/client/ui-mantur-editing/adapters/mantur-cut.patch', 'packages/client/ui-mantur-editing/adapters/mantur-cut-packaged.patch') }}",
+        },
+      })
+      const compiler = job.steps.filter(isRecord).find(step => step.name === 'Require native compiler')
+      expect(compiler).toMatchObject({ run: 'xcrun clang --version' })
+      if (file.endsWith('desktop-package.yml')) expect(compiler?.if).toBe("runner.os == 'macOS'")
+    }
+  })
+
   it('separates protected native signing from explicit GitHub publication', async () => {
     const workflow = loadWorkflow('.github/workflows/desktop-release.yml')
     const dispatch = workflowEvent(workflow, 'workflow_dispatch')
@@ -528,6 +549,7 @@ describe('Desktop release workflow', () => {
     const authorizeScript = (authorize as { run?: string }).run
     expect(authorizeScript).toContain('"v$version"')
     expect(authorizeScript).not.toContain('desktop-v$version')
+    expect(authorizeScript).toContain('sha256sum apps/desktop/mantur-cut/source.json')
     const desktopVersion = (JSON.parse(readFileSync(resolve(root, 'apps/desktop/package.json'), 'utf8')) as {
       version: string
     }).version
@@ -634,9 +656,12 @@ releaseDate: '2026-09-03T00:00:00.000Z'
       needs: ['validate', 'assemble'],
       environment: 'macos-release',
       permissions: { contents: 'write' },
+      env: { MANTUR_CUT_DISTRIBUTION_APPROVAL: '${{ vars.MANTUR_CUT_DISTRIBUTION_APPROVAL }}' },
     })
     const publishSteps = JSON.stringify(publish.steps)
     expect(publishSteps).toContain('sha256sum -c SHA256SUMS')
+    expect(publishSteps).toContain('approved:')
+    expect(publishSteps).toContain('must approve the exact pinned distribution')
     expect(publishSteps).toContain('gh release view')
     expect(publishSteps).toContain('published desktop assets are never replaced')
     expect(publishSteps).toContain('gh release create')

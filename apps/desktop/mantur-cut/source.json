@@ -1,0 +1,90 @@
+{
+  "formatVersion": 1,
+  "repository": "https://github.com/0xsline/OpenChatCut.git",
+  "version": "0.2.14",
+  "upstreamCommit": "19cba6e1a70a3e589545ce02de975f6494c918f6",
+  "upstreamTree": "1457d1e9efd887da98e54a72aca8f2a5ff5c670c",
+  "electronVersion": "43.4.0",
+  "embeddedNodeVersion": "24.18.1",
+  "cmakeVersion": "4.3.3",
+  "cmakeMacArchiveSha256": "5221a13450c7a0219a2a0d1b6c9085eb06489721fafd8488ccebc1584175d2fb",
+  "whisperRepository": "https://github.com/ggml-org/whisper.cpp.git",
+  "whisperVersion": "v1.9.2",
+  "whisperCommit": "306c88f4d1286aec1bf96e544632897886af5501",
+  "whisperTree": "8f71d09d10a51543a6d1b476a88080d2e33a163d",
+  "remotionVersion": "4.0.509",
+  "remotionRendererIntegrity": "sha512-Ge3/yia5s4ZRHjHJDrgIzOHqjqQgCtG6wEnmdTaoUSEK6w+WLqjcCls2lREdchMZ4oDGuKIZ0SjCDLXZtrzTrw==",
+  "ffmpegStaticVersion": "5.3.0",
+  "ffmpegStaticIntegrity": "sha512-H+K6sW6TiIX6VGend0KQwthe+kaceeH/luE8dIZyOP35ik7ahYojDuqlTV1bOrtEwl01sy2HFNGQfi5IDJvotg==",
+  "patches": [
+    {
+      "file": "mantur-cut.patch",
+      "sha256": "6a292e61b74e4915723d389cc7c77f87fcbd91f71860f666223e2c6916479307",
+      "resultTree": "65d96973380a14050c19c0928a22d1fd59714af7"
+    },
+    {
+      "file": "mantur-cut-packaged.patch",
+      "sha256": "306fc97449c6fbff0abab4b754e7d4095739709f9787201341be53c3e7ad0728",
+      "resultTree": "2a5be55239826a9e74bde5a5a5484a0f033d4da0"
+    }
+  ],
+  "targets": {
+    "darwin-arm64": {
+      "platform": "darwin",
+      "arch": "arm64",
+      "chromePlatform": "mac-arm64",
+      "chromeVersion": "149.0.7790.0",
+      "chromeSha256": "17ef152eba8ffcfebc42e25ab295eb040d8e62455cff7dfcc735b652456d6899",
+      "ffmpegSha256": "a90e3db6a3fd35f6074b013f948b1aa45b31c6375489d39e572bea3f18336584",
+      "browserExecutable": "chrome-headless-shell/mac-arm64/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "ffmpeg": "runtime/node_modules/ffmpeg-static/ffmpeg",
+      "ffprobe": "runtime/node_modules/@ffprobe-installer/darwin-arm64/ffprobe",
+      "compositor": "runtime/node_modules/@remotion/compositor-darwin-arm64",
+      "compositorPackage": "@remotion/compositor-darwin-arm64",
+      "compositorIntegrity": "sha512-hT64iklPxTJXtPmVtMCSuC9rf5rhKNxQWozdYvHg5cKbO68t1OTWVFIEARyr7Fh19NW8OoNMqXkvZqiPK9AVUA==",
+      "ffprobePackage": "@ffprobe-installer/darwin-arm64",
+      "ffprobeIntegrity": "sha512-vwNCNjokH8hfkbl6m95zICHwkSzhEvDC3GVBcUp5HX8+4wsX10SP3B+bGur7XUzTIZ4cQpgJmEIAx6TUwRepMg==",
+      "ffprobeLicense": "LGPL-2.1",
+      "whisperArchive": null,
+      "whisperArchiveSha256": null
+    },
+    "darwin-x64": {
+      "platform": "darwin",
+      "arch": "x64",
+      "chromePlatform": "mac-x64",
+      "chromeVersion": "149.0.7790.0",
+      "chromeSha256": "2597bf0940b54afbdfcb76519b5c8cf423cec49eea90ce1c4123456aca47a851",
+      "ffmpegSha256": "ebdddc936f61e14049a2d4b549a412b8a40deeff6540e58a9f2a2da9e6b18894",
+      "browserExecutable": "chrome-headless-shell/mac-x64/chrome-headless-shell-mac-x64/chrome-headless-shell",
+      "ffmpeg": "runtime/node_modules/ffmpeg-static/ffmpeg",
+      "ffprobe": "runtime/node_modules/@ffprobe-installer/darwin-x64/ffprobe",
+      "compositor": "runtime/node_modules/@remotion/compositor-darwin-x64",
+      "compositorPackage": "@remotion/compositor-darwin-x64",
+      "compositorIntegrity": "sha512-kXoAmGbbVLPqgNZvWXZy4dAHAgyOoU9eGk0W/jjBHg801+OOnHZS1WOSwVlpskxxE2xDAY3cq47LySWd5snBFA==",
+      "ffprobePackage": "@ffprobe-installer/darwin-x64",
+      "ffprobeIntegrity": "sha512-J+YGscZMpQclFg31O4cfVRGmDpkVsQ2fZujoUdMAAYcP0NtqpC49Hs3SWJpBdsGB4VeqOt5TTm1vSZQzs1NkhA==",
+      "ffprobeLicense": "GPL-3.0",
+      "whisperArchive": null,
+      "whisperArchiveSha256": null
+    },
+    "win32-x64": {
+      "platform": "win32",
+      "arch": "x64",
+      "chromePlatform": "win64",
+      "chromeVersion": "149.0.7790.0",
+      "chromeSha256": "8a112c0e768907ff382ff994dcde35cdbd0e1f5a3a475da93d3a83e3260e78c2",
+      "ffmpegSha256": "04e1307997530f9cf2fe35cba2ca7e8875ca91da02f89d6c7243df819c94ad00",
+      "browserExecutable": "chrome-headless-shell/win64/chrome-headless-shell-win64/chrome-headless-shell.exe",
+      "ffmpeg": "runtime/node_modules/ffmpeg-static/ffmpeg.exe",
+      "ffprobe": "runtime/node_modules/@ffprobe-installer/win32-x64/ffprobe.exe",
+      "compositor": "runtime/node_modules/@remotion/compositor-win32-x64-msvc",
+      "compositorPackage": "@remotion/compositor-win32-x64-msvc",
+      "compositorIntegrity": "sha512-chMy5iaeIgqhPAzHVtg0cLkLABbPFHg6J9lO601pgFVX+fXTB4swYbYjL464cr0SF9FUDmpuZsU8f9MA5tWf1w==",
+      "ffprobePackage": "@ffprobe-installer/win32-x64",
+      "ffprobeIntegrity": "sha512-jMGYeAgkrdn4e2vvYt/qakgHRE3CPju4bn5TmdPfoAm1BlX1mY9cyMd8gf5vSzI8gH8Zq5WQAyAkmekX/8TSTg==",
+      "ffprobeLicense": "GPL-3.0",
+      "whisperArchive": "whisper-bin-x64.zip",
+      "whisperArchiveSha256": "49dcc16de826f20bd53d44f947a1ae49dfa81f86cad67a64d80820cb192d674a"
+    }
+  }
+}
