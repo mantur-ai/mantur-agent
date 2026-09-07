@@ -413,7 +413,8 @@ export class SubagentRuntime extends TypertRemoteService {
    * message the child's FIFO inbox accepted; later execution is independent of
    * this call.
    * Image parts are admitted and persisted through the attachment store
-   * before delivery, and the child's model must accept image input.
+   * before delivery, and the child's model must accept image input. Shutdown
+   * freezes this entry and joins admitted attachment saves before completing.
    * @param request - durable address, minted identity, content, and optional browser zone.
    * @param signal - carrier cancellation, owning the call until inbox acceptance.
    * @returns the accepted message's inbox identity.
@@ -425,6 +426,7 @@ export class SubagentRuntime extends TypertRemoteService {
   @Remote('prompt')
   async prompt(request: SubagentPromptRequest, signal: AbortSignal): Promise<SubagentPromptReceipt> {
     const { parentSessionId, childSessionId, clientTimeZone } = request
+    if (this.shutdown !== undefined) return rejectPrompt(this.shutdownSignal.signal.reason, childSessionId, this.shutdownSignal.signal)
     validateControlRequest('subagent.prompt', request)
     const canonicalTimeZone = clientTimeZone === undefined
       ? undefined
@@ -449,7 +451,7 @@ export class SubagentRuntime extends TypertRemoteService {
       rpcId: request.requestId,
       ...(canonicalTimeZone === undefined ? {} : { clientTimeZone: canonicalTimeZone }),
     }
-    try {
+    const admission = (async (): Promise<SubagentPromptReceipt> => {
       // Admission precedes delivery: image parts become durable references
       // here, so the child inbox only ever accepts Host-persisted attachments.
       let content: ContentBlock[]
@@ -470,6 +472,9 @@ export class SubagentRuntime extends TypertRemoteService {
           'queue',
         ),
       }
+    })()
+    try {
+      return await this.track(admission, false)
     } catch (error: unknown) {
       return rejectPrompt(error, childSessionId, signal)
     }

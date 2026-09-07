@@ -618,7 +618,8 @@ listDescendants(rootSessionId: SessionId, signal?: AbortSignal): Promise<Subagen
  * message the child's FIFO inbox accepted; later execution is independent of
  * this call.
  * Image parts are admitted and persisted through the attachment store
- * before delivery, and the child's model must accept image input.
+ * before delivery, and the child's model must accept image input. Shutdown
+ * freezes this entry and joins admitted attachment saves before completing.
  * @param request - durable address, minted identity, content, and optional browser zone.
  * @param signal - carrier cancellation, owning the call until inbox acceptance.
  * @returns the accepted message's inbox identity.
