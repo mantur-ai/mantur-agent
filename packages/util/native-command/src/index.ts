@@ -3,7 +3,7 @@
  * @module @deepseek-ai/dsh-native-command
  */
 
-export { runNativeCommand } from './runner.ts'
+export { runNativeCommand, NativeCommandCleanupError } from './runner.ts'
 export type { NativeCommandRunner } from './runner.ts'
 export {
   canOpenNativePath,

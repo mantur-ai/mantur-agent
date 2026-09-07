@@ -39,6 +39,8 @@ const { stdout, stderr } = await runNativeCommand('osascript', ['-e', script], s
 
 On exit 0 the call resolves with captured stdout and stderr. On any failure it rejects with the exit `code` and both captured streams attached, so a caller can tell a missing tool (`ENOENT`), a cancellation (`ABORT_ERR`), and a real command failure apart without re-running the command.
 
+Both success and failure wait for the child's `close` event, including its stdio closure. Cancellation requests termination; it does not prove exit. A child that ignores termination keeps the call pending. Native integrations use `NativeCommandCleanupError` to distinguish a failed termination attempt from an ordinary command failure.
+
 ### Injecting the command boundary
 
 The `NativeCommandRunner` type is the injectable command boundary for host integrations: pass the function (or a wrapper) where the integration needs a testable seam, so tests can substitute a fake runner.

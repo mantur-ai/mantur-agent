@@ -14,13 +14,14 @@ type ExecFileMock = (
   args: readonly string[],
   options: { encoding: string; signal: AbortSignal; windowsHide: boolean },
   callback: ExecFileCallback,
-) => void
+) => EventEmitter
 
 const { execFileMock } = vi.hoisted(() => ({ execFileMock: vi.fn<ExecFileMock>() }))
 
 vi.mock('node:child_process', () => ({ execFile: execFileMock }))
 
 import { describe, expect, it, vi } from 'vitest'
+import { EventEmitter } from 'node:events'
 import { pickNativeDirectory, type DirectoryPickerRunner } from '../src/native-picker.ts'
 
 function failure(code: string | number, stderr = ''): Error {
@@ -92,7 +93,10 @@ describe('native directory picker', () => {
 
   it('runs the default command adapter without a shell and preserves command failures', async () => {
     execFileMock.mockImplementationOnce((_command, _args, _options, callback) => {
+      const child = new EventEmitter()
       callback(null, '/home/test/project\n', '')
+      queueMicrotask(() => child.emit('close'))
+      return child
     })
     await expect(pickNativeDirectory(signal(), { platform: 'linux' })).resolves.toBe('/home/test/project')
     const [command, args, options] = execFileMock.mock.calls[0]!
@@ -105,7 +109,10 @@ describe('native directory picker', () => {
     // A non-cancellation command failure surfaces as-is with its cause and
     // captured stdio attached; no tier masks or rewraps it.
     execFileMock.mockImplementationOnce((_command, _args, _options, callback) => {
+      const child = new EventEmitter()
       callback(Object.assign(new Error('zenity failed'), { code: 7 }), 'partial output', 'failure details')
+      queueMicrotask(() => child.emit('close'))
+      return child
     })
     const surfaced = await pickNativeDirectory(signal(), { platform: 'linux' })
       .then(() => { throw new Error('expected rejection') }, (error: unknown) => error as Error)
