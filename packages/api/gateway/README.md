@@ -36,6 +36,8 @@ A stream Remote uses `@Remote({ mode: 'stream' })` and returns an `Iterable` or 
 
 Host composition can register one application event source through `registerRemoteEvents()`. Gateway reserves the internal `$events` logical endpoint for that source, accepts only empty `args`, and aborts streams opened by the registration when the source is withdrawn. API Remotes owns the event selection, argument validation, per-Client queues, and the Host home sent in the opening `{ type: 'ready', clientId, host: { home } }` frame. Its source factory attaches incremental listeners synchronously, so the Client publishes the generation and starts baseline reads only after incremental delivery is ready.
 
+`stopForShutdown()` freezes new calls and event-source registration, aborts stream observation, and joins admitted unary calls, stream openings, original iterator reads, and iterator cleanup. Stream methods receive the combined caller and Gateway lifetime signal; unary calls retain their caller signal and original result. Cleanup failures remain recorded and reject shutdown even after the stream leaves the live registry. Service disposal uses the same operation. Ordinary UI hiding does not invoke it.
+
 <a id="client-service-clientremote-ctx-key-remote"></a>
 ## Client service: `ClientRemote` (ctx key: `remote`)
 

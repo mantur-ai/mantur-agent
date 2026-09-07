@@ -179,6 +179,12 @@ export class TypertGatewayService extends Service implements TypertGateway {
     failure: error => rpcError(error),
   }
 
+  private readonly pending = new Set<Promise<unknown>>()
+  private readonly streamClosers = new Set<() => Promise<IteratorResult<unknown>>>()
+  private readonly streamLifetime = new AbortController()
+  private readonly cleanupFailures: unknown[] = []
+  private closing = false
+  private shutdown: Promise<void> | undefined
   private srcClaims: ReadonlySet<string> | undefined
   private remoteEvents: RegisteredRemoteEventSource | undefined
   private readonly remoteEventClients = new Map<RemoteEventClientId, RemoteEventClient>()
@@ -191,6 +197,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
    */
   constructor(ctx: Context, config: Config) {
     super(ctx, 'typertGateway')
+    ctx.effect(() => () => this.stopForShutdown(), 'api-gateway: drain admitted calls')
     const resolved = config as ResolvedConfig
     ctx.on('internal/service', () => {
       this.srcClaims = undefined
@@ -239,17 +246,19 @@ export class TypertGatewayService extends Service implements TypertGateway {
     source: TypertRemoteEventSource,
     host: RemoteEventHostInfo,
   ): () => Promise<void> {
+    this.assertOpen()
     if (this.remoteEvents !== undefined) {
       throw new Error('typert gateway: forwarded Remote event source is already registered')
     }
     const lifetime = new AbortController()
-    const stream = source(lifetime.signal)
+    const stream = this.ownStream(source(lifetime.signal)) as AsyncIterable<TypertRemoteEventDispatch>
     const done = this.consumeRemoteEvents(stream, lifetime.signal).catch((error: unknown) => {
       if (this.remoteEvents?.lifetime !== lifetime || lifetime.signal.aborted) return
       this.closeRemoteEvents(error)
       this.remoteEvents = undefined
       lifetime.abort(error)
     })
+    void this.track(done)
     const registration: RegisteredRemoteEventSource = { lifetime, done, host: { home: host.home } }
     this.remoteEvents = registration
     return async () => {
@@ -260,6 +269,80 @@ export class TypertGatewayService extends Service implements TypertGateway {
         this.closeRemoteEvents(error)
       }
       await registration.done
+    }
+  }
+
+  /**
+   * Freeze requests, cancel stream observation, and join original invocations and iterator cleanup.
+   * Admitted unary calls retain their caller signal; shutdown does not replay or cancel remote work.
+   * @returns completion after owned calls settle; retained iterator cleanup failures reject.
+   */
+  stopForShutdown(): Promise<void> {
+    this.closing = true
+    this.shutdown ??= (async () => {
+      const reason = new Error('typert gateway: shutting down')
+      this.streamLifetime.abort(reason)
+      const registration = this.remoteEvents
+      this.remoteEvents = undefined
+      registration?.lifetime.abort(reason)
+      this.closeRemoteEvents(reason)
+      await Promise.resolve()
+      while (this.pending.size > 0 || this.streamClosers.size > 0) {
+        await Promise.allSettled([...this.pending, ...[...this.streamClosers].map(close => close())])
+      }
+      if (this.cleanupFailures.length > 0) throw new AggregateError(this.cleanupFailures, 'Gateway stream cleanup failed')
+    })()
+    return this.shutdown
+  }
+
+  private assertOpen(): void {
+    if (this.closing) throw new Error('typert gateway: admission is closed')
+  }
+
+  private track<T>(work: Promise<T>): Promise<T> {
+    this.pending.add(work)
+    const settled = (): void => { this.pending.delete(work) }
+    void work.then(settled, settled)
+    return work
+  }
+
+  private ownStream(source: Iterable<unknown> | AsyncIterable<unknown>): AsyncIterableIterator<unknown> {
+    const asyncFactory = Reflect.get(source, Symbol.asyncIterator) as unknown
+    const syncFactory = Reflect.get(source, Symbol.iterator) as unknown
+    const iterator: AsyncIterator<unknown> | Iterator<unknown> = typeof asyncFactory === 'function'
+      ? Reflect.apply(asyncFactory, source, []) as AsyncIterator<unknown>
+      : Reflect.apply(syncFactory as (...args: never[]) => Iterator<unknown>, source, [])
+    const reads = new Set<Promise<IteratorResult<unknown>>>()
+    let closing: { returned: Promise<IteratorResult<unknown>>; drained: Promise<IteratorResult<unknown>> } | undefined
+    const requestReturn = (): NonNullable<typeof closing> => {
+      if (closing === undefined) {
+        const returned = Promise.resolve().then(() => iterator.return?.() ?? { done: true, value: undefined })
+        const drained = (async () => {
+          const [result] = await Promise.allSettled([returned, Promise.allSettled([...reads])])
+          if (result.status === 'rejected') throw result.reason
+          return result.value
+        })()
+        closing = { returned, drained }
+        void drained.then(() => { this.streamClosers.delete(close) }, (error: unknown) => {
+          this.streamClosers.delete(close)
+          this.cleanupFailures.push(error)
+        })
+      }
+      return closing
+    }
+    const close = (): Promise<IteratorResult<unknown>> => requestReturn().drained
+    this.streamClosers.add(close)
+    return {
+      [Symbol.asyncIterator]() { return this },
+      next: () => {
+        if (closing !== undefined) return Promise.resolve({ done: true, value: undefined })
+        const read = Promise.resolve().then(() => iterator.next())
+        reads.add(read)
+        const settled = (): void => { reads.delete(read) }
+        void read.then(settled, settled)
+        return read
+      },
+      return: () => requestReturn().returned,
     }
   }
 
@@ -296,6 +379,11 @@ export class TypertGatewayService extends Service implements TypertGateway {
    * @throws {@link TypertGatewayError} for dispatch, provider, or boundary failures; lookup-policy and business errors retain identity.
    */
   async invoke(request: InvokeRemoteRequest): Promise<unknown> {
+    this.assertOpen()
+    return this.track(this.invokeAdmitted(request))
+  }
+
+  private async invokeAdmitted(request: InvokeRemoteRequest): Promise<unknown> {
     const prepared = await this.prepareInvocation(request)
     if (prepared.descriptor.mode === 'stream') {
       throw new TypertGatewayError(
@@ -319,7 +407,16 @@ export class TypertGatewayService extends Service implements TypertGateway {
    * @returns a cancellation-aware iterable over the business results.
    */
   async stream(request: InvokeRemoteRequest): Promise<AsyncIterable<unknown>> {
+    this.assertOpen()
+    const signal = request.signal === undefined
+      ? this.streamLifetime.signal
+      : AbortSignal.any([request.signal, this.streamLifetime.signal])
+    return this.track(this.streamAdmitted({ ...request, signal }))
+  }
+
+  private async streamAdmitted(request: InvokeRemoteRequest & { signal: AbortSignal }): Promise<AsyncIterable<unknown>> {
     const prepared = await this.prepareInvocation(request)
+    if (this.closing) throw remoteCancelled(prepared.endpoint, this.streamLifetime.signal.reason)
     if (prepared.descriptor.mode !== 'stream') {
       throw new TypertGatewayError(
         'gateway/signature-invalid',
@@ -331,7 +428,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
     try {
       source = Reflect.apply(prepared.method, prepared.receiver, prepared.args) as unknown
     } catch (error) {
-      if (request.signal?.aborted === true) throw remoteCancelled(prepared.endpoint, error)
+      if (request.signal.aborted) throw remoteCancelled(prepared.endpoint, error)
       throw error
     }
     if (!isIterable(source)) {
@@ -343,9 +440,9 @@ export class TypertGatewayService extends Service implements TypertGateway {
       )
     }
     return cancellableStream(
-      source,
+      this.ownStream(source),
       prepared.endpoint,
-      request.signal ?? NEVER_ABORTED_SIGNAL,
+      request.signal,
     )
   }
 
@@ -375,8 +472,10 @@ export class TypertGatewayService extends Service implements TypertGateway {
     payload: unknown,
     signal: AbortSignal,
   ): Promise<AsyncIterable<unknown>> {
+    this.assertOpen()
     if (endpoint === REMOTE_EVENT_STREAM_ENDPOINT) {
-      return this.openRemoteEvents(payload, signal)
+      const lifetime = AbortSignal.any([signal, this.streamLifetime.signal])
+      return this.ownStream(this.openRemoteEvents(payload, lifetime))
     }
     return this.stream(remoteRequest(endpoint, payload, signal))
   }
@@ -962,15 +1061,11 @@ function isIterable(value: unknown): value is Iterable<unknown> | AsyncIterable<
 }
 
 async function *cancellableStream(
-  source: Iterable<unknown> | AsyncIterable<unknown>,
+  source: AsyncIterable<unknown>,
   endpoint: string,
   signal: AbortSignal,
 ): AsyncGenerator {
-  const asyncFactory = Reflect.get(source, Symbol.asyncIterator) as unknown
-  const syncFactory = Reflect.get(source, Symbol.iterator) as unknown
-  const iterator = typeof asyncFactory === 'function'
-    ? Reflect.apply(asyncFactory, source, []) as AsyncIterator<unknown>
-    : Reflect.apply(syncFactory as (...args: never[]) => Iterator<unknown>, source, [])
+  const iterator = source[Symbol.asyncIterator]()
   let rejectAbort: ((error: unknown) => void) | undefined
   const aborted = new Promise<never>((_resolve, reject) => { rejectAbort = reject })
   const onAbort = (): void => {

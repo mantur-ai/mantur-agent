@@ -2737,6 +2737,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'disposer removing this source and cancelling its active streams.',
       },
       {
+        signature: 'stopForShutdown(): Promise<void>',
+        description: 'Freeze requests, cancel stream observation, and join original invocations and iterator cleanup. Admitted unary calls retain their caller signal; shutdown does not replay or cancel remote work.',
+        parameters: [],
+        returns: 'completion after owned calls settle; retained iterator cleanup failures reject.',
+      },
+      {
         signature: 'async invoke(request: InvokeRemoteRequest): Promise<unknown>',
         description: 'Invoke one live Remote method through strict generated reflection or SRC markers.',
         parameters: [{ name: 'request', description: 'decoded endpoint and exact named wire arguments.' }],
