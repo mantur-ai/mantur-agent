@@ -15,6 +15,7 @@ export async function startExpiryFixture() {
   let initializeReleased: Promise<void> = Promise.resolve()
   const failures = new Map<string, number | 'rpc' | 'tool'>()
   let initializeStatus: number | undefined
+  let imageResult = false
   async function handle(req: IncomingMessage, res: ServerResponse) {
     const id = req.headers['mcp-session-id'] as string | undefined
     const chunks: Buffer[] = []
@@ -35,7 +36,7 @@ export async function startExpiryFixture() {
         },
       })
       mcp.registerTool('mutate', { description: 'Record one explicit call.', inputSchema: {} }, async () => ({
-        content: [{ type: 'text', text: 'mutation saved' }],
+        content: imageResult ? [{ type: 'image', mimeType: 'image/png', data: 'AQ==' }] : [{ type: 'text', text: 'mutation saved' }],
         ...failures.get(transport.sessionId!) === 'tool' ? { isError: true } : {},
       }))
       servers.push(mcp)
@@ -71,6 +72,7 @@ export async function startExpiryFixture() {
     holdCalls(until: Promise<void>) { callsReleased = until },
     holdInitializations(until: Promise<void>) { initializeReleased = until },
     failInitialize(status: number) { initializeStatus = status },
+    replyWithImage() { imageResult = true },
     async close() {
       await Promise.all(servers.map(mcp => mcp.close()))
       await new Promise<void>((resolve, reject) => {

@@ -18,12 +18,13 @@ import z from '@deepseek-ai/schemastery'
 import { scopeOf } from '@deepseek-ai/dsh-scope'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { RECONNECT_DEFAULTS, resolveReconnectPolicy, startConnection } from './connection.ts'
-import type { ReconnectConfig } from './connection.ts'
+import type { ConnectionHandle, ReconnectConfig } from './connection.ts'
 // Side-effect type import: declaration-merges `ctx.tools` onto Context.
 import type {} from '@deepseek-ai/dsh-tools'
 
 export type { McpResult } from './tools.ts'
 export type { ReconnectConfig, ResolvedReconnectPolicy } from './connection.ts'
+export type { ConnectionHandle } from './connection.ts'
 
 /** Cordis plugin name used by loader diagnostics. */
 export const name = 'mcp-client'
@@ -144,6 +145,18 @@ export const Config = z.union([
  * @returns startup readiness after connection and initial tool discovery settle.
  */
 export async function apply(ctx: Context, config: Config): Promise<void> {
+  await connectMcpServer(ctx, config).ready
+}
+
+/**
+ * Mount the same scoped MCP connection with an owner's transport-close prerequisite.
+ * The returned handle preserves shutdown failures independently of Cordis disposal logging.
+ * @param ctx - Owner scope receiving tool registrations and effect cleanup.
+ * @param config - Resolved MCP transport and namespace configuration.
+ * @param beforeClose - Remote owner drain after accepted executions finish, before closing transport.
+ * @returns Owned connection whose ready promise rejects fatal startup errors.
+ */
+export function connectMcpServer(ctx: Context, config: Config, beforeClose?: () => Promise<void>): ConnectionHandle {
   // Fail loud at load: reconnect misconfiguration (including programmatic
   // construction that bypassed Schemastery) rejects THIS instance before any
   // effect registers.
@@ -151,6 +164,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
 
   // Reserve the namespace next: a duplicate `serverName` fails THIS instance
   // at load with an actionable error and leaves the earlier instance intact.
+  let connection!: ConnectionHandle
   ctx.effect(() => {
     const owner = scopeOf(ctx) ?? ctx.root
     let names = activeServerNames.get(owner)
@@ -164,16 +178,11 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       )
     }
     names.add(config.serverName)
-    return () => void names.delete(config.serverName)
-  }, 'mcp-client.serverName')
-
-  // The supervisor owns the client/transport generations, the reconnect
-  // loop, and the live tool registrations; disposal stops reconnection,
-  // quiesces in-flight work, and unregisters the current generation.
-  const connection = startConnection(ctx, config, reconnect)
-
-  ctx.effect(() => {
-    return () => connection.dispose()
+    connection = startConnection(ctx, config, reconnect, beforeClose)
+    return async () => {
+      await connection.dispose()
+      names.delete(config.serverName)
+    }
   }, 'mcp-client.connection')
 
   // Block plugin activation on the initial connection + tool discovery so
@@ -181,8 +190,13 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   // When failOnStartupError is true, a failed initial attempt rejects the
   // fiber (Cordis rolls it back); otherwise the error is logged and the
   // supervisor enters its reconnect loop.
-  const outcome = await connection.ready
-  if (outcome.error !== undefined && config.failOnStartupError) {
-    throw new Error(`mcp-client(${config.serverName}): initial connection or tool synchronization failed`, { cause: outcome.error })
+  return {
+    ...connection,
+    ready: connection.ready.then((outcome) => {
+      if (outcome.error !== undefined && config.failOnStartupError) {
+        throw new Error(`mcp-client(${config.serverName}): initial connection or tool synchronization failed`, { cause: outcome.error })
+      }
+      return outcome
+    }),
   }
 }

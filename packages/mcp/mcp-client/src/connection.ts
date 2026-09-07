@@ -104,9 +104,13 @@ export interface ConnectionHandle {
    */
   ready: Promise<ConnectionOutcome>
   /**
-   * Stop reconnection, close the live client, wait for the in-flight attempt
-   * and queued tool syncs to quiesce, then unregister every tool this server
-   * still owns.
+   * Freeze new executions and reconnection without cancelling accepted calls or their attachment writes.
+   * @returns The retained drain result; an accepted failure or timeout rejects it.
+   */
+  stopAccepting(): Promise<void>
+  /**
+   * Drain accepted calls and the optional owner prerequisite before closing the transport and unregistering tools.
+   * @returns The retained shutdown result; failure or unconfirmed completion rejects it.
    */
   dispose(): Promise<void>
 }
@@ -118,11 +122,28 @@ export interface ConnectionHandle {
  * @param ctx - Cordis context providing the `tools` registry and logger.
  * @param config - Resolved plugin config selecting the transport and server identity.
  * @param policy - Resolved reconnect policy from {@link resolveReconnectPolicy}.
+ * @param beforeClose - Owned remote work to drain after local executions and before transport close.
  * @returns Handle with a `ready` promise for startup-await and a `dispose` for teardown.
  */
-export function startConnection(ctx: Context, config: Config, policy: ResolvedReconnectPolicy): ConnectionHandle {
+export function startConnection(
+  ctx: Context,
+  config: Config,
+  policy: ResolvedReconnectPolicy,
+  beforeClose?: () => Promise<void>,
+): ConnectionHandle {
   const label = `mcp-client(${config.serverName})`
+  let stopping = false
+  const executions = new Map<Promise<unknown>, unknown[]>()
+  const runTool: ToolBridgeOptions['runTool'] = (work) => {
+    if (stopping) return Promise.reject(new Error(`${label}: shutting down; this call was not accepted`))
+    const failures: unknown[] = []
+    const result = work(error => failures.push(error))
+    executions.set(result, failures)
+    void result.then(() => executions.delete(result), () => executions.delete(result))
+    return result
+  }
   const opts: Omit<ToolBridgeOptions, 'isCurrent'> = {
+    runTool,
     registrationFailure: 'contain',
     serverName: config.serverName,
     toolCallTimeoutMs: config.toolCallTimeoutMs,
@@ -142,6 +163,7 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
   /** HTTP generation whose session expired and whose local close is still owned here. */
   let expiredClient: Client | undefined
   let retirement: Promise<void> = Promise.resolve()
+  const closeFailures: unknown[] = []
   /** Live tool registrations owned by this server; only {@link enqueueSync} and dispose swap it. */
   let disposers: ToolDisposers = new Map()
   let reconnectTimer: NodeJS.Timeout | undefined
@@ -194,6 +216,7 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
   }
 
   function scheduleReconnect(): void {
+    if (stopping || disposed) return
     const lostEstablishedConnection = connectedAt !== undefined
     if (!policy.enabled) {
       const message = lostEstablishedConnection
@@ -283,13 +306,14 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
         })
         retirement = (async () => {
           // Both close completion and onclose must settle before a fresh initialize.
-          const closing = generation.close().catch(() => { /* the expired transport may already be closed */ })
+          const closing = generation.close().catch((error: unknown) => { closeFailures.push(error) })
           const quiesced = await waitForClose(Promise.all([closing, closed.promise]).then(() => {}))
-          if (!ownsGeneration(generation)) return
           if (!quiesced) {
+            closeFailures.push(new Error(`${label}: expired HTTP generation closure is unconfirmed`))
             ctx.logger.error(`${label}: expired HTTP generation did not close within ${GENERATION_CLOSE_TIMEOUT_MS}ms — reconnect stopped; reload the plugin or restart the Host to retry`)
             return
           }
+          if (!ownsGeneration(generation)) return
           generationDown(generation)
         })()
       }
@@ -304,17 +328,20 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
       if (firstAttemptError === undefined) firstAttemptError = error
       // Disposal clears current ownership before it closes the generation, so
       // only a live supervisor reports an attempt failure.
-      if (isCurrent(generation)) ctx.logger.warn(`${label}: connection attempt failed: ${String(error)}`)
-      try { await generation.close() } catch { /* transport already gone */ }
+      if (isCurrent(generation) && !stopping) ctx.logger.warn(`${label}: connection attempt failed: ${String(error)}`)
+      try { await generation.close() } catch (closeError) { closeFailures.push(closeError) }
       const quiesced = hasClosed() || await waitForClose(closed.promise)
       attemptSettled = true
-      if (!isCurrent(generation)) return
       if (!quiesced) {
-        client = undefined
-        clientClosed = undefined
+        closeFailures.push(new Error(`${label}: failed generation closure is unconfirmed`))
+        if (isCurrent(generation)) {
+          client = undefined
+          clientClosed = undefined
+        }
         ctx.logger.error(`${label}: failed generation did not close within ${GENERATION_CLOSE_TIMEOUT_MS}ms — reconnect stopped to avoid overlapping server processes; reload the plugin or restart the Host to retry`)
         return
       }
+      if (!isCurrent(generation)) return
       generationDown(generation)
       return
     }
@@ -346,31 +373,58 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
     return { error: firstAttemptError ?? new Error(`${label}: initial connection failed`) }
   })
 
+  let draining: Promise<void> | undefined
+  let disposal: Promise<void> | undefined
+  function withinShutdownBudget(work: Promise<void>, timeoutMs = config.toolCallTimeoutMs): Promise<void> {
+    let timer: NodeJS.Timeout | undefined
+    const timeout = new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => { reject(new Error(`${label}: shutdown timed out; completion is unconfirmed`)) }, timeoutMs)
+    })
+    return Promise.race([work, timeout]).finally(() => { clearTimeout(timer) })
+  }
+  const stopAccepting = (): Promise<void> => {
+    if (draining) return draining
+    stopping = true
+    if (reconnectTimer !== undefined) {
+      clearTimeout(reconnectTimer)
+      reconnectTimer = undefined
+    }
+    const accepted = [...executions]
+    draining = withinShutdownBudget(Promise.allSettled(accepted.map(([work]) => work)).then((results) => {
+      const errors = [
+        ...accepted.flatMap(([, failures]) => failures),
+        ...results.filter((result): result is PromiseRejectedResult => result.status === 'rejected').map(result => result.reason as unknown),
+      ]
+      if (errors.length) throw new AggregateError(errors, `${label}: accepted execution failed during shutdown`)
+    }))
+    return draining
+  }
   return {
     ready,
-    async dispose(): Promise<void> {
-      disposed = true
-      if (reconnectTimer !== undefined) {
-        clearTimeout(reconnectTimer)
-        reconnectTimer = undefined
-      }
-      const current = client
-      const currentClosed = clientClosed
-      client = undefined
-      clientClosed = undefined
-      if (current !== undefined && current !== expiredClient) {
-        try { await current.close() } catch { /* transport already gone */ }
-        if (currentClosed !== undefined && !await waitForClose(currentClosed)) {
-          ctx.logger.error(`${label}: generation did not close within ${GENERATION_CLOSE_TIMEOUT_MS}ms during disposal — server shutdown may be incomplete`)
+    stopAccepting,
+    dispose(): Promise<void> {
+      return disposal ??= (async () => {
+        await stopAccepting()
+        if (beforeClose) await withinShutdownBudget(beforeClose())
+        disposed = true
+        if (reconnectTimer !== undefined) {
+          clearTimeout(reconnectTimer)
+          reconnectTimer = undefined
         }
-      }
-      // Quiesce, don't just request it: the in-flight attempt enqueues its
-      // sync before settling, so awaiting both leaves `disposers` final.
-      await settling
-      await retirement
-      await syncChain
-      for (const dispose of disposers.values()) dispose()
-      disposers = new Map()
+        const current = client
+        const currentClosed = clientClosed
+        client = undefined
+        clientClosed = undefined
+        if (current !== undefined && current !== expiredClient) {
+          await withinShutdownBudget(Promise.all([current.close(), currentClosed]).then(() => {}), GENERATION_CLOSE_TIMEOUT_MS)
+        }
+        // Quiesce, don't just request it: the in-flight attempt enqueues its
+        // sync before settling, so awaiting both leaves `disposers` final.
+        await withinShutdownBudget(Promise.all([settling, retirement, syncChain]).then(() => {}))
+        if (closeFailures.length) throw new AggregateError(closeFailures, `${label}: generation cleanup failed during shutdown`)
+        for (const dispose of disposers.values()) dispose()
+        disposers = new Map()
+      })()
     },
   }
 }
