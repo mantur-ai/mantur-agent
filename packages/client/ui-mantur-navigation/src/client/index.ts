@@ -16,6 +16,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ReferenceInsert } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { GUIDE_NAMESPACE, type CreationMode, type GuideSettings } from '../guide-settings.ts'
 import { CreationGuide, CreationModes, type GuidePreferencesInjected } from './CreationGuide.tsx'
 import { ManturComposerLayout } from './ManturComposerLayout.tsx'
@@ -97,6 +98,7 @@ export async function apply(ctx: Context): Promise<void> {
       inject: () => projectSettings,
     }, ProjectPathSettings))
     const controller = new ManturMarketplaceStore(scope)
+    const guideNavigation = createSnapshotStore(0)
     scope.effect(() => () => { controller.dispose() }, 'ui-mantur-navigation: marketplace controller')
     const preferences = scope.settingsScope.bind<GuideSettings>({ namespace: GUIDE_NAMESPACE })
     const guidePreferences: GuidePreferencesInjected = {
@@ -125,6 +127,7 @@ export async function apply(ctx: Context): Promise<void> {
       name: 'conversation.composer.guide', locale: 'guide.mantur',
       inject: (sessionId: SessionId | undefined) => ({
         ...guidePreferences,
+        navigationVersion: () => guideNavigation.getSnapshot(),
         appendReference: (reference: ReferenceInsert) => {
           if (sessionId === undefined) return scope.conversationDrafts.input.appendReference(reference)
           const binding = scope.sessions.binding(sessionId)
@@ -132,7 +135,7 @@ export async function apply(ctx: Context): Promise<void> {
           return scope.conversation.input.for(binding.ctx).appendReference(reference)
         },
         hooks: {
-          preferences, marketplace: controller.store,
+          preferences, marketplace: controller.store, guideNavigation,
           guideInput: sessionId === undefined ? scope.conversationDrafts.input.state : (() => {
             const binding = scope.sessions.binding(sessionId)
             return binding === undefined ? ABSENT_GUIDE_INPUT : scope.conversation.input.for(binding.ctx).state
@@ -155,7 +158,9 @@ export async function apply(ctx: Context): Promise<void> {
     scope.slots.inject('sidebar.navigation', () =>
       scope.slots.inject('sidebar.workspaces.heading', () =>
         scope.slots.inject('main.page', function* () {
-          yield scope.slots.register({ name: 'sidebar.navigation', locale: NS }, MarketplaceNavigation)
+          yield scope.slots.register({ name: 'sidebar.navigation', locale: NS,
+            inject: () => ({ beforeOpenPage: () => { guideNavigation.set(guideNavigation.getSnapshot() + 1) } }),
+          }, MarketplaceNavigation)
           yield scope.slots.register({ name: 'sidebar.workspaces.heading', locale: NS }, ProjectsHeading)
           yield scope.slots.register({
             name: 'main.page', locale: NS,

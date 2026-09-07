@@ -29,7 +29,12 @@ export type ManturMarketPageId = typeof MANTUR_MARKET_PAGES[keyof typeof MANTUR_
 
 /** Full sidebar navigation props. */
 export type MarketplaceNavigationProps =
-  PropsRuntime<'sidebar.navigation'> & PropsLocale<'navigation.mantur'>
+  PropsRuntime<'sidebar.navigation'> & PropsLocale<'navigation.mantur'> & InjectFace<MarketplaceNavigationInjected>
+
+/** Invalidate pending current-composer actions before leaving for a marketplace page. */
+export interface MarketplaceNavigationInjected {
+  beforeOpenPage: () => void
+}
 
 /** Full root-page props. */
 export type MarketplacePageProps =
@@ -56,7 +61,7 @@ const items: readonly NavigationItem[] = [
 ]
 
 /** Render the Mantur-only feature group above Projects. */
-export function MarketplaceNavigation({ wide, activePage, openPage, t }: MarketplaceNavigationProps) {
+export function MarketplaceNavigation({ wide, activePage, openPage, beforeOpenPage, t }: MarketplaceNavigationProps) {
   return (
     <nav className={clsx(css.navigation, !wide && css.rail)} aria-label={t('section.features')}>
       <div className={css.navigationItems}>
@@ -69,7 +74,7 @@ export function MarketplaceNavigation({ wide, activePage, openPage, t }: Marketp
               className={clsx(css.navigationItem, selected && css.selected)}
               aria-current={selected ? 'page' : undefined}
               aria-label={t(label)}
-              onClick={() => { openPage(id) }}
+              onClick={() => { beforeOpenPage(); openPage(id) }}
             >
               <Icon size={wide ? 16 : 18} />
               {wide && <span>{t(label)}</span>}

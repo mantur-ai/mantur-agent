@@ -57,6 +57,7 @@ export function CreationModes({ usePreferences, saveMode, t }: CreationModesProp
 
 /** Guide callbacks keep marketplace services outside components. */
 export interface CreationGuideInjected extends GuidePreferencesInjected {
+  navigationVersion: () => number
   appendReference: (reference: ReferenceInsert) => boolean
   load: () => Promise<void>
   ensureCatalog: () => Promise<void>
@@ -72,6 +73,7 @@ export interface CreationGuideInjected extends GuidePreferencesInjected {
   hooks: GuidePreferencesInjected['hooks'] & {
     marketplace: SnapshotStore<ManturMarketplaceState>
     guideInput: ObservableSnapshot<InputState | undefined>
+    guideNavigation: SnapshotStore<number>
   }
 }
 
@@ -86,12 +88,14 @@ export function CreationGuide(props: CreationGuideProps) {
   return <ReadyGuide {...props} preferences={preferences.value} />
 }
 
-function ReadyGuide({ hero, disabled, sessionId, preferences, useMarketplace, useGuideInput, appendReference,
+function ReadyGuide({ hero, disabled, sessionId, preferences, useMarketplace, useGuideInput,
+  useGuideNavigation, navigationVersion, appendReference,
   saveClosed, load, ensureCatalog, openDetail: loadDetail, closeDetail: clearDetail,
   install, startLogin, cancelLogin, marketplaceText: mt, t,
 }: CreationGuideProps & { preferences: GuideSettings }) {
   const market = useMarketplace(snapshot => snapshot)
   const input = useGuideInput(snapshot => snapshot)
+  const navigation = useGuideNavigation(snapshot => snapshot)
   const ready = market.phase === 'ready' ? market : undefined
   const [open, setOpen] = useState(hero && !preferences.closed)
   const [welcome, setWelcome] = useState(true)
@@ -122,13 +126,17 @@ function ReadyGuide({ hero, disabled, sessionId, preferences, useMarketplace, us
     setDetailSlug(undefined)
     setMore(false)
     return () => { ++operation.current }
-  }, [sessionId])
+  }, [sessionId, navigation])
 
   const openDetail = (slug: string): Promise<void> => {
+    ++operation.current
+    setNotice(undefined)
     setDetailSlug(slug)
     return loadDetail(slug)
   }
   const closeDetail = (): void => {
+    ++operation.current
+    loginSource.current = undefined
     setDetailSlug(undefined)
     clearDetail()
   }
@@ -149,12 +157,17 @@ function ReadyGuide({ hero, disabled, sessionId, preferences, useMarketplace, us
     return () => { document.removeEventListener('keydown', onKey) }
   })
 
+  const displayName = (skill: ManturMarketplaceSkill): string => {
+    const alias = GUIDE_SKILL_LABELS.get(skill.slug)
+    return alias === undefined ? skill.name : t(alias)
+  }
   const insert = (skill: ManturMarketplaceSkill): void => {
-    if (!appendReference({ source: 'skill', ref: skill.slug, label: skill.name, clipboardText: `/${skill.slug}` })) {
+    const label = displayName(skill)
+    if (!appendReference({ source: 'skill', ref: skill.slug, label, clipboardText: `/${skill.slug}` })) {
       setNotice(t('insertFailed'))
       return
     }
-    setNotice(t('selected').replace('{name}', skill.name))
+    setNotice(t('selected').replace('{name}', label))
     setWelcome(false)
     setMore(false)
     closeDetail()
@@ -162,9 +175,11 @@ function ReadyGuide({ hero, disabled, sessionId, preferences, useMarketplace, us
   const installAndUse = async (skill: ManturMarketplaceSkill): Promise<void> => {
     setWelcome(false)
     const attempt = ++operation.current
-    if (await install(skill.slug)) {
-      if (attempt === operation.current) insert(skill)
-    } else if (attempt === operation.current) setNotice(t('installFailed'))
+    const origin = navigationVersion()
+    const installed = await install(skill.slug)
+    if (attempt !== operation.current || origin !== navigationVersion()) return
+    if (installed) insert(skill)
+    else setNotice(t('installFailed'))
   }
   const skills = ready?.catalog.skills ?? []
   const recommended = preferences.recommendations[preferences.mode].flatMap((slug) => {
@@ -225,11 +240,11 @@ function ReadyGuide({ hero, disabled, sessionId, preferences, useMarketplace, us
         {market.phase === 'failed' && <button type="button" onClick={() => { void load() }}>{mt('skills.retry')}</button>}
       </div>
     </Modal>
-    <Modal open={detailOpen && ready?.loginPhase !== 'starting'} onClose={closeDetail} title={detail?.name ?? mt('skills.loadingDetail')} closeLabel={t('close')}
-      {...(detail === undefined ? {} : { description: detail.description })}>
+    <Modal open={detailOpen && ready?.loginPhase !== 'starting'} onClose={closeDetail}
+      title={detail === undefined ? mt('skills.loadingDetail') : displayName(detail)} closeLabel={t('close')}>
       {detailError !== undefined && <><p role="alert">{mt('skills.detailFailed')}</p><button type="button" onClick={() => { void openDetail(detailError) }}>{mt('skills.retry')}</button></>}
       {detail !== undefined && ready !== undefined && <div className={css.detail}>
-        {detail.introduction !== undefined && <p>{detail.introduction}</p>}
+        {!detail.installed && <p>{t('notInstalled')}</p>}
         {notice !== undefined && ready.installError === undefined && <p role="alert">{notice}</p>}
         {ready.installError !== undefined && <p role="alert">{t('installFailed')}{ready.installError === 'local-conflict' ? mt('skills.localConflict') : ''}</p>}
         {ready.loginPhase === 'failed' && <p role="alert">{mt('skills.loginFailed')}</p>}

@@ -33,7 +33,8 @@ export const zh = {
   'aliasMissing': '部分推荐技能缺少展示短名，请维护推荐配置。',
   'empty': '当前目录还没有这个方向的推荐技能，可以查看更多技能。',
   'more': '更多技能',
-  'installAndUse': '安装并使用',
+  'notInstalled': '尚未安装此技能。安装后可添加到当前对话。',
+  'installAndUse': '安装后使用',
   'use': '添加到当前对话',
   'close': '关闭引导',
 } satisfies Record<string, string>
@@ -74,6 +75,7 @@ export const en = {
   'aliasMissing': 'Some recommended skills need a display label. Update the recommendation configuration.',
   'empty': 'No recommended skills for this direction are in the current catalog. Browse more skills.',
   'more': 'More skills',
+  'notInstalled': 'This skill is not installed. Install it to add it to this conversation.',
   'installAndUse': 'Install and use',
   'use': 'Add to this conversation',
   'close': 'Close guide',

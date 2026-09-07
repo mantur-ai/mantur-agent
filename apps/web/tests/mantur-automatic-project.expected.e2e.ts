@@ -137,7 +137,7 @@ it.skipIf(webSnapshotMode() === 'record' || process.platform === 'win32')('resum
     await settings.getByRole('button', { name: '关闭', exact: true }).click()
     await editor.fill('根据参考图编写第一集 ')
     await page.getByRole('button', { name: '短剧编剧', exact: true }).click()
-    await expect.poll(() => editor.innerText()).toContain(skill.name)
+    await expect.poll(() => editor.innerText()).toContain('短剧编剧')
     await editor.evaluate((element, bytes) => {
       const transfer = new DataTransfer()
       transfer.items.add(new File([new Uint8Array(bytes)], 'reference.png', { type: 'image/png' }))
@@ -166,7 +166,7 @@ it.skipIf(webSnapshotMode() === 'record' || process.platform === 'win32')('resum
     await page.getByRole('button', { name: '设置', exact: true }).click()
     await pathRow.getByText(projectRoot, { exact: true }).waitFor()
     await settings.getByRole('button', { name: '关闭', exact: true }).click()
-    await expect.poll(() => editor.innerText()).toContain(skill.name)
+    await expect.poll(() => editor.innerText()).toContain('短剧编剧')
     expect(await editor.innerText()).toContain('根据参考图编写第一集')
     await page.getByRole('img', { name: 'reference.png', exact: true }).waitFor()
 

@@ -4,7 +4,7 @@ import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import {
-  MarketplaceNavigation, MarketplacePage, ProjectsHeading,
+  MarketplaceNavigation, MarketplacePage, ProjectsHeading, type MarketplaceNavigationInjected,
 } from '../src/client/MarketplaceNavigation.tsx'
 import * as clientEntry from '../src/client/index.ts'
 import { apply, inject } from '../src/client/index.ts'
@@ -201,6 +201,16 @@ describe('ui-mantur-navigation apply', () => {
       const reference = { source: 'skill', ref: 'short-drama', label: '爽文短剧剧本创作', clipboardText: '/short-drama' }
       expect(createGuide(undefined).appendReference(reference)).toBe(true)
       const guide = createGuide('guide-session' as SessionId)
+      const navigation = (subject.slots.entries('sidebar.navigation')[0]!.inject as unknown as () => MarketplaceNavigationInjected)()
+      const changed = vi.fn()
+      const unsubscribe = guide.hooks.guideNavigation.subscribe(changed)
+      try {
+        expect(guide.navigationVersion()).toBe(0)
+        navigation.beforeOpenPage()
+        expect(guide.navigationVersion()).toBe(1)
+        expect(createGuide(undefined).hooks.guideNavigation.getSnapshot()).toBe(1)
+        expect(changed).toHaveBeenCalledOnce()
+      } finally { unsubscribe() }
       expect(guide.hooks.guideInput.getSnapshot()).toBeUndefined()
       guide.hooks.guideInput.subscribe(() => {})()
       expect(guide.appendReference(reference)).toBe(false)
