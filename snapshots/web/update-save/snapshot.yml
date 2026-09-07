@@ -1,0 +1,9 @@
+version: 1
+scenario: update-save
+profile: web
+composition: web-update-managed
+recording: authored
+header:
+  class: web-update-managed
+  # This shutdown-only scenario issues no model request.
+  pin: true

@@ -364,6 +364,12 @@ Concrete agent factory and driver service.
 
 ```ts cordis-catalog
 /**
+ * Freeze admission and stop drivers while keeping published sessions available to admitted Host requests.
+ * @returns completion after drivers and startup work settle; writer closure still requires stopForShutdown.
+ */
+quiesceForShutdown(): Promise<void>
+
+/**
  * Freeze admission, join owned startup and teardown, and verify closed writer offsets.
  * This covers agent-loop ownership only; the Host must separately stop other producers.
  * @returns immutable checkpoints after all owned work settles; repeated calls share the result.

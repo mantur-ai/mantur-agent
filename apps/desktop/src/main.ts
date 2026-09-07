@@ -6,6 +6,8 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { app, BrowserWindow, dialog, ipcMain, Menu, safeStorage, shell } from 'electron'
 import electronUpdater from 'electron-updater'
+import { requestUpdateSave } from './update-save.ts'
+import { prepareDesktopUpdate } from './prepare-update.ts'
 import { DesktopDraftStorage } from './draft-storage.ts'
 import { installDraftBridge } from './draft-bridge.ts'
 import { installUpdateBridge } from './update-bridge.ts'
@@ -34,6 +36,7 @@ let serviceUrl: string | undefined
 let quitting = false
 let updates: DesktopUpdateController | undefined
 let updateState: DesktopUpdateState = { kind: 'idle' }
+let preparingUpdate = false
 let accountHost: NativeAccountHost | undefined
 let nativeAccount: NativeAccountController | undefined
 
@@ -178,6 +181,7 @@ async function launch(): Promise<void> {
         DSH_HOME: paths.dshHome,
         DSH_MANTUR_PROJECTS_ROOT: join(app.getPath('documents'), '漫途项目'),
         DSH_MANTUR_NATIVE_ACCOUNT: '1',
+        DSH_MANTUR_UPDATE_IPC: '1',
       },
       logPath: paths.logPath,
       mirrorOutput: !app.isPackaged,
@@ -189,7 +193,7 @@ async function launch(): Promise<void> {
       onSnapshot: () => { accountBridge.publish() },
     })
     service.child.once('exit', (code, signal) => {
-      if (quitting || serviceUrl === undefined) return
+      if (quitting || preparingUpdate || serviceUrl === undefined) return
       void startupRecovery(new Error(
         `dsh stopped while the desktop window was running (code ${String(code)}, signal ${String(signal)}).`,
       )).then((action) => {
@@ -244,13 +248,20 @@ function startUpdates(): void {
       showUpdateFeedback(state)
     },
     beforeInstall: async () => {
-      try {
-        await drafts.prepare()
-        throw new Error(copy.updateShutdownUnavailable)
-      } catch (error) {
-        drafts.release()
-        throw error
-      }
+      const active = service
+      if (active === undefined) throw new Error(copy.updateShutdownUnavailable)
+      preparingUpdate = true
+      try { await prepareDesktopUpdate({
+        saveDrafts: () => drafts.prepare(),
+        releaseDrafts: () => { drafts.release() },
+        saveHost: () => requestUpdateSave({ child: active.child, timeoutMs: 30_000 }),
+        closeAccount: async () => { await accountHost?.close(); accountHost = undefined },
+        stopHost: async () => {
+          await active.stopAndVerifyExit()
+          if (service === active) service = undefined
+        },
+        cancelled: () => quitting,
+      }) } finally { preparingUpdate = false }
     },
     prompts: {
       confirmInstall: async (version) => {

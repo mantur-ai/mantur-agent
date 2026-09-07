@@ -170,6 +170,8 @@ const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
   // resolve at install time, before the build produces lib/bin.js.
   '@deepseek-ai/dsh-experimental-webworker-packer': ['bin.js', 'lib/repository-*.js'],
   '@deepseek-ai/dsh-subprocess-local': ['scripts/ensure-spawn-helper.mjs'],
+  // Desktop Main and the Host import separate update protocol and shutdown entries.
+  '@deepseek-ai/dsh-mantur-app': ['lib/update-protocol.js', 'lib/update-shutdown.js'],
 }
 
 function sameStringList(actual: readonly string[] | undefined, expected: readonly string[]): boolean {

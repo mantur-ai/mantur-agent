@@ -63,7 +63,7 @@ Python SDK 遵循相同的应用架构。其运行时 wheel 把普通 `dsh` CLI 
 | [`llm/llm`](subsystems/llm-streaming.zh.md) | 消息与流式词汇表，以及适配器 seam | `ctx.llm` |
 | [`webhook/webhook`](subsystems/webhook.zh.md) | 已认证 delivery 的分派和 Workspace Session 创建 | `ctx.webhookRuntime` |
 
-停机准入和输入所有权位于 `core/agent`；`core/agent-loop` 等待自身启动与 writer 生命周期收敛，`core/session` 封存最终追加偏移。缺少独立 Host 生产方收敛结果时，这些所有者结果不能授权安装；参见 [停机 writer 决策](../.agents/notes/implemented/architecture/2026-09-07-agent-shutdown-writers.zh.md)。
+停机准入和输入所有权位于 `core/agent`；`core/agent-loop` 将驱动器静止与 writer 关闭分开，使已接受的 Host 写入能够排空，`core/session` 封存最终追加偏移。缺少独立 Host 生产方收敛结果时，这些所有者结果不能授权安装；参见 [停机 writer 决策](../.agents/notes/implemented/architecture/2026-09-07-agent-shutdown-writers.zh.md)。
 
 <a id="events"></a>
 

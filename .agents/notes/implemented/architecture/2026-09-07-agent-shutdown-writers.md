@@ -14,7 +14,7 @@ Host shutdown needs explicit owner operations before it can authorize installati
 
 The factory joins raw setup and persistence acquisitions even when their public requests have already rejected cancellation. Abandoned handles remain tracked through close. Writer close failures survive removal from the live registries. Each session seals its append admission before writer close, and the factory verifies the seal again after tracked operations finish; a caught late append cannot produce a valid writer result. Successful results carry exclusive final offsets for closed writer lifetimes. The Host must call `verifyShutdown()` after other owners finish: the original shutdown promise retains its result, while fresh verification rejects append attempts made after that result resolved.
 
-The local subprocess owner separately closes spawn admission and joins whole process trees and PTYs, retaining failed ownership. These operations do not cancel remote paid jobs. They do not constitute a global Host receipt: Cordis contains scope disposer errors, and other producer owners must supply independent successful results. The desktop installer remains blocked until that coordination exists.
+The local subprocess owner separately closes spawn admission and joins whole process trees and PTYs, retaining failed ownership. These operations do not cancel remote paid jobs. They do not constitute a global Host receipt: Cordis contains scope disposer errors, and other producer owners must supply independent successful results. The [Host update consumer](../../../../packages/bundle/mantur-app/README.md#use-this-package) coordinates those results and rejects unsupported compositions.
 
 The terminal registry also provides explicit shutdown: it rejects new spawns and sends, joins pending backend allocation and rollback, and closes published terminals. It retains cleanup errors even after ordinary disposal or a successful retry removes their records.
 
@@ -46,7 +46,7 @@ Global flush misses writers that have already left the live registry. Replaying 
 
 ## Consequences
 
-A failed checkpoint leaves installation blocked. No driver or queued work is automatically restarted. The complete Host coordinator and native installation remain pending; the owner primitives do not authorize either operation alone.
+A failed checkpoint leaves installation blocked. No driver or queued work is automatically restarted. The [Host update consumer](../../../../packages/bundle/mantur-app/README.md#use-this-package) joins these primitives; native installation still requires every deployment owner and native draft store to prove durability.
 
 Gateway ownership belongs in `packages/api/gateway/src/index.ts`: closing a socket or cancelling a response does not settle the original business promise or iterator read. The Gateway freezes admission, joins original operations, and retains iterator cleanup failures. Held unary results, cancelled reads, interrupted stream opening, and failed iterator return are the upgrade regressions. It does not own background work detached by a business service.
 

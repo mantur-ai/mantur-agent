@@ -111,6 +111,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [],
       },
       {
+        signature: 'quiesceForShutdown(): Promise<void>',
+        description: 'Freeze admission and stop drivers while keeping published sessions available to admitted Host requests.',
+        parameters: [],
+        returns: 'completion after drivers and startup work settle; writer closure still requires stopForShutdown.',
+      },
+      {
         signature: 'stopForShutdown(): Promise<readonly AgentShutdownCheckpoint[]>',
         description: 'Freeze admission, join owned startup and teardown, and verify closed writer offsets. This covers agent-loop ownership only; the Host must separately stop other producers.',
         parameters: [],

@@ -105,7 +105,7 @@ const handle = await ctx.agents.create({
 
 创建是同一个受回滚保护的事务：构造私有会话、具象 agent 与带作用域上下文；等待可选 setup；进入两个注册表；依次宣告 `session/created` 与 `agent/created`；发出 `agent/session-start`；此后才启动驱动器。Setup 抛出、commit 失败或所有者 dispose 都会回滚事务而不发布任一 id。Teardown 顺序是停止并排空、撤销作用域、封存会话追加入口、关闭会话的写路径、detach agent、再 detach 会话，且每次 detach 都绑定到确切进入的对象，因此陈旧 disposer 无法移除之后出现的同 id 替代项。
 
-`stopForShutdown()` 永久冻结准入并等待已跟踪的启动操作，包括公开创建请求取消后仍在运行的工作。它保留尚未执行的收件箱输入，且只在 writer 关闭后返回最终排他日志偏移；先前的 writer 失败和封存后的写入尝试都会使结果无效。`verifyShutdown()` 要求已经启动停机，并在其完成后重新检查封存的 writer；后续追加尝试会使校验失败。Host 必须在等待其他所有生产方结束后调用它。这些偏移只覆盖 agent-loop writer，不覆盖全部 Host 生产方：Cordis 作用域 dispose 本身不能证明资源清理成功，Host 必须先获得独立生产方结果，才能签发安装回执。
+`quiesceForShutdown()` 冻结准入并等待驱动器及启动工作结束，同时让已发布会话的 writer 保持打开，以接纳 Host 已接受操作的剩余写入。Host 排空这些操作后再调用 `stopForShutdown()`。`stopForShutdown()` 永久冻结准入并等待已跟踪的启动操作，包括公开创建请求取消后仍在运行的工作。它保留尚未执行的收件箱输入，且只在 writer 关闭后返回最终排他日志偏移；先前的 writer 失败和封存后的写入尝试都会使结果无效。`verifyShutdown()` 要求已经启动停机，并在其完成后重新检查封存的 writer；后续追加尝试会使校验失败。Host 必须在等待其他所有生产方结束后调用它。这些偏移只覆盖 agent-loop writer，不覆盖全部 Host 生产方：Cordis 作用域 dispose 本身不能证明资源清理成功，Host 必须先获得独立生产方结果，才能签发安装回执。
 
 ### 持久化集成
 

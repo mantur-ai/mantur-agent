@@ -41,6 +41,10 @@ Maintainers switch the installed macOS application by editing `~/Library/Applica
 
 Use `environment: production` to return to production. Quit and reopen the desktop application after each edit so browser account and marketplace state cannot survive a deployment change. The profile rejects a missing test URL, a path-bearing URL such as `https://test.example.com/api`, and a test origin equal to `baseUrl`.
 
+The desktop update consumer activates only after explicit installation confirmation. It stops profile reload and preset admission, freezes each owned agent registry, quiesces drivers, and joins native pickers, original Gateway/HTTP requests, and producer owners before closing settings, session writers, projection caches, and storage domains. A fresh writer verification produces the request-bound IPC receipt. The coordinator retains isolated and retired service instances throughout its lifetime so replacement cannot discard cleanup failures. Each repeated preparation rechecks writer seals.
+
+Only modules reviewed in the update policy participate. Code execution with unmanaged OS descendants, module HMR, arbitrary Host plugins, unverified telemetry, and editing/MCP compositions without a shutdown owner prevent installation. A failure or expired Main wait never authorizes installation; already-started Host cleanup continues and stopped work does not restart automatically. The ordinary application-close path remains separate.
+
 <a id="model-experience"></a>
 ## Model Experience
 

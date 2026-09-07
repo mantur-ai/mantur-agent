@@ -106,15 +106,16 @@ class FactoryOwnership {
   private accepting = true
   private readonly teardown = new AbortController()
   private readonly inactive = Promise.withResolvers<void>()
-  private readonly liveAgents = new Set<() => Promise<void>>()
+  private readonly liveAgents = new Map<() => Promise<void>, () => Promise<void>>()
   private startupTasks = new Set<Promise<void>>()
   private readonly pendingOperations = new Set<Promise<void>>()
   private readonly shutdownFailures: unknown[] = []
   private readonly checkpoints: AgentShutdownCheckpoint[] = []
   private readonly sealedSessions: Session[] = []
   private shutdown: Promise<readonly AgentShutdownCheckpoint[]> | undefined
+  private quiescing: Promise<void> | undefined
 
-  get stoppingForShutdown(): boolean { return this.shutdown !== undefined }
+  get stoppingForShutdown(): boolean { return this.quiescing !== undefined }
 
   recordSeal(session: Session): void {
     this.sealedSessions.push(session)
@@ -130,29 +131,52 @@ class FactoryOwnership {
 
   trackOperation<T>(job: Promise<T>, retainFailure = false): Promise<T> {
     const settled = job.then(() => {}, (error: unknown) => {
-      if (retainFailure || (this.stoppingForShutdown && error !== this.teardown.signal.reason)) this.shutdownFailures.push(error)
+      const cancelled = error === this.teardown.signal.reason
+        || (error instanceof Error && error.name === 'AbortError' && (error as NodeJS.ErrnoException).code === 'ABORT_ERR'
+          && error.cause === this.teardown.signal.reason)
+      if (retainFailure || (this.stoppingForShutdown && !cancelled)) this.shutdownFailures.push(error)
     })
     this.pendingOperations.add(settled)
     void settled.then(() => { this.pendingOperations.delete(settled) })
     return job
   }
 
-  stopForShutdown(): Promise<readonly AgentShutdownCheckpoint[]> {
-    if (this.shutdown !== undefined) return this.shutdown
-    const completion = Promise.withResolvers<readonly AgentShutdownCheckpoint[]>()
-    this.shutdown = completion.promise
+  quiesceForShutdown(): Promise<void> {
+    if (this.quiescing !== undefined) return this.quiescing
+    const completion = Promise.withResolvers<void>()
+    this.quiescing = completion.promise
     this.accepting = false
     this.teardown.abort(new Error('agent loop is stopping for shutdown'))
     this.inactive.resolve()
-    const stop = async (): Promise<readonly AgentShutdownCheckpoint[]> => {
+    const stop = async (): Promise<void> => {
       const outcomes = await Promise.allSettled([
-        ...[...this.liveAgents].map(dispose => dispose()),
+        ...[...this.liveAgents.values()].map(quiesce => quiesce()),
         ...this.startupTasks,
       ])
       for (const outcome of outcomes) {
         if (outcome.status === 'rejected') this.shutdownFailures.push(outcome.reason as unknown)
       }
       while (this.pendingOperations.size > 0) await Promise.all([...this.pendingOperations])
+      if (this.shutdownFailures.length > 0) throw new AggregateError(this.shutdownFailures, 'agent driver shutdown failed')
+    }
+    stop().then(completion.resolve, completion.reject)
+    return completion.promise
+  }
+
+  stopForShutdown(): Promise<readonly AgentShutdownCheckpoint[]> {
+    if (this.shutdown !== undefined) return this.shutdown
+    const completion = Promise.withResolvers<readonly AgentShutdownCheckpoint[]>()
+    this.shutdown = completion.promise
+    const quiescing = this.quiesceForShutdown()
+    const stop = async (): Promise<readonly AgentShutdownCheckpoint[]> => {
+      const outcomes = await Promise.allSettled([
+        quiescing,
+        ...[...this.liveAgents.keys()].map(dispose => dispose()),
+        ...this.startupTasks,
+      ])
+      for (const outcome of outcomes) {
+        if (outcome.status === 'rejected') this.shutdownFailures.push(outcome.reason as unknown)
+      }
       this.verifySeals()
       return Object.freeze([...this.checkpoints])
     }
@@ -186,8 +210,8 @@ class FactoryOwnership {
   }
 
   /** Track one live agent's shared teardown until it has run. */
-  track(dispose: () => Promise<void>): () => void {
-    this.liveAgents.add(dispose)
+  track(dispose: () => Promise<void>, quiesce: () => Promise<void>): () => void {
+    this.liveAgents.set(dispose, quiesce)
     return () => { this.liveAgents.delete(dispose) }
   }
 
@@ -213,7 +237,7 @@ class FactoryOwnership {
     this.teardown.abort(new Error('agent loop is not active'))
     this.inactive.resolve()
     await Promise.all([
-      ...[...this.liveAgents].map(dispose => dispose()),
+      ...[...this.liveAgents.keys()].map(dispose => dispose()),
       ...this.startupTasks,
     ])
   }
@@ -452,6 +476,15 @@ export class AgentLoop extends Service implements AgentFactory {
   private readonly ownership: FactoryOwnership
   /** Plain holder prevents Cordis from re-tracing the factory's dependency context through a caller shadow. */
   private readonly runtime: { ctx: Context }
+
+  /**
+   * Freeze admission and stop drivers while keeping published sessions available to admitted Host requests.
+   * @returns completion after drivers and startup work settle; writer closure still requires stopForShutdown.
+   */
+  quiesceForShutdown(): Promise<void> {
+    this.runtime.ctx.agents.freezeAdmission()
+    return this.ownership.quiesceForShutdown()
+  }
 
   /**
    * Freeze admission, join owned startup and teardown, and verify closed writer offsets.
@@ -735,7 +768,10 @@ export class AgentLoop extends Service implements AgentFactory {
         throw new AggregateError(failures, `agent "${id}" disposal failed`)
       }
     })())
-    const untrack = this.ownership.track(dispose)
+    const untrack = this.ownership.track(dispose, async () => {
+      await machineReady.promise
+      await machine?.stopForShutdown()
+    })
     let unfollowOwner: () => Promise<void> | void
     try {
       unfollowOwner = ownerCtx.effect(() => () => {

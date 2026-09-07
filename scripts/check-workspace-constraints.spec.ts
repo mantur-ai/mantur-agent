@@ -1,6 +1,7 @@
 /** Experimental-package publication and dependency constraints. */
 
 import { describe, expect, it } from 'vitest'
+import manturManifest from '../packages/bundle/mantur-app/package.json' with { type: 'json' }
 import {
   checkExperimentalDependencyIsolation,
   checkExperimentalManifest,
@@ -78,6 +79,19 @@ describe('experimental workspace constraints', () => {
 })
 
 describe('package payload constraints', () => {
+  it('requires both Mantur update entries and rejects an unrelated published artifact', () => {
+    const workspace: WorkspaceManifest = { dir: 'packages/bundle/mantur-app', manifest: manturManifest }
+    expect(checkWorkspaceManifest(workspace)).toEqual([])
+    for (const files of [
+      manturManifest.files.filter(file => file !== 'lib/update-protocol.js'),
+      manturManifest.files.filter(file => file !== 'lib/update-shutdown.js'),
+      [...manturManifest.files, 'lib/unrelated.js'],
+    ]) {
+      expect(checkWorkspaceManifest({ ...workspace, manifest: { ...manturManifest, files } }))
+        .toEqual([expect.stringContaining('package.json files must be')])
+    }
+  })
+
   it('keeps the native desktop assembly private and outside npm publication policy', () => {
     const desktop: WorkspaceManifest = {
       dir: 'apps/desktop',

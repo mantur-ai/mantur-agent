@@ -216,6 +216,61 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     }
   })
 
+  it.each(['owned', 'foreign-cause', 'wrong-code'] as const)('handles %s native cancellation during writer acquisition', async (kind) => {
+    const { ctx } = await persistentHarness(new MockAdapter([]))
+    const entered = Promise.withResolvers<undefined>()
+    const spy = vi.spyOn(ctx.sessionPersistence, 'open').mockImplementation((_id, _access, options) => new Promise((_resolve, reject) => {
+      const signal = options?.signal
+      if (!signal) throw new Error('resume must supply its lifetime')
+      signal.addEventListener('abort', () => {
+        reject(Object.assign(new Error('The operation was aborted', {
+          cause: kind === 'foreign-cause' ? new Error('another cancellation') : signal.reason,
+        }), { name: 'AbortError', code: kind === 'wrong-code' ? 'EIO' : 'ABORT_ERR' }))
+      }, { once: true })
+      entered.resolve(undefined)
+    }))
+    const creating = ctx.agentLoop.resume(ctx, { resumeSessionId: SessionId('native-cancel') }).catch((error: unknown) => error)
+    try {
+      await entered.promise
+      const stopping = ctx.agentLoop.stopForShutdown()
+      if (kind === 'owned') await expect(stopping).resolves.toEqual([])
+      else await expect(stopping).rejects.toThrow('agent factory shutdown failed')
+      expect(await creating).toBeInstanceOf(Error)
+    } finally { spy.mockRestore(); await creating; await ctx.fiber.dispose() }
+  })
+
+  it('retains a failed driver closure across both shutdown phases', async () => {
+    const { ctx } = await persistentHarness(new MockAdapter([textResponse('done')]))
+    const handle = await ctx.agents.create({ sessionId: SessionId('failed-two-phase'), agentOptions: { provider: 'mock', model: 'mock' } })
+    ctx.on('agent/turn-stopping', () => {
+      vi.spyOn(handle.agent.session, 'append').mockImplementationOnce(() => { throw new Error('turn close failed') })
+    })
+    try {
+      handle.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'run' }], source: { kind: 'user' } }))
+      await handle.agent.whenIdle()
+      await expect(ctx.agentLoop.quiesceForShutdown()).rejects.toThrow('agent driver shutdown failed')
+      await expect(ctx.agentLoop.stopForShutdown()).rejects.toThrow('agent factory shutdown failed')
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it('keeps the writer open for an admitted Host write after drivers quiesce', async () => {
+    const { ctx } = await persistentHarness(new MockAdapter([]))
+    try {
+      const handle = await ctx.agents.create({ sessionId: SessionId('two-phase-save') })
+      const quiescing = ctx.agentLoop.quiesceForShutdown()
+      expect(ctx.agentLoop.quiesceForShutdown()).toBe(quiescing)
+      await quiescing
+      expect(ctx.agents.list()).toContain(handle.agent)
+      await expect(ctx.agentLoop.create(SessionId('too-late'))).rejects.toThrow('not active')
+      handle.agent.session.append('turn/start', { turn: 1 })
+      handle.agent.session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+      const checkpoints = await ctx.agentLoop.stopForShutdown()
+      expect(checkpoints).toEqual([{ sessionId: handle.agent.id, nextSeq: handle.agent.session.seq }])
+      expect(await readStoredEvents(ctx, handle.agent.id)).toEqual(handle.agent.session.snapshotEvents())
+      await expect(ctx.agentLoop.verifyShutdown()).resolves.toBe(checkpoints)
+    } finally { await ctx.fiber.dispose() }
+  })
+
   it('returns the final closed writer offset and preserves pending input during shutdown', async () => {
     const { ctx } = await persistentHarness(new MockAdapter([]))
     try {

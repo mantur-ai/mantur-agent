@@ -11,6 +11,7 @@
  * @module @deepseek-ai/dsh/profile-boot
  */
 
+import { installHostUpdateListener } from '@deepseek-ai/dsh-mantur-app/update-shutdown'
 import { writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -314,6 +315,9 @@ export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Con
   if (!signalShutdown.signal.aborted
     && ctx.fiber.state === FiberState.ACTIVE
     && ctx.get('loader') !== undefined) {
+    if (options.environment.getFrom('DSH_MANTUR_UPDATE_IPC', ['process'])?.value === '1') {
+      ctx.effect(() => installHostUpdateListener(ctx, process), 'desktop update save IPC')
+    }
     appReady.commit()
   }
   return { ctx, shutdown }
