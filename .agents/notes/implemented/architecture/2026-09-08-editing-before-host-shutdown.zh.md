@@ -14,13 +14,13 @@ Mantur 协调器在其他条件已获准的组合中，首先等待每个保留�
 
 该阶段成功前，协调器保留 Agent/inbox 准入、有效信号、HTTP/Gateway 回调、writer 和其他生产方。随后启动既有 quiesce、网络关闭及生产方排空，再封存权威 writer。剪辑失败被缓存，并阻止这些后续操作。剪辑排空中创建的所有者也会被收集并排空；在后续生产方或设置清理期间出现的所有者会阻止 writer 封存。后续回执校验也会拒绝未排空的剪辑所有者。
 
-模块允许列表与 codeRuntime/Host runner 排除规则不变。真实剪辑所有者尚未交付整合后的固定实现，所以其模块继续被排除。本变更提供 Host 顺序接线，不授予安装准入，也不新增 UI 冻结通知。
+模块允许列表与 codeRuntime/Host runner 排除规则不变。浏览器与生产方完成验收尚未完成，因此真实剪辑模块继续被排除。本变更提供 Host 顺序接线，不授予安装准入，也不新增 UI 冻结通知。
 
 ## Evidence
 
 受控剪辑所有者暂停关闭期间，真实 loopback HTTP 与真实 Typert Gateway 仍可使用。其回调在所有者完成前追加 Session 事件；生成的 checkpoint 与重新打开的物理 JSONL 日志一致。对实际关闭方法的 spy 证明，暂停期间不会启动 AgentLoop quiesce 及 terminal/workflow/subprocess 停止。错误对照覆盖写入失败、取消或完成状态未知后保留 writer 和回调。已退役与新发现所有者的对照覆盖阶段切换。把 quiesce 或网络关闭移到剪辑排空之前会使回调测试失败；恢复顺序后通过。
 
-这些测试确立协调器顺序，不证明真实 MCP 信号传播、浏览器 job 接纳、工程持久化或 GUI 安装。后者需要剪辑所有者的固定交付与真实整合组合检查。
+所有者组合回归使用真实 AgentLoop、MCP HTTP transport、附件存储和原生剪辑 runtime，配合本地脚本模型与夹具 editor。已接纳工具的信号在返回图片写入和 editor 排空期间保持有效；保存的图片可读取，物理会话日志在 runtime 关闭后保持完整。提前 quiesce 会使信号断言失败。夹具 editor 不证明浏览器 job 接纳、工程持久化、lease 释放或 GUI 安装；这些检查需要真实 editor 与浏览器组合。
 
 ## Alternatives considered
 

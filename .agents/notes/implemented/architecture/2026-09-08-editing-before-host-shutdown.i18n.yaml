@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-08-editing-before-host-shutdown.md
-2026-09-08-editing-before-host-shutdown.md: 9cfa29e7fcdb87406c0ad7f0fb697da6c991b1a4
-2026-09-08-editing-before-host-shutdown.zh.md: ac80b53725627782078513b7888146a76f87b7f1
+2026-09-08-editing-before-host-shutdown.md: 9bbeb29d2a2c476958afda19737dd4d96147b65a
+2026-09-08-editing-before-host-shutdown.zh.md: 887158a4a183af1c97817b2c98f9ac0bf4fe6a60

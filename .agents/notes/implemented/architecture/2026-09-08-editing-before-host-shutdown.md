@@ -14,13 +14,13 @@ The Mantur coordinator first awaits each retained `manturEditing.stopForShutdown
 
 Until this phase succeeds, the coordinator preserves Agent/inbox admission, live signals, HTTP/Gateway callbacks, writers and other producers. It then starts its existing quiesce, network shutdown and producer drain before sealing authoritative writers. Editing failure is cached and prevents those later operations. Owners created during the editing drain are collected and drained too; owners appearing during later producer or settings cleanup prevent writer sealing. Subsequent receipt verification also rejects an undrained editing owner.
 
-The module allowlist and codeRuntime/Host runner exclusions are unchanged. The real editing owner has not delivered its combined fixed implementation, so its module remains excluded. This change supplies Host ordering without granting installation admission or adding UI freeze notifications.
+The module allowlist and codeRuntime/Host runner exclusions are unchanged. The real editing module remains excluded while browser and producer completion acceptance is incomplete. This change supplies Host ordering without granting installation admission or adding UI freeze notifications.
 
 ## Evidence
 
 A controlled editing owner holds shutdown while real loopback HTTP and a real Typert Gateway remain usable. Its callback appends Session events before owner completion; the resulting checkpoint matches a freshly reopened physical JSONL log. Spies on actual shutdown methods show that AgentLoop quiesce and terminal/workflow/subprocess stops do not start during the hold. Error controls retain writers and callbacks after write failure, cancellation or unknown completion. Retired and newly observed owner controls exercise the phase transition. Moving quiesce or network shutdown ahead of the editing drain makes the callback test fail; restoring the order passes.
 
-These tests establish coordinator ordering, not real MCP signal propagation, browser job acceptance, project persistence or GUI installation. The latter checks require the editing owner's fixed delivery and a real combined composition.
+The combined owner regression uses a real AgentLoop, MCP HTTP transport, attachment store and native editing runtime with a scripted local model and fixture editor. An admitted tool signal stays live through its returned image write and editor drain; the saved image is readable and the physical session log survives runtime closure. Premature quiesce makes the signal assertion fail. The fixture editor does not establish browser job acceptance, project persistence, lease release or GUI installation; those require the real editor and browser composition.
 
 ## Alternatives considered
 
