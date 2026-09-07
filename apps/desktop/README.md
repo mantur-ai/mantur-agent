@@ -67,6 +67,8 @@ The main process reuses Electron as the Node executable with `ELECTRON_RUN_AS_NO
 
 The installer carries the existing runtime dependency closure and built Web frontend. `asar` remains disabled because Loader profiles, plugin manifests, native modules, and subprocess helpers require ordinary files. Closing or restarting the application waits for the child process to terminate before Electron exits. A Node IPC channel connects the Electron parent and its child; feature owners validate their own messages.
 
+Main owns the OS-encrypted native account store and validates account operations from the current local main frame. The desktop launch selects the Mantur provider's `desktop-managed` identity explicitly. Host API responses stream through a per-request loopback broker; Main alone sends the device bearer upstream. A command descriptor remains private until its consumer acknowledges whole-tree cleanup. Logout cancels accepted streams and commands but retains encrypted remote-cleanup records until HTTP 204 or original expiry.
+
 The permanent application identifier is `ai.mantur.agent`. Before Electron becomes ready, the carrier sets a stable `mantur-agent` user-data directory below the operating system's application-data root. Its `harness` child directory is the only `DSH_HOME` used by the installed application, so ambient CLI or development data under `~/.dsh` cannot affect desktop startup. The child starts in an application-owned neutral directory and appends stdout, stderr, recovery, and updater diagnostics to `logs/harness.log` below the same user-data root.
 
 If startup identifies only a stale `session_projcache` schema, the carrier closes the failed child process and its log before the localized native dialog can remove that disposable projection cache and retry after the user explicitly approves the action. It never deletes session logs, settings, credentials, profiles, or workspaces. Other startup failures offer the log and quit instead of guessing a repair.
@@ -87,6 +89,7 @@ The carrier passes `app.getPath('documents')` with a `漫途项目` child to the
 
 ## Known limitations
 
+- Native account Main, preload, provider, forms and Bash/PowerShell/PTY consumers are connected in source. Forms expose registration, browser authorization, persisted Skip and exact expiry without publishing the device bearer. Marketplace login routing, packaged CLI invocation and native OS acceptance remain incomplete. Loopback IPC, simulated-preload browser and fixed-CLI tests do not establish complete native login availability; the [integration proposal](../../.agents/notes/proposed/architecture/2026-09-07-desktop-native-account-identity.md) owns the remaining acceptance conditions.
 - The `Desktop package` artifacts remain unsigned internal installers. macOS Gatekeeper and Windows SmartScreen can warn for those files; use only the `Desktop release` artifacts for external macOS distribution.
 - The native icon source is a 1024 px PNG with a white rounded tile and transparent outer corners. The Web client uses the transparent logo separately. macOS and Windows packages derive their platform icon formats during the native build; a vector source remains unavailable.
 - The signed release workflow publishes macOS only. Windows external updates remain unsupported until a Windows code-signing identity and protected publication path exist.

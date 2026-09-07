@@ -30,6 +30,7 @@
   },
   "license": "MIT",
   "devDependencies": {
+    "@deepseek-ai/dsh-authorization-manturhub": "workspace:^",
     "@deepseek-ai/cordis-plugin-group": "workspace:^",
     "@deepseek-ai/dsh-client-modules": "workspace:^",
     "@deepseek-ai/dsh-client-store": "workspace:^",

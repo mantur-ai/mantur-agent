@@ -122,7 +122,7 @@ interface ShellRunResult {
    */
   timedOut: boolean
   /**
-   * True when the caller's `AbortSignal` was the FIRST cause to kill the command
+   * True when caller, owner or identity cancellation was the FIRST cause to kill the command
    * (and it was not the executor's own timeout). Mutually exclusive with
    * {@link timedOut} — see there for the first-cause classification.
    */
@@ -166,13 +166,13 @@ The `SANDBOX_UNAVAILABLE` error code (owned by the [sandbox seam](sandbox.md)) i
 
 ## Background processes: `ShellProcess`
 
-`start()` returns a handle with no id or owner. `dsh-tool-bash` adapts it into `ctx.jobs.start()` hooks; the generic runtime then owns job identity and lifecycle. `done` resolves when the process closes and never rejects, reads remain valid after settlement, and sandbox facts are stamped before `done` resolves.
+`start()` asynchronously prepares identity and returns a real handle with no job id or agent owner. The shell tools adapt that preparation and handle into `ctx.jobs.start()` hooks; cancellation also covers preparation. `done` resolves after whole-tree exit and identity release, rejects cleanup failure, and preserves output reads after settlement. Sandbox facts are stamped before completion.
 
 ```ts type-equiv
 /**
  * A background process handle returned by {@link ShellExecutor.start}. It is the
  * only access path; buffered output remains readable after exit. Composition
- * teardown (the subprocess service's disposal) kills running processes and
+ * teardown (the command scope service's disposal) kills running processes and
  * awaits {@link done}; an executor-only reload leaves them running.
  */
 interface ShellProcess {
@@ -182,7 +182,7 @@ interface ShellProcess {
   exitCode: number | null
   /** Terminating signal name, when signal-killed. */
   signal: NodeJS.Signals | null
-  /** Resolves when the underlying process closes (never rejects — a spawn failure settles as `killed` with the error on stderr). */
+  /** Resolves after whole-tree exit and identity release; cleanup failure rejects. Spawn failure alone settles as killed with stderr. */
   readonly done: Promise<void>
   /** Sandbox facts, stamped once a confined process settles. */
   sandbox?: ShellSandboxInfo
@@ -220,6 +220,10 @@ interface ShellProcessRead {
 
 `ShellExecutor` owns `resolve`, foreground `run`, background-process `start`, and the `sandboxMode` capability fact. `dsh-bash-local` owns command defaulting, timeout/abort classification, the terminal environment, and the background read merge; process groups, bounded collectors, spill files, credential scrubbing, and disposal quiescence are the [subprocess service](subprocess.md)'s. `dsh-tool-bash` owns model-facing rendering and adapts background handles into the [generic job runtime](jobs.md). `dsh-shell` owns the shell tools' shared exit-status contract: the exported `parseExitStatus`/`ParsedExitStatus` inverts the `[exit code: N]` / `[killed by signal: X]` markers `dsh-tool-bash`'s `renderResult` and `dsh-tool-pwsh`'s `renderPwshResult` append, and both tools' `presentResult` use it to split the rendered text into the terminal card's output body and its exit-status pill.
 
+## Command identity and process cleanup
+
+[command-scopes](../../packages/shell/command-scopes/README.md) owns asynchronous admission and cleanup above the synchronous subprocess primitive. A `CommandIdentityProvider` prepares environment and cancellation before allocation. A `CommandProcess` keeps direct-child `done` separate from whole-tree `cleanup` and exposes the combined caller, owner and identity signal for first-cause classification. Shutdown freezes new admission before waiting; failed cleanup remains a failure. Protocol processes outside this service remain owned by their protocol provider.
+
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
 <a id="cordis-surface"></a>
@@ -227,6 +231,45 @@ interface ShellProcessRead {
 ## Cordis API
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
+
+<a id="ctxcommandscopes--commandscopes"></a>
+
+### `ctx.commandScopes` — `CommandScopes`
+
+Keeps identity scopes alive across executor reloads and direct-child exit until the entire owned tree is gone.
+
+```ts cordis-catalog
+/**
+ * Register the single identity owner for this required-identity composition.
+ * @param provider - prepares private authority without creating a command process.
+ * @returns a disposer that stops admission, aborts this provider's commands and awaits their cleanup.
+ */
+register(provider: CommandIdentityProvider): () => Promise<void>
+
+/**
+ * Prepare identity, then synchronously allocate and own a real subprocess handle.
+ * @param spec - complete subprocess request, including caller cancellation and environment.
+ * @returns the real live handle after preparation; its direct-child done remains distinct from scope cleanup.
+ */
+async spawn(spec: SubprocessSpawnSpec): Promise<CommandProcess>
+
+/**
+ * Own both asynchronous PTY allocation and the complete terminal session.
+ * @param spec - terminal request whose cancellation also covers identity preparation.
+ * @returns a real terminal handle only if allocation wins cancellation; late terminals are terminated before rejection.
+ */
+async spawnTerminal(spec: SubprocessTerminalSpawnSpec): Promise<SubprocessTerminalHandle>
+
+/**
+ * Reject new work, abort admitted preparation and commands, and await actual cleanup.
+ * @returns completion only after every lease is released; missing whole-tree proof or a release failure rejects.
+ */
+stopAll(): Promise<void>
+```
+
+Types: [SubprocessSpawnSpec](subprocess.md) · [SubprocessTerminalHandle](subprocess.md) · [SubprocessTerminalSpawnSpec](subprocess.md)
+
+Source: [`packages/shell/command-scopes/src/index.ts`](../../packages/shell/command-scopes/src/index.ts)
 
 <a id="ctxshell--shellexecutor-abstract-seam"></a>
 
@@ -236,10 +279,10 @@ Abstract bash execution service. Subclass, implement the abstract methods, and l
 
 Implementations must honor these semantics:
 
-- run rejects only for infrastructure failures. Nonzero exits, timeout kills, and abort kills resolve with a ShellRunResult.
-- start returns immediately; no timeout applies to background processes. `done` settles at process close and never rejects; spawn failures settle as `killed` with the error on stderr.
+- run rejects before allocation or for infrastructure failures. Allocated processes resolve nonzero exits and timeout or abort kills with a ShellRunResult.
+- start prepares command identity before returning a real process; no timeout applies to background processes. `done` settles after process-tree cleanup and identity release. Spawn failures settle as `killed` with the error on stderr; unconfirmed cleanup rejects instead of claiming completion.
 - ShellProcess.readOutput is incremental: consecutive reads never repeat output. Lossy reads report truncation and available spill files.
-- A still-running background process is stopped and awaited when its owning composition tears down. With the subprocess seam that boundary is `ctx.subprocess` disposal, so a background process survives an executor-only reload.
+- A still-running background process is stopped and awaited when its owning composition tears down. With the subprocess seam that boundary is `ctx.commandScopes` disposal, so a background process survives an executor-only reload.
 
 ```ts cordis-catalog
 /**
@@ -259,11 +302,11 @@ abstract resolve(request: ShellExecRequest): ShellExecSpec
 abstract run(spec: ShellExecSpec): Promise<ShellRunResult>
 
 /**
- * Start a background process and return its handle immediately.
+ * Prepare command identity and start a background process.
  * @param spec - a resolved spec from {@link resolve}, never a raw request.
  * @returns the live process handle (reads, kill, quiescence promise).
  */
-abstract start(spec: ShellExecSpec): ShellProcess
+abstract start(spec: ShellExecSpec): Promise<ShellProcess>
 ```
 
 Source: [`packages/shell/shell/src/index.ts`](../../packages/shell/shell/src/index.ts)

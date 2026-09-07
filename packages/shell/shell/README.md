@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-shell` defines the executor service (`ctx.shell`) that runs shell commands for the harness: foreground commands that resolve with bounded output when they finish, and background processes that return a handle immediately. Every shell executor in the repository — local Bash, sandboxed Bash, local PowerShell, sandboxed PowerShell — implements this one contract, so the model-facing `bash` and `pwsh` tools work unchanged over any of them. Callers pass a request and receive a fully-resolved spec with explicit defaults and caps before any command runs. The service itself never renders anything to a model; the shell tools own all model-visible output and sandbox guidance.
+`dsh-shell` defines the executor service (`ctx.shell`) that runs shell commands for the harness: foreground commands that resolve with bounded output when they finish, and background processes that return a real handle after asynchronous identity preparation. Every shell executor in the repository — local Bash, sandboxed Bash, local PowerShell, sandboxed PowerShell — implements this one contract, so the model-facing `bash` and `pwsh` tools work unchanged over any of them. Callers pass a request and receive a fully-resolved spec with explicit defaults and caps before any command runs. The service itself never renders anything to a model; the shell tools own all model-visible output and sandbox guidance.
 
 ## Table of Contents
 
@@ -29,7 +29,7 @@ Use `ctx.shell` when an agent or an in-process plugin needs to run a shell comma
 
 ### Foreground commands
 
-Call `run` with a resolved spec to execute a command in the foreground. The promise resolves when the command finishes: a nonzero exit, an executor timeout kill, or a caller abort kill is a result, never a rejection. `run` rejects only for infrastructure failures such as an unusable working directory or a missing shell. The result carries the exit code or signal, whether a timeout or an abort cut the run short, and the collected stdout/stderr with spill-file paths when a stream overflowed its budget.
+Call `run` with a resolved spec to execute a command in the foreground. After process allocation, a nonzero exit, executor timeout kill, or caller abort kill resolves as a result. Identity preparation failure or cancellation before allocation rejects without publishing a process result; infrastructure and cleanup failures also reject. The result carries the exit code or signal, whether a timeout or an abort cut the run short, and the collected stdout/stderr with spill-file paths when a stream overflowed its budget.
 
 ```text
 const result = await ctx.shell.run(ctx.shell.resolve({ command: 'ls -la' }))
@@ -38,7 +38,7 @@ console.log(result.exitCode, result.stdout.text)
 
 ### Background processes
 
-Call `start` with a resolved spec to launch a background process; it returns a handle immediately and no timeout applies. Read output incrementally with `readOutput()` — consecutive reads never repeat output, and lossy reads point at full-stream spill files. Kill the process group with `kill()` (returns `false` once it has finished) and await `done` for settlement. Job ids, ownership, polling, and notices belong to the generic `ctx.jobs` runtime, where the tool layer registers the handle.
+Call `start` with a resolved spec to launch a background process; it returns a real handle after asynchronous identity preparation and no timeout applies. Read output incrementally with `readOutput()` — consecutive reads never repeat output, and lossy reads point at full-stream spill files. Kill the process group with `kill()` (returns `false` once it has finished) and await `done` for settlement. Job ids, ownership, polling, and notices belong to the generic `ctx.jobs` runtime, where the tool layer registers the handle.
 
 ### Requests and resolved specs
 
@@ -46,7 +46,7 @@ Every execution starts from a `ShellExecRequest` with optional fields; the execu
 
 ### Choosing and composing an executor
 
-The seam is not an executor: mount exactly one provider per composition, and the tools work unchanged. On POSIX, `dsh-bash-local` runs commands as fresh `bash -c` processes and `dsh-bash-sandbox` confines every command through the sandbox capability; on Windows, `dsh-pwsh-local` and `dsh-pwsh-sandbox` are the counterparts. The `bash` and `pwsh` tools advertise escalation fields only while a sandboxing executor is mounted. The smallest composition is the executor alone:
+The seam is not an executor: mount exactly one provider per composition, and the tools work unchanged. On POSIX, `dsh-bash-local` runs commands as fresh `bash -c` processes and `dsh-bash-sandbox` confines every command through the sandbox capability; on Windows, `dsh-pwsh-local` and `dsh-pwsh-sandbox` are the counterparts. The `bash` and `pwsh` tools advertise escalation fields only while a sandboxing executor is mounted. The composition also needs a subprocess provider and [command-scopes](../command-scopes/README.md):
 
 ```yaml
 - id: bash
@@ -91,7 +91,7 @@ The package is one role of a standard capability seam: the Service Definition th
 
 ### Background lifecycle and ownership
 
-A background process belongs to the subprocess service, not to the executor: it survives an executor-only reload and is killed and joined when the composition tears down. Implementations must honor the seam's semantics — `run` rejects only for infrastructure failures; `start` returns immediately with no timeout and its `done` never rejects (spawn failures settle as `killed` with the error on stderr); `readOutput` is consuming and lossy reads report spill files.
+A background process belongs to the commandScopes service, not to the executor: it survives an executor-only reload and is killed and joined when the composition tears down. Implementations must honor the seam's semantics — `run` rejects before allocation or for infrastructure failures; `start` returns asynchronously after identity preparation with no running timeout; its `done` joins whole-tree exit and identity release, rejects cleanup failures, and reports a spawn failure alone as `killed` with stderr; `readOutput` is consuming and lossy reads report spill files.
 
 </details>
 

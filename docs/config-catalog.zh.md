@@ -279,6 +279,10 @@ export interface Config {
 ```ts config-catalog
 /** ManturHub deployment endpoint. */
 export interface Config {
+  /** Standalone credential storage or Electron Main ownership; no cross-mode credential lookup. */
+  readonly identity?: ManturIdentityMode
+  /** Explicit Main transport and command budgets, required for desktop-managed identity. */
+  readonly native?: Omit<NativeAccountConfiguration, 'origin' | 'environment'> | undefined
   /** Active ManturHub deployment; defaults to production. */
   readonly environment?: ManturEnvironment
   /** Production HTTP origin serving the ManturHub APIs. */
@@ -287,17 +291,38 @@ export interface Config {
   readonly testBaseUrl?: string
 }
 
+/** Explicit identity owner selected by the application profile, never an automatic fallback. */
+export type ManturIdentityMode = 'standalone' | 'desktop-managed'
+
+/** Profile-owned transport budgets sent to Main once, before account or command requests. */
+export interface NativeAccountConfiguration {
+  /** Canonical API origin selected by the machine-local profile. */
+  readonly origin: string
+  /** Named deployment owning this device grant. */
+  readonly environment: 'production' | 'test'
+  /** Human-readable deployment label included in each local broker descriptor. */
+  readonly environmentLabel: string
+  /** Complete network-operation and IPC-reply deadline in milliseconds. */
+  readonly requestTimeoutMs: number
+  /** Maximum buffered native-account protocol response bytes. */
+  readonly maxResponseBytes: number
+  /** Maximum command capability lifetime in milliseconds, capped by the original device expiry. */
+  readonly leaseMs: number
+  /** Interval between attempts to finish encrypted pending remote revocations. */
+  readonly revocationRetryMs: number
+}
+
 /** Named ManturHub deployment selected for every online Mantur request. */
 export type ManturEnvironment = 'production' | 'test'
 ```
 
-来源：[`packages/credentials/authorization-manturhub/src/index.ts:29`](../packages/credentials/authorization-manturhub/src/index.ts)
+来源：[`packages/credentials/authorization-manturhub/src/index.ts:32`](../packages/credentials/authorization-manturhub/src/index.ts)
 
 <a id="deepseek-aidsh-bash-local"></a>
 
 ## `@deepseek-ai/dsh-bash-local`
 
-需要：`subprocess`
+需要：`commandScopes`
 
 ```ts config-catalog
 /** Plugin config (all optional — `static Config` supplies the defaults). */
@@ -317,13 +342,13 @@ export interface Config {
 }
 ```
 
-来源：[`packages/shell/bash-local/src/index.ts:41`](../packages/shell/bash-local/src/index.ts)
+来源：[`packages/shell/bash-local/src/index.ts:42`](../packages/shell/bash-local/src/index.ts)
 
 <a id="deepseek-aidsh-bash-sandbox"></a>
 
 ## `@deepseek-ai/dsh-bash-sandbox`
 
-需要：`subprocess` · `sandbox` · `sandboxPolicy`
+需要：`commandScopes` · `sandbox` · `sandboxPolicy`
 
 ```ts config-catalog
 /**
@@ -474,6 +499,22 @@ export interface Config {
 ```
 
 来源：[`packages/code-runtime/code-runtime-worker-thread/src/index.ts:25`](../packages/code-runtime/code-runtime-worker-thread/src/index.ts)
+
+<a id="deepseek-aidsh-command-scopes"></a>
+
+## `@deepseek-ai/dsh-command-scopes`
+
+需要：`subprocess`
+
+```ts config-catalog
+/** Deployment choice; required identity never silently becomes an unscoped command. */
+export interface Config {
+  /** Whether commands require one registered identity provider; defaults to none. */
+  readonly identity?: 'none' | 'required'
+}
+```
+
+来源：[`packages/shell/command-scopes/src/index.ts:9`](../packages/shell/command-scopes/src/index.ts)
 
 <a id="deepseek-aidsh-compaction-basic"></a>
 
@@ -1742,7 +1783,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-pwsh-local`
 
-需要：`subprocess`
+需要：`commandScopes`
 
 ```ts config-catalog
 /** Plugin config (all optional — `static Config` supplies the defaults). */
@@ -1769,13 +1810,13 @@ export interface Config {
 }
 ```
 
-来源：[`packages/shell/pwsh-local/src/index.ts:58`](../packages/shell/pwsh-local/src/index.ts)
+来源：[`packages/shell/pwsh-local/src/index.ts:59`](../packages/shell/pwsh-local/src/index.ts)
 
 <a id="deepseek-aidsh-pwsh-sandbox"></a>
 
 ## `@deepseek-ai/dsh-pwsh-sandbox`
 
-需要：`subprocess` · `sandbox` · `sandboxPolicy`
+需要：`commandScopes` · `sandbox` · `sandboxPolicy`
 
 ```ts config-catalog
 /**
@@ -2659,7 +2700,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-terminal-bash`
 
-需要：`terminals` · `sandboxPolicy` · `sessionProjections` · `subprocess`
+需要：`terminals` · `sandboxPolicy` · `sessionProjections` · `commandScopes`
 
 ```ts config-catalog
 /** Public plugin configuration. */

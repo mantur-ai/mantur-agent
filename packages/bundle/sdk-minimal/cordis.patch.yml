@@ -47,6 +47,11 @@
     - id: subprocess
       name: '@deepseek-ai/dsh-subprocess-local'
 
+    - id: command-scopes
+      name: '@deepseek-ai/dsh-command-scopes'
+      config:
+        identity: none
+
     - id: pty
       name: '@deepseek-ai/dsh-terminal'
 

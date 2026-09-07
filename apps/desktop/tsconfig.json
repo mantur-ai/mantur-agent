@@ -4,6 +4,8 @@
     "rootDir": "src",
     "outDir": "lib/types"
   },
+  "references": [{ "path": "../../packages/util/brand" }, { "path": "../../packages/util/values" },
+    { "path": "../../packages/credentials/authorization-manturhub" }],
   "include": [
     "src"
   ]

@@ -1,0 +1,46 @@
+- id: credentials
+  name: '@deepseek-ai/dsh-credentials-local'
+  config:
+    path: !!js process.cwd() + '/isolated-credentials.yaml'
+    watch: false
+- id: authorization
+  name: '@deepseek-ai/dsh-authorization'
+- id: subprocess
+  name: '@deepseek-ai/dsh-subprocess-local'
+- id: command-scopes
+  name: '@deepseek-ai/dsh-command-scopes'
+  config:
+    identity: required
+- id: account
+  name: '@deepseek-ai/dsh-authorization-manturhub'
+  config:
+    identity: desktop-managed
+    environment: test
+    testBaseUrl: !!js process.env.MANTUR_COMMAND_TEST_ORIGIN
+    native:
+      environmentLabel: Isolated
+      requestTimeoutMs: 10000
+      maxResponseBytes: 16384
+      leaseMs: 60000
+      revocationRetryMs: 60000
+- id: shell
+  name: '@deepseek-ai/dsh-bash-local'
+  config:
+    graceMs: 100
+- id: agents
+  name: '@deepseek-ai/dsh-agent'
+- id: session-projection
+  name: '@deepseek-ai/dsh-session-projection'
+- id: sandbox-policy
+  name: '@deepseek-ai/dsh-sandbox-policy'
+  config:
+    mode: danger-full-access
+    workspaceRoot: !!js process.cwd()
+- id: terminal
+  name: '@deepseek-ai/dsh-terminal'
+- id: terminal-bash
+  name: '@deepseek-ai/dsh-terminal-bash'
+  config:
+    timeoutMs: 3000
+    idleSilenceMs: 5000
+    disposeGraceMs: 100

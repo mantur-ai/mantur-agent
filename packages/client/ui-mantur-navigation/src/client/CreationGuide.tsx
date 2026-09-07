@@ -13,6 +13,7 @@ import type { ManturMarketplaceState } from './store.ts'
 import { GUIDE_SKILL_LABELS } from './guide-locales.ts'
 import { useGuidePopover } from './useGuidePopover.ts'
 import css from './CreationGuide.module.css'
+import { focusDetailAction } from './detail-focus.ts'
 
 /** Settings operations shared by the two guide locations. */
 export interface GuidePreferencesInjected {
@@ -67,7 +68,7 @@ export interface CreationGuideInjected extends GuidePreferencesInjected {
   marketplaceText: (key: 'skills.loading' | 'skills.failed' | 'skills.retry' | 'skills.search' | 'skills.noMatches'
     | 'skills.loadingDetail' | 'skills.detailFailed' | 'skills.installing' | 'skills.loginToInstall'
     | 'skills.loginPreparing' | 'skills.loginCode' | 'skills.openLogin' | 'skills.cancelLogin'
-    | 'skills.loginFailed' | 'skills.localConflict' | 'skills.noWorkspace') => string
+    | 'skills.loginFailed' | 'skills.loginUnavailable' | 'skills.localConflict' | 'skills.noWorkspace') => string
   hooks: GuidePreferencesInjected['hooks'] & {
     marketplace: SnapshotStore<ManturMarketplaceState>
     guideInput: ObservableSnapshot<InputState | undefined>
@@ -98,6 +99,9 @@ function ReadyGuide({ hero, disabled, sessionId, preferences, useMarketplace, us
   const [more, setMore] = useState(false)
   const [query, setQuery] = useState('')
   const [detailSlug, setDetailSlug] = useState<string>()
+  const source = useRef<HTMLDivElement>(null)
+  const detailAction = useRef<HTMLButtonElement>(null)
+  const loginSource = useRef<{ slug: string; sessionId: typeof sessionId }>()
   const helper = useRef<HTMLButtonElement>(null)
   const panel = useRef<HTMLElement>(null)
   const panelVisible = (open || notice !== undefined) && !more && detailSlug === undefined
@@ -169,12 +173,18 @@ function ReadyGuide({ hero, disabled, sessionId, preferences, useMarketplace, us
   })
   const missingAlias = recommended.some(skill => !GUIDE_SKILL_LABELS.has(skill.slug))
   const detail = detailSlug !== undefined && ready?.detail?.slug === detailSlug ? ready.detail : undefined
+  useEffect(() => {
+    if (ready?.loginPhase === 'starting' || loginSource.current === undefined) return
+    const origin = loginSource.current
+    loginSource.current = undefined
+    if (origin.slug === detail?.slug && origin.sessionId === sessionId) focusDetailAction(source.current, detailAction.current)
+  }, [ready?.loginPhase, detail?.slug, sessionId])
   const detailError = ready?.detailError
   const detailOpen = detailSlug !== undefined
   const intro = notice ?? t(`intro.${preferences.mode}`)
   const matching = skills.filter(skill => `${skill.name} ${skill.description}`.toLocaleLowerCase().includes(query.toLocaleLowerCase()))
 
-  return <div className={css.guide}>
+  return <div ref={source} className={css.guide}>
     {panelVisible && <section ref={panel} className={css.bubble} id={bubbleId} aria-label={t('assistant')}
       style={panelPosition ?? { visibility: 'hidden' }}>
       <button type="button" className={css.close} onClick={close} aria-label={t('close')}>×</button>
@@ -213,7 +223,7 @@ function ReadyGuide({ hero, disabled, sessionId, preferences, useMarketplace, us
         {market.phase === 'failed' && <button type="button" onClick={() => { void load() }}>{mt('skills.retry')}</button>}
       </div>
     </Modal>
-    <Modal open={detailOpen} onClose={closeDetail} title={detail?.name ?? mt('skills.loadingDetail')} closeLabel={t('close')}
+    <Modal open={detailOpen && ready?.loginPhase !== 'starting'} onClose={closeDetail} title={detail?.name ?? mt('skills.loadingDetail')} closeLabel={t('close')}
       {...(detail === undefined ? {} : { description: detail.description })}>
       {detailError !== undefined && <><p role="alert">{mt('skills.detailFailed')}</p><button type="button" onClick={() => { void openDetail(detailError) }}>{mt('skills.retry')}</button></>}
       {detail !== undefined && ready !== undefined && <div className={css.detail}>
@@ -221,11 +231,13 @@ function ReadyGuide({ hero, disabled, sessionId, preferences, useMarketplace, us
         {notice !== undefined && ready.installError === undefined && <p role="alert">{notice}</p>}
         {ready.installError !== undefined && <p role="alert">{t('installFailed')}{ready.installError === 'local-conflict' ? mt('skills.localConflict') : ''}</p>}
         {ready.loginPhase === 'failed' && <p role="alert">{mt('skills.loginFailed')}</p>}
+        {ready.loginPhase === 'unavailable' && <p role="alert">{mt('skills.loginUnavailable')}</p>}
         {detail.installed || ready.catalog.signedIn
-          ? <button type="button" disabled={disabled || ready.installing !== undefined}
+          ? <button ref={detailAction} type="button" disabled={disabled || ready.installing !== undefined}
             onClick={() => { if (detail.installed) insert(detail); else void installAndUse(detail) }}
           >{ready.installing !== undefined ? mt('skills.installing') : detail.installed ? t('use') : t('installAndUse')}</button>
-          : <button type="button" disabled={ready.loginPhase === 'starting' || ready.loginPhase === 'authorizing'} onClick={() => { void startLogin() }}>
+          : <button ref={detailAction} type="button" disabled={ready.loginPhase === 'starting' || ready.loginPhase === 'authorizing'}
+            onClick={() => { loginSource.current = { slug: detail.slug, sessionId }; void startLogin() }}>
             {mt(ready.loginPhase === 'starting' ? 'skills.loginPreparing' : 'skills.loginToInstall')}
           </button>}
         {ready.loginPhase === 'authorizing' && ready.login !== undefined && <>

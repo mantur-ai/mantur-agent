@@ -1,7 +1,9 @@
+import CommandScopes from '@deepseek-ai/dsh-command-scopes'
+import type { CommandIdentityLease } from '@deepseek-ai/dsh-command-scopes'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { ShellExecutor } from '@deepseek-ai/dsh-shell'
@@ -36,6 +38,7 @@ async function setup() {
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(LocalSubprocessRuntime)
+  await ctx.plugin(CommandScopes, { identity: 'none' })
   ;(ctx.subprocess as LocalSubprocessRuntime).internals = { spillDir }
   await ctx.plugin(BashEnvPlugin)
   await ctx.plugin(LocalBashExecutor, { timeoutMs: 10_000, graceMs: 200 })
@@ -44,7 +47,7 @@ async function setup() {
 }
 
 /** Full harness: the generic job runtime + its controller, then the bash tool. */
-async function setupWithTasks() {
+async function setupWithTasks(identity: 'none' | 'required' = 'none') {
   const ctx = new Context()
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
@@ -52,6 +55,7 @@ async function setupWithTasks() {
   await ctx.plugin(LocalJobRegistry)
   await ctx.plugin(ToolTasks)
   await ctx.plugin(LocalSubprocessRuntime)
+  await ctx.plugin(CommandScopes, { identity })
   ;(ctx.subprocess as LocalSubprocessRuntime).internals = { spillDir }
   await ctx.plugin(BashEnvPlugin)
   await ctx.plugin(LocalBashExecutor, { timeoutMs: 10_000, graceMs: 200 })
@@ -139,7 +143,7 @@ class RecordingSandboxExecutor extends ShellExecutor {
     })
   }
 
-  start(spec: ShellExecSpec): ShellProcess {
+  async start(spec: ShellExecSpec): Promise<ShellProcess> {
     this.modes.push(spec.sandboxPolicy?.mode)
     return {
       status: 'completed',
@@ -169,7 +173,7 @@ class CountingStartExecutor extends ShellExecutor {
 
   run(): Promise<ShellRunResult> { return Promise.reject(new Error('unused')) }
 
-  start(): ShellProcess {
+  async start(): Promise<ShellProcess> {
     this.starts += 1
     return {
       status: 'completed',
@@ -288,6 +292,7 @@ describe('bash tool', () => {
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(LocalSubprocessRuntime)
+    await ctx.plugin(CommandScopes, { identity: 'none' })
     ;(ctx.subprocess as LocalSubprocessRuntime).internals = { spillDir }
     await ctx.plugin(LocalBashExecutor, { maxOutputBytes: 100, graceMs: 200 })
     await ctx.plugin(BashEnvPlugin)
@@ -409,6 +414,7 @@ describe('bash tool', () => {
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(LocalSubprocessRuntime)
+    await ctx.plugin(CommandScopes, { identity: 'none' })
     await ctx.plugin(LocalBashExecutor, {})
     await ctx.plugin(BashEnvPlugin)
     const fiber = await ctx.plugin(ToolBash)
@@ -429,6 +435,7 @@ describe('bash tool', () => {
     await ctx.plugin(ToolBash)
     expect(ctx.tools.schemas()).toHaveLength(0)
     await ctx.plugin(LocalSubprocessRuntime)
+    await ctx.plugin(CommandScopes, { identity: 'none' })
     await ctx.plugin(LocalBashExecutor, {})
     await new Promise(resolve => setTimeout(resolve, 0))
     expect(ctx.tools.schemas()).toHaveLength(1)
@@ -441,6 +448,7 @@ describe('bash tool', () => {
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(LocalSubprocessRuntime)
+    await ctx.plugin(CommandScopes, { identity: 'none' })
     await ctx.plugin(LocalBashExecutor, {})
     ToolBash.apply(ctx, {})
     const schema = ctx.tools.schemas()[0]!
@@ -450,6 +458,64 @@ describe('bash tool', () => {
 })
 
 describe('background execution through the job runtime', () => {
+  it.each(['released', 'refused'] as const)('joins cancelled preparation when identity release is %s', async (releaseResult) => {
+    const ctx = await setupWithTasks('required')
+    const prepared = Promise.withResolvers<CommandIdentityLease>()
+    const preparing = Promise.withResolvers<AbortSignal>()
+    const releaseAck = Promise.withResolvers<undefined>()
+    const releasing = Promise.withResolvers<undefined>()
+    const release = vi.fn(() => { releasing.resolve(undefined); return releaseAck.promise })
+    const lease = { environment: {}, signal: new AbortController().signal, release }
+    onTestFinished(async () => {
+      prepared.resolve(lease); releaseAck.resolve(undefined)
+      await ctx.fiber.dispose()
+    })
+    ctx.commandScopes.register({ prepare: (signal) => { preparing.resolve(signal); return prepared.promise } })
+    const spawn = vi.spyOn(ctx.subprocess, 'spawn')
+    const started = await call(ctx, 'bash', { command: 'printf unexpected', description: 'test command', run_in_background: true })
+    expect(text(started)).toBe('started background job bash-1')
+    const signal = await preparing.promise
+    const killed = await call(ctx, 'job_kill', { job_id: 'bash-1' })
+    expect(text(killed)).toBe('requested cancellation of job bash-1')
+    expect(signal.aborted).toBe(true)
+    const stopped = ctx.commandScopes.stopAll()
+    const stopCheck = releaseResult === 'released'
+      ? expect(stopped).resolves.toBeUndefined()
+      : expect(stopped).rejects.toThrow('cleanup could not be confirmed')
+    prepared.resolve(lease)
+    await releasing.promise
+    expect(ctx.jobs.list()[0]?.status).toBe('stopping')
+    expect(spawn).not.toHaveBeenCalled()
+    if (releaseResult === 'released') releaseAck.resolve(undefined)
+    else releaseAck.reject(new Error('identity release refused'))
+    await stopCheck
+    const final = await call(ctx, 'job_output', { job_id: 'bash-1', wait: true })
+    expect(text(final)).toContain(releaseResult === 'released'
+      ? '[status: killed, cancelled before command start]'
+      : '[status: failed, Error: identity release refused]')
+    expect(spawn).not.toHaveBeenCalled()
+    expect(release).toHaveBeenCalledOnce()
+  })
+
+  it('reports a release failure after real process exit even when job cancellation arrives during release', async () => {
+    const ctx = await setupWithTasks('required')
+    const releaseAck = Promise.withResolvers<undefined>()
+    const releasing = Promise.withResolvers<undefined>()
+    onTestFinished(async () => { releaseAck.resolve(undefined); await ctx.fiber.dispose() })
+    const release = vi.fn(() => { releasing.resolve(undefined); return releaseAck.promise })
+    ctx.commandScopes.register({ prepare: async () => ({ environment: {}, signal: new AbortController().signal, release }) })
+    await call(ctx, 'bash', { command: 'printf completed', description: 'test command', run_in_background: true })
+    await releasing.promise
+    await call(ctx, 'job_kill', { job_id: 'bash-1' })
+    expect(ctx.jobs.list()[0]?.status).toBe('stopping')
+    const stopped = expect(ctx.commandScopes.stopAll()).rejects.toThrow('cleanup could not be confirmed')
+    releaseAck.reject(new Error('identity release refused'))
+    const final = await call(ctx, 'job_output', { job_id: 'bash-1', wait: true })
+    expect(text(final)).toContain('[status: failed, Error: identity release refused]')
+    await stopped
+    expect(release).toHaveBeenCalledOnce()
+  })
+
   it('run_in_background acks with the job id, readable through the REAL job_output tool', async () => {
     const ctx = await setupWithTasks()
     const started = await call(ctx, 'bash', { command: 'echo bg-ok', description: 'test command', run_in_background: true })
@@ -559,6 +625,7 @@ describe('background execution through the job runtime', () => {
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(LocalSubprocessRuntime)
+    await ctx.plugin(CommandScopes, { identity: 'none' })
     await ctx.plugin(BashEnvPlugin)
     await ctx.plugin(LocalBashExecutor, {})
     await ctx.plugin(ToolBash, { enableRunInBackground: false })
@@ -1102,7 +1169,7 @@ describe('the model-facing bash tool builds its request from named args only (no
         stdout: { text: 'ok', truncated: false }, stderr: { text: '', truncated: false },
       })
     }
-    start(): ShellProcess {
+    async start(): Promise<ShellProcess> {
       return {
         status: 'completed',
         exitCode: 0,
