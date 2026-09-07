@@ -118,6 +118,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['if any writer or owned cleanup failed, including a previously closed writer.'],
       },
       {
+        signature: 'verifyShutdown(): Promise<readonly AgentShutdownCheckpoint[]>',
+        description: 'Recheck sealed writers after the Host has joined every other producer. Requires an existing shutdown; waits for its completion without starting one.',
+        parameters: [],
+        returns: 'the original immutable checkpoints after a fresh seal check.',
+        throws: ['if shutdown has not started, failed, or a subsequent append was attempted.'],
+      },
+      {
         signature: 'async create(id: SessionId, options: AgentOptions = {}, meta: Pick<SessionHeader, \'cwd\'> = {}): Promise<Agent>',
         description: 'Create an agent and session under one caller-supplied identity, owned by the accessing fiber. Constructor-driven config calls mint a fresh combined id before entering this boundary. When a persistence backend is mounted, the session\'s durable identity and any seed are stored before publication.',
         parameters: [{ name: 'id', description: 'shared agent/session identity.' }, { name: 'options', description: 'concrete loop options.' }, { name: 'meta', description: 'optional fresh-session workspace metadata.' }],

@@ -362,6 +362,14 @@ Concrete agent factory and driver service.
 stopForShutdown(): Promise<readonly AgentShutdownCheckpoint[]>
 
 /**
+ * Recheck sealed writers after the Host has joined every other producer.
+ * Requires an existing shutdown; waits for its completion without starting one.
+ * @returns the original immutable checkpoints after a fresh seal check.
+ * @throws if shutdown has not started, failed, or a subsequent append was attempted.
+ */
+verifyShutdown(): Promise<readonly AgentShutdownCheckpoint[]>
+
+/**
  * Create an agent and session under one caller-supplied identity, owned by
  * the accessing fiber. Constructor-driven config calls mint a fresh combined
  * id before entering this boundary. When a persistence backend is mounted,

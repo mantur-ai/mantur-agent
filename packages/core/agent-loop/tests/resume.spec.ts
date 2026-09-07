@@ -105,6 +105,32 @@ function throwUnknown(value: unknown): never {
 }
 
 describe('the session-persistence Agent Note: AgentLoop factory create/resume', () => {
+  it('requires shutdown before verifying writers without freezing admission', async () => {
+    const { ctx } = await persistentHarness(new MockAdapter([]))
+    try {
+      await expect(ctx.agentLoop.verifyShutdown()).rejects.toThrow('start agent shutdown')
+      const handle = await ctx.agents.create({ sessionId: SessionId('verify-before-shutdown') })
+      await handle.dispose()
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('rejects a caught sealed append after the original shutdown result resolved', async () => {
+    const { ctx } = await persistentHarness(new MockAdapter([]))
+    try {
+      const handle = await ctx.agents.create({ sessionId: SessionId('verify-late-append') })
+      await ctx.agentLoop.stopForShutdown()
+      let failure: unknown
+      try { handle.agent.session.append('turn/start', { turn: 1 }) } catch (error: unknown) { failure = error }
+      expect(failure).toBeInstanceOf(Error)
+      await expect(ctx.agentLoop.verifyShutdown()).rejects.toMatchObject({ errors: expect.arrayContaining([failure]) as unknown })
+      expect((await readStoredEvents(ctx, handle.agent.id)).some(event => event.type === 'turn/start')).toBe(false)
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
   it.each(['before-stop', 'during-detach', 'after-close'] as const)('rejects a caught sealed write %s', async (phase) => {
     const { ctx } = await persistentHarness(new MockAdapter([]))
     const handle = await ctx.agents.create({ sessionId: SessionId(`sealed-write-${phase}`) })
@@ -199,6 +225,8 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
       const stopping = ctx.agentLoop.stopForShutdown()
       expect(ctx.agentLoop.stopForShutdown()).toBe(stopping)
       const checkpoints = await stopping
+      expect(await ctx.agentLoop.verifyShutdown()).toBe(checkpoints)
+      expect(await ctx.agentLoop.verifyShutdown()).toBe(checkpoints)
       expect(checkpoints).toEqual([{ sessionId: handle.agent.id, nextSeq: handle.agent.session.seq }])
       const events = await readStoredEvents(ctx, handle.agent.id)
       expect(events).toEqual(handle.agent.session.snapshotEvents())

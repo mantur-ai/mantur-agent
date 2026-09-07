@@ -153,14 +153,25 @@ class FactoryOwnership {
         if (outcome.status === 'rejected') this.shutdownFailures.push(outcome.reason as unknown)
       }
       while (this.pendingOperations.size > 0) await Promise.all([...this.pendingOperations])
-      for (const session of this.sealedSessions) {
-        try { session.seal() } catch (error: unknown) { this.shutdownFailures.push(error) }
-      }
-      if (this.shutdownFailures.length > 0) throw new AggregateError(this.shutdownFailures, 'agent factory shutdown failed')
+      this.verifySeals()
       return Object.freeze([...this.checkpoints])
     }
     stop().then(completion.resolve, completion.reject)
     return completion.promise
+  }
+
+  async verifyShutdown(): Promise<readonly AgentShutdownCheckpoint[]> {
+    if (this.shutdown === undefined) throw new Error('start agent shutdown before verifying writers')
+    const checkpoints = await this.shutdown
+    this.verifySeals()
+    return checkpoints
+  }
+
+  private verifySeals(): void {
+    for (const session of this.sealedSessions) {
+      try { session.seal() } catch (error: unknown) { this.shutdownFailures.push(error) }
+    }
+    if (this.shutdownFailures.length > 0) throw new AggregateError(this.shutdownFailures, 'agent factory shutdown failed')
   }
 
   constructor(private readonly fiber: Context['fiber']) {}
@@ -451,6 +462,16 @@ export class AgentLoop extends Service implements AgentFactory {
   stopForShutdown(): Promise<readonly AgentShutdownCheckpoint[]> {
     this.runtime.ctx.agents.freezeAdmission()
     return this.ownership.stopForShutdown()
+  }
+
+  /**
+   * Recheck sealed writers after the Host has joined every other producer.
+   * Requires an existing shutdown; waits for its completion without starting one.
+   * @returns the original immutable checkpoints after a fresh seal check.
+   * @throws if shutdown has not started, failed, or a subsequent append was attempted.
+   */
+  verifyShutdown(): Promise<readonly AgentShutdownCheckpoint[]> {
+    return this.ownership.verifyShutdown()
   }
 
   constructor(ctx: Context, config: Config) {
