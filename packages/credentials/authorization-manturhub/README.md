@@ -30,6 +30,8 @@ This Host package routes ManturHub requests to the selected production or test d
 
 `desktop-managed` requires an Electron parent IPC channel and explicit `native` settings: `environmentLabel`, `requestTimeoutMs`, `maxResponseBytes`, `leaseMs` and `revocationRetryMs`. The Mantur desktop profile supplies these budgets. Main validates the selected origin before the provider becomes available. Authenticated GETs retain their broker scope through response EOF or cancellation. A command environment lease may be released only after the command consumer confirms whole-tree cleanup. Connection disposal aborts scopes and waits for those receipts. Missing Main or invalid managed identity fails without consulting standalone storage. Native account actions belong to the guarded preload bridge; legacy device-login Remotes reject them.
 
+The native provider registers with [command-scopes](../../shell/command-scopes/README.md). Bash, PowerShell and persistent terminal allocation prepare identity before spawning and acknowledge release only after whole-tree cleanup. A signed-out command receives explicit desktop-managed mode and an empty descriptor path, overriding stale caller environment.
+
 Standalone device login rejects a verification URL on another origin. A session that omits `interval` or `expires_in` uses 5 seconds and 600 seconds. `slow_down` adds 5 seconds to the active polling interval; denial and expiry end the attempt without a credential.
 
 ## Model Experience
@@ -53,7 +55,7 @@ Authorization does not alter model request prefixes or cache reuse.
 <a id="known-limitations-and-deferred-work"></a>
 
 - Standalone login attempts are process-local; standalone sign-out removes only the local grant.
-- Desktop transport is connected in source, but the native forms, real shell consumers and packaged CLI integration remain incomplete. See the [native account proposal](../../../.agents/notes/proposed/architecture/2026-09-07-desktop-native-account-identity.md).
+- Native forms, packaged CLI integration and native OS acceptance remain incomplete. Loopback command tests do not establish test-site readiness. See the [native account proposal](../../../.agents/notes/proposed/architecture/2026-09-07-desktop-native-account-identity.md).
 
 <a id="dev-note"></a>
 ### Dev Note

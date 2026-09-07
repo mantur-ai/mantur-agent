@@ -1,5 +1,6 @@
 /** The `bash` settings section layered over the executor's composition entry. */
 
+import CommandScopes from '@deepseek-ai/dsh-command-scopes'
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import type { Fiber } from '@deepseek-ai/cordis'
@@ -35,6 +36,7 @@ async function boot(config: ConstructorParameters<typeof LocalBashExecutor>[1] =
 }> {
   const ctx = new Context()
   await ctx.plugin(LocalSubprocessRuntime)
+  await ctx.plugin(CommandScopes, { identity: 'none' })
   const settingsFiber = ctx.plugin(MemorySettings)
   await settingsFiber.await()
   const executorFiber = ctx.plugin(LocalBashExecutor, { timeoutMs: 60_000, ...config })
@@ -97,6 +99,7 @@ describe('bash settings section', () => {
   it('keeps the composition entry when no settings provider is mounted', async () => {
     const ctx = new Context()
     await ctx.plugin(LocalSubprocessRuntime)
+    await ctx.plugin(CommandScopes, { identity: 'none' })
     await ctx.plugin(LocalBashExecutor, { timeoutMs: 1_234 })
 
     expect((ctx.shell as LocalBashExecutor).config.timeoutMs).toBe(1_234)

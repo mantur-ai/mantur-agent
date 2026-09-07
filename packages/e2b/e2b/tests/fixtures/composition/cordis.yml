@@ -10,6 +10,11 @@
 - id: subprocess-e2b
   name: '@deepseek-ai/dsh-subprocess-e2b'
 
+- id: command-scopes
+  name: '@deepseek-ai/dsh-command-scopes'
+  config:
+    identity: none
+
 - id: bash
   name: '@deepseek-ai/dsh-bash-local'
   config:

@@ -27,6 +27,10 @@
   config:
     newSessionWorkspace: explicit
 
+- id: command-scopes
+  config:
+    identity: !!js process.env.DSH_MANTUR_NATIVE_ACCOUNT === '1' ? 'required' : 'none'
+
 - insert:
     - id: mantur-identity
       name: '@deepseek-ai/dsh-mantur-app'

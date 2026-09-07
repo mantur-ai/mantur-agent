@@ -18,6 +18,7 @@ import type {
   ManturLoginStart,
 } from './types.ts'
 import { NativeAccountConnection, type NativeAccountConfiguration } from './native.ts'
+import type {} from '@deepseek-ai/dsh-command-scopes'
 
 export type * from './types.ts'
 
@@ -305,7 +306,15 @@ export class ManturHubAuthorization extends TypertRemoteService {
       ctx.effect(() => {
         const connection = new NativeAccountConnection(native)
         this.native = connection
-        return () => connection.close()
+        let stopCommands: (() => Promise<void>) | undefined
+        const commands = ctx.inject(['commandScopes'], (commandCtx) => {
+          commandCtx.effect(() => {
+            const stop = commandCtx.commandScopes.register({ prepare: signal => connection.prepare(signal) })
+            stopCommands = stop
+            return stop
+          }, 'authorization-manturhub: native command identity')
+        })
+        return async () => { await stopCommands?.(); await commands.dispose(); await connection.close() }
       }, 'authorization-manturhub: native Main connection')
       return
     }

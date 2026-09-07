@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-07-command-identity-scopes.md
+2026-09-07-command-identity-scopes.md: dd262b8a4c788c2d22fd41ef11c3cc832ecde6fc
+2026-09-07-command-identity-scopes.zh.md: 81c7b182a5d855794a262c588f930cd002ee17af

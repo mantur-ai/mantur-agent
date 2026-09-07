@@ -107,7 +107,6 @@ export class NativeAccountHost {
       if (this.failedScopes.has(request.scopeId)) throw new Error('Native command descriptor cleanup previously failed')
       const scope = this.scopes.get(request.scopeId)
       if (scope === undefined) { this.reply(request.id, true, {}); return }
-      scope.abort.abort()
       scope.release.resolve(undefined)
       try { await scope.done }
       catch (error) { if (!(error instanceof Error) || error.name !== 'AbortError') throw error }

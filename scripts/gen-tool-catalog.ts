@@ -24,6 +24,7 @@ import LocalBashExecutor from '@deepseek-ai/dsh-bash-local'
 import * as BashEnvPlugin from '@deepseek-ai/dsh-shell-env'
 import { PwshLocalExecutor } from '@deepseek-ai/dsh-pwsh-local'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
+import CommandScopes from '@deepseek-ai/dsh-command-scopes'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import { AttachmentStore } from '@deepseek-ai/dsh-attachment'
 import type { ImageAttachmentLimits, ImageAttachmentRef, SaveImageAttachment, StoredImageAttachment } from '@deepseek-ai/dsh-attachment'
@@ -234,6 +235,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
     writes: ['tool/call', 'tool/result'],
     async mount(ctx) {
       await ctx.plugin(LocalSubprocessRuntime)
+      await ctx.plugin(CommandScopes, { identity: 'none' })
       await ctx.plugin(BashEnvPlugin)
       await ctx.plugin(LocalBashExecutor)
       await ctx.plugin(ToolBash)
@@ -252,6 +254,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
       // mounts the pwsh-local implementation so the inject resolves without
       // executing anything (registration never spawns a process).
       await ctx.plugin(LocalSubprocessRuntime)
+      await ctx.plugin(CommandScopes, { identity: 'none' })
       await ctx.plugin(BashEnvPlugin)
       await ctx.plugin(PwshLocalExecutor)
       await ctx.plugin(ToolPwsh)

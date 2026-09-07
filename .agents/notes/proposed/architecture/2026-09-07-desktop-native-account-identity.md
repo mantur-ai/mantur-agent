@@ -22,7 +22,7 @@ The desktop store, HTTP client, request owner and login controller implement pro
 
 Local disallowance takes precedence over persisted active metadata in the public snapshot and command admission. A failed logout write leaves local access blocked and reports `logout-storage`; it does not report durable logout or confirmed remote revocation. The retained record permits an explicit retry.
 
-Real loopback and child-IPC tests exercise these owners. Fixed, unpacked CLI tests cover balance, streaming, presigned upload and logout cancellation against the broker. Native forms, Bash/PowerShell/PTY consumers and packaged CLI invocation remain incomplete; these tests do not substitute for the real assembled entry or native OS acceptance.
+The shell and terminal consumers prepare identity through command-scopes before process allocation. Whole-tree cleanup and Main release acknowledgment precede completion; canceled preparation also joins late allocations. Real Main, Loader, provider, Bash and frozen unpacked CLI tests cover balance, signed-out isolation and streaming logout cancellation. The real persistent terminal path retains its descriptor across sends and joins logout cleanup. The terminal test substitutes only an idle agent owner, not the Loader, backend or OS process. Native forms, packaged CLI invocation and native OS acceptance remain incomplete.
 
 ## Alternatives considered
 

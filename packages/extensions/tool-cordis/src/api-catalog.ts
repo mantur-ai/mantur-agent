@@ -646,6 +646,37 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'commandScopes',
+    summary: 'Keeps identity scopes alive across executor reloads and direct-child exit until the entire owned tree is gone.',
+    description: 'Keeps identity scopes alive across executor reloads and direct-child exit until the entire owned tree is gone.',
+    methods: [
+      {
+        signature: 'register(provider: CommandIdentityProvider): () => Promise<void>',
+        description: 'Register the single identity owner for this required-identity composition.',
+        parameters: [{ name: 'provider', description: 'prepares private authority without creating a command process.' }],
+        returns: 'a disposer that stops admission, aborts this provider\'s commands and awaits their cleanup.',
+      },
+      {
+        signature: 'async spawn(spec: SubprocessSpawnSpec): Promise<CommandProcess>',
+        description: 'Prepare identity, then synchronously allocate and own a real subprocess handle.',
+        parameters: [{ name: 'spec', description: 'complete subprocess request, including caller cancellation and environment.' }],
+        returns: 'the real live handle after preparation; its direct-child done remains distinct from scope cleanup.',
+      },
+      {
+        signature: 'async spawnTerminal(spec: SubprocessTerminalSpawnSpec): Promise<SubprocessTerminalHandle>',
+        description: 'Own both asynchronous PTY allocation and the complete terminal session.',
+        parameters: [{ name: 'spec', description: 'terminal request whose cancellation also covers identity preparation.' }],
+        returns: 'a real terminal handle only if allocation wins cancellation; late terminals are terminated before rejection.',
+      },
+      {
+        signature: 'stopAll(): Promise<void>',
+        description: 'Reject new work, abort admitted preparation and commands, and await actual cleanup.',
+        parameters: [],
+        returns: 'completion only after every lease is released; missing whole-tree proof or a release failure rejects.',
+      },
+    ],
+  },
+  {
     key: 'compaction',
     summary: 'Abstract compaction service.',
     description: 'Abstract compaction service. Implementations own trigger policy, retention, and summarization, and may consume a separate measurement service. A successful run replaces the selected surface span with one summary node and prevents concurrent compaction of the same session. The replacement user message uses compactCheckpointSource with the transaction identity so consumers recognize and correlate it independently of the backend. Load one implementation per context as `ctx.compaction`.',
@@ -2090,7 +2121,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
     key: 'shell',
     summary: 'Abstract bash execution service.',
-    description: 'Abstract bash execution service. Subclass, implement the abstract methods, and load the subclass as a plugin — it registers as `ctx.shell` (one implementation per context; loading a second throws, which is cordis\' standard duplicate-service behavior).\n\nImplementations must honor these semantics:\n\n- run rejects only for infrastructure failures. Nonzero exits, timeout kills, and abort kills resolve with a ShellRunResult.\n- start returns immediately; no timeout applies to background processes. `done` settles at process close and never rejects; spawn failures settle as `killed` with the error on stderr.\n- ShellProcess.readOutput is incremental: consecutive reads never repeat output. Lossy reads report truncation and available spill files.\n- A still-running background process is stopped and awaited when its owning composition tears down. With the subprocess seam that boundary is `ctx.subprocess` disposal, so a background process survives an executor-only reload.',
+    description: 'Abstract bash execution service. Subclass, implement the abstract methods, and load the subclass as a plugin — it registers as `ctx.shell` (one implementation per context; loading a second throws, which is cordis\' standard duplicate-service behavior).\n\nImplementations must honor these semantics:\n\n- run rejects before allocation or for infrastructure failures. Allocated processes resolve nonzero exits and timeout or abort kills with a ShellRunResult.\n- start prepares command identity before returning a real process; no timeout applies to background processes. `done` settles after process-tree cleanup and identity release. Spawn failures settle as `killed` with the error on stderr; unconfirmed cleanup rejects instead of claiming completion.\n- ShellProcess.readOutput is incremental: consecutive reads never repeat output. Lossy reads report truncation and available spill files.\n- A still-running background process is stopped and awaited when its owning composition tears down. With the subprocess seam that boundary is `ctx.commandScopes` disposal, so a background process survives an executor-only reload.',
     methods: [
       {
         signature: 'abstract resolve(request: ShellExecRequest): ShellExecSpec',
@@ -2105,8 +2136,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the outcome; nonzero exits, timeout kills, and abort kills resolve with a descriptive result rather than reject.',
       },
       {
-        signature: 'abstract start(spec: ShellExecSpec): ShellProcess',
-        description: 'Start a background process and return its handle immediately.',
+        signature: 'abstract start(spec: ShellExecSpec): Promise<ShellProcess>',
+        description: 'Prepare command identity and start a background process.',
         parameters: [{ name: 'spec', description: 'a resolved spec from {@link resolve}, never a raw request.' }],
         returns: 'the live process handle (reads, kill, quiescence promise).',
       },
@@ -3742,12 +3773,24 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type CommandId = Branded<\'CommandId\'>;',
   },
   {
+    name: 'CommandIdentityLease',
+    declaration: 'export interface CommandIdentityLease {\n    readonly environment: Readonly<Record<string, string>>;\n    readonly signal: AbortSignal;\n    release(): Promise<void>;\n}',
+  },
+  {
+    name: 'CommandIdentityProvider',
+    declaration: 'export interface CommandIdentityProvider {\n    prepare(signal: AbortSignal): Promise<CommandIdentityLease>;\n}',
+  },
+  {
     name: 'CommandInputDescriptor',
     declaration: 'export interface CommandInputDescriptor {\n    readonly hint: string;\n    readonly images?: boolean;\n}',
   },
   {
     name: 'CommandInvocation',
     declaration: 'export interface CommandInvocation {\n    readonly commandId: CommandId;\n    readonly agent: Agent;\n    readonly rawInput: string;\n    readonly attachments: readonly ImageBlock[];\n    readonly signal: AbortSignal;\n}',
+  },
+  {
+    name: 'CommandProcess',
+    declaration: 'export interface CommandProcess extends SubprocessHandle {\n    readonly signal: AbortSignal;\n    readonly cleanup: Promise<void>;\n}',
   },
   {
     name: 'CommandResult',

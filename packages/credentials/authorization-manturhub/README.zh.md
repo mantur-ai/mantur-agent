@@ -30,6 +30,8 @@ kind: "package-reference"
 
 `desktop-managed` 要求 Electron 父进程 IPC 通道，以及显式的 `native` 配置：`environmentLabel`、`requestTimeoutMs`、`maxResponseBytes`、`leaseMs` 与 `revocationRetryMs`。漫途桌面 profile 提供这些预算。provider 可用前，Main 会校验所选 origin。需要认证的 GET 会持有 broker scope，直到响应 EOF 或取消。命令环境租约只有在命令 consumer 确认整棵进程树清理后才能释放。连接销毁会中止 scope，并等待这些回执。Main 缺失或托管身份无效时明确失败，不查询独立凭据存储。原生账号操作属于受保护的 preload bridge，旧设备登录 Remote 会拒绝这些操作。
 
+原生 provider 注册到 [command-scopes](../../shell/command-scopes/README.zh.md)。Bash、PowerShell 和持久终端在分配进程前准备身份，仅在完整进程树清理后确认释放。未登录命令收到显式桌面托管模式和空描述文件路径，覆盖调用方的陈旧环境值。
+
 独立设备登录会拒绝来自其他 origin 的验证地址。会话缺少 `interval` 或 `expires_in` 时使用 5 秒与 600 秒。`slow_down` 会给当前轮询间隔增加 5 秒；拒绝与过期会在不写入凭据的情况下结束本次尝试。
 
 <a id="model-experience"></a>
@@ -54,7 +56,7 @@ kind: "package-reference"
 <a id="known-limitations-and-deferred-work"></a>
 
 - 独立登录尝试只存在于当前进程中，独立退出登录仅删除本机授权。
-- 桌面传输已在源码中连接，但原生表单、真实 shell consumer 与打包 CLI 接入尚未完成。详见[原生账号提案](../../../.agents/notes/proposed/architecture/2026-09-07-desktop-native-account-identity.zh.md)。
+- 原生表单、打包 CLI 接入和原生操作系统验收尚未完成。本机联测不证明测试站已经就绪。详见[原生账号提案](../../../.agents/notes/proposed/architecture/2026-09-07-desktop-native-account-identity.zh.md)。
 
 <a id="dev-note"></a>
 ### 开发备注

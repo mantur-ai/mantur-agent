@@ -316,13 +316,13 @@ export interface NativeAccountConfiguration {
 export type ManturEnvironment = 'production' | 'test'
 ```
 
-来源：[`packages/credentials/authorization-manturhub/src/index.ts:31`](../packages/credentials/authorization-manturhub/src/index.ts)
+来源：[`packages/credentials/authorization-manturhub/src/index.ts:32`](../packages/credentials/authorization-manturhub/src/index.ts)
 
 <a id="deepseek-aidsh-bash-local"></a>
 
 ## `@deepseek-ai/dsh-bash-local`
 
-需要：`subprocess`
+需要：`commandScopes`
 
 ```ts config-catalog
 /** Plugin config (all optional — `static Config` supplies the defaults). */
@@ -342,13 +342,13 @@ export interface Config {
 }
 ```
 
-来源：[`packages/shell/bash-local/src/index.ts:41`](../packages/shell/bash-local/src/index.ts)
+来源：[`packages/shell/bash-local/src/index.ts:42`](../packages/shell/bash-local/src/index.ts)
 
 <a id="deepseek-aidsh-bash-sandbox"></a>
 
 ## `@deepseek-ai/dsh-bash-sandbox`
 
-需要：`subprocess` · `sandbox` · `sandboxPolicy`
+需要：`commandScopes` · `sandbox` · `sandboxPolicy`
 
 ```ts config-catalog
 /**
@@ -499,6 +499,22 @@ export interface Config {
 ```
 
 来源：[`packages/code-runtime/code-runtime-worker-thread/src/index.ts:25`](../packages/code-runtime/code-runtime-worker-thread/src/index.ts)
+
+<a id="deepseek-aidsh-command-scopes"></a>
+
+## `@deepseek-ai/dsh-command-scopes`
+
+需要：`subprocess`
+
+```ts config-catalog
+/** Deployment choice; required identity never silently becomes an unscoped command. */
+export interface Config {
+  /** Whether commands require one registered identity provider; defaults to none. */
+  readonly identity?: 'none' | 'required'
+}
+```
+
+来源：[`packages/shell/command-scopes/src/index.ts:9`](../packages/shell/command-scopes/src/index.ts)
 
 <a id="deepseek-aidsh-compaction-basic"></a>
 
@@ -1767,7 +1783,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-pwsh-local`
 
-需要：`subprocess`
+需要：`commandScopes`
 
 ```ts config-catalog
 /** Plugin config (all optional — `static Config` supplies the defaults). */
@@ -1794,13 +1810,13 @@ export interface Config {
 }
 ```
 
-来源：[`packages/shell/pwsh-local/src/index.ts:58`](../packages/shell/pwsh-local/src/index.ts)
+来源：[`packages/shell/pwsh-local/src/index.ts:59`](../packages/shell/pwsh-local/src/index.ts)
 
 <a id="deepseek-aidsh-pwsh-sandbox"></a>
 
 ## `@deepseek-ai/dsh-pwsh-sandbox`
 
-需要：`subprocess` · `sandbox` · `sandboxPolicy`
+需要：`commandScopes` · `sandbox` · `sandboxPolicy`
 
 ```ts config-catalog
 /**
@@ -2684,7 +2700,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-terminal-bash`
 
-需要：`terminals` · `sandboxPolicy` · `sessionProjections` · `subprocess`
+需要：`terminals` · `sandboxPolicy` · `sessionProjections` · `commandScopes`
 
 ```ts config-catalog
 /** Public plugin configuration. */

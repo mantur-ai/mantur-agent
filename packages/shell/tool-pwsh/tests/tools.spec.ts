@@ -10,7 +10,7 @@
  * is pinned separately in integration.spec.ts.
  */
 
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { mkdtempSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -70,7 +70,7 @@ class FakeBash extends ShellExecutor {
     return this.handler(spec)
   }
 
-  override start(spec: ShellExecSpec): ShellProcess {
+  override async start(spec: ShellExecSpec): Promise<ShellProcess> {
     this.startCalls++
     this.specs.push(spec)
     return this.backgroundHandler(spec)
@@ -197,7 +197,7 @@ class ConfiningFakeBash extends ShellExecutor {
     })
   }
 
-  override start(spec: ShellExecSpec): ShellProcess {
+  override async start(spec: ShellExecSpec): Promise<ShellProcess> {
     this.modes.push(spec.sandboxPolicy?.mode)
     return fakeProcess()
   }
@@ -733,6 +733,37 @@ describe('sandbox escalation through ctx.approval', () => {
 })
 
 describe('background execution through the job runtime', () => {
+  it.each(['cancel', 'prepare', 'cancel-and-failure'] as const)('settles a pending background start after %s', async (cause) => {
+    const { ctx, bash } = await setupWithTasks()
+    const pending = Promise.withResolvers<ShellProcess>()
+    const preparing = Promise.withResolvers<AbortSignal>()
+    onTestFinished(async () => { pending.resolve(fakeProcess()); await ctx.fiber.dispose() })
+    vi.spyOn(bash, 'start').mockImplementation((spec) => { preparing.resolve(spec.signal!); return pending.promise })
+    await call(ctx, 'pwsh', { command: 'test', description: 'test command', run_in_background: true })
+    const signal = await preparing.promise
+    expect(text(await call(ctx, 'job_output', { job_id: 'pwsh-1' }))).toContain('(no new output)')
+    if (cause !== 'prepare') await call(ctx, 'job_kill', { job_id: 'pwsh-1' })
+    pending.reject(cause === 'cancel' ? signal.reason : new Error('preparation refused'))
+    const final = await call(ctx, 'job_output', { job_id: 'pwsh-1', wait: true })
+    expect(text(final)).toContain(cause === 'cancel'
+      ? '[status: killed, cancelled before command start]'
+      : '[status: failed, Error: preparation refused]')
+  })
+
+  it('does not classify process cleanup failure as successful cancellation', async () => {
+    const { ctx, bash } = await setupWithTasks()
+    const pending = Promise.withResolvers<undefined>()
+    const allocated = Promise.withResolvers<undefined>()
+    onTestFinished(async () => { pending.resolve(undefined); await ctx.fiber.dispose() })
+    bash.backgroundHandler = () => { allocated.resolve(undefined); return { ...fakeProcess(), done: pending.promise } }
+    await call(ctx, 'pwsh', { command: 'test', description: 'test command', run_in_background: true })
+    await allocated.promise
+    await call(ctx, 'job_kill', { job_id: 'pwsh-1' })
+    pending.reject(new Error('process cleanup refused'))
+    const final = await call(ctx, 'job_output', { job_id: 'pwsh-1', wait: true })
+    expect(text(final)).toContain('[status: failed, Error: process cleanup refused]')
+  })
+
   it('run_in_background acks with the job id, readable through the REAL job_output tool', async () => {
     const { ctx } = await setupWithTasks()
     const started = await call(ctx, 'pwsh', { command: 'Write-Output bg-ok', description: 'test command', run_in_background: true })

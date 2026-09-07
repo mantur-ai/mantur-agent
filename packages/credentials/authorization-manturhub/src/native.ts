@@ -106,7 +106,10 @@ export class NativeAccountConnection {
    */
   async prepare(signal: AbortSignal): Promise<NativeCommandLease> {
     const lease = await this.admit(signal)
-    return { environment: lease.environment, signal: lease.signal, release: lease.release }
+    return {
+      environment: { MANTURHUB_AGENT_AUTH: '', ...lease.environment },
+      signal: lease.signal, release: lease.release,
+    }
   }
 
   /**
