@@ -96,6 +96,7 @@ export class NativeAccountClient {
     try {
       const parsed = reply.safeParse(await this.bridge.invoke(action))
       if (sequence !== this.sequence) return { ok: false }
+      if (parsed.success && parsed.data.revision < this.revision) return { ok: false }
       if (!parsed.success || (parsed.data.ok && parsed.data.snapshot === undefined)) {
         this.fail({ kind: 'protocol' })
         return { ok: false }

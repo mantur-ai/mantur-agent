@@ -25,6 +25,74 @@ function bench() {
 async function settle(): Promise<void> { await Promise.resolve(); await Promise.resolve() }
 
 describe('native account renderer state', () => {
+  it('suppresses a superseded failure reply after a newer signed-in publication', async () => {
+    const b = bench()
+    const first = Promise.withResolvers<NativeAccountReply>()
+    b.invoke.mockReturnValueOnce(first.promise)
+    b.connect()
+    b.publish({ revision: 3, snapshot: signedIn })
+    first.resolve({ ok: false, revision: 1, snapshot: { ...signedOut, failure: { kind: 'remote', code: 'INVALID_CREDENTIALS' } } })
+    await settle()
+    expect(b.client.store.getSnapshot()).toEqual({ online: true, snapshot: signedIn, operation: undefined, failure: undefined })
+  })
+
+  it.each([2, 3])('returns code lifetime only for a reply not superseded by revision 3: %s', async (revision) => {
+    const b = bench()
+    b.connect()
+    await settle()
+    const reply = Promise.withResolvers<NativeAccountReply>()
+    b.invoke.mockReturnValueOnce(reply.promise)
+    const request = b.client.run({ kind: 'send-code', email: 'creator@example.com' })
+    b.publish({ revision: 3, snapshot: signedOut })
+    reply.resolve({ ok: true, revision, snapshot: signedOut, codeExpirySeconds: 600 })
+    expect(await request).toEqual(revision === 3 ? { ok: true, codeExpirySeconds: 600 } : { ok: false })
+    expect(b.client.store.getSnapshot().failure).toBeUndefined()
+  })
+
+  it.each([false, true])('keeps a replacement account when the previous account reply arrives with ok=%s', async (ok) => {
+    const b = bench()
+    b.connect()
+    await settle()
+    b.publish({ revision: 2, snapshot: signedIn })
+    const pending = Promise.withResolvers<NativeAccountReply>()
+    b.invoke.mockReturnValueOnce(pending.promise)
+    const request = b.client.run({ kind: 'refresh' })
+    const replacement = { ...signedIn, account: { ...signedIn.account!, email: 'replacement@example.com' } }
+    b.publish({ revision: 4, snapshot: replacement })
+    pending.resolve({ ok, revision: 3, snapshot: signedIn, failure: { kind: 'remote', code: 'INVALID_CREDENTIALS' } })
+    expect(await request).toEqual({ ok: false })
+    expect(b.client.store.getSnapshot()).toEqual({ online: true, snapshot: replacement, operation: undefined, failure: undefined })
+  })
+
+  it.each([false, true])('gives sign-out ownership over a late password reply with ok=%s regardless of its revision', async (ok) => {
+    const b = bench()
+    const password = Promise.withResolvers<NativeAccountReply>()
+    const logout = Promise.withResolvers<NativeAccountReply>()
+    b.invoke.mockReturnValueOnce(password.promise).mockReturnValueOnce(logout.promise)
+    const login = b.client.run({ kind: 'password', email: 'creator@example.com', password: 'private-canary', consent: true })
+    const signOut = b.client.run({ kind: 'sign-out' })
+    password.resolve({ ok, revision: 10, snapshot: signedIn, failure: { kind: 'remote', code: 'INVALID_CREDENTIALS' } })
+    expect(await login).toEqual({ ok: false })
+    expect(b.client.store.getSnapshot()).toEqual({ online: true, operation: 'sign-out', failure: undefined })
+    logout.resolve({ ok: true, revision: 3, snapshot: signedOut })
+    expect(await signOut).toEqual({ ok: true })
+    expect(b.client.store.getSnapshot()).toEqual({ online: true, snapshot: signedOut, operation: undefined, failure: undefined })
+  })
+
+  it.each([2, 3])('preserves a current request failure at revision %s after publication revision 2', async (revision) => {
+    const b = bench()
+    b.connect()
+    await settle()
+    const pending = Promise.withResolvers<NativeAccountReply>()
+    b.invoke.mockReturnValueOnce(pending.promise)
+    const request = b.client.run({ kind: 'password', email: 'creator@example.com', password: 'private-canary', consent: true })
+    b.publish({ revision: 2, snapshot: signedOut })
+    const failure = { kind: 'remote', code: 'INVALID_CREDENTIALS' }
+    pending.resolve({ ok: false, revision, failure })
+    expect(await request).toEqual({ ok: false })
+    expect(b.client.store.getSnapshot()).toEqual({ online: true, snapshot: signedOut, operation: undefined, failure })
+  })
+
   it('subscribes before the first check and rejects stale replies and duplicate publications', async () => {
     const b = bench()
     const first = Promise.withResolvers<NativeAccountReply>()
