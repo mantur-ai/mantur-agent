@@ -160,12 +160,11 @@
   background: var(--dsw-alias-bg-layer-1);
 }
 .workspaceFooter > div { margin-top: 0; padding-left: 8px; }
-.automaticProject { padding: 8px; color: var(--dsw-alias-label-secondary); font-size: 12px; }
-.automaticProject summary { width: fit-content; cursor: pointer; }
-.projectLocation { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 12px 0 4px; }
-.projectLocation code { overflow-wrap: anywhere; white-space: normal; }
-.automaticProject p { margin: 8px 0 0; line-height: 1.5; }
-.automaticProject button { color: var(--dsw-alias-brand-primary); border: 0; background: transparent; font: inherit; cursor: pointer; }
+.projectStatus { padding: 8px; color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 18px; }
+.projectStatus p { margin: 0; }
+.projectStatus span { display: block; margin-top: 4px; }
+.projectStatus button { margin-left: 8px; color: var(--dsw-alias-brand-primary); border: 0; background: transparent; font: inherit; cursor: pointer; }
+.projectStatus button:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 2px; }
 .automaticProject summary:focus-visible, .automaticProject button:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 2px; }
 
 @media (max-width: 640px) {

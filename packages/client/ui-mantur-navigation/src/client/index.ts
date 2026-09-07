@@ -19,6 +19,7 @@ import type { ReferenceInsert } from '@deepseek-ai/dsh-client-ui-conversation/cl
 import { GUIDE_NAMESPACE, type CreationMode, type GuideSettings } from '../guide-settings.ts'
 import { CreationGuide, CreationModes, type GuidePreferencesInjected } from './CreationGuide.tsx'
 import { ManturComposerLayout } from './ManturComposerLayout.tsx'
+import { ProjectPathSettings, type ProjectPathSettingsInjected } from './ProjectPathSettings.tsx'
 import { AutomaticProjectController } from './automatic-project.ts'
 import { en as projectEn, zh as projectZh, type ProjectKey } from './project-locales.ts'
 import { en as guideEn, zh as guideZh, type GuideKey } from './guide-locales.ts'
@@ -88,6 +89,13 @@ export async function apply(ctx: Context): Promise<void> {
     scope.effect(() => () => { projects.dispose() }, 'ui-mantur-navigation: project controller')
     scope.effect(() => scope.conversationDrafts.register(projects), 'ui-mantur-navigation: first-send project policy')
     void projects.load()
+    const projectSettings: ProjectPathSettingsInjected = {
+      hooks: { automaticProject: projects.store }, chooseRoot: () => projects.chooseRoot(), reloadRoot: () => projects.load(),
+    }
+    scope.slots.inject('settings.general.item', () => scope.slots.register({
+      name: 'settings.general.item', id: 'mantur.project-path', order: 40, locale: 'projects.mantur',
+      inject: () => projectSettings,
+    }, ProjectPathSettings))
     const controller = new ManturMarketplaceStore(scope)
     scope.effect(() => () => { controller.dispose() }, 'ui-mantur-navigation: marketplace controller')
     const preferences = scope.settingsScope.bind<GuideSettings>({ namespace: GUIDE_NAMESPACE })
@@ -110,7 +118,7 @@ export async function apply(ctx: Context): Promise<void> {
     scope.slots.inject('conversation.composer.layout', () => scope.slots.register({
       name: 'conversation.composer.layout', locale: 'projects.mantur',
       inject: () => ({
-        hooks: { automaticProject: projects.store }, chooseRoot: () => projects.chooseRoot(), reloadRoot: () => projects.load(),
+        hooks: projectSettings.hooks, reloadRoot: projectSettings.reloadRoot,
       }),
     }, ManturComposerLayout))
     scope.slots.inject('conversation.composer.guide', () => scope.slots.register({

@@ -15,12 +15,15 @@ it('places the existing workspace control after the editor and retains the edito
   const parts = {
     hero: true, heading: <h1>Heading</h1>, workspace: <button type="button">Workspace</button>,
     content: <><input aria-label="Draft" defaultValue="Keep draft" /><button type="button">Send</button></>,
-    chooseRoot: async () => {}, reloadRoot: async () => {}, t: makeTranslate(zh),
+    reloadRoot: async () => {}, t: makeTranslate(zh),
     useAutomaticProject: select => select({ settings: { source: 'desktop', rootPath: '/documents/漫途项目' }, loading: false, choosing: false, preparing: false, error: null }),
   } as ComponentProps<typeof ManturComposerLayout>
   const view = render(<ManturComposerLayout {...parts} />)
   const editor = screen.getByRole('textbox')
   const workspace = screen.getByRole('button', { name: 'Workspace' })
+  expect(screen.queryByText(zh.location)).toBeNull()
+  expect(screen.queryByText('/documents/漫途项目')).toBeNull()
+  expect(view.container.querySelector('details')).toBeNull()
   expect(screen.getByRole('button', { name: 'Send' }).compareDocumentPosition(workspace) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   view.rerender(<ManturComposerLayout {...parts} hero={false} heading={null} workspace={null} />)
   expect(screen.getByRole('textbox')).toBe(editor)
@@ -28,31 +31,45 @@ it('places the existing workspace control after the editor and retains the edito
   expect(screen.queryByRole('button', { name: 'Workspace' })).toBeNull()
 })
 
-it('shows location loading, selection, preparation and retry states without replacing the editor', () => {
+it('keeps location controls off the home screen while retaining creation status and recovery', () => {
   let state: AutomaticProjectState = { settings: undefined, loading: true, choosing: false, preparing: false, error: null }
-  const chooseRoot = vi.fn(async () => {})
   const reloadRoot = vi.fn(async () => {})
   const props = {
     hero: true, heading: null, workspace: null, content: <input aria-label="Draft" />,
-    chooseRoot, reloadRoot, t: makeTranslate(zh), useAutomaticProject: select => select(state),
+    reloadRoot, t: makeTranslate(zh), useAutomaticProject: select => select(state),
   } as ComponentProps<typeof ManturComposerLayout>
   const view = render(<ManturComposerLayout {...props} />)
-  expect(screen.getByText(zh.loading)).toBeTruthy()
+  const editor = screen.getByRole('textbox')
+  expect(screen.queryByText(zh.loading)).toBeNull()
+  expect(screen.queryByRole('status')).toBeNull()
+  expect(screen.queryByRole('alert')).toBeNull()
   state = { ...state, loading: false, error: zh.settingsFailed }
   view.rerender(<ManturComposerLayout {...props} />)
-  expect(screen.getByText(zh.unconfigured)).toBeTruthy()
+  expect(screen.queryByText(zh.unconfigured)).toBeNull()
   expect(screen.getByRole('alert').textContent).toContain(zh.settingsFailed)
   fireEvent.click(screen.getByRole('button', { name: zh.retry }))
   expect(reloadRoot).toHaveBeenCalledOnce()
-  fireEvent.click(screen.getByRole('button', { name: zh.change, hidden: true }))
-  expect(chooseRoot).toHaveBeenCalledOnce()
+  expect(screen.getByText(zh.settingsHint)).toBeTruthy()
+  expect(screen.queryByRole('button', { name: zh.change })).toBeNull()
   state = { ...state, settings: { source: 'unconfigured' }, choosing: true, preparing: true }
   view.rerender(<ManturComposerLayout {...props} />)
-  expect(screen.getByText(zh.unconfigured)).toBeTruthy()
-  expect(screen.getByRole('button', { name: zh.changing, hidden: true }).hasAttribute('disabled')).toBe(true)
+  expect(screen.queryByRole('button', { name: zh.changing })).toBeNull()
   expect(screen.getByRole('status').textContent).toBe(zh.creating)
   expect(screen.queryByRole('button', { name: zh.retry })).toBeNull()
   view.rerender(<ManturComposerLayout {...props} sessionId={'existing' as SessionId} />)
-  expect(screen.queryByText(zh.automatic)).toBeNull()
-  expect(screen.getByRole('textbox')).toBeTruthy()
+  expect(screen.queryByRole('alert')).toBeNull()
+  expect(screen.queryByRole('status')).toBeNull()
+  expect(screen.getByRole('textbox')).toBe(editor)
+})
+
+it('does not reserve a project status container while the home draft is idle', () => {
+  const props = {
+    hero: true, heading: null, workspace: <button type="button">Workspace</button>, content: <input aria-label="Draft" />,
+    reloadRoot: vi.fn(), t: makeTranslate(zh),
+    useAutomaticProject: select => select({ settings: { source: 'unconfigured' }, loading: false, choosing: false, preparing: false, error: null }),
+  } as ComponentProps<typeof ManturComposerLayout>
+  const view = render(<ManturComposerLayout {...props} />)
+  const footer = view.container.querySelector('[data-workspace-footer]')!
+  expect(footer.children).toHaveLength(1)
+  expect(footer.firstElementChild).toBe(screen.getByRole('button', { name: 'Workspace' }))
 })
