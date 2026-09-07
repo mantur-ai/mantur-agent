@@ -12,6 +12,8 @@ Removing the weaker entry leaves the sidebar header with exactly one action, whi
 
 ## Decision
 
+This decision governs the shared Workspace picker. Mantur's [automatic first-send policy](../feature/2026-09-06-mantur-automatic-project.md) separately creates a project for an unassigned draft; it does not add another entry to this picker or restore create-by-name to `workspace.create`.
+
 Adding a Workspace has one route: pick a host directory through the composed directory flow, new or existing. `menu.addWorkspace` ("添加工作区…" / "Add workspace…") is the entry; the create-by-name dialog and its `create.*` / `menu.createWorkspace` / `workspace.new` strings are gone. The label names the outcome, not the mechanism, because it is now the only door to that outcome — a user looking for "新建" must find it.
 
 **A menu exists to disambiguate between targets.** When the only entry left is the add action — the add-only sidebar surface, or the hero with an empty list — the anchor gesture *is* that action: the flow opens directly and no popover renders. A one-row popover costs a click and offers nothing to choose between. The rule is one predicate (`addIsTheOnlyEntry`) covering both surfaces rather than a per-surface special case.

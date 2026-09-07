@@ -11,6 +11,7 @@
     { "path": "../../api/session-controller/tsconfig.client.json" },
     { "path": "../../api/workspace-controller/tsconfig.client.json" },
     { "path": "../../skill/manturhub-marketplace" },
+    { "path": "../../workspace/mantur-projects" },
     { "path": "../locale" },
     { "path": "../store" },
     { "path": "../ui-layout" },

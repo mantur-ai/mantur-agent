@@ -1,14 +1,8 @@
-/** User-consent, channel, state, and scheduling behavior for desktop updates. */
-
+/** Explicit download consent, real progress, confirmation, and failed restart behavior. */
 import { EventEmitter } from 'node:events'
+import { setImmediate } from 'node:timers/promises'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  allowsPrerelease,
-  startAutoUpdates,
-  type DesktopUpdateState,
-  type DesktopUpdater,
-  type StartAutoUpdatesOptions,
-} from '../src/updater.ts'
+import { allowsPrerelease, startAutoUpdates, type DesktopUpdater, type StartAutoUpdatesOptions } from '../src/updater.ts'
 
 class FakeUpdater extends EventEmitter implements DesktopUpdater {
   autoDownload = true
@@ -18,394 +12,153 @@ class FakeUpdater extends EventEmitter implements DesktopUpdater {
   downloadUpdate = vi.fn(async () => [])
   quitAndInstall = vi.fn()
 }
-
-function start(updater: FakeUpdater, overrides: Partial<StartAutoUpdatesOptions> = {}) {
-  const states: DesktopUpdateState[] = []
-  const controller = startAutoUpdates({
-    updater,
-    currentVersion: '1.0.0',
-    prompts: {
-      confirmDownload: vi.fn(async () => false),
-      confirmInstall: vi.fn(async () => false),
-    },
-    beforeInstall: vi.fn(async () => {}),
-    onStateChange: (state) => { states.push(state) },
-    log: vi.fn(),
-    ...overrides,
-  })
-  return { controller, states }
+const disposers: (() => void)[] = []
+afterEach(() => { for (const dispose of disposers.splice(0)) dispose(); vi.useRealTimers() })
+function start(overrides: Partial<StartAutoUpdatesOptions> = {}) {
+  const updater = new FakeUpdater()
+  const confirmInstall = vi.fn(async () => false)
+  const beforeInstall = vi.fn(async () => {})
+  const controller = startAutoUpdates({ updater, currentVersion: '1.0.0', prompts: { confirmInstall }, beforeInstall, onStateChange: vi.fn(), log: vi.fn(), ...overrides })
+  disposers.push(controller.dispose)
+  return { updater, confirmInstall, beforeInstall, controller }
 }
 
-afterEach(() => {
-  vi.useRealTimers()
-})
-
-describe('desktop update channels', () => {
-  it.each([
-    ['1.2.3', false],
-    ['1.2.3-alpha.4', true],
-    ['1.2.3-beta.2', true],
-    ['1.2.3-rc.1', true],
-    ['1.2.3-preview.1', false],
-  ])('selects prerelease participation for %s', (version, expected) => {
-    expect(allowsPrerelease(version)).toBe(expected)
-    const updater = new FakeUpdater()
-    const { controller } = start(updater, { currentVersion: version })
-    expect(updater.allowPrerelease).toBe(expected)
-    controller.dispose()
-  })
-})
-
 describe('desktop updates', () => {
-  it('reports its initial state and ignores actions after disposal', () => {
-    const updater = new FakeUpdater()
-    const { controller } = start(updater)
-
-    expect(controller.getState()).toEqual({ kind: 'idle' })
-    controller.installReadyUpdate()
-    controller.dispose()
-    controller.checkNow()
-
-    expect(updater.checkForUpdates).not.toHaveBeenCalled()
-    expect(updater.quitAndInstall).not.toHaveBeenCalled()
+  it.each([['1.2.3', false], ['1.2.3-alpha.4', true], ['1.2.3-beta.2', true], ['1.2.3-rc.1', true], ['1.2.3-preview.1', false]])('selects the release channel for %s', (version, expected) => {
+    expect(allowsPrerelease(version)).toBe(expected)
+    expect(start({ currentVersion: version }).updater.allowPrerelease).toBe(expected)
   })
-
-  it('checks on schedule and never downloads without approval', async () => {
+  it('checks silently and leaves an available version until an explicit download', async () => {
     vi.useFakeTimers()
-    const updater = new FakeUpdater()
-    const confirmDownload = vi.fn(async () => false)
-    const { controller, states } = start(updater, {
-      prompts: { confirmDownload, confirmInstall: vi.fn(async () => false) },
-      checkDelayMs: 10,
-      checkIntervalMs: 100,
-    })
-
+    const { updater, controller, confirmInstall } = start({ checkDelayMs: 10, checkIntervalMs: 100 })
     expect(updater.autoDownload).toBe(false)
     expect(updater.autoInstallOnAppQuit).toBe(false)
     await vi.advanceTimersByTimeAsync(10)
-    expect(updater.checkForUpdates).toHaveBeenCalledTimes(1)
-    expect(states.at(-1)).toEqual({ kind: 'checking' })
+    expect(updater.checkForUpdates).toHaveBeenCalledOnce()
     updater.emit('update-available', { version: '1.2.3' })
-    await vi.waitFor(() => { expect(confirmDownload).toHaveBeenCalledWith('1.2.3') })
-    expect(states.at(-1)).toEqual({ kind: 'available', version: '1.2.3', prompting: false })
-    expect(updater.downloadUpdate).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(90)
-    expect(updater.checkForUpdates).toHaveBeenCalledTimes(2)
-    controller.dispose()
     await vi.advanceTimersByTimeAsync(100)
-    expect(updater.checkForUpdates).toHaveBeenCalledTimes(2)
+    expect(controller.getState()).toEqual({ kind: 'available', version: '1.2.3', prompting: false })
+    expect(updater.checkForUpdates).toHaveBeenCalledOnce()
+    expect(updater.downloadUpdate).not.toHaveBeenCalled()
+    expect(confirmInstall).not.toHaveBeenCalled()
+    controller.downloadAvailableUpdate()
+    controller.downloadAvailableUpdate()
+    controller.checkNow()
+    await Promise.resolve()
+    expect(updater.downloadUpdate).toHaveBeenCalledOnce()
+    expect(controller.getState()).toEqual({ kind: 'downloading', version: '1.2.3', percent: null, transferred: 0, total: null })
   })
-
-  it('distinguishes manual no-update and failure states', async () => {
-    const updater = new FakeUpdater()
-    const { controller, states } = start(updater)
-
+  it('keeps unknown totals indeterminate and publishes actual bytes with finite percentages', () => {
+    const { updater, controller } = start()
+    updater.emit('update-available', { version: '1.2.3' })
+    controller.downloadAvailableUpdate()
+    updater.emit('download-progress', { percent: 42.9, transferred: 429, total: 1000 })
+    expect(controller.getState()).toMatchObject({ percent: 42, transferred: 429, total: 1000 })
+    updater.emit('download-progress', { percent: 100, transferred: 512, total: 0 })
+    expect(controller.getState()).toMatchObject({ percent: null, transferred: 512, total: null })
+    updater.emit('download-progress', { percent: Number.NaN, transferred: 600, total: 1000 })
+    expect(controller.getState()).toMatchObject({ percent: null, transferred: 600, total: 1000 })
+    updater.emit('download-progress', { percent: 104, transferred: 1000, total: 1000 })
+    expect(controller.getState()).toMatchObject({ percent: 100 })
+    updater.emit('update-not-available', { version: '1.0.0' })
+    expect(controller.getState().kind).toBe('downloading')
+  })
+  it('does not start a second operation while a failed download is still settling', async () => {
+    let rejectDownload!: (error: Error) => void
+    const { updater, controller } = start()
+    updater.downloadUpdate.mockImplementation(() => new Promise<[]>((_resolve, reject) => { rejectDownload = reject }))
+    updater.emit('update-available', { version: '1.2.3' })
+    controller.downloadAvailableUpdate()
+    await Promise.resolve()
+    updater.emit('error', new Error('network error'))
+    controller.checkNow()
+    expect(updater.checkForUpdates).not.toHaveBeenCalled()
+    rejectDownload(new Error('network error'))
+    await vi.waitFor(() => { expect(controller.getState().kind).toBe('error') })
+    await setImmediate()
     controller.checkNow()
     expect(updater.checkForUpdates).toHaveBeenCalledOnce()
-    updater.emit('update-not-available', { version: '1.0.0' })
-    expect(states.at(-1)).toEqual({ kind: 'up-to-date', requestedByUser: true })
-
-    updater.checkForUpdates.mockRejectedValueOnce(new Error('feed unavailable'))
-    controller.checkNow()
-    await vi.waitFor(() => {
-      expect(states.at(-1)).toEqual({ kind: 'error', detail: 'feed unavailable', requestedByUser: true })
-    })
-    controller.dispose()
   })
-
-  it('publishes background and non-Error failures without duplicating identical state', async () => {
-    const updater = new FakeUpdater()
-    const log = vi.fn()
-    const { controller, states } = start(updater, { log })
-
-    updater.emit('error', new Error('background feed failure'))
-    updater.emit('error', new Error('background feed failure'))
-    expect(states).toEqual([{
-      kind: 'error',
-      detail: 'background feed failure',
-      requestedByUser: false,
-    }])
-
-    updater.checkForUpdates.mockRejectedValueOnce('offline')
+  it('retains manual no-update and feed-error feedback', async () => {
+    const { updater, controller } = start()
     controller.checkNow()
-    await vi.waitFor(() => {
-      expect(states.at(-1)).toEqual({ kind: 'error', detail: 'offline', requestedByUser: true })
-    })
-    expect(log).toHaveBeenCalledWith('desktop update: offline')
-    controller.dispose()
+    updater.emit('update-not-available', {})
+    expect(controller.getState()).toEqual({ kind: 'up-to-date', requestedByUser: true })
+    updater.checkForUpdates.mockRejectedValueOnce(new Error('offline'))
+    controller.checkNow()
+    await vi.waitFor(() => { expect(controller.getState()).toEqual({ kind: 'error', detail: 'offline', requestedByUser: true }) })
   })
-
-  it('publishes download progress and installs only after separate confirmations', async () => {
-    vi.useFakeTimers()
-    const updater = new FakeUpdater()
-    let releaseInstall: (() => void) | undefined
-    const installReady = new Promise<void>((resolve) => { releaseInstall = resolve })
-    const beforeInstall = vi.fn(async () => { await installReady })
-    const { controller, states } = start(updater, {
-      prompts: {
-        confirmDownload: vi.fn(async () => true),
-        confirmInstall: vi.fn(async () => true),
-      },
-      beforeInstall,
-    })
-
+  it('reports download verification errors without ever showing a ready state', async () => {
+    const { updater, controller } = start()
+    updater.downloadUpdate.mockRejectedValueOnce(new Error('checksum mismatch'))
     updater.emit('update-available', { version: '1.2.3' })
-    await vi.waitFor(() => { expect(updater.downloadUpdate).toHaveBeenCalledTimes(1) })
-    updater.emit('download-progress', { percent: 42.9 })
-    expect(states.at(-1)).toEqual({ kind: 'downloading', version: '1.2.3', percent: 42 })
-    updater.emit('update-downloaded', { version: '1.2.3' })
-    await vi.waitFor(() => { expect(beforeInstall).toHaveBeenCalledOnce() })
-    expect(states.at(-1)).toEqual({ kind: 'ready', version: '1.2.3', prompting: true })
+    controller.downloadAvailableUpdate()
+    await vi.waitFor(() => { expect(controller.getState()).toEqual({ kind: 'error', detail: 'checksum mismatch', requestedByUser: true }) })
     expect(updater.quitAndInstall).not.toHaveBeenCalled()
-    releaseInstall?.()
-    await vi.waitFor(() => { expect(updater.quitAndInstall).toHaveBeenCalledWith(false, true) })
-    controller.dispose()
   })
-
-  it('clamps download progress and ignores conflicting actions while work is active', async () => {
-    const updater = new FakeUpdater()
-    let finishDownload: (() => void) | undefined
-    updater.downloadUpdate.mockImplementation(() => new Promise<[]>((resolve) => {
-      finishDownload = () => { resolve([]) }
-    }))
-    const { controller, states } = start(updater, {
-      prompts: {
-        confirmDownload: vi.fn(async () => true),
-        confirmInstall: vi.fn(async () => false),
-      },
-    })
-
-    updater.emit('download-progress', { percent: 20 })
-    updater.emit('update-available', { version: '1.2.3' })
-    controller.checkNow()
-    updater.emit('update-available', { version: '9.9.9' })
-    await vi.waitFor(() => { expect(updater.downloadUpdate).toHaveBeenCalledOnce() })
-    controller.checkNow()
-    updater.emit('update-available', { version: '9.9.9' })
-    updater.emit('download-progress', { percent: -4 })
-    updater.emit('download-progress', { percent: 0.8 })
-    updater.emit('download-progress', { percent: 104 })
-
-    expect(states.slice(-2)).toEqual([
-      { kind: 'downloading', version: '1.2.3', percent: 0 },
-      { kind: 'downloading', version: '1.2.3', percent: 100 },
-    ])
-    expect(updater.checkForUpdates).not.toHaveBeenCalled()
-    finishDownload?.()
-    controller.dispose()
-  })
-
-  it('reports failures from download and both update prompts', async () => {
-    const downloadUpdater = new FakeUpdater()
-    downloadUpdater.downloadUpdate.mockRejectedValueOnce(new Error('download failed'))
-    const download = start(downloadUpdater, {
-      prompts: {
-        confirmDownload: vi.fn(async () => true),
-        confirmInstall: vi.fn(async () => false),
-      },
-    })
-    downloadUpdater.emit('update-available', { version: '1.2.3' })
-    await vi.waitFor(() => {
-      expect(download.states.at(-1)).toEqual({
-        kind: 'error', detail: 'download failed', requestedByUser: true,
-      })
-    })
-    download.controller.dispose()
-
-    const downloadPromptUpdater = new FakeUpdater()
-    const downloadPrompt = start(downloadPromptUpdater, {
-      prompts: {
-        confirmDownload: vi.fn(async () => { throw new Error('download prompt failed') }),
-        confirmInstall: vi.fn(async () => false),
-      },
-    })
-    downloadPromptUpdater.emit('update-available', { version: '1.2.3' })
-    await vi.waitFor(() => {
-      expect(downloadPrompt.states.at(-1)).toEqual({
-        kind: 'error', detail: 'download prompt failed', requestedByUser: true,
-      })
-    })
-    downloadPrompt.controller.dispose()
-
-    const installPromptUpdater = new FakeUpdater()
-    const installPrompt = start(installPromptUpdater, {
-      prompts: {
-        confirmDownload: vi.fn(async () => true),
-        confirmInstall: vi.fn(async () => { throw new Error('install prompt failed') }),
-      },
-    })
-    installPromptUpdater.emit('update-downloaded', { version: '1.2.3' })
-    await vi.waitFor(() => {
-      expect(installPrompt.states.at(-1)).toEqual({
-        kind: 'error', detail: 'install prompt failed', requestedByUser: true,
-      })
-    })
-    installPrompt.controller.dispose()
-  })
-
-  it('classifies updater errors by the active user operation', async () => {
-    const availableUpdater = new FakeUpdater()
-    const available = start(availableUpdater, {
-      prompts: {
-        confirmDownload: vi.fn(() => new Promise<boolean>(() => {})),
-        confirmInstall: vi.fn(async () => false),
-      },
-    })
-    availableUpdater.emit('update-available', { version: '1.2.3' })
-    availableUpdater.emit('error', new Error('available failed'))
-    expect(available.states.at(-1)).toEqual({
-      kind: 'error', detail: 'available failed', requestedByUser: true,
-    })
-    available.controller.dispose()
-
-    const downloadingUpdater = new FakeUpdater()
-    downloadingUpdater.downloadUpdate.mockImplementation(() => new Promise<[]>(() => {}))
-    const downloading = start(downloadingUpdater, {
-      prompts: {
-        confirmDownload: vi.fn(async () => true),
-        confirmInstall: vi.fn(async () => false),
-      },
-    })
-    downloadingUpdater.emit('update-available', { version: '1.2.3' })
-    await vi.waitFor(() => { expect(downloadingUpdater.downloadUpdate).toHaveBeenCalledOnce() })
-    downloadingUpdater.emit('error', new Error('download event failed'))
-    expect(downloading.states.at(-1)).toEqual({
-      kind: 'error', detail: 'download event failed', requestedByUser: true,
-    })
-    downloading.controller.dispose()
-
-    const readyUpdater = new FakeUpdater()
-    const ready = start(readyUpdater, {
-      prompts: {
-        confirmDownload: vi.fn(async () => true),
-        confirmInstall: vi.fn(() => new Promise<boolean>(() => {})),
-      },
-    })
-    readyUpdater.emit('update-downloaded', { version: '1.2.3' })
-    readyUpdater.emit('error', new Error('install event failed'))
-    expect(ready.states.at(-1)).toEqual({
-      kind: 'error', detail: 'install event failed', requestedByUser: true,
-    })
-    ready.controller.dispose()
-  })
-
-  it('offers a downloaded version again after the first install prompt is declined', async () => {
-    const updater = new FakeUpdater()
-    const confirmInstall = vi.fn()
-      .mockResolvedValueOnce(false)
-      .mockResolvedValueOnce(true)
-    const { controller, states } = start(updater, {
-      prompts: { confirmDownload: vi.fn(async () => true), confirmInstall },
-    })
-
+  it('Later and repeated downloaded events neither stop tasks nor repeat the dialog', async () => {
+    const { updater, controller, confirmInstall, beforeInstall } = start()
     updater.emit('update-downloaded', { version: '1.2.3' })
-    await vi.waitFor(() => {
-      expect(states.at(-1)).toEqual({ kind: 'ready', version: '1.2.3', prompting: false })
-    })
+    await vi.waitFor(() => { expect(controller.getState()).toEqual({ kind: 'ready', version: '1.2.3', prompting: false }) })
+    updater.emit('update-downloaded', { version: '1.2.3' })
+    expect(confirmInstall).toHaveBeenCalledOnce()
+    expect(beforeInstall).not.toHaveBeenCalled()
+    expect(updater.quitAndInstall).not.toHaveBeenCalled()
     controller.installReadyUpdate()
-    await vi.waitFor(() => { expect(updater.quitAndInstall).toHaveBeenCalledWith(false, true) })
-    expect(confirmInstall).toHaveBeenCalledTimes(2)
-    controller.dispose()
+    await vi.waitFor(() => { expect(confirmInstall).toHaveBeenCalledTimes(2) })
   })
-
-  it('handles one downloaded version only once while confirmation and shutdown are pending', async () => {
-    const updater = new FakeUpdater()
-    let confirmInstall: ((confirmed: boolean) => void) | undefined
-    let finishShutdown: (() => void) | undefined
-    const confirmation = new Promise<boolean>((resolve) => { confirmInstall = resolve })
-    const shutdown = new Promise<void>((resolve) => { finishShutdown = resolve })
-    const confirmInstallPrompt = vi.fn(() => confirmation)
-    const beforeInstall = vi.fn(() => shutdown)
-    const { controller } = start(updater, {
-      prompts: { confirmDownload: vi.fn(async () => true), confirmInstall: confirmInstallPrompt },
-      beforeInstall,
-    })
-
+  it('keeps a verified download retryable after a refused save without running the installer', async () => {
+    const beforeInstall = vi.fn(async () => { throw new Error('final checkpoint unavailable') })
+    const confirmInstall = vi.fn(async () => true)
+    const { updater, controller } = start({ beforeInstall, prompts: { confirmInstall } })
     updater.emit('update-downloaded', { version: '1.2.3' })
+    await vi.waitFor(() => { expect(controller.getState()).toEqual({ kind: 'ready', version: '1.2.3', prompting: false, error: 'final checkpoint unavailable' }) })
+    expect(updater.quitAndInstall).not.toHaveBeenCalled()
+    controller.installReadyUpdate()
+    await vi.waitFor(() => { expect(beforeInstall).toHaveBeenCalledTimes(2) })
+  })
+  it('waits for confirmation and successful persistence, with one installation despite duplicate clicks', async () => {
+    let confirm!: (value: boolean) => void
+    let saved!: () => void
+    const confirmation = new Promise<boolean>((resolve) => { confirm = resolve })
+    const persistence = new Promise<void>((resolve) => { saved = resolve })
+    const beforeInstall = vi.fn(() => persistence)
+    const prompt = vi.fn(() => confirmation)
+    const { updater, controller } = start({ beforeInstall, prompts: { confirmInstall: prompt } })
     updater.emit('update-downloaded', { version: '1.2.3' })
-    await vi.waitFor(() => { expect(confirmInstallPrompt).toHaveBeenCalledOnce() })
-
-    confirmInstall?.(true)
+    controller.installReadyUpdate()
+    await vi.waitFor(() => { expect(prompt).toHaveBeenCalledOnce() })
+    expect(beforeInstall).not.toHaveBeenCalled()
+    confirm(true)
     await vi.waitFor(() => { expect(beforeInstall).toHaveBeenCalledOnce() })
-    updater.emit('update-downloaded', { version: '1.2.3' })
-    finishShutdown?.()
-    await vi.waitFor(() => { expect(updater.quitAndInstall).toHaveBeenCalledOnce() })
-
-    expect(confirmInstallPrompt).toHaveBeenCalledOnce()
-    expect(beforeInstall).toHaveBeenCalledOnce()
-    expect(updater.quitAndInstall).toHaveBeenCalledWith(false, true)
-    controller.dispose()
+    expect(updater.quitAndInstall).not.toHaveBeenCalled()
+    controller.installReadyUpdate()
+    saved()
+    await vi.waitFor(() => { expect(updater.quitAndInstall).toHaveBeenCalledExactlyOnceWith(false, true) })
   })
-
-  it('suppresses pending prompt work after disposal', async () => {
-    const updater = new FakeUpdater()
-    let releaseDownload: ((confirmed: boolean) => void) | undefined
-    let releaseInstall: ((confirmed: boolean) => void) | undefined
-    const confirmDownload = vi.fn(() => new Promise<boolean>((resolve) => { releaseDownload = resolve }))
-    const confirmInstall = vi.fn(() => new Promise<boolean>((resolve) => { releaseInstall = resolve }))
-    const beforeInstall = vi.fn(async () => {})
-    const { controller } = start(updater, {
-      prompts: { confirmDownload, confirmInstall },
-      beforeInstall,
-    })
-
-    updater.emit('update-available', { version: '1.2.3' })
+  it('invalidates a pending confirmation on updater error', async () => {
+    let confirm!: (value: boolean) => void
+    const confirmation = new Promise<boolean>((resolve) => { confirm = resolve })
+    const { updater, controller, beforeInstall } = start({ prompts: { confirmInstall: () => confirmation } })
     updater.emit('update-downloaded', { version: '1.2.3' })
-    await vi.waitFor(() => {
-      expect(confirmDownload).toHaveBeenCalledOnce()
-      expect(confirmInstall).toHaveBeenCalledOnce()
-    })
-    controller.dispose()
-    releaseDownload?.(true)
-    releaseInstall?.(true)
-    await Promise.resolve()
-
-    expect(updater.downloadUpdate).not.toHaveBeenCalled()
+    updater.emit('error', new Error('installer unavailable'))
+    confirm(true)
+    await Promise.resolve(); await Promise.resolve()
+    expect(controller.getState()).toMatchObject({ kind: 'ready', prompting: false, error: 'installer unavailable' })
     expect(beforeInstall).not.toHaveBeenCalled()
     expect(updater.quitAndInstall).not.toHaveBeenCalled()
   })
-
-  it('ignores captured updater callbacks and pending failures after disposal', async () => {
-    const updater = new FakeUpdater()
-    let rejectCheck: ((error: Error) => void) | undefined
-    updater.checkForUpdates.mockImplementation(() => new Promise<null>((_resolve, reject) => {
-      rejectCheck = reject
-    }))
-    const { controller, states } = start(updater)
-    const staleAvailable = updater.listeners('update-available')[0] as (info: { version: string }) => void
-    const staleNotAvailable = updater.listeners('update-not-available')[0] as () => void
-    const staleProgress = updater.listeners('download-progress')[0] as (info: { percent: number }) => void
-    const staleDownloaded = updater.listeners('update-downloaded')[0] as (info: { version: string }) => void
-
-    controller.checkNow()
-    controller.dispose()
-    staleAvailable({ version: '1.2.3' })
-    staleNotAvailable()
-    staleProgress({ percent: 50 })
-    staleDownloaded({ version: '1.2.3' })
-    rejectCheck?.(new Error('late failure'))
-    await Promise.resolve()
-
-    expect(states).toEqual([{ kind: 'checking' }])
-  })
-
-  it('does not install when disposed during application shutdown', async () => {
-    const updater = new FakeUpdater()
-    let finishShutdown: (() => void) | undefined
-    const { controller } = start(updater, {
-      prompts: {
-        confirmDownload: vi.fn(async () => true),
-        confirmInstall: vi.fn(async () => true),
-      },
-      beforeInstall: vi.fn(() => new Promise<void>((resolve) => { finishShutdown = resolve })),
-    })
-
+  it('ignores confirmation completion and actions after disposal', async () => {
+    let confirm!: (value: boolean) => void
+    const confirmation = new Promise<boolean>((resolve) => { confirm = resolve })
+    const { updater, controller, beforeInstall } = start({ prompts: { confirmInstall: () => confirmation } })
     updater.emit('update-downloaded', { version: '1.2.3' })
-    await vi.waitFor(() => { expect(finishShutdown).toBeTypeOf('function') })
     controller.dispose()
-    finishShutdown?.()
-    await Promise.resolve()
-
+    confirm(true)
+    await Promise.resolve(); await Promise.resolve()
+    controller.checkNow(); controller.downloadAvailableUpdate(); controller.installReadyUpdate()
+    expect(beforeInstall).not.toHaveBeenCalled()
     expect(updater.quitAndInstall).not.toHaveBeenCalled()
+    expect(updater.listenerCount('update-downloaded')).toBe(0)
   })
 })

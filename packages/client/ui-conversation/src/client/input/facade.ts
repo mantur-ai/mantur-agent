@@ -26,6 +26,7 @@ import type {
   Occurrence, QueuedMessage, ReferenceInsert, SessionInput, SubmitAttempt, SubmitImageAttachment,
   SubmitOutcome, TokenSpan,
 } from '../contract/input.ts'
+import type { DraftDocument } from '../contract/draft-persistence.ts'
 import type { InputSubmitMode } from '../contract/composer-submission.ts'
 import { SubmitMachine } from './machine.ts'
 import { ReferenceChipNode, $createReferenceChipNode } from './editor/chip-node.tsx'
@@ -67,6 +68,8 @@ export interface SessionInputDeps {
     mode: InputSubmitMode,
     signal: AbortSignal,
   ): Promise<SubmitOutcome>
+  /** Materialize a draft's Session before handing it to the ordinary submit path. */
+  prepareSubmit?: (mode: InputSubmitMode, signal: AbortSignal) => Promise<void>
   /** Command-plane image plumbing (the hub owns the conversation face and the copy). */
   commandImages: {
     /** Resolve ordered draft ids to wire payloads without sending them; rejects when an id no longer resolves. */
@@ -143,6 +146,8 @@ export class SessionInputShell implements SessionInput {
 
   private readonly core = new SubmitMachine()
   private projection: EditorProjection = { detectText: '', clipboardText: '', occurrences: [], selection: null, caret: null }
+  private nativeDraftPersistence = false
+  private draftLocks = 0
   private rev = 0
   /** Stable occurrence ids per chip NodeKey (undo restores keys, so ids survive it too). */
   private readonly occurrenceIds = new Map<NodeKey, number>()
@@ -164,6 +169,8 @@ export class SessionInputShell implements SessionInput {
   private failedRestoreRev: number | undefined
   private restoringFailures = false
   private imageFlightSeq = 0
+  /** One Session-preparation operation; its draft remains resident until handoff. */
+  private preparation: AbortController | undefined
   /** Image-only sends retained until admission settles or scope disposal releases their images. */
   private readonly imageFlights = new Map<number, {
     readonly controller: AbortController
@@ -245,7 +252,7 @@ export class SessionInputShell implements SessionInput {
     const caret = this.projection.caret
     if (caret !== null) {
       this.deps.inputTriggers?.()?.track(
-        this.projection.detectText, caret, { tier: guardOf(this.core.state.phase) }, this.rev,
+        this.projection.detectText, caret, { tier: guardOf(this.snapshot.phase) }, this.rev,
       )
     }
   }
@@ -267,6 +274,7 @@ export class SessionInputShell implements SessionInput {
    * @param text - the full next draft.
    */
   setDraft(text: string): void {
+    if (this.draftLocks !== 0 || this.preparation !== undefined) return
     const clean = text.replace(REFERENCE_PLACEHOLDER_RE, '')
     if (clean === this.projection.clipboardText) return
     this.editor.update(() => {
@@ -283,6 +291,7 @@ export class SessionInputShell implements SessionInput {
 
   /** Append ordered image ids unless an admission transaction is locked. */
   addImages(ids: readonly DraftAttachmentId[]): boolean {
+    if (this.draftLocks !== 0) return false
     if (this.snapshot.phase === 'adjudicating' || this.snapshot.phase === 'submitting') return false
     if (ids.length === 0) return true
     this.imageIds = [...this.imageIds, ...ids]
@@ -296,6 +305,7 @@ export class SessionInputShell implements SessionInput {
    * would otherwise vanish from the rail yet still ride the in-flight send.
    */
   removeImage(id: DraftAttachmentId): void {
+    if (this.draftLocks !== 0) return
     if (this.snapshot.phase === 'adjudicating' || this.snapshot.phase === 'submitting') return
     const next = this.imageIds.filter(candidate => candidate !== id)
     if (next.length === this.imageIds.length) return
@@ -308,6 +318,7 @@ export class SessionInputShell implements SessionInput {
    * @param available - live registry ids.
    */
   pruneImages(available: readonly DraftAttachmentId[]): void {
+    if (this.draftLocks !== 0) return
     const keep = new Set(available)
     const next = this.imageIds.filter(id => keep.has(id))
     if (next.length === this.imageIds.length) return
@@ -322,6 +333,7 @@ export class SessionInputShell implements SessionInput {
    * @param imageIds - admitted image ids to remove from this draft.
    */
   commitSend(imageIds: readonly DraftAttachmentId[]): void {
+    if (this.draftLocks !== 0) return
     const submitted = new Set(imageIds)
     this.imageIds = this.imageIds.filter(id => !submitted.has(id))
     this.dispatchRun(({ type: 'send-committed' }))
@@ -335,6 +347,7 @@ export class SessionInputShell implements SessionInput {
    * @param text - pasted plain text.
    */
   paste(text: string): void {
+    if (this.draftLocks !== 0 || this.preparation !== undefined) return
     const clean = text.replace(REFERENCE_PLACEHOLDER_RE, '')
     if (clean === '') return
     this.applyEdit(() => {
@@ -358,6 +371,24 @@ export class SessionInputShell implements SessionInput {
    * dismisses and the menu tracks frozen.
    */
   submit(mode: InputSubmitMode = 'queue'): void {
+    if (this.disposed || this.draftLocks !== 0 || this.preparation !== undefined) return
+    if (this.deps.prepareSubmit !== undefined) {
+      if (this.snapshot.draft.trim() === '' && this.imageIds.length === 0) return
+      const controller = new AbortController()
+      this.preparation = controller
+      this.editor.setEditable(false)
+      this.publish()
+      void this.deps.prepareSubmit(mode, controller.signal).catch((error: unknown) => {
+        if (!this.disposed && !controller.signal.aborted) {
+          this.notify('error', error instanceof Error ? error.message : String(error))
+        }
+      }).finally(() => {
+        if (this.preparation === controller) this.preparation = undefined
+        if (this.preparation === undefined && this.draftLocks === 0) this.editor.setEditable(true)
+        if (!this.disposed) this.publish()
+      })
+      return
+    }
     if (this.snapshot.draft.trim() === '' && this.imageIds.length > 0) {
       if (this.snapshot.phase === 'plain') {
         const imageIds = [...this.imageIds]
@@ -413,6 +444,7 @@ export class SessionInputShell implements SessionInput {
    * empty-draft no-op.
    */
   steerQueue(): void {
+    if (this.draftLocks !== 0) return
     this.deps.steerQueue?.()
   }
 
@@ -421,6 +453,7 @@ export class SessionInputShell implements SessionInput {
    * @returns true = a claim/insert was applied — the caller preventDefaults.
    */
   space(): boolean {
+    if (this.draftLocks !== 0) return false
     const inputTriggers = this.deps.inputTriggers?.()
     if (inputTriggers === undefined) return false
     return inputTriggers.onSpace()
@@ -467,7 +500,8 @@ export class SessionInputShell implements SessionInput {
    * @returns whether the edit applied (phase, span CAS, and leading guard passed).
    */
   beginCommand(claim: CommandClaim, span: TokenSpan): boolean {
-    const phase = this.core.state.phase
+    if (this.draftLocks !== 0 || this.preparation !== undefined) return false
+    const phase = this.snapshot.phase
     if (phase !== 'plain' && phase !== 'claimed') return false
     if (span.draftRev !== this.rev) return false
     // Leading-trigger contract: only whitespace may precede the span; the
@@ -491,7 +525,8 @@ export class SessionInputShell implements SessionInput {
    * @returns whether the edit applied.
    */
   insertReference(ref: ReferenceInsert, span: TokenSpan): boolean {
-    const phase = this.core.state.phase
+    if (this.draftLocks !== 0 || this.preparation !== undefined) return false
+    const phase = this.snapshot.phase
     if (phase !== 'plain' && phase !== 'claimed') return false
     if (span.draftRev !== this.rev) return false
     const tail = this.projection.detectText.slice(span.end, span.end + 1)
@@ -511,7 +546,8 @@ export class SessionInputShell implements SessionInput {
    * @returns whether the reference is present and the editor accepted focus.
    */
   appendReference(reference: ReferenceInsert): boolean {
-    if (this.core.state.phase !== 'plain' && this.core.state.phase !== 'claimed') return false
+    if (this.draftLocks !== 0 || this.preparation !== undefined) return false
+    if (this.snapshot.phase !== 'plain' && this.snapshot.phase !== 'claimed') return false
     const present = this.projection.occurrences.some(item =>
       item.source === reference.source && item.ref === reference.ref)
     const end = this.projection.detectText.length
@@ -529,6 +565,7 @@ export class SessionInputShell implements SessionInput {
    * @returns whether the token was consumed.
    */
   consumeToken(guard: ConsumeTokenRequest['guard']): boolean {
+    if (this.draftLocks !== 0 || this.preparation !== undefined) return false
     if (guard.kind === 'span') {
       if (guard.span.draftRev !== this.rev || guard.span.start === guard.span.end) return false
       let applied = false
@@ -556,6 +593,7 @@ export class SessionInputShell implements SessionInput {
    * @returns whether the text was applied.
    */
   insertText(text: string, span: TokenSpan, keepCompleting = false): boolean {
+    if (this.draftLocks !== 0 || this.preparation !== undefined) return false
     void keepCompleting
     if (span.draftRev !== this.rev) return false
     let applied = false
@@ -577,6 +615,79 @@ export class SessionInputShell implements SessionInput {
 
   // ---- wiring-layer extras (not on the frozen SessionInput face) ----
 
+  /** Mark the native checkpoint as the draft owner; localStorage must not seed this editor afterward. */
+  useNativeDraftPersistence(): void { this.nativeDraftPersistence = true }
+
+  /**
+   * Lock user editing and submission until a save/transfer transaction releases its ownership.
+   * @returns - An idempotent input-lock release callback.
+   */
+  lockDraft(): () => void {
+    if (!this.isDraftSettled()) throw new Error('Draft submission is still in progress')
+    this.draftLocks += 1
+    this.editor.setEditable(false)
+    this.publish()
+    let active = true
+    return () => {
+      if (!active) return
+      active = false
+      this.draftLocks -= 1
+      if (this.draftLocks === 0 && this.preparation === undefined) this.editor.setEditable(true)
+      this.publish()
+    }
+  }
+
+  /**
+   * Return whether no admission or detached send can still change the draft.
+   * @returns - Whether the composer can be captured for persistence.
+   */
+  isDraftSettled(): boolean {
+    return !this.disposed && this.core.state.phase !== 'adjudicating' && this.core.state.phase !== 'submitting'
+      && this.detachedDrafts.size === 0 && this.imageFlights.size === 0
+  }
+
+  /**
+   * Capture the complete editor and selected image identities after synchronous editor updates settle.
+   * @returns - The complete editor document and selected image identities.
+   */
+  captureDraft(): DraftDocument {
+    if (!this.isDraftSettled()) throw new Error('Draft submission is still in progress')
+    return {
+      editor: JSON.stringify(this.editor.getEditorState().toJSON()),
+      occurrenceIds: this.projection.occurrences.map(item => item.occurrenceId),
+      nextOccurrenceId: this.occurrenceSeq,
+      imageIds: [...this.imageIds],
+    }
+  }
+
+  /**
+   * Restore a validated checkpoint into an empty, settled composer, preserving reference identities.
+   * @param draft - Complete serialized editor and registered attachment identities.
+   * @param expectedClipboard - Optional current-origin draft that must agree before restoration.
+   */
+  restoreDraft(draft: DraftDocument, expectedClipboard?: string): void {
+    if (!this.isDraftSettled() || this.snapshot.draft !== '' || this.imageIds.length !== 0) throw new Error('Draft restore conflicts with current input')
+    if (!Number.isSafeInteger(draft.nextOccurrenceId) || draft.nextOccurrenceId < 0
+      || draft.occurrenceIds.some(id => !Number.isSafeInteger(id) || id < 0 || id > draft.nextOccurrenceId)
+      || new Set(draft.occurrenceIds).size !== draft.occurrenceIds.length) throw new Error('Invalid saved reference identities')
+    const parsed = this.editor.parseEditorState(draft.editor)
+    const keys: NodeKey[] = []
+    const projected = parsed.read(() => $projectComposer((key) => { keys.push(key); return keys.length }))
+    if (expectedClipboard !== undefined && expectedClipboard !== projected.clipboardText) throw new Error('Native draft conflicts with current-origin localStorage; input was not replaced')
+    if (keys.length !== draft.occurrenceIds.length) throw new Error('Saved reference count does not match editor')
+    this.occurrenceIds.clear()
+    keys.forEach((key, index) => {
+      const id = draft.occurrenceIds[index]
+      if (id === undefined) throw new Error('Saved reference identity is missing')
+      this.occurrenceIds.set(key, id)
+    })
+    this.occurrenceSeq = draft.nextOccurrenceId
+    this.imageIds = [...draft.imageIds]
+    if (!parsed.isEmpty()) this.editor.setEditorState(parsed)
+    this.onEditorUpdate()
+    this.publish()
+  }
+
   /**
    * Teardown the shell and return every browser-owned image still retained by
    * the draft or an unsettled default send.
@@ -584,6 +695,7 @@ export class SessionInputShell implements SessionInput {
    */
   dispose(): readonly DraftAttachmentId[] {
     if (this.disposed) return []
+    this.preparation?.abort()
     const retained = new Set(this.imageIds)
     for (const record of this.detachedDrafts.values()) {
       for (const imageId of record.imageIds) retained.add(imageId)
@@ -608,14 +720,48 @@ export class SessionInputShell implements SessionInput {
   }
 
   /**
+   * Move the complete editor and attachment draft into an empty Session composer.
+   * @param target - distinct, idle composer which does not own another draft.
+   * @param commitTransfer - optional final precondition; rejection leaves both drafts unchanged.
+   */
+  moveDraftTo(target: SessionInputShell, commitTransfer?: () => void): void {
+    if (target === this) return
+    if (target.snapshot.phase !== 'plain' || target.snapshot.draft !== '' || target.imageIds.length > 0) {
+      throw new Error('The destination conversation already has a draft; the current draft was retained.')
+    }
+    commitTransfer?.()
+    target.occurrenceIds.clear()
+    for (const [key, id] of this.occurrenceIds) target.occurrenceIds.set(key, id)
+    target.occurrenceSeq = this.occurrenceSeq
+    target.imageIds = this.imageIds
+    if (this.snapshot.draft !== '') target.editor.setEditorState(this.editor.getEditorState())
+    target.onEditorUpdate()
+    target.publish()
+    this.imageIds = []
+    this.commitDraft(null)
+    this.publish()
+  }
+
+  /** Cancel Session preparation while retaining the current editor and attachments. */
+  cancelPreparation(): void {
+    if (this.preparation === undefined) return
+    this.preparation.abort()
+    this.preparation = undefined
+    if (this.draftLocks === 0) this.editor.setEditable(true)
+    this.publish()
+  }
+
+  /**
    * Bind the draft persistence mirror (Conversation store write). Adopt-on-bind: the
    * store draft may hold a persisted value from a previous mount; the caller
    * seeds it via setDraft BEFORE binding, and afterwards every editor-adopted
    * draft mirrors out.
    * @param write - store draft write.
+   * @param seed - Browser-only legacy text seed; native owners reject this seed.
    * @returns the unbind disposer.
    */
-  bindMirror(write: (text: string) => void): () => void {
+  bindMirror(write: (text: string) => void, seed?: string): () => void {
+    if (!this.nativeDraftPersistence && this.snapshot.draft === '' && seed !== undefined && seed !== '') this.setDraft(seed)
     this.mirrorFn = write
     return () => {
       if (this.mirrorFn === write) this.mirrorFn = undefined
@@ -921,7 +1067,7 @@ export class SessionInputShell implements SessionInput {
       draft: this.projection.clipboardText,
       imageIds: this.imageIds,
       draftRev: this.rev,
-      phase: core.phase,
+      phase: this.preparation === undefined && this.draftLocks === 0 ? core.phase : 'adjudicating',
       ...(core.claim !== undefined ? { claim: core.claim } : {}),
       occurrences: this.projection.occurrences,
       queue: this.deps.queue?.getSnapshot() ?? EMPTY_QUEUE,

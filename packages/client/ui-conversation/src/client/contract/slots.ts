@@ -231,7 +231,10 @@ export interface ConversationInjected {
   /** Connect and open a blank Session in the selected Workspace. */
   selectWorkspace: (workspaceId: WorkspaceId) => Promise<void>
   /** Session-addressed composer block source, or the stable absent source. */
-  hooks: { composerBlock: ObservableSnapshot<ComposerBlock | undefined> }
+  hooks: {
+    composerBlock: ObservableSnapshot<ComposerBlock | undefined>
+    draftEnabled: ObservableSnapshot<boolean>
+  }
 }
 
 /** Business callbacks injected into the strict Session body. */
@@ -239,7 +242,7 @@ export interface ConversationSessionInjected {
   /** Package-owned View roster source bound only for the Conversation body. */
   readonly hooks: { readonly conversationViews: ObservableSnapshot<readonly ViewTab[]> }
   /** Bind input draft persistence to the Session-owned store instance. */
-  bindDraftMirror: (write: (text: string) => void) => () => void
+  bindDraftMirror: (write: (text: string) => void, seed?: string) => () => void
   /** Select and activate one View while addressing an opaque focus request to it. */
   openView: (view: string, focus: string) => void
 }
@@ -273,6 +276,8 @@ export interface ComposerBarOwnerProps {
 
 /** Package-private operations injected into the resident composer bar. */
 export interface ComposerBarInjected {
+  /** Actions for the browser-only draft when no Session is selected. */
+  unassignedActions: InputActions | undefined
   keyboard: ComposerKeyboard | undefined
   addImages: ((files: readonly File[]) => string | null) | undefined
   removeImage: ((id: DraftAttachmentId) => void) | undefined
@@ -286,6 +291,7 @@ export interface ComposerBarInjected {
   stop: (() => void) | undefined
   command: ((line: string) => Promise<boolean>) | undefined
   hooks: {
+    composerInput: ObservableSnapshot<InputState | undefined>
     notices: ObservableSnapshot<InputNotice | null>
     lexicon: ObservableSnapshot<ReadonlyMap<'/' | '@', readonly string[]>>
     menuLauncher: ObservableSnapshot<string | null>

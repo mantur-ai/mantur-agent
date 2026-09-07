@@ -22,6 +22,8 @@ import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, delimiter } from 'node:path'
 import { vi } from 'vitest'
+import { setTimeout as delay } from 'node:timers/promises'
+import { performance } from 'node:perf_hooks'
 import {
   PROTOCOL_VERSION,
   type ContentBlock as AcpContentBlock,
@@ -597,7 +599,9 @@ async function waitForPersistedTurnEnd(
  * Harvest order matches `session.1.jsonl`, `session.2.jsonl`, and so on. A
  * continuable child appends its descriptor after any inherited history and
  * before accepting its first prompt, so only a later request header proves its
- * own model work reached a closed turn.
+ * own model work reached a closed turn. A deadline ends polling after the current
+ * filesystem harvest settles, so timeout reporting cannot leave a read running
+ * during scenario cleanup.
  */
 async function waitForPersistedChildTurnEnd(
   root: string,
@@ -605,16 +609,19 @@ async function waitForPersistedChildTurnEnd(
   timeoutMs = DEFAULT_WAIT_TIMEOUT_MS,
   minimumTurn = 1,
 ): Promise<void> {
-  await vi.waitFor(async () => {
+  const deadline = performance.now() + timeoutMs
+  while (performance.now() < deadline) {
     const log = (await harvestSessionLogs(root))[child]
-    if (log === undefined || !latestTurnIsClosed(log.content)
-      || !hasRequestHeaderAfterDescriptor(log.content)
-      || !hasClosedTurn(log.content, minimumTurn)) {
-      throw new Error(
-        `snapshot-harness: subagent child #${child} did not persist closed turn ${minimumTurn} within ${timeoutMs}ms`,
-      )
-    }
-  }, { interval: WAIT_POLL_INTERVAL_MS, timeout: timeoutMs })
+    const remaining = deadline - performance.now()
+    if (remaining <= 0) break
+    if (log !== undefined && latestTurnIsClosed(log.content)
+      && hasRequestHeaderAfterDescriptor(log.content)
+      && hasClosedTurn(log.content, minimumTurn)) return
+    await delay(Math.min(WAIT_POLL_INTERVAL_MS, remaining))
+  }
+  throw new Error(
+    `snapshot-harness: subagent child #${child} did not persist closed turn ${minimumTurn} within ${timeoutMs}ms`,
+  )
 }
 
 /** Whether a raw session log contains the requested closed turn. */

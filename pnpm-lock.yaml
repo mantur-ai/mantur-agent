@@ -1395,6 +1395,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-mantur-navigation':
         specifier: workspace:^
         version: link:../../client/ui-mantur-navigation
+      '@deepseek-ai/dsh-mantur-projects':
+        specifier: workspace:^
+        version: link:../../workspace/mantur-projects
       '@deepseek-ai/dsh-manturhub-marketplace':
         specifier: workspace:^
         version: link:../../skill/manturhub-marketplace
@@ -2845,6 +2848,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-workspace':
         specifier: workspace:^
         version: link:../ui-workspace
+      '@deepseek-ai/dsh-mantur-projects':
+        specifier: workspace:^
+        version: link:../../workspace/mantur-projects
       '@deepseek-ai/dsh-manturhub-marketplace':
         specifier: workspace:^
         version: link:../../skill/manturhub-marketplace
@@ -3986,6 +3992,9 @@ importers:
 
   packages/client/ui-workspace:
     dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
       clsx:
         specifier: ^2.0.0
         version: 2.1.1
@@ -4026,6 +4035,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-session':
         specifier: workspace:^
         version: link:../ui-session
+      '@deepseek-ai/dsh-client-ui-settings':
+        specifier: workspace:^
+        version: link:../ui-settings
       '@deepseek-ai/dsh-client-ui-sidebar':
         specifier: workspace:^
         version: link:../ui-sidebar
@@ -4038,6 +4050,9 @@ importers:
       '@deepseek-ai/dsh-session':
         specifier: workspace:^
         version: link:../../core/session
+      '@deepseek-ai/dsh-settings':
+        specifier: workspace:^
+        version: link:../../settings/settings
       '@deepseek-ai/dsh-typert-protocol':
         specifier: workspace:^
         version: link:../../typert/protocol
@@ -10054,6 +10069,34 @@ importers:
       tsx:
         specifier: ^4.19.2
         version: 4.22.4
+
+  packages/workspace/mantur-projects:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-brand':
+        specifier: workspace:^
+        version: link:../../util/brand
+      '@deepseek-ai/dsh-session':
+        specifier: workspace:^
+        version: link:../../core/session
+      '@deepseek-ai/dsh-storage-domain':
+        specifier: workspace:^
+        version: link:../../storage/storage-domain
+      '@deepseek-ai/dsh-typert-protocol':
+        specifier: workspace:^
+        version: link:../../typert/protocol
+      '@deepseek-ai/dsh-workspace':
+        specifier: workspace:^
+        version: link:../workspace
 
   packages/workspace/workspace:
     dependencies:

@@ -5,8 +5,8 @@ import clsx from 'clsx'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { ManturMarketplaceSkill } from '@deepseek-ai/dsh-manturhub-marketplace/types'
-import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
-import type { ReferenceInsert } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { ObservableSnapshot, SnapshotStore } from '@deepseek-ai/dsh-client-store'
+import type { InputState, ReferenceInsert } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import { CREATION_MODES, type CreationMode, type GuideSettings } from '../guide-settings.ts'
 import type { ManturMarketplaceState } from './store.ts'
@@ -68,7 +68,10 @@ export interface CreationGuideInjected extends GuidePreferencesInjected {
     | 'skills.loadingDetail' | 'skills.detailFailed' | 'skills.installing' | 'skills.loginToInstall'
     | 'skills.loginPreparing' | 'skills.loginCode' | 'skills.openLogin' | 'skills.cancelLogin'
     | 'skills.loginFailed' | 'skills.localConflict' | 'skills.noWorkspace') => string
-  hooks: GuidePreferencesInjected['hooks'] & { marketplace: SnapshotStore<ManturMarketplaceState> }
+  hooks: GuidePreferencesInjected['hooks'] & {
+    marketplace: SnapshotStore<ManturMarketplaceState>
+    guideInput: ObservableSnapshot<InputState | undefined>
+  }
 }
 
 /** Framework-bound composer guide props. */
@@ -82,12 +85,12 @@ export function CreationGuide(props: CreationGuideProps) {
   return <ReadyGuide {...props} preferences={preferences.value} />
 }
 
-function ReadyGuide({ hero, disabled, sessionId, preferences, useMarketplace, useInput, appendReference,
+function ReadyGuide({ hero, disabled, sessionId, preferences, useMarketplace, useGuideInput, appendReference,
   saveClosed, load, ensureCatalog, openDetail: loadDetail, closeDetail: clearDetail,
   install, startLogin, cancelLogin, marketplaceText: mt, t,
 }: CreationGuideProps & { preferences: GuideSettings }) {
   const market = useMarketplace(snapshot => snapshot)
-  const input = useInput(snapshot => snapshot)
+  const input = useGuideInput(snapshot => snapshot)
   const ready = market.phase === 'ready' ? market : undefined
   const [open, setOpen] = useState(hero && !preferences.closed)
   const [welcome, setWelcome] = useState(true)

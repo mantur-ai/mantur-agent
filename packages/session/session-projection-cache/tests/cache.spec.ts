@@ -204,27 +204,36 @@ describe('SessionProjectionCache write policy', () => {
   it('keeps overlapping mandatory checkpoints in invocation order', async () => {
     const { ctx, root } = await harness()
     const firstFlush = Promise.withResolvers<undefined>()
+    const enteredFlush = Promise.withResolvers<undefined>()
+    const write = vi.spyOn(ctx.sessionProjectionCache, 'write')
     let flushCalls = 0
     const flush = vi.spyOn(ctx.sessions, 'flush').mockImplementation(async () => {
       flushCalls += 1
-      if (flushCalls === 1) await firstFlush.promise
+      if (flushCalls === 1) {
+        enteredFlush.resolve(undefined)
+        await firstFlush.promise
+      }
       return true
     })
 
-    const session = ctx.sessions.create(SessionId('ordered-mandatory'))
-    mark(session, ['newer'])
-    const end = endTurn(session)
     try {
-      await vi.waitFor(() => { expect(flush).toHaveBeenCalledTimes(1) })
-    } finally {
+      const session = ctx.sessions.create(SessionId('ordered-mandatory'))
+      mark(session, ['newer'])
+      const end = endTurn(session)
+      expect(write).toHaveBeenCalledTimes(2)
+      await enteredFlush.promise
+      expect(flush).toHaveBeenCalledTimes(1)
       firstFlush.resolve(undefined)
-    }
-
-    await vi.waitFor(async () => {
+      await Promise.all(write.mock.results.map(async (call) => { await call.value }))
       expect((await storedRows(root, session.id))?.['cache-test/marks'])
         .toEqual({ ver: 1, seq: end.seq, val: { marks: ['newer'] } })
-    })
-    expect(flush).toHaveBeenCalledTimes(2)
+      expect(flush).toHaveBeenCalledTimes(2)
+    } finally {
+      firstFlush.resolve(undefined)
+      await Promise.allSettled(write.mock.results.map(async (call) => { await call.value }))
+      write.mockRestore()
+      flush.mockRestore()
+    }
   })
 
   it('writes at session disposal (detach, the live-to-cold moment)', async () => {
@@ -244,17 +253,23 @@ describe('SessionProjectionCache write policy', () => {
   })
 
   it('flushes when the in-turn event count reaches the configured threshold', async () => {
-    const { ctx, root } = await harness({ config: { writeEveryEvents: 3, writeIntervalMs: 60_000 } })
-    const session = ctx.sessions.create(SessionId('count'))
-    mark(session, ['1'])
-    mark(session, ['2'])
-    await vi.waitFor(async () => {
-      expect((await storedRows(root, session.id))?.['cache-test/marks']?.seq).toBe(-1) // still the creation cut
-    }, { timeout: 5_000 })
-    mark(session, ['3'])
-    await vi.waitFor(async () => {
+    const { ctx, root, cache } = await harness({ config: { writeEveryEvents: 3, writeIntervalMs: 60_000 } })
+    const write = vi.spyOn(cache, 'write')
+    try {
+      const session = ctx.sessions.create(SessionId('count'))
+      expect(write).toHaveBeenCalledTimes(1)
+      await write.mock.results[0]?.value
+      mark(session, ['1'])
+      mark(session, ['2'])
+      expect(write).toHaveBeenCalledTimes(1)
+      expect((await storedRows(root, session.id))?.['cache-test/marks']?.seq).toBe(-1)
+      mark(session, ['3'])
+      expect(write).toHaveBeenCalledTimes(2)
+      await write.mock.results[1]?.value
       expect((await storedRows(root, session.id))?.['cache-test/marks']?.val).toEqual({ marks: ['3'] })
-    }, { timeout: 5_000 })
+    } finally {
+      write.mockRestore()
+    }
   })
 
   it('flushes on the configured interval when the count threshold is not reached', async () => {
