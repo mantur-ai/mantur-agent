@@ -2007,6 +2007,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Abstract settings service. Providers implement raw-document storage (`load`/`persist`) and push external changes through Settings.publish; the base class owns namespace registration, resolution, validation, change detection, and the `settings/updated` commit event.',
     methods: [
       {
+        signature: 'stopForShutdown(): Promise<void>',
+        description: 'Stop a ready provider\'s writes and watcher starts, then join admitted operation chains. Queued writes not yet started reject through their original caller promises.',
+        parameters: [],
+        returns: 'completion after write queues and started watcher callbacks settle.',
+      },
+      {
         signature: 'abstract readonly writable: boolean',
         description: 'Whether update may persist through this provider.',
         parameters: [],

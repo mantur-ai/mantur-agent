@@ -127,6 +127,8 @@ export class FileSettingsProvider extends SettingsProvider {
   private operations: Promise<void> = Promise.resolve()
   /** Set at dispose: refuse new watcher events and let in-flight work no-op. */
   private closed = false
+  private watcher: ReturnType<typeof chokidarWatch> | undefined
+  private fileShutdown: Promise<void> | undefined
 
   /** Opaque read of {@link closed}: control flow cannot narrow it across awaits. */
   private isClosed(): boolean {
@@ -192,6 +194,7 @@ export class FileSettingsProvider extends SettingsProvider {
 
   /** Queue one exclusive document operation behind every earlier one. */
   private enqueue<T>(operation: () => Promise<T>): Promise<T> {
+    if (this.closed) return Promise.reject(new Error('settings-file: admission is closed'))
     const task = this.operations.then(operation)
     this.operations = task.then(() => undefined, () => undefined)
     return task
@@ -244,6 +247,7 @@ export class FileSettingsProvider extends SettingsProvider {
         },
       })
       : undefined
+    this.watcher = watcher
     if (watcher !== undefined) {
       watcher.on('all', () => {
         if (this.closed) return
@@ -261,12 +265,23 @@ export class FileSettingsProvider extends SettingsProvider {
         this.ctx.logger.warn(error)
       })
     }
-    yield async () => {
-      // Quiesce every operation chain, even when no watcher is configured.
-      this.closed = true
-      await watcher?.close()
-      await this.operations
-    }
+    yield () => this.stopForShutdown()
+  }
+
+  /**
+   * Stop a ready file provider and join settings callbacks, file operations, and watcher close.
+   * @returns completion after every owned queue settles; watcher cleanup failure rejects.
+   */
+  override stopForShutdown(): Promise<void> {
+    this.closed = true
+    this.fileShutdown ??= (async () => {
+      const outcomes = await Promise.allSettled([
+        super.stopForShutdown(), this.watcher?.close(), this.operations,
+      ])
+      const failures = outcomes.filter(result => result.status === 'rejected').map(result => result.reason as unknown)
+      if (failures.length > 0) throw new AggregateError(failures, 'Settings file cleanup failed')
+    })()
+    return this.fileShutdown
   }
 
   /** Parse one document text into raw sections, failing on a non-map root. */

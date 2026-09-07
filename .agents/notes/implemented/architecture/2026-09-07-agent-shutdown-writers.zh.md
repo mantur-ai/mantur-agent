@@ -53,3 +53,5 @@ Gateway 的操作归属由 `packages/api/gateway/src/index.ts` 管理：关闭�
 存储域操作由 `packages/storage/storage-domain/src/index.ts` 管理：活动域快照会遗漏尚未完成的后端打开。设施冻结接纳，立即禁止现有域的新写入，等待未完成的分配和单元清理，并保留失败的分配回滚。延迟分配与关闭、失败回滚以及普通关闭后的重新打开是升级检查。
 
 投影缓存的操作由 `packages/session/session-projection-cache/src/index.ts` 管理：实时检查点队列不包含冷读取写回。显式停止会冻结生产者，并在存储所有者关闭领域之前等待两类写入。挂起的冷写入、保留的警告语义和清除的检查点定时器验证升级。缓存写入错误仍是派生数据失败，不作为领域清理回执。
+
+设置关闭由 `packages/settings/settings/src/index.ts` 和 `packages/settings/settings-file/src/index.ts` 管理：命名空间写入与观察回调可能晚于文件操作队列结束。就绪提供者停止两类生产者，并等待两层队列及监听器关闭。已启动的回调、挂起的文档创建、重复停止及监听器关闭失败验证升级。请求就绪提供者关闭前，必须先完成启动组合。

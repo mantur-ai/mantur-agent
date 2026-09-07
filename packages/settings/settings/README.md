@@ -11,6 +11,8 @@ English | [中文](README.zh.md)
 
 `dsh-settings` lets plugins expose configuration that users can change at runtime: a plugin registers a namespace with a schema, and the resolved value honors schema defaults, the deployment's own composition `base`, and the user-edited document section — with user overrides winning. Consumers read a snapshot of the resolved value and are notified of every committed change; configuration surfaces get one descriptor per namespace — schema, current value, which layer each field came from, effect timing — without touching storage directly. Writes change only the user overrides, run one at a time per namespace, and can carry an expected revision so a stale writer is refused instead of silently overwriting a newer one. A provider must be mounted to store the document; without one, nothing changes and configuration stays exactly as composed.
 
+`stopForShutdown()` stops new writes and watcher starts on a ready provider, then joins namespace write queues and started watcher callbacks. Queued writes that have not started reject through their original caller promises, as on service disposal. Provider-specific resources require the provider's own shutdown operation.
+
 ## Table of Contents
 
 - [Use this package](#use-this-package)
