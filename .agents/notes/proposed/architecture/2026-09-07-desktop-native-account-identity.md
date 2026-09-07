@@ -28,6 +28,8 @@ The [account UI](../../../../packages/client/ui-mantur-account/README.md) select
 
 Marketplace and creation-guide Skill login gates request the same native view through `shell.overlay`, retaining their source detail, project, Session and complete draft. Login completion never installs, inserts a Skill or sends automatically. Another modal or an unavailable owner rejects the request; unloading invalidates late results and releases subscriptions. Standalone device login remains selected only by explicit Host mode.
 
+Source details own post-login focus because their pre-login buttons unmount while the native dialog is open. The requesting source focuses its remounted primary action only if its detail and Session still match, the source remains visible and no other modal owns interaction. This does not invoke the action or change generic modal behavior.
+
 ## Alternatives considered
 
 **Share the device bearer through renderer storage or CLI environment.** This exposes account authority beyond Main and does not provide per-command cancellation or expiry.

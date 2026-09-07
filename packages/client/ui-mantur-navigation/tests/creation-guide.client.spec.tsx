@@ -37,6 +37,34 @@ function props(preferences = settings, market = ready) {
 function guide(input: ReturnType<typeof props>) { return <CreationGuide {...input as unknown as CreationGuideProps} /> }
 
 describe('Mantur creation guide', () => {
+  it.each([false, true])('restores the requested detail action after login with signedIn=%s', (signedIn) => {
+    const detail = { ...skill, installed: false, usesOperators: [] }
+    const state = { phase: 'ready' as const, catalog: { skills: [detail], installedCount: 0, signedIn: false }, detail }
+    const p = props(settings, state)
+    const view = render(guide(p))
+    fireEvent.click(screen.getByRole('button', { name: '短剧编剧' }))
+    fireEvent.click(screen.getByRole('button', { name: '登录后安装' }))
+    view.rerender(guide(props(settings, { ...state, loginPhase: 'starting' })))
+    view.rerender(guide(props(settings, { ...state, catalog: { ...state.catalog, signedIn } })))
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: signedIn ? '安装并使用' : '登录后安装' }))
+    expect(p.install).not.toHaveBeenCalled()
+    expect(p.inputActions.submit).not.toHaveBeenCalled()
+  })
+
+  it('does not restore focus to a detail after the current Session changes during login', () => {
+    const detail = { ...skill, installed: false, usesOperators: [] }
+    const state = { phase: 'ready' as const, catalog: { skills: [detail], installedCount: 0, signedIn: false }, detail }
+    const view = render(guide(props(settings, state)))
+    fireEvent.click(screen.getByRole('button', { name: '短剧编剧' }))
+    fireEvent.click(screen.getByRole('button', { name: '登录后安装' }))
+    view.rerender(guide(props(settings, { ...state, loginPhase: 'starting' })))
+    view.rerender(guide({ ...props(settings, { ...state, loginPhase: 'starting' }), sessionId: 's2' }))
+    const before = document.activeElement
+    view.rerender(guide({ ...props(settings, state), sessionId: 's2' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(document.activeElement).toBe(before)
+  })
+
   it('shows the first welcome and never inserts invented catalog entries', () => {
     const p = props()
     render(guide(p))

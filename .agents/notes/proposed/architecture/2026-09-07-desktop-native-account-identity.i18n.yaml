@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/proposed/architecture/2026-09-07-desktop-native-account-identity.md
-2026-09-07-desktop-native-account-identity.md: c55b6c744155abfe567ceafc6328c5ed9d97a5dc
-2026-09-07-desktop-native-account-identity.zh.md: 89901b23cef495af45c4d7e90dbb5e0b0343e279
+2026-09-07-desktop-native-account-identity.md: 61373d8ebdfbaa6562877146c15490ba7743f49d
+2026-09-07-desktop-native-account-identity.zh.md: addcbcd458232d53ad6fbcf660ebdef517d15886
