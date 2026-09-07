@@ -172,6 +172,8 @@ function bench(over?: BenchOptions) {
         ? over?.permissions
         : key === 'plan' ? over?.plan : key === 'imageLimits' ? over?.imageLimits : undefined)),
     useInput: bindSnapshotSelector(shell.state),
+    useComposerInput: bindSnapshotSelector(shell.state),
+    unassignedActions: undefined,
     inputActions: shell.actions,
     keyboard: shell,
     addImages: over?.addImages ?? (() => null),

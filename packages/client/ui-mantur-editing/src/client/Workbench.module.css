@@ -1,10 +1,10 @@
 .workbench { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; background: var(--dsw-alias-bg-base); }
-.header { display: flex; align-items: center; gap: 8px; padding: 6px 10px; min-height: 36px; box-sizing: border-box; border-bottom: 1px solid var(--dsw-alias-border-l3); }
+.header { display: flex; align-items: center; gap: 8px; padding: 6px 10px; min-height: 36px; box-sizing: border-box; border-bottom: 0.5px solid var(--dsw-alias-border-l3); }
 .header strong { margin-right: auto; }
-.header button { color: inherit; background: var(--dsw-alias-bg-base); border: 1px solid var(--dsw-alias-border-l3); border-radius: 6px; padding: 4px 8px; font-size: 12px; cursor: pointer; }
+.header button { color: inherit; background: var(--dsw-alias-bg-base); border: 0.5px solid var(--dsw-alias-border-l3); border-radius: 6px; padding: 4px 8px; font-size: 12px; cursor: pointer; }
 .editor { flex: 1; width: 100%; min-height: 0; border: 0; }
 .openAction {
-  border: 1px solid var(--dsw-alias-border-l3);
+  border: 0.5px solid var(--dsw-alias-border-l3);
   border-radius: 6px;
   padding: 4px 10px;
   background: transparent;

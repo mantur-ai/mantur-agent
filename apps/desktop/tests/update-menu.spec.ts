@@ -11,6 +11,7 @@ const updateItemIds = new Set([
   'desktop-update-status',
   'desktop-check-update',
   'desktop-install-update',
+  'desktop-download-update',
 ])
 
 function menuFor(platform: NodeJS.Platform, state: DesktopUpdateState, overrides = {}) {
@@ -22,6 +23,7 @@ function menuFor(platform: NodeJS.Platform, state: DesktopUpdateState, overrides
     state,
     copy: desktopCopy('zh-CN'),
     onCheck: vi.fn(),
+    onDownload: vi.fn(),
     onInstall: vi.fn(),
     ...overrides,
   })
@@ -67,7 +69,7 @@ describe('desktop update menu', () => {
       updatePresentation('darwin', { kind: 'checking' }),
       updatePresentation('darwin', { kind: 'available', version: '1.3.0', prompting: false }),
       updatePresentation('darwin', { kind: 'available', version: '1.3.0', prompting: true }),
-      updatePresentation('darwin', { kind: 'downloading', version: '1.3.0', percent: 42 }),
+      updatePresentation('darwin', { kind: 'downloading', version: '1.3.0', percent: 42, transferred: 420, total: 1000 }),
       updatePresentation('darwin', { kind: 'ready', version: '1.3.0', prompting: false }),
       updatePresentation('darwin', { kind: 'ready', version: '1.3.0', prompting: true }),
       updatePresentation('darwin', { kind: 'up-to-date', requestedByUser: true }),

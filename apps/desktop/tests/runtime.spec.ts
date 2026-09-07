@@ -1,6 +1,7 @@
 /** Desktop dsh child-process contract and shutdown lifecycle. */
 
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { once } from 'node:events'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -44,6 +45,9 @@ describe('desktop runtime', () => {
 
     try {
       await expect(service.ready).resolves.toBe('http://127.0.0.1:4312/?token=desktop-test')
+      const reply = once(service.child, 'message', { signal: AbortSignal.timeout(2_000) })
+      service.child.send({ type: 'desktop-test/ping' })
+      await expect(reply).resolves.toEqual([{ type: 'desktop-test/pong' }, undefined])
       service.stop()
       await service.closed
       if (process.platform === 'win32') expect(service.child.signalCode).toBe('SIGTERM')

@@ -1,11 +1,17 @@
 import { spawnSync } from 'node:child_process'
+import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import tsconfigPaths from 'vite-tsconfig-paths'
 import { resolvePwshPath } from './packages/shell/pwsh-local/src/resolve.ts'
 import { defineConfig } from 'vitest/config'
 import { standardDecoratorPlugin, vitestExecArgv } from './vitest.shared.ts'
 import { COVERAGE_EXEMPT_ENV, coverageExemptHeavySuites } from './scripts/coverage-exempt.ts'
-import { COVERAGE_PARTITION_MODE_ENV } from './scripts/coverage-partitions.ts'
+import { COVERAGE_PARTITION_MODE_ENV, COVERAGE_TEST_TIMEOUT_ENV, coverageTestTimeoutConfig } from './scripts/coverage-partitions.ts'
+
+// Load only in the Vitest coordinator; spawned product processes inherit no preload.
+if (process.env.DSH_VITEST_FORK_DIAGNOSTICS !== undefined) {
+  createRequire(import.meta.url)('./scripts/vitest-fork-diagnostics.cjs')
+}
 
 // Prints exact `path:line:col` records for every uncovered statement, branch
 // path, and function when a file misses the per-file 100% gate — the built-in
@@ -18,6 +24,14 @@ const uncoveredLocationsReporter = fileURLToPath(new URL('./scripts/coverage-unc
 // map applies to every test file. paths must win over package exports so built
 // lib/ never loads a second module-singleton copy.
 const pathsPlugin = (): ReturnType<typeof tsconfigPaths> => tsconfigPaths({ projects: ['./tsconfig.base.json'] })
+
+// Source composition tests provide the explicit mock; this resolver does not supply a Remote implementation.
+const mockedEditingRemote = {
+  name: 'mocked-mantur-editing-remote',
+  resolveId(id: string) {
+    if (id === '@deepseek-ai/dsh-client-ui-mantur-editing/remote') return id
+  },
+}
 
 const windowsUnsupportedPackages = process.platform === 'win32'
   ? [
@@ -147,8 +161,11 @@ const processBoundTests = [
   'packages/workflow/workflow-worker-thread/tests/session.spec.ts',
 ]
 
+// Vitest 4 does not forward CLI expect/hook options into inline projects.
+const coverageTimeouts = coverageTestTimeoutConfig(process.env[COVERAGE_TEST_TIMEOUT_ENV])
+
 export default defineConfig({
-  plugins: [pathsPlugin(), standardDecoratorPlugin()],
+  plugins: [pathsPlugin(), standardDecoratorPlugin(), mockedEditingRemote],
   test: {
     setupFiles: ['./scripts/test-proxy-environment.ts', './scripts/test-invariants.ts'],
     // .tsx: client component specs (jsdom via per-file @vitest-environment pragma).
@@ -158,9 +175,10 @@ export default defineConfig({
     // Node stability; process-bound suites stay separate for inventory control.
     projects: [
       {
-        plugins: [pathsPlugin(), standardDecoratorPlugin()],
+        plugins: [pathsPlugin(), standardDecoratorPlugin(), mockedEditingRemote],
         test: {
           name: 'thread-safe',
+          ...coverageTimeouts,
           execArgv: vitestExecArgv,
           // Node 24 has aborted in its CJS lexer (v8::ToLocalChecked Empty
           // MaybeLocal in cjs_lexer::Parse) from worker threads on macOS,
@@ -176,9 +194,10 @@ export default defineConfig({
         },
       },
       {
-        plugins: [pathsPlugin(), standardDecoratorPlugin()],
+        plugins: [pathsPlugin(), standardDecoratorPlugin(), mockedEditingRemote],
         test: {
           name: 'process-bound',
+          ...coverageTimeouts,
           execArgv: vitestExecArgv,
           pool: 'forks',
           setupFiles: ['./scripts/test-proxy-environment.ts', './scripts/test-invariants.ts'],

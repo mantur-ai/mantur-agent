@@ -50,27 +50,31 @@ export function runLiveWritePathContract(
       const { ctx } = await make()
       const session = ctx.sessions.create(SessionId('routed'))
       const handle = await ctx.sessionPersistence.create(session.header)
-      vi.useFakeTimers()
+      const persist = vi.spyOn(ctx.sessionPersistence as unknown as {
+        persistBatch: (...args: unknown[]) => Promise<void>
+      }, 'persistBatch')
       try {
-        session.append('turn/start', { turn: 1 })
-        session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
-        await vi.advanceTimersByTimeAsync(batchDelayMs - 1)
-        // One tick short of the window: nothing stored yet (in-process
-        // visibility serves the created-but-empty session).
-        expect(await readAll(ctx.sessionPersistence, session.id)).toEqual([])
-        await vi.advanceTimersByTimeAsync(1)
-      } finally {
-        vi.useRealTimers()
-      }
-      // The deadline started a background write; wait for its durability.
-      await vi.waitFor(async () => {
+        vi.useFakeTimers()
+        try {
+          session.append('turn/start', { turn: 1 })
+          session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+          await vi.advanceTimersByTimeAsync(batchDelayMs - 1)
+          expect(persist).not.toHaveBeenCalled()
+          expect(await readAll(ctx.sessionPersistence, session.id)).toEqual([])
+          await vi.advanceTimersByTimeAsync(1)
+        } finally {
+          vi.useRealTimers()
+        }
+        expect(persist).toHaveBeenCalledTimes(1)
+        await persist.mock.results[0]!.value
         expect((await readAll(ctx.sessionPersistence, session.id)).map(event => [event.type, event.seq])).toEqual([
           ['turn/start', 0],
           ['turn/end', 1],
         ])
-      })
-      await handle.close()
-      await ctx.fiber.dispose()
+      } finally {
+        persist.mockRestore()
+        try { await handle.close() } finally { await ctx.fiber.dispose() }
+      }
     })
 
     it('a session without an active write handle persists nothing', async () => {

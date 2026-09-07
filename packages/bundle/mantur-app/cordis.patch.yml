@@ -23,6 +23,10 @@
 - id: ui-plan
   disabled: true
 
+- id: ui-workspace
+  config:
+    newSessionWorkspace: explicit
+
 - insert:
     - id: mantur-identity
       name: '@deepseek-ai/dsh-mantur-app'
@@ -37,6 +41,10 @@
       name: '@deepseek-ai/dsh-authorization-manturhub'
     - id: mantur-marketplace
       name: '@deepseek-ai/dsh-manturhub-marketplace'
+    - id: mantur-projects
+      name: '@deepseek-ai/dsh-mantur-projects'
+      config:
+        defaultRoot: !!js process.env.DSH_MANTUR_PROJECTS_ROOT
     - id: ui-mantur-navigation
       name: '@deepseek-ai/dsh-client-ui-mantur-navigation'
       config:
@@ -48,7 +56,7 @@
     - id: ui-mantur-account
       name: '@deepseek-ai/dsh-client-ui-mantur-account'
 
-# Enabled only by a profile that supplies a local editor URL.
+# Enabled only by a profile that supplies the editor checkout, Node executable and runtime budgets.
 - insert:
     - id: ui-mantur-editing
       name: '@deepseek-ai/dsh-client-ui-mantur-editing'

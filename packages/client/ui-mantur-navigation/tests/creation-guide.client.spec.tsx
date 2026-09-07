@@ -26,7 +26,7 @@ function props(preferences = settings, market = ready) {
     hero: true, disabled: false, sessionId: 's1', t,
     usePreferences: (select: (value: unknown) => unknown) => select({ status: 'ready', value: preferences }),
     useMarketplace: (select: (value: unknown) => unknown) => select(market),
-    useInput: (select: (value: unknown) => unknown) => select({ draft: '我的草稿', imageIds: ['image'], occurrences: [] }),
+    useGuideInput: (select: (value: unknown) => unknown) => select({ draft: '我的草稿', imageIds: ['image'], occurrences: [] }),
     inputActions: { appendReference, submit },
     appendReference,
     saveMode: vi.fn(() => Promise.resolve(true)), saveClosed: vi.fn(() => Promise.resolve(true)),
@@ -220,12 +220,12 @@ describe('Mantur creation guide', () => {
 
   it('reads occurrence identity, tolerates no input binding, and closes the complete Skill list', () => {
     const p = props()
-    const withOccurrences = { ...p, useInput: (select: (value: unknown) => unknown) => select({ occurrences: [
+    const withOccurrences = { ...p, useGuideInput: (select: (value: unknown) => unknown) => select({ occurrences: [
       { source: 'file', ref: skill.slug }, { source: 'skill', ref: 'another' }, { source: 'skill', ref: skill.slug },
     ] }) }
     const view = render(guide(withOccurrences))
     expect(screen.getByRole('button', { name: '短剧编剧' }).getAttribute('aria-pressed')).toBe('true')
-    view.rerender(guide({ ...p, useInput: (select: (value: unknown) => unknown) => select(undefined) }))
+    view.rerender(guide({ ...p, useGuideInput: (select: (value: unknown) => unknown) => select(undefined) }))
     expect(screen.getByRole('button', { name: '短剧编剧' }).getAttribute('aria-pressed')).toBe('false')
     fireEvent.click(screen.getByRole('button', { name: zh.more }))
     fireEvent.click(screen.getByRole('button', { name: zh.close }))

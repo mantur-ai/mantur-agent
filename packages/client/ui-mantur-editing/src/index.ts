@@ -5,9 +5,11 @@ import { isAbsolute } from 'node:path'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
-import * as McpClient from '@deepseek-ai/dsh-mcp-client'
+import { apply as applyMcpClient, Config as McpClientConfig, inject as mcpClientInject, name as mcpClientName } from '@deepseek-ai/dsh-mcp-client'
 import { startEditor, type EditorRuntime, type RuntimeConfig } from './runtime.ts'
 import type { EditingWorkspace } from './types.ts'
+
+const McpClient = { apply: applyMcpClient, Config: McpClientConfig, inject: mcpClientInject, name: mcpClientName }
 
 declare module '@deepseek-ai/cordis' {
   interface Context {

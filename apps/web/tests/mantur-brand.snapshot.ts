@@ -1,5 +1,5 @@
 /** Mantur desktop product identity over the real shipped Web composition. */
-import { readFile } from 'node:fs/promises'
+import { mkdir, readFile } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { join } from 'node:path'
@@ -18,9 +18,7 @@ import {
   webSnapshotMode,
   type WebScaffold,
 } from './scaffold.ts'
-import {
-  connectFreshWorkspace, connectFreshWorkspaceZh, newEnglishPage, saveFailureShot, ZH_BROWSER_LOCALE,
-} from './support.ts'
+import { newEnglishPage, saveFailureShot, ZH_BROWSER_LOCALE } from './support.ts'
 
 const OVERLAY = fileURLToPath(new URL('../../../packages/bundle/mantur-app/cordis.patch.yml', import.meta.url))
 const INSTALL_ANCHOR = fileURLToPath(new URL('../../../packages/bundle/mantur-app/package.json', import.meta.url))
@@ -34,6 +32,24 @@ const TOOL_SCHEMAS_EXPECTED = fileURLToPath(
 const MARKETPLACE_EXPECTED = join(SNAPSHOT_DIR, 'marketplace.expected.md')
 const ACCOUNT_SETTINGS_EXPECTED = join(SNAPSHOT_DIR, 'account-settings.expected.md')
 const MODE = webSnapshotMode()
+
+/** Choose a Workspace from Mantur's resident root composer and await the real Session selection. */
+async function connectManturWorkspace(page: Page, root: string, locale: 'zh' | 'en'): Promise<void> {
+  const copy = locale === 'zh'
+    ? { choose: '选择工作区', dialog: '选择工作区目录', edit: '编辑路径', open: '打开' }
+    : { choose: 'Choose workspace', dialog: 'Select Workspace Directory', edit: 'Edit path', open: 'Open' }
+  const path = join(root, `workspace-${locale}`)
+  await mkdir(path)
+  await page.getByRole('button', { name: copy.choose, exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: copy.dialog })
+  await dialog.getByRole('button', { name: copy.edit }).click()
+  const input = dialog.getByRole('textbox', { name: copy.edit })
+  await input.fill(path)
+  await input.press('Enter')
+  await dialog.getByRole('button', { name: copy.open, exact: true }).click()
+  await expect.poll(() => page.getByRole('treeitem', { selected: true }).count()).toBe(1)
+  await page.locator('[data-composer-input][contenteditable="true"]').waitFor()
+}
 
 const marketplaceSkill = {
   slug: 'story-director',
@@ -218,7 +234,7 @@ describe.skipIf(MODE === 'record')('web snapshot: Mantur product identity', () =
     expect(await page.locator('img[src$="mantur-logo.png"]').count()).toBe(2)
     expect(await page.getByRole('button', { name: '标准模式' }).count()).toBe(0)
     expect(await page.getByRole('button', { name: /计划模式/ }).count()).toBe(0)
-    await connectFreshWorkspaceZh(page, scaffold.workspaceCwd)
+    await connectManturWorkspace(page, scaffold.workspaceCwd, 'zh')
     await page.getByRole('button', { name: '选择模型' }).waitFor({ timeout: 10_000 })
     await page.getByRole('button', { name: /访问模式/ }).waitFor({ timeout: 10_000 })
 
@@ -352,7 +368,7 @@ describe.skipIf(MODE === 'record')('web snapshot: Mantur product identity', () =
       await recipePage.waitForSelector('[class*="frame"]', { timeout: 30_000 })
       await recipePage.getByRole('heading', { name: '登录漫途账号' }).waitFor({ timeout: 10_000 })
       await recipePage.getByRole('button', { name: '暂时跳过' }).click()
-      await connectFreshWorkspaceZh(recipePage, recipeScaffold.workspaceCwd)
+      await connectManturWorkspace(recipePage, recipeScaffold.workspaceCwd, 'zh')
       const createRequestsBeforeRecipe = createRequests.length
       const initialIds = new Set((await recipeScaffold.ctx.sessionPersistence.list()).map(snapshot => snapshot.header.id))
 
@@ -423,7 +439,7 @@ describe.skipIf(MODE === 'record')('web snapshot: Mantur product identity', () =
       expect(await englishPage.getByText(/DeepSeek Harness/).count()).toBe(0)
       expect(await englishPage.getByRole('button', { name: 'Standard mode' }).count()).toBe(0)
       expect(await englishPage.getByRole('button', { name: /Plan mode/ }).count()).toBe(0)
-      await connectFreshWorkspace(englishPage, englishScaffold.workspaceCwd, 'workspace-en')
+      await connectManturWorkspace(englishPage, englishScaffold.workspaceCwd, 'en')
       await englishPage.getByRole('button', { name: 'Select model' }).waitFor({ timeout: 10_000 })
       await englishPage.getByRole('button', { name: /Access mode/ }).waitFor({ timeout: 10_000 })
       expect(englishTripwire.pageErrors).toEqual([])
