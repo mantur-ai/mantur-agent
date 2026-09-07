@@ -20,9 +20,11 @@ Host 停机必须先调用明确的所有者操作，才能授权安装。agent 
 
 后台任务注册表冻结新注册，并等待原始生产者释放 Promise 和异步完成监听器。记录离开注册表后仍保留失败。它不会取消工作，后续所有者释放也不会触发取消；本地资源由独立执行所有者停止。注册表记录被强制标记失败不能证明资源已释放。
 
+工作流引擎冻结新运行，等待线程终止、待处理子任务创建和超过普通释放期限的子任务清理。子任务清理错误在子任务和运行记录被移除后仍保留。只有释放操作结束、线程退出、全部子任务创建及清理结束后，运行才离开引擎所有权集合；此后只保留失败信息。
+
 ## 上游所有权
 
-现有观察钩子无法冻结直接收件箱修改、恢复驱动器内部持有的领取批次、封存直接 Session 追加，或在工厂释放 writer 后继续保留它。因此改动位于 `packages/core/agent/src/{index,inbox}.ts`、`packages/core/agent-loop/src/{index,agent}.ts`、`packages/core/session/src/index.ts` 和 `packages/subprocess/subprocess-local/src/index.ts`。终端注册表操作位于 `packages/terminal/terminal/src/index.ts`，因为外部钩子无法冻结发送或保留已移除分配的失败；受控晚到分配、等待关闭和失败保留测试用于验证上游升级。任务注册表改动位于 `packages/jobs/jobs-local/src/index.ts`；插件无法冻结直接 start 或恢复已丢弃的生产者 Promise。未取消的待处理工作、强制失败记录、晚到释放及完成监听器测试用于验证升级。 不修改 vendored Cordis 行为。工厂在自身生命周期结束前保留已关闭会话对象，以检测关闭后的写入；这是验证先前已关闭 writer 的保留成本。
+现有观察钩子无法冻结直接收件箱修改、恢复驱动器内部持有的领取批次、封存直接 Session 追加，或在工厂释放 writer 后继续保留它。因此改动位于 `packages/core/agent/src/{index,inbox}.ts`、`packages/core/agent-loop/src/{index,agent}.ts`、`packages/core/session/src/index.ts` 和 `packages/subprocess/subprocess-local/src/index.ts`。终端注册表操作位于 `packages/terminal/terminal/src/index.ts`，因为外部钩子无法冻结发送或保留已移除分配的失败；受控晚到分配、等待关闭和失败保留测试用于验证上游升级。任务注册表改动位于 `packages/jobs/jobs-local/src/index.ts`；插件无法冻结直接 start 或恢复已丢弃的生产者 Promise。未取消的待处理工作、强制失败记录、晚到释放及完成监听器测试用于验证升级。 工作流改动位于 `packages/workflow/workflow-worker-thread/src/{index,host}.ts`，因为普通释放会在等待期限后放弃子任务，并吞掉清理失败。晚到子任务创建、超出期限的清理、历史失败及线程终止拒绝构成升级回归。 不修改 vendored Cordis 行为。工厂在自身生命周期结束前保留已关闭会话对象，以检测关闭后的写入；这是验证先前已关闭 writer 的保留成本。
 
 ## 验证
 
