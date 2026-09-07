@@ -64,7 +64,7 @@ it('places native update status above Settings in expanded and collapsed sidebar
     await state({ kind: 'downloading', version: '1.2.0', percent: null, transferred: 40000000, total: null })
     expect(await page.getByRole('progressbar').getAttribute('aria-valuenow')).toBeNull()
     await state({ kind: 'ready', version: '1.2.0', prompting: false })
-    const install = page.getByRole('button', { name: /下载完成，重启安装.*重启并安装/u })
+    const install = page.getByRole('button', { name: /下载完成，重启安装.*重启并更新/u })
     await install.waitFor()
     await page.screenshot({ path: `${artifacts}/collapsed.png` })
     await install.click()

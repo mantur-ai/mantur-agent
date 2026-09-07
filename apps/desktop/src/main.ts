@@ -1,6 +1,7 @@
 /** Thin native window over the shipped Mantur profile. */
 
 import { appendFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron'
 import electronUpdater from 'electron-updater'
@@ -162,7 +163,11 @@ async function launch(): Promise<void> {
     service = startDesktopService({
       electronExecutable: process.execPath,
       cwd: paths.launchRoot,
-      environment: { ...process.env, DSH_HOME: paths.dshHome },
+      environment: {
+        ...process.env,
+        DSH_HOME: paths.dshHome,
+        DSH_MANTUR_PROJECTS_ROOT: join(app.getPath('documents'), '漫途项目'),
+      },
       logPath: paths.logPath,
       mirrorOutput: !app.isPackaged,
     })

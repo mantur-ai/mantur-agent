@@ -222,17 +222,59 @@ for (const backend of backends) {
         expect(failedMember?.error).toContain('child Session recovery failed')
       }, { timeout: 5_000 })
 
-      await second.ctx.agentTeams.sendMessage(activeHandle.agent, {
-        target: 'recoverable',
-        content: [{ type: 'text', text: 'resume after reconciliation' }],
-        signal: SIGNAL,
+      const mailbox = (second.ctx.agentTeams as unknown as {
+        mailbox: {
+          pendingDispatches(): readonly Promise<unknown>[]
+        }
+      }).mailbox
+      const entered = Promise.withResolvers<undefined>()
+      const release = Promise.withResolvers<undefined>()
+      const flush = second.ctx.sessions.flush.bind(second.ctx.sessions)
+      let delayReceipt = true
+      const delayed = vi.spyOn(second.ctx.sessions, 'flush').mockImplementation(async (session) => {
+        // Keep writer admission synchronous; only the completion notification is delayed.
+        const completion = await flush(session)
+        if (delayReceipt && session.id === childId && session.snapshotEvents().some(event =>
+          event.type === 'user/message' && event.data.source.kind === 'team-message')) {
+          delayReceipt = false
+          entered.resolve(undefined)
+          await release.promise
+        }
+        return completion
       })
-      await vi.waitFor(() => { expect(second.ctx.agents.get(childId)).toBeUndefined() }, { timeout: 5_000 })
-      await vi.waitFor(() => { expect(durable(activeHandle.agent).pendingMessages).toEqual([]) })
+      try {
+        await second.ctx.agentTeams.sendMessage(activeHandle.agent, {
+          target: 'recoverable',
+          content: [{ type: 'text', text: 'resume after reconciliation' }],
+          signal: SIGNAL,
+        })
+        await entered.promise
+        await vi.waitFor(() => { expect(second.ctx.agents.get(childId)).toBeUndefined() }, { timeout: 5_000 })
+        expect(durable(activeHandle.agent).pendingMessages).toHaveLength(1)
+        release.resolve(undefined)
+        await Promise.all(mailbox.pendingDispatches())
+        expect(durable(activeHandle.agent).pendingMessages).toEqual([])
+      } finally {
+        release.resolve(undefined)
+        await Promise.all(mailbox.pendingDispatches())
+        delayed.mockRestore()
+      }
 
       await activeHandle.dispose()
       await failedHandle.dispose()
       await second.dispose()
+
+      const third = await stack(backend, storageRoot, [])
+      const leadEvents = await storedEvents(third.ctx, activeRootId)
+      const queued = leadEvents.flatMap(event => event.type === 'team/message/queued' ? [event.data.message.id] : [])
+      const delivered = leadEvents.flatMap(event => event.type === 'team/message/delivered' ? [event.data.messageId] : [])
+      const childEvents = await storedEvents(third.ctx, childId)
+      const received = childEvents.flatMap(event => event.type === 'user/message' && event.data.source.kind === 'team-message'
+        ? [event.data.source.messageId] : [])
+      expect(queued).toHaveLength(1)
+      expect(delivered).toEqual(queued)
+      expect(received).toEqual(queued)
+      await third.dispose()
     })
 
     it('reconciles a provisioning child whose initial prompt is durably pending', {

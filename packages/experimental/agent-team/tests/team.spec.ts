@@ -90,6 +90,7 @@ interface TeamServiceInternals {
     liveChildrenByRoot(): Map<Agent, SessionId[]>
   }
   readonly mailbox: {
+    pendingDispatches(): readonly Promise<unknown>[]
     tryDispatch(root: Agent, message: TeamMessageSnapshot, signal: AbortSignal): Promise<boolean>
     serializeDispatch(message: TeamMessageSnapshot, operation: () => Promise<boolean>): Promise<boolean>
     markDelivered(root: Agent, messageId: ReturnType<typeof TeamMessageId>, targetId: SessionId): Promise<void>
@@ -1216,6 +1217,46 @@ describe('Team mailbox and waiting', () => {
     ctx.agentTeams.interrupt(lead, 'reordered-target')
     target.cancel({ kind: 'parent' })
     await waitNoAgent(ctx, target.id)
+  })
+
+  it('acknowledges a cold target receipt without resuming or redelivering the message', async () => {
+    const { ctx, lead, adapter } = await setup(['hang'])
+    const started = await spawn(ctx, lead, 'cold-receipt')
+    const target = await waitRunning(ctx, started.member.id)
+    const message: TeamMessageSnapshot = {
+      id: TeamMessageId('cold-recorded-message'),
+      senderId: lead.id,
+      senderName: 'lead',
+      targetId: target.id,
+      content: content('already persisted'),
+    }
+    target.session.append('user/message', createUserMessage({
+      content: message.content,
+      source: {
+        kind: 'team-message', teamId: TeamId(lead.id), messageId: message.id,
+        senderId: lead.id, senderName: 'lead',
+      },
+    }), { surfaceOp: 'append' })
+    const mailbox = teamInternals(ctx).mailbox
+    await Promise.all(mailbox.pendingDispatches())
+    await ctx.sessions.flush(target.session)
+    ctx.agentTeams.interrupt(lead, 'cold-receipt')
+    await waitNoAgent(ctx, target.id)
+    const requests = adapter.requests.length
+    lead.session.append('team/message/queued', { version: 2, teamId: TeamId(lead.id), message })
+    await ctx.sessions.flush(lead.session)
+    const deliver = vi.spyOn(ctx.subagents as unknown as HostPromptDeliverer, deliverSubagentPrompt)
+    try {
+      await expect(mailbox.tryDispatch(lead, message, SIGNAL)).resolves.toBe(true)
+      expect(deliver).not.toHaveBeenCalled()
+      expect(ctx.agents.get(target.id)).toBeUndefined()
+      expect(adapter.requests).toHaveLength(requests)
+      expect(durable(lead).pendingMessages).toEqual([])
+      expect((await storedEvents(ctx, lead.id)).filter(event => event.type === 'team/message/delivered'
+        && event.data.messageId === message.id)).toHaveLength(1)
+    } finally {
+      deliver.mockRestore()
+    }
   })
 
   it('deduplicates live target history and contains inspection and delivery failures', async () => {

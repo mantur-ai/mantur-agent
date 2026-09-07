@@ -5,19 +5,40 @@ import { NativeUpdates, type NativeUpdateBridge, type NativeUpdateSnapshot } fro
 function fixture() {
   let changed!: (value: NativeUpdateSnapshot) => void
   let loaded!: (value: NativeUpdateSnapshot) => void
+  let rejected!: (error: unknown) => void
   const unsubscribe = vi.fn()
   const bridge: NativeUpdateBridge = {
-    getSnapshot: () => new Promise((resolve) => { loaded = resolve }),
+    getSnapshot: () => new Promise((resolve, reject) => { loaded = resolve; rejected = reject }),
     subscribe: (listener) => { changed = listener; return unsubscribe },
     check: vi.fn(async () => {}), download: vi.fn(async () => {}), install: vi.fn(async () => {}),
   }
   const controller = new NativeUpdates(bridge)
   return { controller, bridge, unsubscribe,
+    rejected: (error: unknown) => { rejected(error) },
     changed: (value: NativeUpdateSnapshot) => { changed(value) }, loaded: (value: NativeUpdateSnapshot) => { loaded(value) } }
 }
 const snapshot: NativeUpdateSnapshot = { revision: 2, enabled: true, currentVersion: '1.0.0', state: { kind: 'available', version: '1.2.0', prompting: false } }
 
 describe('native update view', () => {
+  it('reports a failed initial snapshot and clears it when a newer event arrives', async () => {
+    const subject = fixture()
+    try {
+      subject.rejected('snapshot unavailable')
+      await vi.waitFor(() => { expect(subject.controller.store.getSnapshot().failure).toBe('snapshot unavailable') })
+      subject.changed(snapshot)
+      subject.changed({ ...snapshot, revision: 3, state: { kind: 'checking' } })
+      expect(subject.controller.store.getSnapshot()).toEqual({ snapshot: { ...snapshot, revision: 3, state: { kind: 'checking' } } })
+      subject.controller.run('check')
+      expect(subject.bridge.check).toHaveBeenCalledOnce()
+    } finally { subject.controller.dispose() }
+  })
+  it('ignores a snapshot failure delivered after unload', async () => {
+    const subject = fixture()
+    subject.controller.dispose()
+    subject.rejected(new Error('late snapshot failure'))
+    await new Promise(resolve => setImmediate(resolve))
+    expect(subject.controller.store.getSnapshot()).toEqual({})
+  })
   it('retains a newer event when the initial snapshot arrives late', async () => {
     const subject = fixture()
     try {

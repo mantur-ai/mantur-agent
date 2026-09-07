@@ -6,6 +6,7 @@ import type {} from '@deepseek-ai/dsh-api-session-controller/client'
 import type {} from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type {} from '@deepseek-ai/dsh-authorization-manturhub/remote'
 import manturMarketplaceRemote from '@deepseek-ai/dsh-manturhub-marketplace/remote'
+import manturProjectsRemote from '@deepseek-ai/dsh-mantur-projects/remote'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
@@ -18,6 +19,8 @@ import type { ReferenceInsert } from '@deepseek-ai/dsh-client-ui-conversation/cl
 import { GUIDE_NAMESPACE, type CreationMode, type GuideSettings } from '../guide-settings.ts'
 import { CreationGuide, CreationModes, type GuidePreferencesInjected } from './CreationGuide.tsx'
 import { ManturComposerLayout } from './ManturComposerLayout.tsx'
+import { AutomaticProjectController } from './automatic-project.ts'
+import { en as projectEn, zh as projectZh, type ProjectKey } from './project-locales.ts'
 import { en as guideEn, zh as guideZh, type GuideKey } from './guide-locales.ts'
 import {
   MarketplaceNavigation, MarketplacePage, ProjectsHeading,
@@ -47,14 +50,17 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     'updates.mantur': UpdateKey
     /** Mantur creation-mode and assistant copy. */
     'guide.mantur': GuideKey
+    /** Unassigned draft project location and creation status. */
+    'projects.mantur': ProjectKey
   }
 }
 
 /** Dictionary namespace owned by this plugin. */
 const NS = 'navigation.mantur'
+const ABSENT_GUIDE_INPUT = { getSnapshot: () => undefined, subscribe: () => () => {} }
 
 /** Required UI services and declarations. */
-export const inject = ['slots', 'locale', 'remote', 'sessions', 'workspaces', 'conversation', 'settingsScope']
+export const inject = ['slots', 'locale', 'remote', 'sessions', 'workspaces', 'conversation', 'conversationDrafts', 'uiWorkspace', 'settingsScope']
 
 /** Fill Mantur navigation, workspace terminology, and the root marketplace page. */
 export async function apply(ctx: Context): Promise<void> {
@@ -67,11 +73,21 @@ export async function apply(ctx: Context): Promise<void> {
       inject: () => ({ controller: native, hooks: { updates: native.store } }),
     }, DesktopUpdate))
   }
-  const disposeRemote = await ctx.remote.$mount(manturMarketplaceRemote)
-  ctx.effect(() => disposeRemote, 'ui-mantur-navigation: marketplace Remote')
-  ctx.inject(['remote.manturMarketplace', 'remote.manturAccount'], (scope: Context) => {
+  const disposeMarketplace = await ctx.remote.$mount(manturMarketplaceRemote)
+  ctx.effect(() => disposeMarketplace, 'ui-mantur-navigation: marketplace Remote')
+  const disposeProjects = await ctx.remote.$mount(manturProjectsRemote)
+  ctx.effect(() => disposeProjects, 'ui-mantur-navigation: projects Remote')
+  ctx.inject(['remote.manturMarketplace', 'remote.manturAccount', 'remote.manturProjects'], (scope: Context) => {
     scope.effect(() => scope.locale.register(NS, { zh, en }), 'ui-mantur-navigation: dictionaries')
     scope.effect(() => scope.locale.register('guide.mantur', { zh: guideZh, en: guideEn }), 'ui-mantur-navigation: guide dictionaries')
+    scope.effect(() => scope.locale.register('projects.mantur', { zh: projectZh, en: projectEn }), 'ui-mantur-navigation: project dictionaries')
+    const projects = new AutomaticProjectController({
+      remote: scope.remote.manturProjects, sessions: scope.sessions, workspace: scope.uiWorkspace,
+      persistence: scope.conversation.draftPersistence, text: scope.locale.bind('projects.mantur'),
+    })
+    scope.effect(() => () => { projects.dispose() }, 'ui-mantur-navigation: project controller')
+    scope.effect(() => scope.conversationDrafts.register(projects), 'ui-mantur-navigation: first-send project policy')
+    void projects.load()
     const controller = new ManturMarketplaceStore(scope)
     scope.effect(() => () => { controller.dispose() }, 'ui-mantur-navigation: marketplace controller')
     const preferences = scope.settingsScope.bind<GuideSettings>({ namespace: GUIDE_NAMESPACE })
@@ -92,19 +108,28 @@ export async function apply(ctx: Context): Promise<void> {
       name: 'conversation.hero.modes', locale: 'guide.mantur', inject: () => guidePreferences,
     }, CreationModes))
     scope.slots.inject('conversation.composer.layout', () => scope.slots.register({
-      name: 'conversation.composer.layout',
+      name: 'conversation.composer.layout', locale: 'projects.mantur',
+      inject: () => ({
+        hooks: { automaticProject: projects.store }, chooseRoot: () => projects.chooseRoot(), reloadRoot: () => projects.load(),
+      }),
     }, ManturComposerLayout))
     scope.slots.inject('conversation.composer.guide', () => scope.slots.register({
       name: 'conversation.composer.guide', locale: 'guide.mantur',
       inject: (sessionId: SessionId | undefined) => ({
         ...guidePreferences,
         appendReference: (reference: ReferenceInsert) => {
-          if (sessionId === undefined) return false
+          if (sessionId === undefined) return scope.conversationDrafts.input.appendReference(reference)
           const binding = scope.sessions.binding(sessionId)
           if (binding === undefined) return false
           return scope.conversation.input.for(binding.ctx).appendReference(reference)
         },
-        hooks: { preferences, marketplace: controller.store },
+        hooks: {
+          preferences, marketplace: controller.store,
+          guideInput: sessionId === undefined ? scope.conversationDrafts.input.state : (() => {
+            const binding = scope.sessions.binding(sessionId)
+            return binding === undefined ? ABSENT_GUIDE_INPUT : scope.conversation.input.for(binding.ctx).state
+          })(),
+        },
         marketplaceText: scope.locale.bind(NS),
         load: () => controller.load(),
         ensureCatalog: () => controller.ensureSkillCatalog(),

@@ -65,7 +65,7 @@ smoke 会从解包应用自己的依赖目录启动 `dsh`，把打印出的进�
 
 主进程通过 `ELECTRON_RUN_AS_NODE=1` 复用 Electron 作为 Node 可执行文件，并以 `--profile mantur --host 127.0.0.1 --port 0 --no-open` 启动已构建的 `@deepseek-ai/dsh` 入口。就绪解析器只接受带 token 的 `127.0.0.1` URL。renderer 禁用 Node integration、启用 context isolation 与 sandbox，并把离开本地 origin 的导航交给操作系统浏览器。
 
-安装包携带既有运行时依赖闭包和已构建 Web 前端。Loader profile、插件 manifest、原生模块与 subprocess helper 都需要普通文件，因此 `asar` 保持禁用。关闭或重启应用时，Electron 会等待子进程终止后再退出。
+安装包携带既有运行时依赖闭包和已构建 Web 前端。Loader profile、插件 manifest、原生模块与 subprocess helper 都需要普通文件，因此 `asar` 保持禁用。关闭或重启应用时，Electron 会等待子进程终止后再退出。Electron 父进程通过 Node IPC 通道连接子进程；各功能模块负责校验自己的消息。
 
 永久应用标识为 `ai.mantur.agent`。Electron 就绪前，载体会在操作系统的应用数据根目录下设置稳定的 `mantur-agent` 用户数据目录。其 `harness` 子目录是已安装应用使用的唯一 `DSH_HOME`，因此 `~/.dsh` 中的 CLI 或开发数据不会影响桌面启动。子进程从应用自有的中性目录启动，并把 stdout、stderr、恢复与 updater 诊断追加到同一用户数据根下的 `logs/harness.log`。
 
@@ -81,7 +81,9 @@ macOS Intel、macOS Apple Silicon 与 Windows 使用同一个更新控制器。m
 
 沙箱化 preload 仅暴露具名的草稿读取、保存、重启准备及更新状态与操作消息。主进程只接受当前本地主 frame 的调用，并在 `userData/drafts` 下写入完整检查点，不依赖随机 loopback origin。检查点保留完整编辑器文档、Skill 引用标识，以及用户已经选择的图片原始字节和 SHA-256 摘要。一个 revision 覆盖所有草稿归属以及未关联草稿转入 Session 的两端。过期 revision、附件不完整、存储错误或 renderer 无响应都会阻止重启准备；取消会释放输入锁。
 
-在 macOS 上，保存回执仅在检查点文件与父目录同步后返回。Windows 尚未实现原生持久发布路径，保存会明确失败；Node 未提供所需的目录 fsync 操作。恢复只读取应用检查点和当前 origin 中存在的旧文本草稿。发生冲突会明确报告，不扫描其他浏览器 origin，也不替换其数据。未关联项目输入框的接入依赖 automatic-project 功能，当前随附 profile 尚未提供该输入框。
+在 macOS 上，保存回执仅在检查点文件与父目录同步后返回。Windows 尚未实现原生持久发布路径，保存会明确失败；Node 未提供所需的目录 fsync 操作。恢复只读取应用检查点和当前 origin 中存在的旧文本草稿。发生冲突会明确报告，不扫描其他浏览器 origin，也不替换其数据。漫途 profile 在启用首次发送准备前将未关联输入框接入此检查点。
+
+载体将 `app.getPath('documents')` 下的 `漫途项目` 子目录作为 `DSH_MANTUR_PROJECTS_ROOT` 传给 Host。该值只指定默认根目录，不提前创建目录。[项目所有者](../../packages/workspace/mantur-projects/README.zh.md)持久保存用户明确更改的位置，仅在首次发送时创建子目录。
 
 ## 已知限制
 

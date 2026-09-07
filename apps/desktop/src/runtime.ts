@@ -11,7 +11,7 @@ const OUTPUT_LIMIT = 64 * 1_024
 
 /** A running dsh process and its authenticated startup URL. */
 export interface DesktopService {
-  /** Child process running the shipped dsh CLI through Electron's Node mode. */
+  /** Child process running the shipped dsh CLI through Electron's Node mode, with parent IPC. */
   child: ChildProcessByStdio<null, Readable, Readable>
   /** Resolves after dsh exits and its persistent log finishes closing. */
   closed: Promise<void>
@@ -75,6 +75,7 @@ export function startDesktopService(options: StartDesktopServiceOptions): Deskto
   const entry = options.entry ?? resolveDshEntry()
   const timeoutMs = options.timeoutMs ?? 60_000
   const shutdownTimeoutMs = options.shutdownTimeoutMs ?? 2_000
+  // Node's IPC overload loses the first three explicit stdio stream types.
   const child = spawn(options.electronExecutable, buildDshArguments(entry), {
     cwd: options.cwd,
     env: {
@@ -82,8 +83,8 @@ export function startDesktopService(options: StartDesktopServiceOptions): Deskto
       ELECTRON_RUN_AS_NODE: '1',
       NODE_OPTIONS: '',
     },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  })
+    stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+  }) as ChildProcessByStdio<null, Readable, Readable>
 
   let output = ''
   let settled = false
