@@ -61,14 +61,14 @@ The Host Remote resolves the Agent, coalesces concurrent opens, and launches `ad
 
 Opening the workbench mounts the native MCP tools and a `systemPrompt.section` in that Agent's scope after startup succeeds. The section explains draft reads, review and terminal status, starting a fresh draft after application, inspecting saved work before repeating mutations, and project versus source frame rates. The next model request records this guidance in `request/header`. Unopened Agents receive no editing section; hiding the view retains it, while Agent or Host disposal removes it. This guidance does not repair a disconnected transport or prove that an edit succeeded.
 
-The controlled [editor patch](adapters/mantur-cut.patch) has these fixed sources. Apply it to a clean upstream checkout with `git apply --index`; `git write-tree` must match the result tree before building. It includes the local-import draft fix and terminal-checkpoint persistence fix, without additional editor changes.
+The controlled [editor patch](adapters/mantur-cut.patch) has these fixed sources. Apply it to a clean upstream checkout with `git apply --index`; `git write-tree` must match the result tree before building. It includes draft import, terminal checkpoint persistence, and ordinary H.264 audio finalization. The latter separates the existing PCM mix and encodes AAC directly into MP4 after video rendering, preserving video packets and the pinned Remotion audio-track behavior. See the [audio timing decision](../../../.agents/notes/implemented/bug-fix/2026-09-07-mantur-cut-aac-timing.md) for failure handling, regression commands and upgrade limits.
 
 | Source | Fixed value |
 |---|---|
 | OpenChatCut 0.2.14 upstream commit | `19cba6e1a70a3e589545ce02de975f6494c918f6` |
-| Patched editor commit | `d8f59016ea605fcb240798f0b5a73be48647dabc` |
-| Patched editor tree | `229a7d996c209b5f90a64d9ab92637bd55abbd34` |
-| Patch SHA-256 | `4b786eca9ab82479fc63d47f1adc382d89a6f25d8cef3ae3c9b4a7df3d458401` |
+| Patched editor commit | `863354fba45960fafc9e7d0661b65f413d1baeee` |
+| Patched editor tree | `65d96973380a14050c19c0928a22d1fd59714af7` |
+| Patch SHA-256 | `6a292e61b74e4915723d389cc7c77f87fcbd91f71860f666223e2c6916479307` |
 
 </details>
 
