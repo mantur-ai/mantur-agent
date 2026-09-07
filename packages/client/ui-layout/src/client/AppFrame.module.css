@@ -162,3 +162,7 @@
   min-height: 0;
   overflow: hidden;
 }
+
+.workbenchPane[hidden] {
+  display: none;
+}

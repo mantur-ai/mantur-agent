@@ -1,0 +1,12 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`AppFrame > hides and reopens the same workbench without mounting it before first use 1`] = `
+<div
+  class="_workbenchPane_c17aef"
+  hidden=""
+>
+  <div
+    data-testid="workbench-content"
+  />
+</div>
+`;

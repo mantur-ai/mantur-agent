@@ -32,6 +32,21 @@ function CenterColumn(props: { children?: ReactNode }) {
   return <div className={css.centerCol}>{props.children}</div>
 }
 
+/** Retain an opened workbench until the selected Session changes or the shell unmounts. */
+function WorkbenchColumn({ open, children }: { open: boolean; children?: ReactNode }) {
+  const [opened, setOpened] = useState(open)
+  const column = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    if (open) setOpened(true)
+    else {
+      const focused = document.activeElement
+      if (focused instanceof HTMLElement && column.current?.contains(focused)) focused.blur()
+    }
+  }, [open])
+  if (!open && !opened) return null
+  return <div ref={column} className={css.workbenchPane} hidden={!open}>{children}</div>
+}
+
 /** Details column grid item; width 0 keeps the subtree mounted (never unmount on close). */
 function DetailsColumn(props: { children?: ReactNode }) {
   return <div className={css.detailsCol}>{props.children}</div>
@@ -214,11 +229,9 @@ export function AppFrame({
         <CenterColumn>
           <div className={css.conversationSurface} hidden={mainPageOpen} data-workbench-open={workbenchOpen || undefined}>
             <div className={css.conversationPane}>{renderSlot('conversation', {})}</div>
-            {sessionWorkbenchOpen && (
-              <div key={workbenchSession} className={css.workbenchPane}>
-                {renderSlot('main.workbench', { closeWorkbench: actions.closeWorkbench })}
-              </div>
-            )}
+            <WorkbenchColumn key={workbenchSession} open={sessionWorkbenchOpen}>
+              {renderSlot('main.workbench', { closeWorkbench: actions.closeWorkbench })}
+            </WorkbenchColumn>
           </div>
           {panels.mainPage !== undefined && (
             <div className={css.mainPageSurface}>

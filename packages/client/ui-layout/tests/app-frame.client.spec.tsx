@@ -272,28 +272,42 @@ describe('AppFrame', () => {
     expect(typeof props.closeMainPage).toBe('function')
   })
 
-  it('opens a workbench before the first prompt and keeps the composer surface mounted', () => {
+  it('hides and reopens the same workbench without mounting it before first use', () => {
     selectedSession.current = undefined
-    const { instance, getByTestId, queryByTestId, slotCalls } = mountFrame()
+    const { instance, getByTestId, queryByTestId, slotCalls, unmount } = mountFrame()
     const conversation = getByTestId('center-content')
     expect(queryByTestId('workbench-content')).toBeNull()
     act(() => { instance.actions.openWorkbench() })
-    expect(getByTestId('workbench-content')).toBeTruthy()
-    expect(getByTestId('center-content')).toBe(conversation)
+    const workbench = getByTestId('workbench-content')
     const owner = slotCalls.filter(call => call.key === 'main.workbench').at(-1)?.props as { closeWorkbench: () => void }
+    for (let cycle = 0; cycle < 3; cycle++) {
+      workbench.tabIndex = 0
+      workbench.focus()
+      expect(document.activeElement).toBe(workbench)
+      act(() => { owner.closeWorkbench() })
+      expect(document.activeElement).not.toBe(workbench)
+      workbench.removeAttribute('tabindex')
+      expect(getByTestId('workbench-content')).toBe(workbench)
+      expect(workbench.parentElement?.hidden).toBe(true)
+      expect(getByTestId('center-content')).toBe(conversation)
+      act(() => { instance.actions.openWorkbench() })
+      expect(getByTestId('workbench-content')).toBe(workbench)
+      expect(workbench.parentElement?.hidden).toBe(false)
+    }
     act(() => { owner.closeWorkbench() })
-    expect(queryByTestId('workbench-content')).toBeNull()
-    expect(getByTestId('center-content')).toBe(conversation)
-    act(() => { instance.actions.openWorkbench() })
-    expect(getByTestId('workbench-content')).toBeTruthy()
+    expect(workbench.parentElement).toMatchSnapshot()
+    unmount()
+    expect(workbench.isConnected).toBe(false)
   })
 
   it('remembers workbench visibility separately for each session and the home screen', () => {
     const { instance, queryByTestId, rerenderFrame } = mountFrame()
     act(() => { instance.actions.openWorkbench() })
-    expect(queryByTestId('workbench-content')).not.toBeNull()
+    const first = queryByTestId('workbench-content')
+    expect(first).not.toBeNull()
     selectedSession.current = 's-other' as SessionId
     rerenderFrame()
+    expect(first?.isConnected).toBe(false)
     expect(queryByTestId('workbench-content')).toBeNull()
     act(() => { instance.actions.openWorkbench() })
     expect(queryByTestId('workbench-content')).not.toBeNull()
@@ -311,6 +325,18 @@ describe('AppFrame', () => {
     selectedSession.current = undefined
     rerenderFrame()
     expect(queryByTestId('workbench-content')).not.toBeNull()
+  })
+
+  it('retains the current workbench while a main page covers the conversation', () => {
+    const { instance, getByTestId } = mountFrame()
+    act(() => { instance.actions.openWorkbench() })
+    const workbench = getByTestId('workbench-content')
+    act(() => { instance.actions.openMainPage('skills' as never) })
+    expect(getByTestId('workbench-content')).toBe(workbench)
+    expect(workbench.closest('[hidden]')).not.toBeNull()
+    act(() => { instance.actions.closeMainPage() })
+    expect(getByTestId('workbench-content')).toBe(workbench)
+    expect(workbench.closest('[hidden]')).toBeNull()
   })
 
   it('switches the center to a main page, keeps conversation state mounted, and returns', () => {

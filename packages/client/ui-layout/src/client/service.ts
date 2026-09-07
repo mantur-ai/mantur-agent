@@ -23,7 +23,7 @@ export type PanelActions = BoundActions<ReturnType<typeof createLayoutStore>>
 export interface ILayout {
   /** Show the workbench beside the conversation, including before a Session exists. */
   openWorkbench(): void
-  /** Hide the workbench without changing the conversation. */
+  /** Hide the opened workbench while retaining its current Session instance. */
   closeWorkbench(): void
   /** Toggle the sidebar panel (closed ⟷ contract default width). */
   toggleSidebar(): void
@@ -68,7 +68,7 @@ export class LayoutController implements ILayout {
     this.#require().openWorkbench()
   }
 
-  /** Hide the workbench without changing the conversation. */
+  /** Hide the opened workbench while retaining its current Session instance. */
   closeWorkbench(): void {
     this.#require().closeWorkbench()
   }

@@ -25,7 +25,7 @@ Open the local editor beside the Mantur conversation by selecting Editing on the
 <a id="use-this-package"></a>
 ## Use this package
 
-The Mantur bundle contains a disabled row. Enable `ui-mantur-editing` in a profile patch and provide the runtime fields below. Selecting Editing opens the current Session through the authenticated Remote gateway. The conversation header also offers Editing to reopen a saved Session after closing the view or refreshing the page. Without a selected Session and working directory, the workbench shows a diagnostic. Closing the workbench releases its page while background editor work continues until the Agent or Host is disposed.
+The Mantur bundle contains a disabled row. Enable `ui-mantur-editing` in a profile patch and provide the runtime fields below. Selecting Editing opens the current Session through the authenticated Remote gateway. The conversation header also offers Editing to reopen a saved Session after closing the view or refreshing the page. Without a selected Session and working directory, the workbench shows a diagnostic. Hiding the workbench retains the current Session’s editor page and native Agent binding. Reopening that view continues the same editing draft. Disposing the Agent or Host releases the runtime.
 
 Each Session uses `<cwd>/剪辑/<session-id>/`: `工程/` contains project persistence and runtime state, `素材/` contains imported media, and `导出/` is the default export destination. The Host reads `cwd` from the resolved Agent's Session header; the browser cannot select another path. Session directory components reject traversal and symbolic links. Reopening preserves files. Different Sessions use separate runtimes and tool scopes even within one project.
 
@@ -93,7 +93,7 @@ Opening editing changes the Agent's available tool definitions; subsequent reque
 <a id="known-limitations-and-deferred-work"></a>
 
 - The checkout adapter is a local development integration. Shipping the editor, dependencies, native binaries, and platform installers remains distribution work.
-- Closing or reloading recreates the editor page. The editor owns saved projects and any unsaved-change behavior. Workbench visibility resets on page reload.
+- Switching Sessions, explicitly reloading the editor, or refreshing the page recreates the editor page. Continuing an old draft across these actions is not supported. Other Sessions do not retain hidden editor pages; saved projects remain on disk. Workbench visibility resets on page reload.
 - Runtime failures are shown explicitly. A user retry can restart after cleanup. Previous experiment projects remain in their original directory; this integration does not silently migrate or adopt them.
 
 <a id="dev-note"></a>
