@@ -35,9 +35,11 @@ describe('native account Main and dsh IPC', () => {
     const b = await hostFixture((_request, response) => { response.end('ok') })
     await b.login()
     const command = b.send('prepare')
+    const prepared = await command.result
+    expect(prepared.ok, JSON.stringify({ prepared, nativeTimings: b.nativeTimings })).toBe(true)
     const result = z.object({ result: z.object({ environment: z.strictObject({
       MANTURHUB_IDENTITY_MODE: z.literal('desktop-managed'), MANTURHUB_AGENT_AUTH: z.string(),
-    }) }) }).parse(await command.result)
+    }) }) }).parse(prepared)
     const descriptor = result.result.environment.MANTURHUB_AGENT_AUTH
     await access(descriptor)
     expect(JSON.stringify(result)).not.toContain(b.backend.bearer())

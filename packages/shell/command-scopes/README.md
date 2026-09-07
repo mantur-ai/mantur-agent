@@ -54,6 +54,8 @@ Process allocation returns asynchronously after preparation. The returned proces
 
 The command owner records admission before awaiting identity preparation. It retains cancellation after direct-child exit while descendants remain alive. The subprocess provider proves tree exit; the identity provider then releases authority. A failed tree-exit check or release remains recorded and causes shutdown to reject.
 
+Subprocess and terminal allocation share admission and identity preparation. Each allocation path retains its own process-tree or terminal cleanup proof before releasing the prepared identity.
+
 [The implementation](src/index.ts) owns registration, allocation and cleanup together. No runtime invariant companion is published: there is no independently maintained event projection or mutable relation to compare. [Ownership tests](tests/command-scopes.spec.ts) exercise cancellation races, late allocation and failed cleanup at the process provider, plus actual POSIX processes and terminals.
 
 </details>

@@ -65,6 +65,18 @@ async function bench(identity: 'none' | 'required' = 'required') {
 }
 
 describe('command scope ownership', () => {
+  it.each(['spawn', 'spawnTerminal'] as const)('keeps %s unallocated when identity preparation rejects and joins shutdown', async (method) => {
+    const b = await bench()
+    const failure = new Error('identity preparation refused')
+    b.provider.prepare.mockRejectedValue(failure)
+    const run = method === 'spawn' ? b.ctx.commandScopes.spawn(spec) : b.ctx.commandScopes.spawnTerminal(terminalSpec)
+    await expect(run).rejects.toBe(failure)
+    expect(b.subprocess.spawn).not.toHaveBeenCalled()
+    expect(b.subprocess.spawnTerminal).not.toHaveBeenCalled()
+    expect(b.release).not.toHaveBeenCalled()
+    await b.ctx.commandScopes.stopAll()
+  })
+
   it.each(['caller', 'timeout'] as const)('rejects %s cancellation during foreground preparation without inventing a process', async (cause) => {
     const b = await bench()
     const prepared = Promise.withResolvers<CommandIdentityLease>()

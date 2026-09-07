@@ -91,13 +91,9 @@ export class CommandScopes extends Service {
    * @returns the real live handle after preparation; its direct-child done remains distinct from scope cleanup.
    */
   async spawn(spec: SubprocessSpawnSpec): Promise<CommandProcess> {
-    const command = this.admit()
-    const signal = AbortSignal.any([command.abort.signal, ...(spec.signal === undefined ? [] : [spec.signal])])
-    let lease: CommandIdentityLease | undefined
+    const { command, lease, lifetime } = await this.prepare(spec.signal)
     let owned = false
     try {
-      lease = await this.prepare(command, signal)
-      const lifetime = lease === undefined ? signal : AbortSignal.any([signal, lease.signal])
       lifetime.throwIfAborted()
       const handle = this.ctx.subprocess.spawn({ ...spec, signal: lifetime, env: { ...spec.env, ...lease?.environment } })
       owned = true
@@ -131,13 +127,9 @@ export class CommandScopes extends Service {
    * @returns a real terminal handle only if allocation wins cancellation; late terminals are terminated before rejection.
    */
   async spawnTerminal(spec: SubprocessTerminalSpawnSpec): Promise<SubprocessTerminalHandle> {
-    const command = this.admit()
-    const signal = AbortSignal.any([command.abort.signal, ...(spec.signal === undefined ? [] : [spec.signal])])
-    let lease: CommandIdentityLease | undefined
+    const { command, lease, lifetime } = await this.prepare(spec.signal)
     let owned = false
     try {
-      lease = await this.prepare(command, signal)
-      const lifetime = lease === undefined ? signal : AbortSignal.any([signal, lease.signal])
       lifetime.throwIfAborted()
       const terminal = await this.ctx.subprocess.spawnTerminal({ ...spec, signal: lifetime, env: { ...spec.env, ...lease?.environment } })
       owned = true
@@ -188,9 +180,22 @@ export class CommandScopes extends Service {
     return command
   }
 
-  private async prepare(command: OwnedCommand, signal: AbortSignal): Promise<CommandIdentityLease | undefined> {
-    signal.throwIfAborted()
-    return await command.provider?.prepare(signal)
+  private async prepare(caller: AbortSignal | undefined): Promise<{
+    command: OwnedCommand
+    lease: CommandIdentityLease | undefined
+    lifetime: AbortSignal
+  }> {
+    const command = this.admit()
+    const signal = AbortSignal.any([command.abort.signal, ...(caller === undefined ? [] : [caller])])
+    let lease: CommandIdentityLease | undefined
+    try {
+      signal.throwIfAborted()
+      lease = await command.provider?.prepare(signal)
+    } catch (error) {
+      await this.releaseUnallocated(command, undefined)
+      throw error
+    }
+    return { command, lease, lifetime: lease === undefined ? signal : AbortSignal.any([signal, lease.signal]) }
   }
 
   private async releaseUnallocated(command: OwnedCommand, lease: CommandIdentityLease | undefined): Promise<void> {

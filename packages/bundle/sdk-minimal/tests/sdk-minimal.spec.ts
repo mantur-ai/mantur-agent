@@ -36,6 +36,7 @@ describe('dsh-sdk-minimal bundle', () => {
       ['session-projection', '@deepseek-ai/dsh-session-projection'],
       ['sandbox-policy', '@deepseek-ai/dsh-sandbox-policy'],
       ['subprocess', '@deepseek-ai/dsh-subprocess-local'],
+      ['command-scopes', '@deepseek-ai/dsh-command-scopes'],
       ['pty', '@deepseek-ai/dsh-terminal'],
       ['terminal-bash', '@deepseek-ai/dsh-terminal-bash'],
       ['terminal-pwsh', '@deepseek-ai/dsh-terminal-bash'],
@@ -61,6 +62,7 @@ describe('dsh-sdk-minimal bundle', () => {
       ['sessions', '@deepseek-ai/dsh-session-persistence-jsonl'],
     ])
     expect(rows.find(row => row.id === 'sdk-app-startup')?.config).toEqual({ profile: 'sdk-minimal' })
+    expect(rows.find(row => row.id === 'command-scopes')?.config).toEqual({ identity: 'none' })
     expect(rows.find(row => row.id === 'sdk-jsonrpc-server')).toMatchObject({
       inject: ['sdkAppStartup', 'loader'],
       config: { maxTokensAsSuccess: false },

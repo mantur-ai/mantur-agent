@@ -52,11 +52,14 @@ async function run(input: z.infer<typeof inputSchema>): Promise<unknown> {
 }
 
 process.on('message', (value) => {
+  const reply = z.object({ type: z.literal('mantur:account:reply'), id: z.string(), ok: z.boolean() }).safeParse(value)
+  if (reply.success) process.send?.({ ...reply.data, type: 'fixture:ipc-reply', at: Date.now() })
   const parsed = inputSchema.safeParse(value)
   if (!parsed.success) return
   void run(parsed.data).then(
     (result) => { process.send?.({ type: 'fixture:reply', id: parsed.data.id, ok: true, result }) },
-    () => { process.send?.({ type: 'fixture:reply', id: parsed.data.id, ok: false }) },
+    (error: unknown) => { process.send?.({ type: 'fixture:reply', id: parsed.data.id, ok: false,
+      failure: error instanceof Error && error.message === 'Native account parent did not reply' ? 'parent-timeout' : 'operation-failed' }) },
   )
 })
 process.send?.({ type: 'fixture:ready' })

@@ -14,7 +14,8 @@ import type { NativeAccountController } from '../src/auth/controller.ts'
 import { nativeBrokerBench } from './native-account-broker-support.ts'
 import { nativeTestCipher } from './native-account-test-support.ts'
 
-const replySchema = z.strictObject({ type: z.literal('fixture:reply'), id: z.string(), ok: z.boolean(), result: z.unknown().optional() })
+const replySchema = z.strictObject({ type: z.literal('fixture:reply'), id: z.string(), ok: z.boolean(), result: z.unknown().optional(),
+  failure: z.enum(['parent-timeout', 'operation-failed']).optional() })
 
 /** Shared real Main/child fixture; commands selects the real Loader and shell consumer composition. */
 export async function hostFixture(
@@ -38,11 +39,18 @@ export async function hostFixture(
   const stopped = new Map<string, PromiseWithResolvers<undefined>>()
   const requests = new Map<string, PromiseWithResolvers<z.infer<typeof replySchema>>>()
   const nativeRequests: string[] = []
+  const nativeTimings: Array<{ type: string; id: string; at: number; ok?: boolean }> = []
   let diagnostics = ''
   child.stderr!.on('data', (bytes: Buffer) => { diagnostics += bytes.toString() })
   child.on('message', (value: unknown) => {
     if (typeof value !== 'object' || value === null) return
     if ('type' in value && typeof value.type === 'string' && value.type.startsWith('mantur:account:')) nativeRequests.push(value.type)
+    if ('type' in value && typeof value.type === 'string' && value.type.startsWith('mantur:account:')
+      && 'id' in value && typeof value.id === 'string') nativeTimings.push({ type: value.type, id: value.id, at: Date.now() })
+    if ('type' in value && value.type === 'fixture:ipc-reply' && 'id' in value && typeof value.id === 'string'
+      && 'at' in value && typeof value.at === 'number' && 'ok' in value && typeof value.ok === 'boolean') {
+      nativeTimings.push({ type: 'mantur:account:reply', id: value.id, at: value.at, ok: value.ok })
+    }
     if ('type' in value && value.type === 'fixture:ready') ready.resolve(undefined)
     if ('type' in value && value.type === 'fixture:stopped' && 'scope' in value && typeof value.scope === 'string') {
       stopped.get(value.scope)?.resolve(undefined)
@@ -74,7 +82,7 @@ export async function hostFixture(
   }
   const release = async (scope: string): Promise<void> => {
     const reply = await send('release', { scope }).result
-    expect(reply.ok).toBe(!expectCleanupFailure)
+    expect(reply.ok, JSON.stringify({ failure: reply.failure, nativeTimings })).toBe(!expectCleanupFailure)
     active.delete(scope)
   }
   onTestFinished(async () => {
@@ -90,5 +98,5 @@ export async function hostFixture(
     requestTimeoutMs: 10_000, maxResponseBytes: 16_384, leaseMs: 60_000, revocationRetryMs: 60_000 } }).result).ok).toBe(true)
   const controller = await configured.promise
   const login = (): Promise<void> => controller.password({ email: 'broker@example.com', password: backend.password, consent: true })
-  return { backend, root, child, controller, host, send, release, login, nativeRequests }
+  return { backend, root, child, controller, host, send, release, login, nativeRequests, nativeTimings }
 }

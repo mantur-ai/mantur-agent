@@ -182,6 +182,12 @@ export interface ToolPackage {
   note?: string
 }
 
+async function mountShellDependencies(ctx: Context): Promise<void> {
+  await ctx.plugin(LocalSubprocessRuntime)
+  await ctx.plugin(CommandScopes, { identity: 'none' })
+  await ctx.plugin(BashEnvPlugin)
+}
+
 /**
  * The boot manifest: every shipped tool package (a `tool-*` leaf under
  * `packages/`). Ordered by package name (the render order); the completeness
@@ -234,9 +240,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
     requires: ['ctx.tools', 'ctx.shell', 'ctx.systemPrompt', 'ctx.shellEnv', 'ctx.jobs at call time for run_in_background'],
     writes: ['tool/call', 'tool/result'],
     async mount(ctx) {
-      await ctx.plugin(LocalSubprocessRuntime)
-      await ctx.plugin(CommandScopes, { identity: 'none' })
-      await ctx.plugin(BashEnvPlugin)
+      await mountShellDependencies(ctx)
       await ctx.plugin(LocalBashExecutor)
       await ctx.plugin(ToolBash)
     },
@@ -253,9 +257,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
       // The pwsh tool consumes the bash executor seam; the schema harvest
       // mounts the pwsh-local implementation so the inject resolves without
       // executing anything (registration never spawns a process).
-      await ctx.plugin(LocalSubprocessRuntime)
-      await ctx.plugin(CommandScopes, { identity: 'none' })
-      await ctx.plugin(BashEnvPlugin)
+      await mountShellDependencies(ctx)
       await ctx.plugin(PwshLocalExecutor)
       await ctx.plugin(ToolPwsh)
     },
