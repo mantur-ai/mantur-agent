@@ -2845,6 +2845,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the disposer removing the transform.',
       },
       {
+        signature: 'stopForShutdown(): Promise<void>',
+        description: 'Close admission and sockets, then join original HTTP and upgrade handlers.',
+        parameters: [],
+        returns: 'completion after handlers settle; transport or observer cleanup failures reject.',
+      },
+      {
         signature: 'applyIndexTaps(html: string): string',
         description: 'Run an index.html body through the registered taps in registration order — called by the fallback owner on every index response it renders.',
         parameters: [{ name: 'html', description: 'the raw index.html body.' }],

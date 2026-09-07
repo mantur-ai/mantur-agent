@@ -28,9 +28,11 @@ Host 停机必须先调用明确的所有者操作，才能授权安装。agent 
 
 标题服务将已有的取消和原始调用排空作为显式关闭操作。在 writer 关闭前冻结直接重命名、刷新和提供方注册，使忽略取消的调用也无法追加迟到标题。
 
+Web 服务器冻结路由准入，并在 socket 关闭后等待原始 HTTP 和升级 handler。仅关闭 socket 无法停止忽略取消的 handler。超出升级 handler 生命周期的协议工作仍由协议服务拥有。
+
 ## 上游所有权
 
-现有观察钩子无法冻结直接收件箱修改、恢复驱动器内部持有的领取批次、封存直接 Session 追加，或在工厂释放 writer 后继续保留它。因此改动位于 `packages/core/agent/src/{index,inbox}.ts`、`packages/core/agent-loop/src/{index,agent}.ts`、`packages/core/session/src/index.ts` 和 `packages/subprocess/subprocess-local/src/index.ts`。终端注册表操作位于 `packages/terminal/terminal/src/index.ts`，因为外部钩子无法冻结发送或保留已移除分配的失败；受控晚到分配、等待关闭和失败保留测试用于验证上游升级。任务注册表改动位于 `packages/jobs/jobs-local/src/index.ts`；插件无法冻结直接 start 或恢复已丢弃的生产者 Promise。未取消的待处理工作、强制失败记录、晚到释放及完成监听器测试用于验证升级。 工作流改动位于 `packages/workflow/workflow-worker-thread/src/{index,host}.ts`，因为普通释放会在等待期限后放弃子任务，并吞掉清理失败。晚到子任务创建、超出期限的清理、历史失败及线程终止拒绝构成升级回归。 code-runtime worker 提供方在 `packages/code-runtime/code-runtime-worker-thread/src/index.ts` 中拥有待处理线程和绑定调用；外部钩子无法恢复被丢弃的操作。延迟终止、未等待的绑定及终止失败保留测试用于验证升级。标题服务操作位于 `packages/session/session-title/src/index.ts`；外部钩子无法冻结直接标题 API。忽略取消和拒绝停止后修改的测试用于验证升级。不修改 vendored Cordis 行为。工厂在自身生命周期结束前保留已关闭会话对象，以检测关闭后的写入；这是验证先前已关闭 writer 的保留成本。
+现有观察钩子无法冻结直接收件箱修改、恢复驱动器内部持有的领取批次、封存直接 Session 追加，或在工厂释放 writer 后继续保留它。因此改动位于 `packages/core/agent/src/{index,inbox}.ts`、`packages/core/agent-loop/src/{index,agent}.ts`、`packages/core/session/src/index.ts` 和 `packages/subprocess/subprocess-local/src/index.ts`。终端注册表操作位于 `packages/terminal/terminal/src/index.ts`，因为外部钩子无法冻结发送或保留已移除分配的失败；受控晚到分配、等待关闭和失败保留测试用于验证上游升级。任务注册表改动位于 `packages/jobs/jobs-local/src/index.ts`；插件无法冻结直接 start 或恢复已丢弃的生产者 Promise。未取消的待处理工作、强制失败记录、晚到释放及完成监听器测试用于验证升级。 工作流改动位于 `packages/workflow/workflow-worker-thread/src/{index,host}.ts`，因为普通释放会在等待期限后放弃子任务，并吞掉清理失败。晚到子任务创建、超出期限的清理、历史失败及线程终止拒绝构成升级回归。 code-runtime worker 提供方在 `packages/code-runtime/code-runtime-worker-thread/src/index.ts` 中拥有待处理线程和绑定调用；外部钩子无法恢复被丢弃的操作。延迟终止、未等待的绑定及终止失败保留测试用于验证升级。标题服务操作位于 `packages/session/session-title/src/index.ts`；外部钩子无法冻结直接标题 API。忽略取消和拒绝停止后修改的测试用于验证升级。Web handler 所有权位于 `packages/host/webserver/src/index.ts`；socket 关闭观察器无法恢复被丢弃的 handler Promise。挂起的 HTTP／升级 handler 及关闭失败保留用于验证升级。不修改 vendored Cordis 行为。工厂在自身生命周期结束前保留已关闭会话对象，以检测关闭后的写入；这是验证先前已关闭 writer 的保留成本。
 
 子代理改动位于 `packages/subagent/subagent/src/{index,lifecycle,continuation}.ts`：提供方移除和结果完成都不能证明资源释放，纯观察钩子无法冻结直接委派或找回已丢弃的清理异常。进程内驱动器也在 agent 准入冻结后取消时保留排队输入；中止监听器不能清空已经冻结的收件箱。该改动位于 `packages/subagent/subagent-in-process-driver/src/index.ts`。晚到启动回滚、已移除运行的失败、异步通知、尚未结束的续跑准备以及一次性和续跑子代理与 agent-loop 联合停机构成升级回归检查。
 
