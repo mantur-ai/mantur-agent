@@ -27,7 +27,7 @@ This package provides the shell layout of the Web GUI: a three-column AppFrame w
 
 Mount this plugin at the root slot; it then renders the app frame around whatever occupies the sidebar, conversation, and details columns. Users resize the sidebar by dragging its invisible hit strip and the details panel by dragging its floating pill; when the window narrows, only details shrinks, then auto-closes. A closed sidebar retains a 56px control rail; details closes to zero width.
 
-The optional `main.workbench` slot opens beside the conversation, including on the home screen before a Session exists. `openWorkbench()` clears the selected main page; `closeWorkbench()` releases the workbench occupant without remounting the conversation. The conversation width can be resized from its lower corner while the workbench is open. Workbench visibility is transient and resets on reload.
+The optional `main.workbench` slot opens beside the conversation, including on the home screen before a Session exists. `openWorkbench()` clears the selected main page; `closeWorkbench()` releases the workbench occupant without remounting the conversation. The conversation width can be resized from its lower corner while the workbench is open. Workbench visibility is remembered separately for each selected Session and the unselected home screen, and resets on reload. Switching away unmounts its editor; returning restores that conversation’s open state.
 
 ### Theme presentation
 

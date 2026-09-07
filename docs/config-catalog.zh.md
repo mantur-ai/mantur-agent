@@ -387,20 +387,28 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-client-ui-mantur-editing`
 
-需要： `settings`
+需要： `typert` · `webServer` · `tools`
 
 ```ts config-catalog
-/** Explicit local editor address selected by the application profile. */
-export type Config = EditingSettings
+/** Editing deployment configuration; no browser-visible credentials. */
+export type Config = RuntimeConfig
 
-/** Configured address; never contains the host-only MCP bearer token. */
-export interface EditingSettings {
-  /** Absolute loopback HTTP address of the running OpenChatCut editor. */
-  editorUrl: string
+/** Deployment settings for the pinned editor source and Node runtime. */
+export interface RuntimeConfig {
+  /** Absolute path to the patched OpenChatCut checkout with dependencies installed. */
+  editorRoot: string
+  /** Absolute Node executable compatible with the editor. */
+  nodeExecutable: string
+  /** Maximum wait for the editor's ready handshake. */
+  startupTimeoutMs: number
+  /** Grace period before killing an editor that has not stopped. */
+  stopTimeoutMs: number
+  /** Maximum duration of one editing tool invocation. */
+  toolCallTimeoutMs: number
 }
 ```
 
-来源： [`packages/client/ui-mantur-editing/src/index.ts:8`](../packages/client/ui-mantur-editing/src/index.ts)
+来源： [`packages/client/ui-mantur-editing/src/index.ts:20`](../packages/client/ui-mantur-editing/src/index.ts)
 
 <a id="deepseek-aidsh-client-ui-mantur-navigation"></a>
 

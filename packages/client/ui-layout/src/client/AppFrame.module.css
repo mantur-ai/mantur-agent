@@ -147,7 +147,7 @@
 
 .conversationSurface[data-workbench-open] .conversationPane {
   flex: 0 0 auto;
-  width: 35%;
+  width: clamp(280px, 28%, 380px);
   min-width: 280px;
   max-width: 70%;
   resize: horizontal;

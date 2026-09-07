@@ -1247,6 +1247,19 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'manturEditing',
+    summary: 'Runtime and tools share the exact Agent identity resolved by the authenticated Remote gateway.',
+    description: 'Runtime and tools share the exact Agent identity resolved by the authenticated Remote gateway.',
+    methods: [
+      {
+        signature: '@Remote(\'open\') async open(agent: Agent, parentOrigin: string): Promise<EditingWorkspace>',
+        description: 'Open the Session\'s workspace and connect its tools only to that Agent.',
+        parameters: [{ name: 'agent', description: 'Live or resumed Agent resolved by the gateway from the Session id.' }, { name: 'parentOrigin', description: 'Mantur browser origin, checked against this Host\'s listening port.' }],
+        returns: 'Loopback editor address and canonical Session editing directory.',
+      },
+    ],
+  },
+  {
     key: 'manturMarketplace',
     summary: 'Host service for catalog reads and local Skill installation.',
     description: 'Host service for catalog reads and local Skill installation.',
@@ -4021,6 +4034,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'EditGoalRequest',
     declaration: 'export interface EditGoalRequest {\n    readonly objective?: string;\n    readonly maxGoalRounds?: number;\n}',
+  },
+  {
+    name: 'EditingWorkspace',
+    declaration: 'export interface EditingWorkspace {\n    editorUrl: string;\n    directory: string;\n}',
   },
   {
     name: 'EncodedImageAttachment',

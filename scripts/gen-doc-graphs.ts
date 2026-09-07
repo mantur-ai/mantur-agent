@@ -99,6 +99,14 @@ const GROUP_ORDER = [
 
 const SERVICE_ROLES: ServiceRole[] = [
   {
+    key: 'manturEditing',
+    pkg: 'client-ui-mantur-editing',
+    title: 'Session editing workspace',
+    mode: 'core',
+    consumers: ['client-ui-mantur-editing'],
+    note: 'The optional Mantur plugin owns per-Agent editor processes and mounts the MCP client in the same Agent scope.',
+  },
+  {
     key: 'attachments',
     pkg: 'attachment',
     title: 'Durable binary attachment storage',

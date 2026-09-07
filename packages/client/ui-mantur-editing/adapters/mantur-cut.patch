@@ -1,0 +1,1779 @@
+diff --git a/README.md b/README.md
+index d5c8f50..dd6ccbc 100644
+--- a/README.md
++++ b/README.md
+@@ -346,6 +346,9 @@ Codex app/CLI and Claude Code use the same session workflow:
+
+ Approval in Codex or Claude controls whether the client may call a tool. OpenChatCut project approval is required only for `manual` sessions; `auto` sessions explicitly bypass that review. Either mode commits the applied operations atomically as one undo step.
+ If an `auto` session becomes stale, it returns an error instead of falling back to manual approval; discard it and start a new session.
++
++In the Mantur integration, `import_asset` and `import_folder` read media from the current Agent project. Manual sessions require confirmation before reading local files. Imported assets enter the editing draft, so successive imports and edits retain the same session revision; review applies the assets with the other draft operations. Compatible originals are referenced in place and remain unchanged. Concurrent live edits still make the session stale.
++
+ Only draft-safe project read/edit tools are exposed in these sessions. Generation, export, project deletion, and other immediate side-effect tools stay unavailable because a rejected proposal could not roll them back.
+
+ ### Codex
+diff --git a/README_ZH.md b/README_ZH.md
+index d8a6fac..9679ae8 100644
+--- a/README_ZH.md
++++ b/README_ZH.md
+@@ -344,6 +344,8 @@ Codex 或 Claude 内的授权决定客户端能否调用工具。只有 `manual`
+ 如果 `auto` 会话已过期，它会直接返回错误而不会降级为人工审批；请丢弃后重新创建会话。
+ 会话只暴露可安全进入草稿的工程读取/编辑工具。生成、导出、删除工程及其他会立即产生副作用的工具不在会话中开放，因为拒绝提案时无法回滚这些副作用。
+
++漫途集成中的 `import_asset` 和 `import_folder` 读取当前 Agent 项目内的素材。手动模式先确认，再读取本地文件。导入的素材进入编辑草稿，连续导入和编辑沿用同一会话版本；审阅时与其他草稿操作一起应用。兼容的原始素材直接引用，保持原文件不变。此期间真实工程发生其他修改，当前编辑会话仍会失效。
++
+ ### Codex
+
+ 在 Codex 配置中加入：
+diff --git a/assets/agent/openchatcut-tool-schemas.json b/assets/agent/openchatcut-tool-schemas.json
+index 5bbf202..642d678 100644
+--- a/assets/agent/openchatcut-tool-schemas.json
++++ b/assets/agent/openchatcut-tool-schemas.json
+@@ -5195,13 +5195,13 @@
+     },
+     {
+       "name": "import_asset",
+-      "description": "Import ONE local media file (video/audio/image) by its absolute disk path into the media pool. Desktop app only; the path must be inside an allowed AGENT_IMPORT_ROOTS directory. Returns the imported pool asset(s); duplicates already in the pool are skipped.",
++      "description": "Import ONE local media file (video/audio/image) by disk path into the media pool. In Mantur, reads the current Agent project directly without copying the source; relative project paths are accepted. Standalone desktop requires an allowed AGENT_IMPORT_ROOTS directory. Returns the imported pool asset(s); duplicates already in the pool are skipped. External edit sessions stage these assets in the draft; review_edit_session applies them to the live pool together with the timeline edits.",
+       "input_schema": {
+         "type": "object",
+         "properties": {
+           "path": {
+             "type": "string",
+-            "description": "Absolute path to the media file."
++            "description": "Absolute file path, or a path relative to the current Mantur project."
+           }
+         },
+         "required": [
+@@ -5211,13 +5211,13 @@
+     },
+     {
+       "name": "import_folder",
+-      "description": "Import every supported media file inside a local directory (recursive, bounded) into the media pool. Desktop app only; the directory must be inside an allowed AGENT_IMPORT_ROOTS directory. Returns imported assets, duplicate counts, unsupported file names, and per-file errors. Documents (txt/md/docx/pdf) are reported as unsupported here and should be attached to chat instead.",
++      "description": "Import every supported media file inside a local directory (recursive, bounded) into the media pool. In Mantur, reads the current Agent project recursively without copying originals, excluding editing outputs and hidden directories. Standalone desktop requires an allowed AGENT_IMPORT_ROOTS directory. Returns imported assets, duplicate counts, unsupported file names, and per-file errors. External edit sessions stage these assets until review_edit_session applies the draft. Documents (txt/md/docx/pdf) are reported as unsupported here and should be attached to chat instead.",
+       "input_schema": {
+         "type": "object",
+         "properties": {
+           "path": {
+             "type": "string",
+-            "description": "Absolute path to the media directory."
++            "description": "Absolute directory path, or a path relative to the current Mantur project."
+           }
+         },
+         "required": [
+diff --git a/desktop/directory-watch-import.ts b/desktop/directory-watch-import.ts
+index af2e247..b37717a 100644
+--- a/desktop/directory-watch-import.ts
++++ b/desktop/directory-watch-import.ts
+@@ -24,6 +24,10 @@ const KIND_BY_EXTENSION: Record<string, DirectoryImportMediaKind> = {
+   '.gif': 'gif', '.svg': 'svg',
+ };
+
++export function directoryMediaKind(name: string): DirectoryImportMediaKind | undefined {
++  return KIND_BY_EXTENSION[extname(name).toLowerCase()];
++}
++
+ export interface DirectoryFileFingerprint {
+   readonly size: number;
+   readonly mtimeMs: number;
+diff --git a/index.html b/index.html
+index 4009a34..7a6883d 100644
+--- a/index.html
++++ b/index.html
+@@ -2,10 +2,10 @@
+ <html lang="en">
+   <head>
+     <meta charset="UTF-8" />
+-    <link rel="icon" type="image/png" href="/openchatcut-icon.png" />
++    <link rel="icon" type="image/svg+xml" href="/mantur-cut.svg" />
+     <meta name="color-scheme" content="dark" />
+     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+-    <title>OpenChatCut</title>
++    <title>漫途Cut</title>
+   </head>
+   <body>
+     <div id="root"></div>
+diff --git a/package.json b/package.json
+index a8f2712..ae6e90e 100644
+--- a/package.json
++++ b/package.json
+@@ -72,7 +72,8 @@
+     "verify:i18n": "node scripts/check-i18n.mjs && tsx src/i18n/locale.verify.ts && tsx src/i18n/dict/it/settingsCoverage.verify.ts && tsx src/i18n/dict/it/mediaCoverage.verify.ts && tsx src/components/settings/transcription-language.verify.ts",
+     "verify:editor": "tsx src/editor/keyframes.verify.ts && tsx src/editor/flexCrop.verify.ts && tsx src/editor/multiSelect.verify.ts && tsx src/editor/professionalTimeline.verify.ts && tsx src/editor/proposal.verify.ts && tsx src/editor/ripple-fade.verify.ts && tsx src/editor/ripple.verify.ts && tsx src/editor/split.verify.ts && tsx src/editor/transitionPreview.verify.ts && tsx src/editor/captionReferences.verify.ts && tsx src/editor/zoom.verify.ts && tsx src/editor/keyframes-check.verify.ts",
+     "verify:captions": "tsx src/captions/captionCueMenu.verify.ts && tsx src/captions/captionIdentity.verify.ts && tsx src/captions/exportCaptions.verify.ts && tsx src/captions/presetStore.verify.ts && tsx src/captions/renderStyles.verify.ts && tsx src/captions/segmenter.verify.ts && tsx src/captions/styles.verify.ts && tsx src/transcript/edit.verify.ts && tsx src/transcript/transcribe-jobs.verify.ts && tsx src/transcript/variants.verify.ts && tsx src/audio/loudness.verify.ts && tsx src/audio/vad.verify.ts && tsx src/transcript/transcribe-jobs-check.verify.ts",
+-    "verify:agent-tools": "tsx src/agent/external-edit-session-apply.verify.ts && tsx src/agent/external-edit-session-cancellation.verify.ts && tsx src/agent/external-edit-session-core.verify.ts && tsx src/agent/external-edit-session-projection.verify.ts && tsx src/agent/external-edit-session-runtime.verify.ts && tsx src/agent/external-tool-policy.verify.ts && tsx src/agent/progress/job-model.verify.ts && tsx src/agent/progress/track-progress-targets.verify.ts && tsx src/agent/selection-refs.verify.ts && tsx src/agent/skills/plugin-skills.verify.ts && tsx src/agent/skills/skills-catalog.verify.ts && tsx src/agent/tools/agent-gap-p3.verify.ts && tsx src/agent/tools/audio-assets.verify.ts && tsx src/agent/tools/auto-grade-tools.verify.ts && tsx src/agent/tools/captions-lanes.verify.ts && tsx src/agent/tools/captions-tools.verify.ts && tsx src/agent/tools/design-tools.verify.ts && tsx src/agent/tools/edit-asset-tools.verify.ts && tsx src/agent/tools/edit-item-authored.verify.ts && tsx src/agent/tools/edit-item-generic.verify.ts && tsx src/agent/tools/edit-item-source-range.verify.ts && tsx src/agent/tools/edit-item-pool-replacement.verify.ts && tsx src/agent/tools/timeline-import-tools.verify.ts && tsx src/agent/tools/edit-item-volume-hint.verify.ts && tsx src/agent/tools/export-tools.verify.ts && tsx src/agent/tools/followup-tools.verify.ts && tsx src/agent/tools/font-tools.verify.ts && tsx src/agent/tools/frames-tool.verify.ts && tsx src/agent/tools/renderSnapshotMedia.verify.ts && tsx src/agent/tools/friction-tools.verify.ts && tsx src/agent/tools/generate-rerun.verify.ts && tsx src/agent/tools/highlight-tool.verify.ts && tsx src/agent/tools/markers-tools.verify.ts && tsx src/agent/tools/media-pool-favorite-delete.verify.ts && tsx src/agent/tools/media-pool-relink.verify.ts && tsx src/agent/tools/media-pool-tools.verify.ts && tsx src/agent/tools/mg-code-tools.verify.ts && tsx src/agent/tools/mg-video-tools.verify.ts && tsx src/agent/tools/probe-tools.verify.ts && tsx src/agent/tools/project-tools.verify.ts && tsx src/agent/tools/followup-tools-check.verify.ts && tsx src/agent/tools/probe-tools-check.verify.ts && tsx src/agent/tools/read-project-tools-check.verify.ts && tsx src/agent/tools/stock-tools-check.verify.ts && tsx src/agent/tools/template-tools-check.verify.ts && node scripts/run-check.mjs src/agent/tools/effect-tools.verify.ts && node scripts/run-check.mjs src/agent/tools/library-edit-item.verify.ts && tsx src/agent/tools/read-project-tools.verify.ts && tsx src/agent/tools/shader-tools.verify.ts && tsx src/agent/tools/skill-tools.verify.ts && tsx src/agent/tools/transcript-clear-edits.verify.ts && tsx src/agent/tools/transcript-tools.verify.ts && tsx src/agent/tools/version-tools.verify.ts && tsx src/agent/tools/web-tools.verify.ts",
++    "verify:mantur-import-session": "tsx server/plugins/mantur-import-session.verify.ts",
++    "verify:agent-tools": "npm run verify:mantur-import-session && tsx src/agent/external-edit-session-apply.verify.ts && tsx src/agent/external-edit-session-cancellation.verify.ts && tsx src/agent/external-edit-session-core.verify.ts && tsx src/agent/external-edit-session-projection.verify.ts && tsx src/agent/external-edit-session-runtime.verify.ts && tsx src/agent/external-tool-policy.verify.ts && tsx src/agent/progress/job-model.verify.ts && tsx src/agent/progress/track-progress-targets.verify.ts && tsx src/agent/selection-refs.verify.ts && tsx src/agent/skills/plugin-skills.verify.ts && tsx src/agent/skills/skills-catalog.verify.ts && tsx src/agent/tools/agent-gap-p3.verify.ts && tsx src/agent/tools/audio-assets.verify.ts && tsx src/agent/tools/auto-grade-tools.verify.ts && tsx src/agent/tools/captions-lanes.verify.ts && tsx src/agent/tools/captions-tools.verify.ts && tsx src/agent/tools/design-tools.verify.ts && tsx src/agent/tools/edit-asset-tools.verify.ts && tsx src/agent/tools/edit-item-authored.verify.ts && tsx src/agent/tools/edit-item-generic.verify.ts && tsx src/agent/tools/edit-item-source-range.verify.ts && tsx src/agent/tools/edit-item-pool-replacement.verify.ts && tsx src/agent/tools/timeline-import-tools.verify.ts && tsx src/agent/tools/edit-item-volume-hint.verify.ts && tsx src/agent/tools/export-tools.verify.ts && tsx src/agent/tools/followup-tools.verify.ts && tsx src/agent/tools/font-tools.verify.ts && tsx src/agent/tools/frames-tool.verify.ts && tsx src/agent/tools/renderSnapshotMedia.verify.ts && tsx src/agent/tools/friction-tools.verify.ts && tsx src/agent/tools/generate-rerun.verify.ts && tsx src/agent/tools/highlight-tool.verify.ts && tsx src/agent/tools/markers-tools.verify.ts && tsx src/agent/tools/media-pool-favorite-delete.verify.ts && tsx src/agent/tools/media-pool-relink.verify.ts && tsx src/agent/tools/media-pool-tools.verify.ts && tsx src/agent/tools/mg-code-tools.verify.ts && tsx src/agent/tools/mg-video-tools.verify.ts && tsx src/agent/tools/probe-tools.verify.ts && tsx src/agent/tools/project-tools.verify.ts && tsx src/agent/tools/followup-tools-check.verify.ts && tsx src/agent/tools/probe-tools-check.verify.ts && tsx src/agent/tools/read-project-tools-check.verify.ts && tsx src/agent/tools/stock-tools-check.verify.ts && tsx src/agent/tools/template-tools-check.verify.ts && node scripts/run-check.mjs src/agent/tools/effect-tools.verify.ts && node scripts/run-check.mjs src/agent/tools/library-edit-item.verify.ts && tsx src/agent/tools/read-project-tools.verify.ts && tsx src/agent/tools/shader-tools.verify.ts && tsx src/agent/tools/skill-tools.verify.ts && tsx src/agent/tools/transcript-clear-edits.verify.ts && tsx src/agent/tools/transcript-tools.verify.ts && tsx src/agent/tools/version-tools.verify.ts && tsx src/agent/tools/web-tools.verify.ts",
+     "verify:components": "tsx --tsconfig tsconfig.app.json src/components/SafeZoneOverlay.verify.tsx && tsx --tsconfig tsconfig.app.json src/components/chat/chatPopoverGeometry.verify.ts && tsx --tsconfig tsconfig.app.json src/components/chat/chatScrollNavigation.verify.ts && tsx --tsconfig tsconfig.app.json src/components/chat/chatTextSelection.verify.ts && tsx --tsconfig tsconfig.app.json src/components/chat/editorDragReference.verify.ts && tsx --tsconfig tsconfig.app.json src/components/chat/message-groups.verify.ts && tsx --tsconfig tsconfig.app.json src/components/chat/template-reference-localization.verify.ts && tsx --tsconfig tsconfig.app.json src/components/chat/workflow-starters.verify.tsx && tsx src/components/chat/capabilityBanner.verify.ts && tsx src/components/chat/chatDocumentParse.verify.ts && tsx --tsconfig tsconfig.app.json src/components/inspector/inspectorPropSchemaLayout.verify.ts && tsx --tsconfig tsconfig.app.json src/components/inspector/inspectorTextArea.verify.ts && tsx src/components/inspector/inspector-controls.verify.ts && tsx --tsconfig tsconfig.app.json src/components/preview/preview-transform-overlay.verify.tsx && tsx --tsconfig tsconfig.app.json src/components/preview/previewTextEdit.verify.ts && tsx --tsconfig tsconfig.app.json src/components/preview/timeline-hover-preview.verify.ts && tsx --tsconfig tsconfig.app.json src/components/previewAudioPool.verify.ts && tsx src/components/settings/settingsStorage.verify.ts && tsx src/components/settings/storageMigration.verify.ts && tsx --tsconfig tsconfig.app.json src/components/settings/design-style-localization.verify.ts && tsx --tsconfig tsconfig.app.json src/components/timeline/clipContextSelection.verify.ts && tsx --tsconfig tsconfig.app.json src/components/timeline/timelineChatDrop.verify.ts && tsx --tsconfig tsconfig.app.json src/components/timeline/timelineWindow.verify.ts && tsx --tsconfig tsconfig.app.json src/components/timeline/trackContextOperations.verify.ts && tsx src/library/extension-installed.verify.ts && tsx src/library/library-card-grid.verify.ts && tsx src/library/resource-tabs-drag.verify.ts && tsx src/library/template-card-actions.verify.ts && tsx src/library/template-category-sticky.verify.ts && tsx src/components/chat/message-groups-check.verify.ts && tsx src/components/chat/widget-parse-check.verify.ts",
+     "verify:media-persist": "tsx --tsconfig tsconfig.app.json src/media/add-solid-canvas-card.verify.tsx && tsx src/media/asset-menu-destinations.verify.tsx && tsx src/media/assetExport.verify.ts && tsx src/media/media-aspect-badge.verify.ts && tsx src/media/media-favorites-folder.verify.ts && tsx src/media/media-folder-drop.verify.ts && tsx src/media/media-pool-progressive-import.verify.ts && tsx src/media/media-view-toggle.verify.ts && tsx src/media/mediaFolderDrop.verify.ts && tsx src/media/mediaMarquee.verify.ts && tsx src/media/mediaPoolShortcutScope.verify.ts && tsx src/media/mediaSelectionActions.verify.ts && tsx src/media/mgPreview.verify.ts && tsx src/media/searchMedia.verify.ts && tsx src/media/semantic-search/mediaFrames.verify.ts && tsx src/media/upload-session-recovery.verify.ts && tsx src/persist/agentRuntimeTransfer.verify.ts && tsx src/persist/chat-persist.verify.ts && tsx src/persist/exportHistoryStore.verify.ts && tsx src/persist/jobRegistryStore.verify.ts && tsx src/persist/mediaBlobStore.verify.ts && tsx src/persist/mediaCleanup.verify.ts && tsx src/persist/projectStore.verify.ts && tsx src/persist/projectTransfer.verify.ts && tsx src/persist/proposalStore.verify.ts && tsx src/persist/sessionPrefs.verify.ts && tsx src/persist/skillStore.verify.ts && tsx src/persist/template-recent.verify.ts && tsx src/persist/version-store.verify.ts && tsx src/persist/jobRegistryStore-check.verify.ts && tsx src/persist/mediaBlobStore-check.verify.ts && tsx src/persist/projectStore-check.verify.ts && tsx src/persist/projectTransfer-check.verify.ts",
+     "verify:export-gl": "tsx src/export/export-reliability.verify.ts && tsx src/export/exportMediaPlan.verify.ts && tsx src/export/range.verify.ts && tsx src/gl/customTransitions.verify.ts && tsx src/gl/fx/chroma-key.verify.ts && tsx src/gl/fx/cube.verify.ts && tsx src/gl/fx/fx.verify.ts && tsx src/gl/shader-contract.verify.ts && tsx src/generate/media-export.geometry.verify.ts && tsx src/generate/video.verify.ts && tsx src/plugins/export.verify.ts && tsx src/plugins/resourcePreview.verify.ts && tsx src/plugins/validate.verify.ts && tsx src/multicam/align.verify.ts && tsx src/multicam/sync.verify.ts && tsx src/reframe/detect.verify.ts && tsx src/script/script.verify.ts && tsx --tsconfig tsconfig.app.json src/fonts/notoSansOffline.verify.ts",
+diff --git a/public/mantur-cut.svg b/public/mantur-cut.svg
+new file mode 100644
+index 0000000..09260c5
+--- /dev/null
++++ b/public/mantur-cut.svg
+@@ -0,0 +1 @@
++<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="16" fill="#0062ed"/><text x="32" y="45" text-anchor="middle" font-family="system-ui,sans-serif" font-size="48" fill="white">∞</text></svg>
+diff --git a/server/media-references.ts b/server/media-references.ts
+index 1a9a605..4cd573d 100644
+--- a/server/media-references.ts
++++ b/server/media-references.ts
+@@ -1,6 +1,6 @@
+ import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
+ import { mkdir, readdir, realpath, rename, stat, unlink, writeFile } from 'node:fs/promises';
+-import { isAbsolute, join } from 'node:path';
++import { isAbsolute, join, relative, sep } from 'node:path';
+ import { randomUUID } from 'node:crypto';
+
+ const REFERENCE_VERSION = 1;
+@@ -70,6 +70,11 @@ export function resolveMediaReference(directory: string, name: string): string |
+   if (!sourcePath || !existsSync(sourcePath)) return null;
+   try {
+     const canonical = realpathSync(sourcePath);
++    const project = process.env.MANTUR_CUT_PROJECT_DIR;
++    if (project) {
++      const inside = relative(realpathSync(project), canonical);
++      if (inside === '..' || inside.startsWith(`..${sep}`) || isAbsolute(inside)) return null;
++    }
+     return statSync(canonical).isFile() ? canonical : null;
+   } catch {
+     return null;
+diff --git a/server/plugins/export-destination.ts b/server/plugins/export-destination.ts
+index fe17421..8da34b8 100644
+--- a/server/plugins/export-destination.ts
++++ b/server/plugins/export-destination.ts
+@@ -5,7 +5,7 @@ import { dirname, resolve } from 'node:path';
+ import { Readable, Transform } from 'node:stream';
+ import { pipeline } from 'node:stream/promises';
+ import type { Plugin } from 'vite';
+-import { resolveExportDirectoryGrant } from '../export-destinations.ts';
++import { createExportDirectoryGrant, resolveExportDirectoryGrant } from '../export-destinations.ts';
+ import { sanitizeFileName } from '../file-name.ts';
+ import { resolveUploadFile } from '../media-dir.ts';
+ import { createExportFailure, type ExportCleanupStatus } from '../../src/export/exportFailure.ts';
+@@ -207,7 +207,10 @@ export async function handleExportDestinationPut(
+ }
+
+ export function exportDestinationPlugin(): Plugin {
++  const directory = process.env.MANTUR_CUT_EXPORT_DIR;
++  const grant = directory ? createExportDirectoryGrant(directory) : undefined;
+   return {
++    transformIndexHtml: () => grant ? [{ tag: 'meta', attrs: { name: 'mantur-cut-export', content: JSON.stringify(grant) }, injectTo: 'head-prepend' }] : [],
+     name: 'openchatcut-export-destination',
+     configureServer(server) {
+       server.middlewares.use('/api/export-destinations', async (req, res) => {
+diff --git a/server/plugins/index.ts b/server/plugins/index.ts
+index dd3ba09..a4ab905 100644
+--- a/server/plugins/index.ts
++++ b/server/plugins/index.ts
+@@ -13,6 +13,7 @@ import { exportQaPlugin } from "./export-qa.ts";
+ import { exportDestinationPlugin } from "./export-destination.ts";
+ import { exportStagePlugin } from "./export-stage.ts";
+ import { uploadPlugin } from "./upload.ts";
++import { manturProjectMediaPlugin } from './mantur-project-media.ts';
+ import { mobileUploadPlugin } from "./mobile-upload.ts";
+ import { uploadMultipartPlugin } from "./upload-multipart.ts";
+ import { extractAudioPlugin } from "./extract-audio.ts";
+@@ -57,6 +58,7 @@ export function serverPlugins(options: { projectStoreHttp?: boolean } = {}): Plu
+   installSystemProxy();
+   return [
+     requestShapeGatePlugin(),
++    manturProjectMediaPlugin(),
+     crossOriginIsolationPlugin(),
+     storageLifecyclePlugin(),
+     llmProxyPlugin(),
+diff --git a/server/plugins/mantur-import-session.verify.ts b/server/plugins/mantur-import-session.verify.ts
+new file mode 100644
+index 0000000..5c9cc2c
+--- /dev/null
++++ b/server/plugins/mantur-import-session.verify.ts
+@@ -0,0 +1,168 @@
++import assert from 'node:assert/strict';
++import { mkdtemp, mkdir, readFile, realpath, rm } from 'node:fs/promises';
++import { tmpdir } from 'node:os';
++import { join } from 'node:path';
++import { execFileSync } from 'node:child_process';
++import { randomUUID } from 'node:crypto';
++import { createServer } from 'vite';
++import type { AgentContext } from '../../src/agent/context';
++import type { StoredExternalProposal } from '../../src/persist/externalProposalStore';
++
++const directory = await realpath(await mkdtemp(join(tmpdir(), 'mantur-import-session-')));
++const root = join(directory, 'project');
++await mkdir(join(root, 'shots'), { recursive: true });
++const env = {
++  OPENCHATCUT_DEV_PROFILE_ID: randomUUID(), OPENCHATCUT_DATA_DIR: join(directory, 'data'),
++  MANTUR_CUT_MEDIA_DIR: join(directory, 'media'), MANTUR_CUT_PROJECT_DIR: root,
++};
++const previousEnv = Object.fromEntries(Object.keys(env).map(key => [key, process.env[key]]));
++Object.assign(process.env, env);
++const { manturProjectMediaPlugin } = await import('./mantur-project-media');
++const { requestShapeGatePlugin } = await import('./request-shape-gate');
++const { ffmpegBin } = await import('../media-binaries');
++const { ExternalBridgeRuntime } = await import('../../src/agent/external-bridge-runtime');
++const { makeDraft } = await import('../../src/editor/store');
++const { INITIAL } = await import('../../src/editor/initial');
++const { docFromTimeline } = await import('../../src/persist/projectStore');
++const { revisionOf } = await import('../../src/agent/external-edit-session');
++const sourceBytes = new Map<string, Buffer>();
++for (const [name, color] of [['A', 'red'], ['B', 'blue'], ['C', 'green']]) {
++  const file = join(root, 'shots', `${name}.mp4`);
++  execFileSync(ffmpegBin(), ['-v', 'error', '-n', '-f', 'lavfi', '-i',
++    `color=c=${color}:s=160x90:r=25:d=1`, '-c:v', 'libx264', '-pix_fmt', 'yuv420p', file], { timeout: 30000 });
++  sourceBytes.set(file, await readFile(file));
++}
++const server = await createServer({ configFile: false, cacheDir: join(directory, 'vite-cache'),
++  optimizeDeps: { noDiscovery: true, include: [] }, plugins: [requestShapeGatePlugin(), manturProjectMediaPlugin()],
++  server: { host: '127.0.0.1', port: 0 } });
++await new Promise<void>(resolve => server.httpServer!.listen(0, '127.0.0.1', resolve));
++const address = server.httpServer!.address();
++assert(address && typeof address !== 'string');
++const origin = `http://127.0.0.1:${address.port}`;
++const nativeFetch = globalThis.fetch;
++const previousDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
++const previousAnimationFrame = Object.getOwnPropertyDescriptor(globalThis, 'requestAnimationFrame');
++Object.defineProperty(globalThis, 'requestAnimationFrame', { configurable: true, value: (callback: FrameRequestCallback) => {
++  queueMicrotask(() => callback(performance.now()));
++  return 0;
++} });
++Object.defineProperty(globalThis, 'document', { configurable: true, value: {
++  querySelector: () => ({ getAttribute: () => 'enabled' }),
++} });
++let importRequests = 0;
++let holdImport: (() => Promise<void>) | undefined;
++globalThis.fetch = (input, init) => {
++  if (input !== '/api/mantur/project-media') return nativeFetch(input, init);
++  importRequests++;
++  const request = () => nativeFetch(new URL(input, origin), { ...init,
++    headers: { ...init?.headers, Origin: origin, 'Sec-Fetch-Site': 'same-origin' } });
++  return holdImport ? holdImport().then(request) : request();
++};
++const runtimes: InstanceType<typeof ExternalBridgeRuntime>[] = [];
++try {
++  for (const approvalMode of ['auto', 'manual'] as const) {
++    const projectId = `import-${approvalMode}-${randomUUID()}`;
++    const live = makeDraft(docFromTimeline({ ...INITIAL, items: [] }));
++    const context: AgentContext = { commands: live.commands, getDoc: live.getDoc, getState: live.getState,
++      getCreativeMode: () => null, getProjectId: () => projectId, templates: [], audio: [] };
++    let saved: StoredExternalProposal | null = null;
++    const runtime = new ExternalBridgeRuntime(projectId, `editor-${projectId}`, () => context, () => {}, {
++      saveProject: async () => ({ projectId, revision: 1, epoch: 1, status: 'saved', saved: true, indexUpdated: true }),
++      saveAutomaticVersion: async () => null,
++      saveExternalProposal: async (_id, proposal) => { saved = proposal; },
++    });
++    runtimes.push(runtime);
++    const binding = runtime.binding();
++    const begun = await runtime.execute('begin_edit_session', { approvalMode }, binding) as { editSessionId: string };
++    for (const [tool, path, duplicates] of [
++      ['import_asset', 'shots/A.mp4', 0], ['import_asset', 'shots/B.mp4', 0],
++      ['import_asset', 'shots/A.mp4', 1], ['import_folder', 'shots', 2],
++    ] as const) {
++      const args = { editSessionId: begun.editSessionId, path };
++      if (approvalMode === 'manual') {
++        const before = importRequests;
++        const pending = await runtime.execute(tool, args, binding) as { needs_confirmation: boolean; note: string };
++        assert.equal(pending.needs_confirmation, true);
++        assert.equal(pending.note, '确认后读取本地素材并加入当前编辑草稿，审阅草稿时统一应用。请在漫途Cut中确认后重试同一次调用。');
++        assert.equal(importRequests, before, 'manual import cannot read the file before one-shot approval');
++        const guard = runtime.pendingGuard(); assert(guard);
++        if (path === 'shots/B.mp4') {
++          await runtime.confirmRealTool(guard.id, false);
++          await runtime.execute(tool, args, binding);
++          assert.equal(importRequests, before, 'denial cannot read the local file');
++        }
++        await runtime.confirmRealTool(runtime.pendingGuard()!.id, true);
++      }
++      const result = await runtime.execute(tool, args, binding) as { ok: boolean; duplicateCount: number };
++      assert.equal(result.ok, true);
++      assert.equal(result.duplicateCount, duplicates);
++      assert.equal(revisionOf(live.getDoc()), binding.baseRevision,
++        'an approved import must not invalidate its own editing session by writing the live project');
++    }
++    assert.equal(live.getDoc().assets.length, 0);
++    const checkpoint = saved as StoredExternalProposal | null;
++    assert.equal(checkpoint?.draftCheckpoint?.draftDoc.assets.length, 3, 'draft survives checkpoints and deduplicates imports');
++    const info = await runtime.execute('get_edit_session', { editSessionId: begun.editSessionId }, binding) as { operationCount: number };
++    assert.equal(info.operationCount, 3);
++    await runtime.execute('set_aspect_ratio', { editSessionId: begun.editSessionId, ratio: '9:16' }, binding);
++    await runtime.execute('review_edit_session', { editSessionId: begun.editSessionId, summary: 'Import three clips' }, binding);
++    if (approvalMode === 'manual') {
++      assert.equal(live.getDoc().assets.length, 0, 'manual review keeps live assets untouched until apply');
++      await runtime.apply(new Set([0, 1, 2, 3]));
++    }
++    assert.equal(live.getDoc().assets.length, 3);
++    assert.equal(live.getState().width, 1080);
++    assert.equal(live.getState().height, 1920);
++  }
++  for (const interruption of ['concurrent-edit', 'cancel'] as const) {
++    const projectId = `interrupt-${randomUUID()}`;
++    const live = makeDraft(docFromTimeline({ ...INITIAL, items: [] }));
++    const runtime = new ExternalBridgeRuntime(projectId, `editor-${projectId}`, () => ({
++      commands: live.commands, getDoc: live.getDoc, getState: live.getState,
++      getCreativeMode: () => null, getProjectId: () => projectId, templates: [], audio: [],
++    }), () => {});
++    runtimes.push(runtime);
++    const binding = runtime.binding();
++    const begun = await runtime.execute('begin_edit_session', { approvalMode: 'auto' }, binding) as { editSessionId: string };
++    let release!: () => void;
++    let entered!: () => void;
++    const reached = new Promise<void>(resolve => { entered = resolve; });
++    const blocked = new Promise<void>(resolve => { release = resolve; });
++    holdImport = () => { entered(); return blocked; };
++    const controller = new AbortController();
++    const pending = runtime.execute('import_asset', { editSessionId: begun.editSessionId, path: 'shots/A.mp4' }, binding, controller.signal);
++    const outcome = Promise.allSettled([pending]);
++    let timeout: ReturnType<typeof setTimeout> | undefined;
++    try {
++      await Promise.race([reached, new Promise<never>((_resolve, reject) => {
++        timeout = setTimeout(() => reject(new Error('Import did not reach the HTTP barrier within 10 seconds')), 10000);
++      })]);
++      if (interruption === 'concurrent-edit') live.commands.setAspect(720, 1280, 'contain');
++      else controller.abort();
++      release();
++      await assert.rejects(pending, interruption === 'concurrent-edit' ? /stale/ : /cancel/i);
++    } finally {
++      clearTimeout(timeout);
++      controller.abort();
++      release();
++      holdImport = undefined;
++      await outcome;
++    }
++    assert.equal(live.getDoc().assets.length, 0, 'interrupted imports never publish candidate assets');
++    assert.equal(live.getState().width, interruption === 'concurrent-edit' ? 720 : 1920);
++  }
++  for (const [file, bytes] of sourceBytes) assert.deepEqual(await readFile(file), bytes);
++  console.log('PASS: real HTTP imports retain session revision; approval/denial, deduplication, draft edits, review/apply, concurrent-edit rejection, cancellation and original files verified.');
++} finally {
++  await Promise.all(runtimes.map(runtime => runtime.disconnect()));
++  globalThis.fetch = nativeFetch;
++  if (previousDocument) Object.defineProperty(globalThis, 'document', previousDocument);
++  else Reflect.deleteProperty(globalThis, 'document');
++  if (previousAnimationFrame) Object.defineProperty(globalThis, 'requestAnimationFrame', previousAnimationFrame);
++  else Reflect.deleteProperty(globalThis, 'requestAnimationFrame');
++  await server.close();
++  for (const [key, value] of Object.entries(previousEnv)) {
++    if (value === undefined) delete process.env[key]; else process.env[key] = value;
++  }
++  await rm(directory, { recursive: true, force: true });
++}
+diff --git a/server/plugins/mantur-project-media.ts b/server/plugins/mantur-project-media.ts
+new file mode 100644
+index 0000000..095b645
+--- /dev/null
++++ b/server/plugins/mantur-project-media.ts
+@@ -0,0 +1,113 @@
++import { readdir, realpath, stat } from 'node:fs/promises';
++import { realpathSync } from 'node:fs';
++import { basename, isAbsolute, relative, resolve, sep } from 'node:path';
++import type { Plugin } from 'vite';
++import { editorCredentialAuthorized } from '../editor-auth.ts';
++import { readBridgeJson, sendBridgeJson } from './external-agent-bridge-routes.ts';
++import { canonicalCurrentUploadDirectory, directoryMediaKind, importDirectoryCandidate, isPathInside } from '../../desktop/directory-watch-import.ts';
++import { scanImportDirectory } from '../../desktop/directory-watch.ts';
++import { isDirectoryImportProjectId, normalizeDirectoryImportHashes, type AgentPathImportRequest, type AgentPathImportResult } from '../../shared/directory-import.ts';
++import type { ProjectMediaListing } from '../../shared/mantur-project-media.ts';
++
++const PAGE_SIZE = 100;
++const MAX_IMPORT_PATHS = 100;
++
++function excluded(root: string, path: string): boolean {
++  const parts = relative(root, path).split(sep);
++  return parts[0] === '剪辑' || parts.some(part => part.startsWith('.') || part === 'node_modules');
++}
++
++/** Resolve every request against the Host-supplied project, including symlink targets. */
++export async function projectMediaPath(root: string, path: string): Promise<string> {
++  const requested = resolve(root, path);
++  if (!isPathInside(root, requested) || excluded(root, requested)) throw new Error('Path is outside the current project media directories');
++  const canonical = await realpath(requested);
++  if (!isPathInside(root, canonical) || excluded(root, canonical)) throw new Error('Path is outside the current project media directories');
++  return canonical;
++}
++
++async function mediaEntries(root: string, directory: string) {
++  return (await readdir(directory, { withFileTypes: true }))
++    .filter(entry => !entry.isSymbolicLink() && !excluded(root, resolve(directory, entry.name))
++      && (entry.isDirectory() || (entry.isFile() && directoryMediaKind(entry.name))))
++    .sort((a, b) => Number(b.isDirectory()) - Number(a.isDirectory()) || a.name.localeCompare(b.name));
++}
++
++export async function listProjectMedia(root: string, path: string, offset: number): Promise<ProjectMediaListing> {
++  const directory = await projectMediaPath(root, path);
++  const entries = await mediaEntries(root, directory);
++  return {
++    root, directory: relative(root, directory),
++    entries: entries.slice(offset, offset + PAGE_SIZE).map(entry => ({
++      path: relative(root, resolve(directory, entry.name)), name: entry.name,
++      kind: entry.isDirectory() ? 'directory' : directoryMediaKind(entry.name)!,
++    })),
++    nextOffset: offset + PAGE_SIZE < entries.length ? offset + PAGE_SIZE : null,
++  };
++}
++
++/** UI and Agent imports publish the same reference-backed media descriptors. */
++export async function importProjectMedia(root: string, request: AgentPathImportRequest): Promise<AgentPathImportResult> {
++  const result: { imported: AgentPathImportResult['imported'][number][]; errors: AgentPathImportResult['errors'][number][]; unsupportedFiles: string[]; duplicateCount: number } = {
++    imported: [], errors: [], unsupportedFiles: [], duplicateCount: 0,
++  };
++  const destination = await canonicalCurrentUploadDirectory();
++  const hashes = new Set(request.knownHashes);
++  const seen = new Set<string>();
++  for (const requested of request.paths) {
++    try {
++      const path = await projectMediaPath(root, requested);
++      const info = await stat(path);
++      const candidates = info.isDirectory()
++        ? await scanImportDirectory(path, { readdir: directory => mediaEntries(root, directory) }, () => false, error => { throw error; })
++        : [{ path, name: basename(path) }];
++      for (const candidate of candidates) {
++        const sourcePath = await projectMediaPath(root, candidate.path);
++        if (seen.has(sourcePath)) continue;
++        seen.add(sourcePath);
++        let failure: unknown;
++        const imported = await importDirectoryCandidate({
++          sourcePath, root, name: candidate.name, pinnedUploadDirectory: destination,
++          knownHashes: hashes, cancelled: () => false, signal: new AbortController().signal,
++          reportError: error => { failure = error; },
++        });
++        if (imported.status === 'imported') {
++          result.imported.push(imported.prepared.file);
++          if (imported.prepared.file.contentHash) hashes.add(imported.prepared.file.contentHash);
++        } else if (imported.status === 'duplicate' || imported.status === 'unchanged') result.duplicateCount++;
++        else if (imported.status === 'unsupported') result.unsupportedFiles.push(candidate.name);
++        else result.errors.push({ path: candidate.path, error: failure instanceof Error ? failure.message : 'Import could not finish; refresh and retry' });
++      }
++    } catch (error) { result.errors.push({ path: requested, error: error instanceof Error ? error.message : String(error) }); }
++  }
++  return result;
++}
++
++export function manturProjectMediaPlugin(): Plugin {
++  const configured = process.env.MANTUR_CUT_PROJECT_DIR;
++  if (configured && !isAbsolute(configured)) throw new Error('Mantur project directory must be absolute');
++  const root = configured ? realpathSync(configured) : null;
++  return {
++    name: 'mantur-project-media',
++    transformIndexHtml: () => root ? [{ tag: 'meta', attrs: { name: 'mantur-project-media', content: 'enabled' } }] : [],
++    configureServer(server) {
++      server.middlewares.use('/api/mantur/project-media', async (req, res) => {
++        if (!root) { sendBridgeJson(res, 404, { error: 'Project media is not enabled' }); return; }
++        if (req.method !== 'POST') { sendBridgeJson(res, 405, { error: 'POST required' }); return; }
++        if (!editorCredentialAuthorized(req, true)) { sendBridgeJson(res, 403, { error: 'Invalid editor origin' }); return; }
++        try {
++          const body = await readBridgeJson(req);
++          if (body.action === 'list' && typeof body.path === 'string' && Number.isSafeInteger(body.offset) && Number(body.offset) >= 0) {
++            sendBridgeJson(res, 200, await listProjectMedia(await root, body.path, Number(body.offset)));
++          } else if (body.action === 'import') {
++            const hashes = normalizeDirectoryImportHashes(body.knownHashes);
++            if (!Array.isArray(body.paths) || !body.paths.length || body.paths.length > MAX_IMPORT_PATHS
++              || !body.paths.every(path => typeof path === 'string' && path.length > 0 && path.length <= 4096)
++              || !hashes || !isDirectoryImportProjectId(body.projectId)) throw new Error('Invalid project media import request');
++            sendBridgeJson(res, 200, await importProjectMedia(await root, { paths: body.paths, projectId: body.projectId, knownHashes: hashes }));
++          } else throw new Error('Invalid project media request');
++        } catch (error) { sendBridgeJson(res, 400, { error: error instanceof Error ? error.message : String(error) }); }
++      });
++    },
++  };
++}
+diff --git a/server/plugins/mantur-project-media.verify.ts b/server/plugins/mantur-project-media.verify.ts
+new file mode 100644
+index 0000000..94d9b17
+--- /dev/null
++++ b/server/plugins/mantur-project-media.verify.ts
+@@ -0,0 +1,98 @@
++import assert from 'node:assert/strict';
++import { mkdtemp, mkdir, readFile, readdir, realpath, rename, rm, stat, symlink, writeFile } from 'node:fs/promises';
++import { tmpdir } from 'node:os';
++import { join } from 'node:path';
++import { execFileSync } from 'node:child_process';
++import { randomUUID } from 'node:crypto';
++import { createServer } from 'vite';
++import type { AgentPathImportResult } from '../../shared/directory-import';
++import type { ProjectMediaListing } from '../../shared/mantur-project-media';
++
++const directory = await realpath(await mkdtemp(join(tmpdir(), 'mantur-project-media-')));
++const root = join(directory, 'project');
++const media = join(root, '剪辑', 'session-test', '素材');
++await mkdir(media, { recursive: true });
++await mkdir(join(root, 'shots'));
++await mkdir(join(root, '.hidden'));
++await mkdir(join(root, 'node_modules'));
++process.env.OPENCHATCUT_DEV_PROFILE_ID = randomUUID();
++process.env.OPENCHATCUT_DATA_DIR = join(root, '剪辑', 'session-test', '工程');
++process.env.MANTUR_CUT_MEDIA_DIR = media;
++process.env.MANTUR_CUT_PROJECT_DIR = root;
++const { manturProjectMediaPlugin } = await import('./mantur-project-media.ts');
++const { requestShapeGatePlugin } = await import('./request-shape-gate.ts');
++const { uploadPlugin } = await import('./upload.ts');
++const { ffmpegBin } = await import('../media-binaries.ts');
++const { resolveUploadFile } = await import('../media-dir.ts');
++const { deleteMediaReference } = await import('../media-references.ts');
++const clip = join(root, 'shots', '中文片段.mp4');
++execFileSync(ffmpegBin(), ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=blue:s=160x90:r=25:d=1', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', clip], { timeout: 30000 });
++const original = await readFile(clip);
++await writeFile(join(root, 'notes.md'), 'not media');
++await symlink(directory, join(root, 'outside'));
++const server = await createServer({ configFile: false, plugins: [requestShapeGatePlugin(), manturProjectMediaPlugin(), uploadPlugin()], server: { host: '127.0.0.1', port: 0 } });
++await new Promise<void>(resolve => server.httpServer!.listen(0, '127.0.0.1', resolve));
++const address = server.httpServer!.address();
++assert.ok(address && typeof address !== 'string');
++const origin = `http://127.0.0.1:${address.port}`;
++async function request(body: object, requestOrigin = origin) {
++  return fetch(`${origin}/api/mantur/project-media`, { method: 'POST',
++    headers: { Origin: requestOrigin, 'Sec-Fetch-Site': 'same-origin', 'Content-Type': 'application/json' }, body: JSON.stringify(body),
++  });
++}
++try {
++  assert.equal((await request({ action: 'list', path: '', offset: 0 }, 'https://example.com')).status, 403);
++  const listing = await (await request({ action: 'list', path: '', offset: 0 })).json() as ProjectMediaListing;
++  assert.deepEqual(listing.entries.map(entry => entry.name), ['shots']);
++  for (const path of ['..', 'outside', '剪辑', '.hidden', 'node_modules']) {
++    assert.equal((await request({ action: 'list', path, offset: 0 })).status, 400, path);
++  }
++  const args = { action: 'import', paths: ['shots/中文片段.mp4'], projectId: 'project-test', knownHashes: [] };
++  const imported = await (await request(args)).json() as AgentPathImportResult;
++  assert.deepEqual(imported.errors, []);
++  assert.equal(imported.imported.length, 1);
++  const file = imported.imported[0];
++  assert.equal(resolveUploadFile(file.storedName), clip, 'compatible clip references the original');
++  assert.deepEqual(await readFile(clip), original, 'source bytes remain unchanged');
++  assert.deepEqual(await readdir(media), ['.references'], 'no duplicate video is stored');
++  const served = await fetch(`${origin}${file.src}`);
++  assert.equal(served.status, 200);
++  assert.deepEqual(Buffer.from(await served.arrayBuffer()), original, 'media URL streams the original');
++  const repeated = await (await request({ ...args, knownHashes: [file.contentHash] })).json() as AgentPathImportResult;
++  assert.equal(repeated.duplicateCount, 1);
++  const moved = join(root, 'shots', 'moved.mp4');
++  await rename(clip, moved);
++  assert.equal(resolveUploadFile(file.storedName), null, 'moved source becomes offline');
++  const relocated = await (await request({ ...args, paths: ['shots/moved.mp4'] })).json() as AgentPathImportResult;
++  assert.equal(relocated.imported.length, 1);
++  assert.equal(resolveUploadFile(relocated.imported[0].storedName), moved);
++  await deleteMediaReference(media, relocated.imported[0].storedName);
++  assert.equal((await stat(moved)).size, original.length, 'removing a reference preserves the source');
++  const { execAgentPathImportTool } = await import('../../src/agent/tools/agent-path-import-tools.ts');
++  const nativeFetch = globalThis.fetch;
++  const originalDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
++  const added: Array<{ name: string }> = [];
++  Object.defineProperty(globalThis, 'document', { configurable: true, value: { querySelector: () => ({ getAttribute: () => 'enabled' }) } });
++  globalThis.fetch = (input, init) => nativeFetch(new URL(String(input), origin), { ...init,
++    headers: { ...init?.headers, Origin: origin, 'Sec-Fetch-Site': 'same-origin' },
++  });
++  try {
++    const agentResult = await execAgentPathImportTool('import_asset', { path: 'shots/moved.mp4' }, {
++      getProjectId: () => 'project-test', getState: () => ({ fps: 25 }), getDoc: () => ({ assets: [] }),
++      commands: { addAsset: (asset: { name: string }) => added.push(asset) },
++    } as unknown as import('../../src/agent/context').AgentContext);
++    assert.equal(agentResult.ok, true);
++    assert.equal(added[0]?.name, 'moved.mp4', 'Agent tool uses the project endpoint and adds a real pool asset');
++  } finally {
++    globalThis.fetch = nativeFetch;
++    if (originalDocument) Object.defineProperty(globalThis, 'document', originalDocument);
++    else Reflect.deleteProperty(globalThis, 'document');
++  }
++  const rejected = await (await request({ ...args, paths: [join(directory, 'unrelated.mp4')] })).json() as AgentPathImportResult;
++  assert.equal(rejected.imported.length, 0);
++  assert.equal(rejected.errors.length, 1);
++  console.log('PASS project media: scoped listing, origin/path checks, direct streaming, deduplication, offline relocation, source-preserving removal.');
++} finally {
++  await server.close();
++  await rm(directory, { recursive: true, force: true });
++}
+diff --git a/server/runtime-profile.ts b/server/runtime-profile.ts
+index cd7b41a..828aa14 100644
+--- a/server/runtime-profile.ts
++++ b/server/runtime-profile.ts
+@@ -135,7 +135,7 @@ export function resolveRuntimeProfile(
+     const rootDir = dataDir ?? join(home, '.openchatcut', 'dev-profiles', profileId);
+     const base = profileBase(
+       rootDir,
+-      join(rootDir, 'media', 'uploads'),
++      env.MANTUR_CUT_MEDIA_DIR ? resolve(env.MANTUR_CUT_MEDIA_DIR) : join(rootDir, 'media', 'uploads'),
+       join(rootDir, 'generation-operations-v1.json'),
+       join(rootDir, 'settings.env'),
+     );
+diff --git a/shared/mantur-project-media.ts b/shared/mantur-project-media.ts
+new file mode 100644
+index 0000000..1fd0b72
+--- /dev/null
++++ b/shared/mantur-project-media.ts
+@@ -0,0 +1,14 @@
++import type { DirectoryImportMediaKind } from './directory-import';
++
++export interface ProjectMediaEntry {
++  path: string;
++  name: string;
++  kind: 'directory' | DirectoryImportMediaKind;
++}
++
++export interface ProjectMediaListing {
++  root: string;
++  directory: string;
++  entries: ProjectMediaEntry[];
++  nextOffset: number | null;
++}
+diff --git a/src/App.tsx b/src/App.tsx
+index 0052cf2..f5e9192 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -1,19 +1,15 @@
+
+ import { useT } from './i18n/locale';
+ import {
+-  useAgentBackendSync,
+   useAppRoute,
+   useProjects,
+ } from './app/appShell';
+ import { AppSplash, DashboardRoute, EditorRoute } from './app/AppViews';
+-import { useInferenceWarmup } from './hooks/useInferenceWarmup';
+ import { useUiScaleShortcuts } from './hooks/useUiScaleShortcuts';
+
+ export default function App() {
+   const t = useT();
+   const route = useAppRoute();
+-  useAgentBackendSync();
+-  useInferenceWarmup(route.name === 'editor');
+   useUiScaleShortcuts();
+   const { projects, refresh } = useProjects();
+
+diff --git a/src/agent/external-bridge-runtime.ts b/src/agent/external-bridge-runtime.ts
+index d57948a..1acbbc8 100644
+--- a/src/agent/external-bridge-runtime.ts
++++ b/src/agent/external-bridge-runtime.ts
+@@ -14,7 +14,7 @@ import {
+ import { commitExternalProposal, type ExternalBridgePersistence } from './external-proposal-apply';
+ import { DEFAULT_EXTERNAL_BRIDGE_PERSISTENCE, EXTERNAL_PROJECT_INDEX_WARNING } from './external-bridge-persistence-defaults';
+ import { ExternalApprovalGate } from './external-approval-gate';
+-import { ExternalSessionRunLedger, invocationFromApproval } from './external-run-ledger';
++import { ExternalSessionRunLedger, invocationFromApproval, type ExternalRecordedInvocation } from './external-run-ledger';
+ import { finalizeExternalSessionRun } from './external-run-terminal';
+ import { validateExternalInvocation } from './external-tool-schemas';
+ import { executeTool } from './tools';
+@@ -174,17 +174,17 @@ export class ExternalBridgeRuntime {
+     const approved = await this.approvalGate.consume({
+       sessionId: session.id, runId: run.runId, tool: name, args, operationId,
+     });
+-    if (!approved) {
+-      // auto (YOLO) sessions skip the confirmation card entirely — the
+-      // client explicitly opted into unapproved real-project execution.
+-      if (session.approvalMode === 'auto') {
+-        const invocation = await run.requested(name, args);
+-        return run.executeApprovedTool(invocation, args, this.getContext(), signal);
+-      }
++    if (!approved && session.approvalMode !== 'auto') {
+       return this.requestRealToolApproval(session, run, name, args);
+     }
++    const invocation = approved ? invocationFromApproval(approved) : await run.requested(name, args);
++    // Local imports keep their approval gate, but pool additions belong to the
++    // draft so a successful import cannot invalidate its own edit-session base.
++    if (name === 'import_asset' || name === 'import_folder') {
++      return this.runEditorTool(session, name, args, signal, invocation);
++    }
+     return run.executeApprovedTool(
+-      invocationFromApproval(approved),
++      invocation,
+       args,
+       this.getContext(),
+       signal,
+@@ -220,7 +220,9 @@ export class ExternalBridgeRuntime {
+       confirmationId: guard.guardId,
+       tool,
+       status: 'pending',
+-      note: '这个操作会作用于真实工程。请在 OpenChatCut 中确认后重试同一次调用。',
++      note: tool === 'import_asset' || tool === 'import_folder'
++        ? '确认后读取本地素材并加入当前编辑草稿，审阅草稿时统一应用。请在漫途Cut中确认后重试同一次调用。'
++        : '这个操作会作用于真实工程。请在 OpenChatCut 中确认后重试同一次调用。',
+     };
+   }
+   async confirmRealTool(guardId: string, allow: boolean): Promise<void> {
+@@ -370,6 +372,7 @@ export class ExternalBridgeRuntime {
+     name: string,
+     args: Record<string, unknown>,
+     signal?: AbortSignal,
++    approvedImport?: ExternalRecordedInvocation,
+   ): Promise<unknown> {
+     const run = this.requireRun(session.id);
+     const executed = await run.executeDraftTool({
+@@ -379,6 +382,7 @@ export class ExternalBridgeRuntime {
+       context: this.getContext(),
+       signal,
+       markStale: () => this.markTerminal(session, 'stale'),
++      approvedImport,
+     });
+     await this.persistence.saveExternalProposal(this.projectId,
+       storedExternalSession(executed.session, 'drafting', undefined, run.runId));
+diff --git a/src/agent/external-run-ledger.ts b/src/agent/external-run-ledger.ts
+index cc34d5c..14f8a75 100644
+--- a/src/agent/external-run-ledger.ts
++++ b/src/agent/external-run-ledger.ts
+@@ -108,14 +108,17 @@ export interface ExternalDraftToolInput {
+   readonly context: AgentContext;
+   readonly signal?: AbortSignal;
+   readonly markStale: () => Promise<void>;
++  /** Local-file import approval already consumed by the connected runtime. */
++  readonly approvedImport?: ExternalRecordedInvocation;
+ }
+
+ function requireDraftTool(
+   session: ExternalEditSession,
+   toolName: string,
+   args: Readonly<Record<string, unknown>>,
++  approvedImport = false,
+ ): void {
+-  if (!isExternalDraftTool(toolName) || isExternalRealTool(toolName, args)) {
++  if (!approvedImport && (!isExternalDraftTool(toolName) || isExternalRealTool(toolName, args))) {
+     throw new ExternalEditSessionOutcomeError(
+       'rejected',
+       `Tool ${toolName} is not available in isolated edit sessions.`,
+@@ -327,8 +330,11 @@ export class ExternalSessionRunLedger {
+   async executeDraftTool(
+     input: ExternalDraftToolInput,
+   ): Promise<ExecutedExternalDraftTool> {
+-    requireDraftTool(input.session, input.name, input.args);
+-    const invocation = await this.requested(input.name, input.args);
++    const approvedImport = input.approvedImport !== undefined
++      && input.approvedImport.toolName === input.name
++      && (input.name === 'import_asset' || input.name === 'import_folder');
++    requireDraftTool(input.session, input.name, input.args, approvedImport);
++    const invocation = approvedImport ? input.approvedImport! : await this.requested(input.name, input.args);
+     if (isExternalEditSessionStale(input.session, input.context.getDoc())) {
+       const error = new ExternalEditSessionOutcomeError(
+         'stale',
+diff --git a/src/agent/external-tool-policy.ts b/src/agent/external-tool-policy.ts
+index 5c0a46d..8d8e8ef 100644
+--- a/src/agent/external-tool-policy.ts
++++ b/src/agent/external-tool-policy.ts
+@@ -103,9 +103,9 @@ export function isExternalServerDirectCall(
+   return action !== 'language_mode' || mode !== 'bilingual';
+ }
+
+-/** Real-project operations (generation, export, import, transcription, analysis
+- * writes) — not available in isolated draft sessions; they act on the live
+- * project and require a one-shot approval bound to the exact tool args and operation. Every
++/** Operations requiring one-shot approval bound to the exact args and operation
++ * in manual sessions. Approved local imports add assets to the edit draft; other
++ * operations (generation, export, transcription, analysis writes) act on the live project. Every
+  * tool outside the draft/global-read whitelist is real: internal and external
+  * agents see the same tool surface, only the confirmation gate differs. */
+ export function isExternalRealTool(
+diff --git a/src/agent/tools/agent-path-import-tools.ts b/src/agent/tools/agent-path-import-tools.ts
+index 1e377a8..0b6cc53 100644
+--- a/src/agent/tools/agent-path-import-tools.ts
++++ b/src/agent/tools/agent-path-import-tools.ts
+@@ -1,25 +1,24 @@
+-// Agent-initiated local-path media import (issue #84 Feature B). Desktop-only:
+-// the Electron main process scans the requested path (whitelisted by the
+-// user-configured AGENT_IMPORT_ROOTS), imports files through the same
+-// fingerprint/copy/probe chain as watched folders, and returns pool-ready
+-// assets. Browsers have no local filesystem bridge and get a clear error.
++// Local-path imports use Mantur project references or the standalone desktop
++// import bridge. Both return pool-ready assets through the shared media probe.
+ import type { AgentContext } from '../context';
+ import type { AgentToolSchema } from '../tool-schema';
+ import { directoryFileToAsset } from '../../media/directoryImportAsset';
+ import type { AgentPathImportResult } from '../../../shared/directory-import';
++import { importProjectMedia, projectMediaEnabled } from '../../media/manturProjectMedia';
+
+ export const AGENT_PATH_IMPORT_SCHEMAS: AgentToolSchema[] = [
+   {
+     name: 'import_asset',
+     description: [
+-      'Import ONE local media file (video/audio/image) by its absolute disk path into the media pool.',
+-      'Desktop app only; the path must be inside an allowed AGENT_IMPORT_ROOTS directory.',
++      'Import ONE local media file (video/audio/image) by disk path into the media pool.',
++      'In Mantur, reads the current Agent project directly without copying the source; relative project paths are accepted. Standalone desktop requires an allowed AGENT_IMPORT_ROOTS directory.',
+       'Returns the imported pool asset(s); duplicates already in the pool are skipped.',
++      'External edit sessions stage these assets in the draft; review_edit_session applies them to the live pool together with the timeline edits.',
+     ].join(' '),
+     input_schema: {
+       type: 'object',
+       properties: {
+-        path: { type: 'string', description: 'Absolute path to the media file.' },
++        path: { type: 'string', description: 'Absolute file path, or a path relative to the current Mantur project.' },
+       },
+       required: ['path'],
+     },
+@@ -28,14 +27,15 @@ export const AGENT_PATH_IMPORT_SCHEMAS: AgentToolSchema[] = [
+     name: 'import_folder',
+     description: [
+       'Import every supported media file inside a local directory (recursive, bounded) into the media pool.',
+-      'Desktop app only; the directory must be inside an allowed AGENT_IMPORT_ROOTS directory.',
++      'In Mantur, reads the current Agent project recursively without copying originals, excluding editing outputs and hidden directories. Standalone desktop requires an allowed AGENT_IMPORT_ROOTS directory.',
+       'Returns imported assets, duplicate counts, unsupported file names, and per-file errors.',
++      'External edit sessions stage these assets until review_edit_session applies the draft.',
+       'Documents (txt/md/docx/pdf) are reported as unsupported here and should be attached to chat instead.',
+     ].join(' '),
+     input_schema: {
+       type: 'object',
+       properties: {
+-        path: { type: 'string', description: 'Absolute path to the media directory.' },
++        path: { type: 'string', description: 'Absolute directory path, or a path relative to the current Mantur project.' },
+       },
+       required: ['path'],
+     },
+@@ -68,7 +68,7 @@ export async function execAgentPathImportTool(
+ ): Promise<Record<string, unknown>> {
+   const rawPath = typeof args.path === 'string' ? args.path.trim() : '';
+   if (!rawPath) return { error: 'path is required and must be a non-empty string' };
+-  const api = desktopApi();
++  const api = projectMediaEnabled() ? { importAgentPaths: importProjectMedia } : desktopApi();
+   if (!api) {
+     return {
+       error: 'import_asset/import_folder are available in the desktop app only; '
+diff --git a/src/app/appShell.ts b/src/app/appShell.ts
+index 5c1cbcc..9065762 100644
+--- a/src/app/appShell.ts
++++ b/src/app/appShell.ts
+@@ -33,8 +33,6 @@ const emptyState = (): TimelineState => ({
+ });
+
+ export const emptyProjectDoc = (): ProjectDoc => docFromTimeline(emptyState());
+-// Keep the sample timeline out of established users' startup bundle; it is needed only on first run.
+-const seedDoc = async (): Promise<ProjectDoc> => docFromTimeline((await import('../editor/initial')).INITIAL);
+
+ function parseHash(): AppRoute {
+   const match = window.location.hash.match(/^#\/editor\/(.+)$/);
+@@ -117,16 +115,26 @@ const projectStartupSource: ProjectStartupSource = {
+   list: listProjects,
+   hasHistory: hasProjectHistory,
+   canSeedDemo: () => kvRemoteMode() === 'local' || projectStoreWriteCredential(),
+-  createDemo: async () => createProject('示例工程', await seedDoc()),
++  createDemo: async () => {
++    const project = await createProject('剪辑工程', emptyProjectDoc());
++    navigateTo(`#/editor/${project.id}`);
++    return project;
++  },
+ };
+
+-export async function loadInitialProjects(
+-  source: ProjectStartupSource = projectStartupSource,
+-): Promise<ProjectMeta[]> {
+-  const list = await source.list();
+-  if (list.length > 0 || await source.hasHistory()) return list;
+-  if (!source.canSeedDemo()) return [];
+-  return [await source.createDemo()];
++const initialProjectLoads = new WeakMap<ProjectStartupSource, Promise<ProjectMeta[]>>();
++
++export function loadInitialProjects(source: ProjectStartupSource = projectStartupSource): Promise<ProjectMeta[]> {
++  const current = initialProjectLoads.get(source);
++  if (current) return current;
++  const pending = (async () => {
++    const list = await source.list();
++    if (list.length > 0 || await source.hasHistory()) return list;
++    if (!source.canSeedDemo()) return [];
++    return [await source.createDemo()];
++  })().finally(() => { initialProjectLoads.delete(source); });
++  initialProjectLoads.set(source, pending);
++  return pending;
+ }
+
+ export function useProjects(): {
+diff --git a/src/app/appShell.verify.ts b/src/app/appShell.verify.ts
+index e3c4e50..5dffdda 100644
+--- a/src/app/appShell.verify.ts
++++ b/src/app/appShell.verify.ts
+@@ -61,7 +61,7 @@ assert.deepEqual(
+ );
+
+ const appSource = await readFile(new URL('../App.tsx', import.meta.url), 'utf8');
+-assert.match(appSource, /useInferenceWarmup\(route\.name === 'editor'\)/, 'App wires unified inference warmup only while editing');
++assert.doesNotMatch(appSource, /useInferenceWarmup|useAgentBackendSync/, 'embedded editor leaves Agent setup to Mantur');
+ assert.doesNotMatch(appSource, /useLocalAsrWarmup/, 'App no longer wires the ASR-only warmup path');
+
+ const descriptors = {
+@@ -88,3 +88,12 @@ try {
+ }
+
+ console.log('appShell.verify: project startup authority semantics passed');
++
++let concurrentCreates = 0;
++const concurrentSource = {
++  list: async () => [], hasHistory: async () => false, canSeedDemo: () => true,
++  createDemo: async () => { concurrentCreates++; return demo; },
++};
++const firstLoads = await Promise.all([loadInitialProjects(concurrentSource), loadInitialProjects(concurrentSource)]);
++assert.equal(concurrentCreates, 1, 'concurrent first mounts create one project');
++assert.deepEqual(firstLoads[0], firstLoads[1]);
+diff --git a/src/components/Dashboard.tsx b/src/components/Dashboard.tsx
+index deb20b2..2f47e18 100644
+--- a/src/components/Dashboard.tsx
++++ b/src/components/Dashboard.tsx
+@@ -1,5 +1,4 @@
+ import { theme } from '../theme';
+-import { UpstreamUpdateNotice } from '../ui/UpstreamUpdateNotice';
+ import { DesktopWindowControls } from './DesktopWindowControls';
+ import {
+   DashboardContent,
+@@ -13,7 +12,6 @@ export function Dashboard(props: DashboardProps) {
+   const isMacDesktop = window.openChatCutDesktop?.platform === 'darwin';
+   return (
+     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: theme.bg, color: theme.text, fontFamily: 'Geist, system-ui, -apple-system, sans-serif' }}>
+-      <UpstreamUpdateNotice />
+       <header className={`cc-window-titlebar${isMacDesktop ? ' cc-window-titlebar--mac' : ''}`} style={{ position: 'relative', height: 48, flex: '0 0 auto', display: 'flex', alignItems: 'center', gap: 10, padding: '0 24px', borderBottom: `0.5px solid ${theme.border}`, background: theme.panel }}>
+         <DesktopWindowControls />
+         <DashboardTitlebarContent model={model} />
+diff --git a/src/components/TopBar.tsx b/src/components/TopBar.tsx
+index 6bc7e8c..00f74aa 100644
+--- a/src/components/TopBar.tsx
++++ b/src/components/TopBar.tsx
+@@ -1,42 +1,12 @@
+-import { lazy, Suspense, useState, useEffect } from 'react';
++import { useState } from 'react';
+ import { theme } from '../theme';
+ import { Icon } from './icons';
+ import { ExportHistory } from './ExportHistory';
+-import { GenerationActivity } from './GenerationActivity';
+-import { SkinPicker } from './settings/SkinPicker';
+-import { loadMcpGuideDialog } from './settings/mcpGuideLoader';
+-import { ALL_LOCALES, getLocale, setLocale, useT } from '../i18n/locale';
+-import { invokeAction, bindAction } from '../shortcuts/actionRegistry';
++import { useT } from '../i18n/locale';
++import { invokeAction } from '../shortcuts/actionRegistry';
+ import { DesktopWindowControls } from './DesktopWindowControls';
+ import { TopBarIconButton } from './TopBarIconButton';
+
+-// Lazy, like the dashboard's copy of this dialog. A static import here put the
+-// whole MCP guide into the editor's eager chunk and made every lazy() built on
+-// loadMcpGuideDialog ineffective, dashboard included — both top bars have to go
+-// through the thunk for either to be split.
+-const McpGuideDialog = lazy(() => loadMcpGuideDialog().then((m) => ({ default: m.McpGuideDialog })));
+-
+-// Language switching: The text pill displays the current language; clicking
+-// cycles through the supported locales. First run defaults to the
+-// system language (or English) — see i18n/locale.ts.
+-export function LocaleToggle() {
+-  const t = useT();
+-  const locale = getLocale();
+-  const next = ALL_LOCALES[(ALL_LOCALES.indexOf(locale) + 1) % ALL_LOCALES.length]!;
+-  return (
+-    <button
+-      className="cc-tip cc-tip-r"
+-      data-tip={t('切换界面语言')}
+-      aria-label={t('切换界面语言')}
+-      onClick={() => setLocale(next)}
+-      style={{ minWidth: 30, height: 22, background: 'none', border: `0.5px solid ${theme.border}`, borderRadius: 4, cursor: 'pointer', padding: '0 5px', fontSize: 11, fontWeight: 600, letterSpacing: 0.3, color: theme.textDim, display: 'grid', placeItems: 'center' }}
+-      onMouseEnter={(e) => { e.currentTarget.style.color = theme.text; e.currentTarget.style.background = theme.panelAlt; }}
+-      onMouseLeave={(e) => { e.currentTarget.style.color = theme.textDim; e.currentTarget.style.background = 'none'; }}>
+-      {locale === 'zh' ? '中' : locale.toUpperCase()}
+-    </button>
+-  );
+-}
+-
+ interface TopBarProps {
+   projectId: string;
+   projectName: string;
+@@ -46,24 +16,21 @@ interface TopBarProps {
+   exportJobCount?: number;
+   onResumeGeneration?: () => Promise<void>;
+   onHome?: () => void;
++  onOpenSettings?: () => void;
+   onRename?: (name: string) => void;
+ }
+
+-export function TopBar({ projectId, projectName, canUndo, canRedo, exporting, exportJobCount = 0, onHome, onRename, onResumeGeneration }: TopBarProps) {
++export function TopBar({ projectName, canUndo, canRedo, exporting, exportJobCount = 0, onHome, onRename }: TopBarProps) {
+   const t = useT();
+   const isMacDesktop = window.openChatCutDesktop?.platform === 'darwin';
+   const [editing, setEditing] = useState(false);
+   const [draft, setDraft] = useState(projectName);
+-  const [mcpOpen, setMcpOpen] = useState(false);
+-  // The settings dialog (and anything else) can summon the MCP guide through the
+-  // action registry: the Anthropic pane names this panel as the way in for
+-  // Claude Code subscribers, so it has to be able to actually open it.
+-  useEffect(() => bindAction('open-mcp-guide', () => setMcpOpen(true)), []);
+   const commit = () => { setEditing(false); if (onRename && draft.trim() && draft.trim() !== projectName) onRename(draft.trim()); };
+
+   return (
+     <header className={`cc-topbar cc-window-titlebar${isMacDesktop ? ' cc-window-titlebar--mac' : ''}`} style={{ gridColumn: '1 / -1', gridRow: 1, position: 'relative', height: '100%', display: 'flex', alignItems: 'center', padding: '0 6px', borderBottom: `0.5px solid ${theme.border}`, background: theme.panel, gap: 4 }}>
+       <DesktopWindowControls />
++      <strong style={{ fontSize: 13, whiteSpace: 'nowrap' }}>漫途Cut</strong>
+       {/* home in a rounded chip + a vertical divider */}
+       <button className="cc-tip" data-tip={t('返回工程列表')} aria-label={t('返回工程列表')} onClick={onHome}
+         style={{ width: 28, height: 28, background: 'none', border: 'none', borderRadius: 4, cursor: onHome ? 'pointer' : 'default', padding: 0, lineHeight: 0, display: 'grid', placeItems: 'center', color: theme.textDim }}
+@@ -74,13 +41,13 @@ export function TopBar({ projectId, projectName, canUndo, canRedo, exporting, ex
+       <span style={{ width: 1, height: 20, background: theme.border, margin: '0 4px' }} />
+
+       {/* center: project title (no collaboration on local single machine, no collaborator users icon)*/}
+-      <div className="cc-topbar-title" style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'center', fontSize: 12, color: theme.text }}>
++      <div className="cc-topbar-title" style={{ display: 'flex', flex: 1, minWidth: 0, overflow: 'hidden', gap: 8, alignItems: 'center', fontSize: 12, color: theme.text }}>
+         {editing ? (
+           <input autoFocus value={draft} onChange={(e) => setDraft(e.target.value)} onBlur={commit}
+             onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false); }}
+             style={{ font: 'inherit', fontSize: 14, textAlign: 'center', background: theme.panelAlt, color: theme.text, border: `0.5px solid ${theme.accent}`, borderRadius: 5, padding: '2px 8px', minWidth: 200 }} />
+         ) : (
+-          <span onDoubleClick={() => { if (onRename) { setDraft(projectName); setEditing(true); } }} title={onRename ? t('双击重命名') : undefined} style={{ cursor: onRename ? 'text' : 'default' }}>{projectName}</span>
++          <span onDoubleClick={() => { if (onRename) { setDraft(projectName); setEditing(true); } }} title={onRename ? t('双击重命名') : undefined} style={{ cursor: onRename ? 'text' : 'default', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{projectName}</span>
+         )}
+       </div>
+
+@@ -90,15 +57,10 @@ export function TopBar({ projectId, projectName, canUndo, canRedo, exporting, ex
+       <TopBarIconButton icon="undo" label={t('撤销')} onClick={() => invokeAction('undo', undefined, 'toolbar')} disabled={!canUndo} />
+       <TopBarIconButton icon="redo" label={t('重做')} onClick={() => invokeAction('redo', undefined, 'toolbar')} disabled={!canRedo} />
+       <TopBarIconButton icon="keyboard" label={t('编辑快捷键')} onClick={() => invokeAction('keyboard-shortcuts', undefined, 'toolbar')} />
+-      <TopBarIconButton icon="plug" label={t('外部 Agent 接入 (MCP)')} onClick={() => setMcpOpen(true)} />
+       <span id="cc-agent-change-log-slot" style={{ display: 'contents' }} />
+-      <TopBarIconButton icon="palette" label={t('设计风格(品牌)')} onClick={() => invokeAction('open-design', undefined, 'toolbar')} />
+-      <SkinPicker />
+-      <GenerationActivity projectId={projectId} onResume={onResumeGeneration} />
+       <TopBarIconButton icon="history" label={t('历史版本')} onClick={() => invokeAction('open-history', undefined, 'toolbar')} />
+       {/* self-contained: trigger + popover, global export history, zero props */}
+       <ExportHistory />
+-      <LocaleToggle />
+       <TopBarIconButton icon="layoutPanel" label={t('切换面板布局')} onClick={() => invokeAction('toggle-layout', undefined, 'toolbar')} />
+       <button onClick={() => invokeAction('open-export', undefined, 'toolbar')}
+         className="cc-tip cc-tip-r"
+@@ -107,13 +69,7 @@ export function TopBar({ projectId, projectName, canUndo, canRedo, exporting, ex
+         style={{ minWidth: 58, height: 26, background: theme.accent, color: theme.onAccent, border: 'none', borderRadius: 2, padding: '0 8px', fontSize: 12, fontWeight: 600, cursor: 'pointer', marginLeft: 4 }}>
+         {exporting ? t('{n} 个导出', { n: Math.max(1, exportJobCount) }) : t('导出')}
+       </button>
+-      <div title={t('账户')} style={{ width: 20, height: 20, borderRadius: '50%', marginLeft: 2, background: 'conic-gradient(from 210deg, #6d6cff, #ff5f9e, #ffb35f, #6d6cff)', flexShrink: 0 }} />
+       </div>
+-      {/* No fallback: a dialog that is still loading shows nothing, exactly as it
+-          did before it was opened — the same treatment the other overlays get. */}
+-      <Suspense fallback={null}>
+-        {mcpOpen && <McpGuideDialog onClose={() => setMcpOpen(false)} />}
+-      </Suspense>
+     </header>
+   );
+ }
+diff --git a/src/components/chat/ChatPanel.tsx b/src/components/chat/ChatPanel.tsx
+index e77b045..33efe77 100644
+--- a/src/components/chat/ChatPanel.tsx
++++ b/src/components/chat/ChatPanel.tsx
+@@ -1,8 +1,11 @@
+-import { ChatPanelView } from './ChatPanelView';
+-import { useChatPanelController, type ChatPanelProps } from './chatPanelController';
++import { useExternalAgentBridge } from '../../agent/useExternalAgentBridge';
++import type { ChatPanelProps } from './chatPanelController';
++import { ExternalProposalCard } from './ExternalProposalCard';
+
+-/** Compose chat state and hand presentation to same-domain view components. */
++/** Mantur owns conversation; this surface only hosts external edit review. */
+ export function ChatPanel(props: ChatPanelProps) {
+-  const controller = useChatPanelController(props);
+-  return <ChatPanelView controller={controller} />;
++  const external = useExternalAgentBridge(props.ctx, props.projectId);
++  return <div data-mantur-edit-review style={{ position: 'fixed', right: 16, bottom: 48, zIndex: 1000, width: 'min(480px, calc(100vw - 32px))', maxHeight: '75vh', overflowY: 'auto' }}>
++    <ExternalProposalCard external={external} onPreviewState={props.onPreviewState} />
++  </div>;
+ }
+diff --git a/src/components/dashboard/DashboardViews.tsx b/src/components/dashboard/DashboardViews.tsx
+index 6136969..07a8f56 100644
+--- a/src/components/dashboard/DashboardViews.tsx
++++ b/src/components/dashboard/DashboardViews.tsx
+@@ -1,41 +1,20 @@
+-import { Suspense, useEffect } from 'react';
++import { Suspense } from 'react';
+ import type { ProjectMeta } from '../../persist/projectStoreCoordinators';
+ import { theme } from '../../theme';
+ import { useT } from '../../i18n/locale';
+-import { DashboardHeaderLinks } from '../DashboardHeaderLinks';
+ import { BrandMark, Icon, OpenChatCutWordmark } from '../icons';
+-import { bindAction } from '../../shortcuts/actionRegistry';
+ // Opened on demand, so they load on demand — see dashboardDialogs.tsx.
+ import {
+-  McpGuideDialog, MediaCleanupDialog, SettingsDialog, ShortcutsDialog, StorageMigrationDialog,
++  MediaCleanupDialog, ShortcutsDialog,
+ } from './dashboardDialogs';
+ import { useDashboardDialogPrefetch } from './dashboardDialogLoaders';
+-import { StorageMigrationBanner } from '../settings/StorageMigrationBanner';
+-import { SkinPicker } from '../settings/SkinPicker';
+-import { LocaleToggle } from '../TopBar';
+ import {
+-  card, importBtn, miniBtn, modelSetupButton, modelSetupCard, modelSetupIcon,
++  card, importBtn, miniBtn,
+   nameInput, newCard, searchBox, searchClear, searchEmpty, searchIcon, searchInput,
+   settingsBtn, thumb,
+ } from './dashboardStyles';
+ import { relativeProjectTime, type DashboardModel, type DashboardProps } from './useDashboardModel';
+
+-function ModelSetupCard({ onOpen }: { onOpen: () => void }) {
+-  const t = useT();
+-  return (
+-    <section role="status" style={modelSetupCard}>
+-      <span style={modelSetupIcon}><Icon name="sparkles" size={18} /></span>
+-      <span style={{ flex: 1, minWidth: 0 }}>
+-        <strong style={{ display: 'block', color: theme.textStrong, fontSize: 13.5 }}>{t('配置模型后开始使用 Agent')}</strong>
+-        <span style={{ display: 'block', marginTop: 3, color: theme.textDim, fontSize: 11.5, lineHeight: 1.5 }}>
+-          {t('配置任一云端或本地模型，即可在编辑器中使用对话式剪辑。')}
+-        </span>
+-      </span>
+-      <button type="button" onClick={onOpen} style={modelSetupButton}>{t('配置模型')}</button>
+-    </section>
+-  );
+-}
+-
+ function ProjectSearch({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+   const t = useT();
+   return (
+@@ -65,13 +44,7 @@ export function DashboardTitlebarContent({ model }: { model: DashboardModel }) {
+       <OpenChatCutWordmark />
+       <span style={{ color: theme.textDim, fontSize: 13 }}>{t('· 我的工程')}</span>
+       <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+-        <DashboardHeaderLinks />
+-        <button onClick={() => model.setDialog('mcp', true)} data-tip={t('外部 Agent 接入 (MCP)')} aria-label={t('外部 Agent 接入 (MCP)')} className="cc-header-btn cc-tip cc-tip-r" style={settingsBtn}><Icon name="plug" size={16} /></button>
+         <button onClick={() => model.setDialog('shortcuts', true)} data-tip={t('编辑快捷键')} aria-label={t('编辑快捷键')} className="cc-header-btn cc-tip cc-tip-r" style={settingsBtn}><Icon name="keyboard" size={16} /></button>
+-        <LocaleToggle />
+-        <SkinPicker />
+-        <button onClick={() => model.setDialog('storage', true)} data-tip={t('数据存储')} aria-label={t('数据存储')} className="cc-header-btn cc-tip cc-tip-r" style={settingsBtn}><Icon name="database" size={16} /></button>
+-        <button onClick={() => model.setDialog('settings', true)} data-tip={t('设置 · API 密钥')} aria-label={t('设置 · API 密钥')} className="cc-header-btn cc-tip cc-tip-r" style={settingsBtn}><Icon name="sliders" size={16} /></button>
+       </span>
+     </>
+   );
+@@ -181,8 +154,6 @@ export function DashboardContent({ props, model }: { props: DashboardProps; mode
+   return (
+     <main style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+       <div style={{ maxWidth: 1120, margin: '0 auto', padding: '28px 24px 80px' }}>
+-        <StorageMigrationBanner onOpenDialog={() => model.setDialog('storage', true)} />
+-        {model.modelSnapshot.loaded && model.modelSnapshot.choices.length === 0 && <ModelSetupCard onOpen={() => model.setDialog('settings', true)} />}
+         <ProjectToolbar projects={props.projects} model={model} />
+         <ProjectGrid props={props} model={model} />
+       </div>
+@@ -191,21 +162,13 @@ export function DashboardContent({ props, model }: { props: DashboardProps; mode
+ }
+
+ export function DashboardDialogs({ model }: { model: DashboardModel }) {
+-  // The settings dialog's Anthropic pane summons the MCP guide through the
+-  // action registry; in the editor the top bar answers, here the dashboard's
+-  // own dialog state does. Without this the button silently does nothing on
+-  // the projects page, which is exactly where a new user starts.
+-  useEffect(() => bindAction('open-mcp-guide', () => model.setDialog('mcp', true)), [model]);
+   useDashboardDialogPrefetch();
+   return (
+     // No fallback: a dialog that is still loading shows nothing, exactly as it
+     // did before it was opened. The idle prefetch keeps that window tiny.
+     <Suspense fallback={null}>
+-      {model.dialogs.settings && <SettingsDialog onClose={() => model.setDialog('settings', false)} />}
+       {model.dialogs.shortcuts && <ShortcutsDialog onClose={() => model.setDialog('shortcuts', false)} />}
+-      {model.dialogs.mcp && <McpGuideDialog onClose={() => model.setDialog('mcp', false)} />}
+       {model.dialogs.cleanup && <MediaCleanupDialog onClose={() => model.setDialog('cleanup', false)} />}
+-      {model.dialogs.storage && <StorageMigrationDialog onClose={() => model.setDialog('storage', false)} />}
+     </Suspense>
+   );
+ }
+diff --git a/src/components/icons.tsx b/src/components/icons.tsx
+index 0ea0733..d86e57c 100644
+--- a/src/components/icons.tsx
++++ b/src/components/icons.tsx
+@@ -135,33 +135,11 @@ export function Icon({ name, size = 16, color = 'currentColor', strokeWidth = 1.
+  * (Skin Discipline Guaranteed ≥4.5 vs.). Use this when replacing sparkles before wordmark. */
+ export function BrandMark({ size = 16 }: { size?: number }) {
+   return (
+-    <img src="/openchatcut-icon.png" alt="" aria-hidden width={size} height={size} style={{ display: 'block' }} />
++    <img src="/mantur-cut.svg" alt="" aria-hidden width={size} height={size} style={{ display: 'block' }} />
+   );
+ }
+
+-/** OpenChatCut word mark: OPEN reverse white badge + Chat Cut solid word mark. */
++/** Mantur Cut product wordmark. */
+ export function OpenChatCutWordmark({ width = 126 }: { width?: number }) {
+-  return (
+-    <svg
+-      aria-label="OpenChatCut"
+-      role="img"
+-      width={width}
+-      height={width / 4}
+-      viewBox="0 0 504 126"
+-      style={{ display: 'block', flexShrink: 0 }}
+-    >
+-      <rect x="0" y="13" width="166" height="92" rx="14" fill="currentColor" />
+-      <text
+-        fontFamily="Inter, Geist, system-ui, sans-serif"
+-        dominantBaseline="alphabetic"
+-      >
+-        <tspan x="83" y="82" textAnchor="middle" fill="var(--cc-panel)" fontSize="58" fontWeight="850" letterSpacing="-0.045em">
+-          OPEN
+-        </tspan>
+-        <tspan x="188" y="79" fill="currentColor" fontSize="62" fontWeight="720" letterSpacing="-0.045em">
+-          Chat Cut
+-        </tspan>
+-      </text>
+-    </svg>
+-  );
++  return <span role="img" aria-label="漫途Cut" style={{ display: 'inline-block', width, flexShrink: 0, fontSize: width / 6, fontWeight: 700, whiteSpace: 'nowrap' }}>漫途Cut</span>;
+ }
+diff --git a/src/editor/EditorWorkspaceView.tsx b/src/editor/EditorWorkspaceView.tsx
+index b01f8ca..0bc39f0 100644
+--- a/src/editor/EditorWorkspaceView.tsx
++++ b/src/editor/EditorWorkspaceView.tsx
+@@ -84,15 +84,10 @@ export function EditorWorkspaceView(props: EditorWorkspaceViewProps) {
+           it did before it was opened. The idle prefetch keeps that window tiny. */}
+       <Suspense fallback={null}>
+         {props.exportDialog && <ExportDialog {...props.exportDialog} />}
+-        {props.settingsDialog && <SettingsDialog {...props.settingsDialog} />}
+-        {props.designStylePanel && <DesignStylePanel {...props.designStylePanel} />}
+         {props.versionHistory && <VersionHistory {...props.versionHistory} />}
+         {props.shortcutsDialog && <ShortcutsDialog {...props.shortcutsDialog} />}
+       </Suspense>
+       <ChatPanel {...props.chatPanel} />
+-      <div style={{ gridColumn: 2, gridRow: '2 / 5' }}>
+-        {!props.chatCollapsed && <Divider onResize={props.onResizeChat} />}
+-      </div>
+       {renderLibrary(props)}
+       <div style={{ gridColumn: 4, gridRow: 2 }}>
+         <Divider onResize={props.onResizeLibrary} />
+diff --git a/src/editor/useEditorWorkspaceUi.ts b/src/editor/useEditorWorkspaceUi.ts
+index 34af749..7c37ad6 100644
+--- a/src/editor/useEditorWorkspaceUi.ts
++++ b/src/editor/useEditorWorkspaceUi.ts
+@@ -112,7 +112,7 @@ export function useEditorWorkspacePanels({
+ }: EditorWorkspacePanelsInput): EditorWorkspacePanels {
+   const [chatCollapsed, setChatCollapsed] = usePersistedState('cc.chatCollapsed', false);
+   const panelLayout = useEditorPanelLayout(chatCollapsed);
+-  const [inspectorCollapsed, setInspectorCollapsed] = usePersistedState('cc.inspectorCollapsed', false);
++  const [inspectorCollapsed, setInspectorCollapsed] = usePersistedState('cc.inspectorCollapsed', true);
+   const addTemplate = useCallback((template: Tpl) => commands.addMotionGraphic(template), [commands]);
+
+   return {
+diff --git a/src/export/exportDestination.ts b/src/export/exportDestination.ts
+index 6563779..d0326cb 100644
+--- a/src/export/exportDestination.ts
++++ b/src/export/exportDestination.ts
+@@ -84,10 +84,20 @@ export function exportDestinationErrorMessage(
+   return error instanceof Error ? error.message : t('导出失败');
+ }
+
+-export const DEFAULT_EXPORT_DESTINATION: ExportDestination = Object.freeze({
+-  type: 'downloads',
+-  label: '浏览器下载目录',
+-});
++function initialExportDestination(): ExportDestination {
++  const meta = typeof document === 'undefined' ? null : document.querySelector<HTMLMetaElement>('meta[name="mantur-cut-export"]');
++  if (meta) {
++    const grant: unknown = JSON.parse(meta.content);
++    if (!grant || typeof grant !== 'object' || !('grantId' in grant) || !('label' in grant)
++      || typeof grant.grantId !== 'string' || !/^[A-Za-z0-9_-]{32,128}$/.test(grant.grantId) || typeof grant.label !== 'string') {
++      throw new Error('Invalid Mantur export directory grant');
++    }
++    return Object.freeze({ type: 'desktop-directory', grantId: grant.grantId, label: grant.label });
++  }
++  return Object.freeze({ type: 'downloads', label: '浏览器下载目录' });
++}
++
++export const DEFAULT_EXPORT_DESTINATION: ExportDestination = initialExportDestination();
+
+ export function exportDestinationTargetPath(destination: ExportDestination, filename: string): string {
+   const target = checkedDestination(destination);
+@@ -331,6 +341,7 @@ function pickerFunction(): ((options: { mode: 'readwrite' }) => Promise<BrowserE
+ }
+
+ export async function restoreExportDestination(): Promise<ExportDestination> {
++  if (DEFAULT_EXPORT_DESTINATION.type === 'desktop-directory') return DEFAULT_EXPORT_DESTINATION;
+   const desktop = window.openChatCutDesktop;
+   if (desktop) {
+     const restored = desktopDestination(await desktop.restoreExportDirectory());
+diff --git a/src/hooks/useEditorPanelLayout.ts b/src/hooks/useEditorPanelLayout.ts
+index 4ab1cb5..b3f856d 100644
+--- a/src/hooks/useEditorPanelLayout.ts
++++ b/src/hooks/useEditorPanelLayout.ts
+@@ -1,13 +1,12 @@
+ import { usePersistedState } from './usePersistedState';
+
+ const HEADER_HEIGHT = 41;
+-const COLLAPSED_CHAT_WIDTH = 46;
+ const BASELINE_WIDTH = 1463;
+ const BASELINE_CONTENT_HEIGHT = 761;
+
+ const DEFAULT_CHAT_RATIO = 356 / BASELINE_WIDTH;
+-const DEFAULT_LIBRARY_RATIO = 406 / BASELINE_WIDTH;
+-const DEFAULT_TIMELINE_RATIO = 350 / BASELINE_CONTENT_HEIGHT;
++const DEFAULT_LIBRARY_RATIO = 320 / BASELINE_WIDTH;
++const DEFAULT_TIMELINE_RATIO = 260 / BASELINE_CONTENT_HEIGHT;
+ const MIN_CHAT_RATIO = 320 / BASELINE_WIDTH;
+ const MIN_LIBRARY_RATIO = 176 / BASELINE_WIDTH;
+ const MIN_PREVIEW_RATIO = 280 / BASELINE_WIDTH;
+@@ -46,7 +45,7 @@ function normalizeRatios(chat: number, library: number, timeline: number) {
+     libraryRatio: clamp(
+       finiteRatio(library, DEFAULT_LIBRARY_RATIO),
+       MIN_LIBRARY_RATIO,
+-      1 - chatRatio - MIN_PREVIEW_RATIO,
++      1 - MIN_PREVIEW_RATIO,
+     ),
+     timelineRatio: clamp(
+       finiteRatio(timeline, DEFAULT_TIMELINE_RATIO),
+@@ -68,7 +67,7 @@ export interface EditorPanelLayout {
+  * Keeps user-resized editor panels as viewport-relative ratios. CSS vw/fr tracks
+  * then react to both window resizing and browser zoom without a JS resize loop.
+  */
+-export function useEditorPanelLayout(chatCollapsed: boolean): EditorPanelLayout {
++export function useEditorPanelLayout(_chatCollapsed: boolean): EditorPanelLayout {
+   const [storedChatRatio, setChatRatio] = usePersistedState(
+     'openchatcut.chatRatio.ui-v2',
+     DEFAULT_CHAT_RATIO,
+@@ -82,14 +81,14 @@ export function useEditorPanelLayout(chatCollapsed: boolean): EditorPanelLayout
+     DEFAULT_TIMELINE_RATIO,
+   );
+
+-  const { chatRatio, libraryRatio, timelineRatio } = normalizeRatios(
++  const { libraryRatio, timelineRatio } = normalizeRatios(
+     storedChatRatio,
+     storedLibraryRatio,
+     storedTimelineRatio,
+   );
+
+-  const chatTrack = chatCollapsed ? `${COLLAPSED_CHAT_WIDTH}px` : `${chatRatio * 100}vw`;
+-  const gridTemplateColumns = `${chatTrack} 0 ${libraryRatio * 100}vw 0 minmax(0, 1fr)`;
++  const chatTrack = '0px';
++  const gridTemplateColumns = `${chatTrack} 0 minmax(200px, ${libraryRatio * 100}vw) 0 minmax(0, 1fr)`;
+   const gridTemplateRows = `${HEADER_HEIGHT}px minmax(0, ${1 - timelineRatio}fr) 0 minmax(0, ${timelineRatio}fr)`;
+
+   const resizeChat = (delta: number) => setChatRatio((current) => roundRatio(clamp(
+@@ -98,11 +97,10 @@ export function useEditorPanelLayout(chatCollapsed: boolean): EditorPanelLayout
+     1 - libraryRatio - MIN_PREVIEW_RATIO,
+   )));
+   const resizeLibrary = (delta: number) => setLibraryRatio((current) => {
+-    const chatShare = chatCollapsed ? COLLAPSED_CHAT_WIDTH / viewportWidth() : chatRatio;
+     return roundRatio(clamp(
+       finiteRatio(current, DEFAULT_LIBRARY_RATIO) + delta / viewportWidth(),
+       MIN_LIBRARY_RATIO,
+-      1 - chatShare - MIN_PREVIEW_RATIO,
++      1 - MIN_PREVIEW_RATIO,
+     ));
+   });
+   const resizeTimeline = (delta: number) => setTimelineRatio((current) => roundRatio(clamp(
+diff --git a/src/i18n/dict/en/media.ts b/src/i18n/dict/en/media.ts
+index 59da2ac..a6d717b 100644
+--- a/src/i18n/dict/en/media.ts
++++ b/src/i18n/dict/en/media.ts
+@@ -1,5 +1,18 @@
+ // EN dictionary (field fragmentation, key = Chinese original text). Data files are exempt from the upper limit of row count.
+ export default {
++  '项目素材': 'Project media',
++  '刷新素材': 'Refresh media',
++  '项目根目录': 'Project root',
++  '兼容素材直接引用；转码另存，不改原片。不列出剪辑缓存及导出。': 'Compatible media is referenced directly; conversions are saved separately. Originals stay unchanged. Editing caches and exports are excluded.',
++  '重新定位素材': 'Relocate media',
++  '添加为新素材': 'Add as new media',
++  '正在读取项目素材…': 'Reading project media…',
++  '此文件夹没有支持的素材': 'No supported media in this folder',
++  '加载更多素材': 'Load more media',
++  '正在引用素材…': 'Referencing media…',
++  '引用所选素材': 'Reference selected media',
++  '查看已引用素材': 'View imported media',
++  '已引用 {count} 个素材，跳过 {duplicates} 个重复素材': 'Referenced {count} assets; skipped {duplicates} duplicates',
+   // MediaPoolPanel toolbar
+   '搜索素材': 'Search media',
+   '搜索': 'Search',
+diff --git a/src/i18n/locale.ts b/src/i18n/locale.ts
+index aeeb70e..bc27fe7 100644
+--- a/src/i18n/locale.ts
++++ b/src/i18n/locale.ts
+@@ -35,6 +35,8 @@ function systemLocale(): Locale {
+ }
+
+ function readInitial(): Locale {
++  const managed = typeof window === 'undefined' ? null : new URL(window.location.href).searchParams.get('manturLocale');
++  if (managed === 'zh' || managed === 'en' || managed === 'it' || managed === 'ru') return managed;
+   try {
+     const stored = localStorage.getItem(STORAGE_KEY);
+     if (stored === 'zh' || stored === 'en' || stored === 'it' || stored === 'ru') return stored;
+@@ -101,7 +103,7 @@ export function prefetchLocaleDicts(): void {
+ /** t('Selected {n}', { n: 3 }) - The Chinese original text is the key; the placeholder {name} has the same name in both languages. */
+ export function t(zh: string, params?: Record<string, string | number>): string {
+   const { ui, uiFallback } = localeDicts(current);
+-  const raw = ui[zh] ?? uiFallback[zh] ?? zh;
++  const raw = (ui[zh] ?? uiFallback[zh] ?? zh).replace(/OpenChatCut|Open Chat Cut/g, '漫途Cut');
+   if (!params) return raw;
+   return raw.replace(/\{(\w+)\}/g, (match, key: string) => (key in params ? String(params[key]) : match));
+ }
+@@ -125,3 +127,8 @@ export function useT(): typeof t {
+   );
+   return t;
+ }
++
++if (typeof window !== 'undefined') window.addEventListener('mantur:locale', (event) => {
++  const locale = (event as CustomEvent<unknown>).detail;
++  if (locale === 'zh' || locale === 'en' || locale === 'it' || locale === 'ru') setLocale(locale);
++});
+diff --git a/src/library/LibraryPanel.tsx b/src/library/LibraryPanel.tsx
+index 9edbd09..bd3f358 100644
+--- a/src/library/LibraryPanel.tsx
++++ b/src/library/LibraryPanel.tsx
+@@ -14,8 +14,9 @@ import { TranscriptPanel, type TranscriptTrackOption } from '../transcript/Trans
+ import { CaptionsPanel } from '../captions/CaptionsPanel';
+ import { newManualCaptions } from '../captions/manualCaptions';
+ import { MediaPoolPanel } from '../media/MediaPoolPanel';
++import { ProjectMediaPanel } from '../media/ProjectMediaPanel';
++import { projectMediaEnabled } from '../media/manturProjectMedia';
+ import { useDirectoryImport } from '../media/useDirectoryImport';
+-import { SkillsTabPanel } from './SkillsTabPanel';
+ import { TemplateBrowser } from './TemplateBrowser';
+ import { ResourceBrowser, type ResourceItem } from './ResourceBrowser';
+ import { TransitionThumb } from './TransitionThumb';
+@@ -24,11 +25,9 @@ import { ZoomThumb } from './ZoomThumb';
+ import { SoundBrowser } from './SoundBrowser';
+ import { EnvelopeThumb } from './PluginBrowser';
+ import { asPluginZoom, pluginResourceItems, usePluginPacks } from './pluginResources';
+-import { ExtensionCenter } from './ExtensionCenter';
+ import { isPluginAssetId } from '../plugins/types';
+ import { customTransitionUniforms, getCustomTransition } from '../gl/customTransitions';
+ import type { ZoomEffect } from '../editor/types';
+-import { Icon } from '../components/icons';
+ import { parseSrt } from '../captions/srt';
+
+ // Two built-in LUTs implemented with published camera-log transfer functions.
+@@ -124,19 +123,18 @@ interface LibraryPanelProps {
+   onApplyZoom: (zoom: ZoomEffect) => void;
+ }
+
+-const MAIN_TABS = ['我的素材', '序列', '资源库', '文字稿', '字幕', '技能'] as const;
++const MAIN_TABS = ['项目素材', '我的素材', '序列', '资源库', '文字稿', '字幕'] as const;
+ const SUB_TABS = ['MG 动画', '音效', '转场', '特效', '缩放', 'LUT'] as const;
+ function localizeDefaultSequenceName(name: string, t: ReturnType<typeof useT>): string {
+   const match = /^序列 (\d+)$/.exec(name);
+   return match ? t('序列 {n}', { n: match[1]! }) : name;
+ }
+-export function LibraryPanel({ semanticScopeId, templates, onAddTemplate, onAddAudio, playerRef, fps, items, sequenceOptions, onAddSequence, trackOptions, captionTracks, onSetCaptions, onCreateCaptionTrack, onUpdateCaptions, onSetItemTranscript, onToggleWord, onCleanScript, onSetGapCap, onSetTranscriptPlayOrder, onReorderTrackItems, onClearEdits, assets, mediaFolders, usedAssetIds, offlineAssetIds, onAssetLoadError, onImportMedia, onImportMobileMedia, onIngestDirectoryAsset, onTranscribeAsset, onAddMediaItem, onAddMediaAssetsToTimeline, onUseMediaAI, onCreateMediaFolder, onRenameMediaFolder, onDeleteMediaFolder, onMoveMediaAssets, onRenameMediaAsset, onRenameMediaAssets, onSetMediaAssetFavorite, onSetMediaAssetsFavorite, onRemoveMediaAsset, onRemoveMediaAssets, onPasteMediaAssets, onRelinkMediaAsset, creativeMode, onCreativeModeChange, onAddSolid, onUseTemplateAI, selectedItem, onApplyTransition, onApplyFx, onApplyZoom }: LibraryPanelProps) {
++export function LibraryPanel({ semanticScopeId, templates, onAddTemplate, onAddAudio, playerRef, fps, items, sequenceOptions, onAddSequence, trackOptions, captionTracks, onSetCaptions, onCreateCaptionTrack, onUpdateCaptions, onSetItemTranscript, onToggleWord, onCleanScript, onSetGapCap, onSetTranscriptPlayOrder, onReorderTrackItems, onClearEdits, assets, mediaFolders, usedAssetIds, offlineAssetIds, onAssetLoadError, onImportMedia, onImportMobileMedia, onIngestDirectoryAsset, onTranscribeAsset, onAddMediaItem, onAddMediaAssetsToTimeline, onCreateMediaFolder, onRenameMediaFolder, onDeleteMediaFolder, onMoveMediaAssets, onRenameMediaAsset, onRenameMediaAssets, onSetMediaAssetFavorite, onSetMediaAssetsFavorite, onRemoveMediaAsset, onRemoveMediaAssets, onPasteMediaAssets, onRelinkMediaAsset, onAddSolid, selectedItem, onApplyTransition, onApplyFx, onApplyZoom }: LibraryPanelProps) {
+   const t = useT();
+   const selKind = selectedItem?.kind ?? null;
+   const isVisual = selKind != null && selKind !== 'audio';
+   const [mainTab, setMainTab] = useState<(typeof MAIN_TABS)[number]>('我的素材');
+   const [subTab, setSubTab] = useState<(typeof SUB_TABS)[number]>('MG 动画');
+-  const [extensionOpen, setExtensionOpen] = useState(false);
+   const [directoryImportError, setDirectoryImportError] = useState<string | null>(null);
+   const directoryImport = useDirectoryImport({
+     projectId: semanticScopeId,
+@@ -168,7 +166,6 @@ export function LibraryPanel({ semanticScopeId, templates, onAddTemplate, onAddA
+   const isCaptions = mainTab === '字幕';
+   const isMyAssets = mainTab === '我的素材';
+   const isSequences = mainTab === '序列';
+-  const isSkills = mainTab === '技能';
+   const openCaptionStyles = (sourceItemIds: string[]) => {
+     const target = captionTracks[0];
+     if (!target?.captions && sourceItemIds.length) {
+@@ -194,13 +191,14 @@ export function LibraryPanel({ semanticScopeId, templates, onAddTemplate, onAddA
+   return (
+     <section className="cc-library-panel">
+       <div className="cc-main-tabs">
+-        {MAIN_TABS.map((tab) => (
+-          <button key={tab} onClick={() => { setExtensionOpen(false); setMainTab(tab); }}
++        {MAIN_TABS.filter(tab => tab !== '项目素材' || projectMediaEnabled()).map((tab) => (
++          <button key={tab} onClick={() => { setMainTab(tab); }}
+             className={`cc-main-tab${mainTab === tab ? ' selected' : ''}`}>{t(tab)}</button>
+         ))}
+       </div>
+-      {extensionOpen ? (
+-        <ExtensionCenter onClose={() => setExtensionOpen(false)} />
++      {mainTab === '项目素材' ? (
++        <ProjectMediaPanel key={semanticScopeId} projectId={semanticScopeId} fps={fps} assets={assets} offlineAssetIds={offlineAssetIds}
++          onIngest={onIngestDirectoryAsset} onRelink={onRelinkMediaAsset} onShowPool={() => setMainTab('我的素材')} />
+       ) : isCaptions ? (
+         <CaptionsPanel playerRef={playerRef} fps={fps} items={items} captionTracks={captionTracks} onSetCaptions={onSetCaptions} onUpdateCaptions={onUpdateCaptions} />
+       ) : isTranscript ? (
+@@ -230,18 +228,11 @@ export function LibraryPanel({ semanticScopeId, templates, onAddTemplate, onAddA
+         </div>
+       ) : isMyAssets ? (
+         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, borderTop: `0.5px solid ${theme.border}` }}>
+-          <MediaPoolPanel semanticScopeId={semanticScopeId} assets={assets} folders={mediaFolders} fps={fps} usedAssetIds={usedAssetIds} offlineAssetIds={offlineAssetIds} onAssetLoadError={onAssetLoadError} onImport={onImportMedia} onImportMobile={onImportMobileMedia} directoryImport={directoryImport} directoryImportError={directoryImportError} onAddAsset={onAddMediaItem} onAddAssetsToTimeline={onAddMediaAssetsToTimeline} onAddAssetsToChat={onUseMediaAI}
++          <MediaPoolPanel semanticScopeId={semanticScopeId} assets={assets} folders={mediaFolders} fps={fps} usedAssetIds={usedAssetIds} offlineAssetIds={offlineAssetIds} onAssetLoadError={onAssetLoadError} onImport={onImportMedia} onImportMobile={onImportMobileMedia} directoryImport={directoryImport} directoryImportError={directoryImportError} onAddAsset={onAddMediaItem} onAddAssetsToTimeline={onAddMediaAssetsToTimeline}
+             onCreateFolder={onCreateMediaFolder} onRenameFolder={onRenameMediaFolder} onDeleteFolder={onDeleteMediaFolder}
+             onMoveAssets={onMoveMediaAssets} onRenameAsset={onRenameMediaAsset} onTranscribe={onTranscribeAsset} onRenameAssets={onRenameMediaAssets} onSetFavorite={onSetMediaAssetFavorite} onSetAssetsFavorite={onSetMediaAssetsFavorite} onRemoveAsset={onRemoveMediaAsset} onRemoveAssets={onRemoveMediaAssets} onPasteAssets={onPasteMediaAssets}
+             onRelinkAsset={onRelinkMediaAsset} onAddSolid={onAddSolid} />
+         </div>
+-      ) : isSkills ? (
+-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, borderTop: `0.5px solid ${theme.border}` }}>
+-          <SkillsTabPanel
+-            creativeMode={creativeMode}
+-            onCreativeModeChange={onCreativeModeChange}
+-          />
+-        </div>
+       ) : (
+       <>
+       <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, padding: '10px 12px 7px 16px', fontSize: 12, borderBottom: `0.5px solid ${theme.border}` }}>
+@@ -251,31 +242,12 @@ export function LibraryPanel({ semanticScopeId, templates, onAddTemplate, onAddA
+               style={{ background: 'none', border: 'none', cursor: 'pointer', color: subTab === tab ? theme.text : theme.textDim, borderBottom: `2px solid ${subTab === tab ? theme.accent : 'transparent'}`, padding: '0 0 4px' }}>{t(tab)}</button>
+           ))}
+         </div>
+-        <button
+-          type="button"
+-          onClick={() => setExtensionOpen(true)}
+-          style={{
+-            display: 'flex',
+-            alignItems: 'center',
+-            gap: 5,
+-            flex: '0 0 auto',
+-            border: `0.5px solid ${theme.border}`,
+-            borderRadius: 4,
+-            background: theme.panelAlt,
+-            color: theme.text,
+-            padding: '4px 7px',
+-            fontSize: 10.5,
+-            cursor: 'pointer',
+-          }}
+-        >
+-          <Icon name="grid" size={12} />
+-          {t('扩展中心')}
+-        </button>
++
+       </div>
+
+       <div style={{ flex: 1, overflowY: 'auto', padding: '10px 10px 14px', minHeight: 0 }}>
+         {mainTab === '资源库' && subTab === 'MG 动画' ? (
+-          <TemplateBrowser templates={templates} onAdd={onAddTemplate} onUseAI={onUseTemplateAI} />
++          <TemplateBrowser templates={templates} onAdd={onAddTemplate} />
+         ) : showSfx ? (
+           <SoundBrowser fps={fps} onAdd={onAddAudio} />
+         ) : subTab === '转场' ? (
+diff --git a/src/library/TemplateBrowser.tsx b/src/library/TemplateBrowser.tsx
+index ef85543..38c9af0 100644
+--- a/src/library/TemplateBrowser.tsx
++++ b/src/library/TemplateBrowser.tsx
+@@ -53,10 +53,9 @@ const MENU_H = 148;
+ interface TemplateBrowserProps {
+   templates: Tpl[];
+   onAdd: (tpl: Tpl) => void;
+-  onUseAI: (tpl: Tpl) => void;
+ }
+
+-export const TemplateBrowser = memo(function TemplateBrowser({ templates, onAdd, onUseAI }: TemplateBrowserProps) {
++export const TemplateBrowser = memo(function TemplateBrowser({ templates, onAdd }: TemplateBrowserProps) {
+   const t = useT();
+   const [favs, setFavs] = usePersistedState<string[]>('cc.favTemplates', []);
+   /** Template id removed from the resource library list (soft deletion, persistence; does not affect the inserted clips in the timeline) */
+@@ -347,12 +346,7 @@ export const TemplateBrowser = memo(function TemplateBrowser({ templates, onAdd,
+               onClick={() => { addAndRemember(menuTpl); closeMenu(); }}
+               style={menuItem}
+             >≡ {t('添加到时间线')}</button>
+-            <button
+-              type="button"
+-              role="menuitem"
+-              onClick={() => { onUseAI(menuTpl); closeMenu(); }}
+-              style={{ ...menuItem, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+-            ><Icon name="sparkles" size={13} />{t('用 AI 生成')}</button>
++
+             <div style={{ height: 0.5, background: theme.border, margin: '4px 6px' }} />
+             {confirmDelete ? (
+               <div style={{ display: 'flex', gap: 4, padding: '2px 4px 4px' }}>
+diff --git a/src/media/AssetMenuDestinations.tsx b/src/media/AssetMenuDestinations.tsx
+index 68dfa36..53b17e5 100644
+--- a/src/media/AssetMenuDestinations.tsx
++++ b/src/media/AssetMenuDestinations.tsx
+@@ -1,6 +1,5 @@
+ import { useT } from '../i18n/locale';
+ import { Icon } from '../components/icons';
+-import { runAssetDestinationAction, type AssetDestinationActions } from './assetDestination';
+
+ interface AssetMenuDestinationsProps {
+   assetName: string;
+@@ -11,34 +10,20 @@ interface AssetMenuDestinationsProps {
+ export function AssetMenuDestinations({
+   assetName,
+   onAddTimeline,
+-  onAddChat,
+ }: AssetMenuDestinationsProps) {
+   const t = useT();
+-  const actions: AssetDestinationActions = {
+-    timeline: onAddTimeline ?? (() => undefined),
+-    chat: onAddChat,
+-  };
++  if (!onAddTimeline) return null;
+
+   return (
+     <div className="cc-asset-menu-destinations">
+       <span>{t('添加到：')}</span>
+       <div className="cc-asset-menu-destination-buttons">
+-        <button
+-          type="button"
+-          className="cc-media-menu-item"
+-          role="menuitem"
+-          aria-label={t('添加 {name} 到 AI 对话框', { name: assetName })}
+-          onClick={() => runAssetDestinationAction('chat', actions)}
+-        >
+-          <span className="cc-media-menu-item-icon" aria-hidden="true"><Icon name="sparkles" size={15} /></span>
+-          <span className="cc-media-menu-item-label">{t('AI 对话框')}</span>
+-        </button>
+         {onAddTimeline && <button
+           type="button"
+           className="cc-media-menu-item"
+           role="menuitem"
+           aria-label={t('添加 {name} 到时间线', { name: assetName })}
+-          onClick={() => runAssetDestinationAction('timeline', actions)}
++          onClick={onAddTimeline}
+         >
+           <span className="cc-media-menu-item-icon" aria-hidden="true"><Icon name="film" size={15} /></span>
+           <span className="cc-media-menu-item-label">{t('时间线')}</span>
+diff --git a/src/media/ProjectMediaPanel.css b/src/media/ProjectMediaPanel.css
+new file mode 100644
+index 0000000..6698587
+--- /dev/null
++++ b/src/media/ProjectMediaPanel.css
+@@ -0,0 +1,11 @@
++.mantur-project-media { display: flex; flex-direction: column; gap: 8px; padding: 10px; min-height: 0; flex: 1; color: var(--cc-text); font-size: 12px; }
++.mantur-project-media button, .mantur-project-media select { color: inherit; background: var(--cc-panel); border: 1px solid var(--cc-border); border-radius: 5px; padding: 5px 7px; font: inherit; cursor: pointer; }
++.mantur-project-media button:disabled { opacity: .5; cursor: default; }
++.mantur-project-media p { margin: 0; overflow-wrap: anywhere; }
++.mantur-project-media [role="alert"] { color: var(--cc-danger); white-space: pre-wrap; }
++.mantur-project-toolbar { display: flex; flex-wrap: wrap; gap: 6px; }
++.mantur-project-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
++.mantur-project-files { overflow: auto; flex: 1; min-height: 80px; }
++.mantur-project-folder { display: block; text-align: left; width: 100%; margin-bottom: 4px; overflow-wrap: anywhere; }
++.mantur-project-file { display: flex; gap: 6px; align-items: center; padding: 7px 0; cursor: pointer; }
++.mantur-project-file span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+diff --git a/src/media/ProjectMediaPanel.tsx b/src/media/ProjectMediaPanel.tsx
+new file mode 100644
+index 0000000..7b971ee
+--- /dev/null
++++ b/src/media/ProjectMediaPanel.tsx
+@@ -0,0 +1,101 @@
++import { useEffect, useRef, useState } from 'react';
++import type { MediaAsset, MediaAssetRelinkPatch } from '../editor/types';
++import type { ProjectMediaListing } from '../../shared/mantur-project-media';
++import { useT } from '../i18n/locale';
++import { listProjectMedia, importProjectMedia } from './manturProjectMedia';
++import { directoryFileToAsset } from './directoryImportAsset';
++import { mediaAssetRelinkPatch } from './mediaAssetRelink';
++import './ProjectMediaPanel.css';
++
++interface Props {
++  projectId: string;
++  fps: number;
++  assets: MediaAsset[];
++  offlineAssetIds: ReadonlySet<string>;
++  onIngest: (asset: MediaAsset) => void;
++  onRelink?: (id: string, patch: MediaAssetRelinkPatch) => void;
++  onShowPool: () => void;
++}
++
++export function ProjectMediaPanel({ projectId, fps, assets, offlineAssetIds, onIngest, onRelink, onShowPool }: Props) {
++  const t = useT();
++  const [path, setPath] = useState('');
++  const [revision, setRevision] = useState(0);
++  const [listing, setListing] = useState<ProjectMediaListing>();
++  const [selected, setSelected] = useState<string[]>([]);
++  const [target, setTarget] = useState('');
++  const [busy, setBusy] = useState(false);
++  const [error, setError] = useState('');
++  const [notice, setNotice] = useState('');
++  const alive = useRef(false);
++  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
++  useEffect(() => {
++    let active = true;
++    setListing(undefined); setSelected([]); setError('');
++    void listProjectMedia(path).then(value => { if (active) setListing(value); })
++      .catch(error => { if (active) setError(String(error.message ?? error)); });
++    return () => { active = false; };
++  }, [path, revision]);
++
++  const loadMore = async () => {
++    if (!listing || listing.nextOffset === null) return;
++    setBusy(true); setError('');
++    try {
++      const next = await listProjectMedia(path, listing.nextOffset);
++      if (alive.current) setListing({ ...next, entries: [...listing.entries, ...next.entries] });
++    } catch (error) { if (alive.current) setError(error instanceof Error ? error.message : String(error)); }
++    finally { if (alive.current) setBusy(false); }
++  };
++  const ingest = async () => {
++    setBusy(true); setError(''); setNotice('');
++    try {
++      const result = await importProjectMedia({ paths: selected, projectId,
++        knownHashes: target ? [] : assets.flatMap(asset => asset.sourceContentHash ? [asset.sourceContentHash] : []),
++      });
++      const imported = await Promise.all(result.imported.map(file => directoryFileToAsset({ ...file, importId: crypto.randomUUID() }, fps)));
++      if (!alive.current) return;
++      if (target && imported.length === 1) { onRelink?.(target, mediaAssetRelinkPatch(imported[0])); setTarget(''); }
++      else if (!target) imported.forEach(onIngest);
++      setNotice(t('已引用 {count} 个素材，跳过 {duplicates} 个重复素材', { count: imported.length, duplicates: result.duplicateCount }));
++      if (result.errors.length || result.unsupportedFiles.length) setError([
++        ...result.errors.map(item => `${item.path}: ${item.error}`), ...result.unsupportedFiles,
++      ].join('\n'));
++      setSelected([]);
++    } catch (error) { if (alive.current) setError(error instanceof Error ? error.message : String(error)); }
++    finally { if (alive.current) setBusy(false); }
++  };
++  const offline = assets.filter(asset => offlineAssetIds.has(asset.id));
++  const parent = path.split(/[\\/]/).slice(0, -1).join('/');
++  return <section className="mantur-project-media" aria-label={t('项目素材')}>
++    <div className="mantur-project-toolbar">
++      <button type="button" disabled={!path || busy} onClick={() => setPath(parent)}>{t('上一级')}</button>
++      <button type="button" disabled={busy} onClick={() => setRevision(value => value + 1)}>{t('刷新素材')}</button>
++    </div>
++    <div className="mantur-project-path" title={listing?.root}>{path || t('项目根目录')}</div>
++    <p>{t('兼容素材直接引用；转码另存，不改原片。不列出剪辑缓存及导出。')}</p>
++    {!!offline.length && onRelink && <label>{t('重新定位素材')}
++      <select aria-label={t('重新定位素材')} disabled={busy} value={target} onChange={event => { setTarget(event.target.value); setSelected([]); }}>
++        <option value="">{t('添加为新素材')}</option>
++        {offline.map(asset => <option key={asset.id} value={asset.id}>{asset.name}</option>)}
++      </select>
++    </label>}
++    {error && <p role="alert">{error}</p>}
++    {notice && <p role="status">{notice}</p>}
++    {!listing && !error && <p role="status">{t('正在读取项目素材…')}</p>}
++    <div className="mantur-project-files">
++      {listing?.entries.map(entry => entry.kind === 'directory'
++        ? <button type="button" className="mantur-project-folder" key={entry.path} disabled={busy} onClick={() => setPath(entry.path)}>▸ {entry.name}</button>
++        : <label className="mantur-project-file" key={entry.path}>
++          <input type="checkbox" disabled={busy} checked={selected.includes(entry.path)} onChange={event => setSelected(current => event.target.checked
++            ? target ? [entry.path] : [...current, entry.path] : current.filter(path => path !== entry.path))} />
++          <span title={entry.name}>{entry.name}</span>
++        </label>)}
++      {listing?.entries.length === 0 && <p>{t('此文件夹没有支持的素材')}</p>}
++      {listing?.nextOffset !== null && listing?.nextOffset !== undefined && <button type="button" disabled={busy} onClick={() => void loadMore()}>{t('加载更多素材')}</button>}
++    </div>
++    <div className="mantur-project-toolbar">
++      <button type="button" disabled={busy || !selected.length} onClick={() => void ingest()}>{busy ? t('正在引用素材…') : target ? t('重新定位素材') : t('引用所选素材')}</button>
++      <button type="button" disabled={busy} onClick={onShowPool}>{t('查看已引用素材')}</button>
++    </div>
++  </section>;
++}
+diff --git a/src/media/asset-menu-destinations.verify.tsx b/src/media/asset-menu-destinations.verify.tsx
+index 0b8066e..6269e3f 100644
+--- a/src/media/asset-menu-destinations.verify.tsx
++++ b/src/media/asset-menu-destinations.verify.tsx
+@@ -91,16 +91,14 @@ try {
+
+   assert.match(markup, /添加到：/);
+   assert.match(markup, />时间线</);
+-  assert.match(markup, />AI 对话框</);
+-  assert.ok(markup.indexOf('>AI 对话框<') < markup.indexOf('>时间线<'), 'AI 对话框应位于左侧，时间线应位于右侧');
+   assert.match(markup, /aria-label="添加 7月7日.mp4 到时间线"/);
+-  assert.match(markup, /aria-label="添加 7月7日.mp4 到 AI 对话框"/);
++  assert.doesNotMatch(markup, /AI 对话框/);
+
+   const documentMarkup = renderToStaticMarkup(createElement(AssetMenuDestinations, {
+     assetName: 'script.md',
+     onAddChat: () => undefined,
+   }));
+-  assert.match(documentMarkup, />AI 对话框</);
++  assert.doesNotMatch(documentMarkup, /AI 对话框/);
+   assert.doesNotMatch(documentMarkup, />时间线</);
+
+   const blankMenuMarkup = renderToStaticMarkup(createElement(BlankMediaMenuActions, {
+diff --git a/src/media/manturProjectMedia.ts b/src/media/manturProjectMedia.ts
+new file mode 100644
+index 0000000..915d78a
+--- /dev/null
++++ b/src/media/manturProjectMedia.ts
+@@ -0,0 +1,31 @@
++import type { AgentPathImportRequest, AgentPathImportResult } from '../../shared/directory-import';
++import type { ProjectMediaListing } from '../../shared/mantur-project-media';
++
++export function projectMediaEnabled(): boolean {
++  return typeof document !== 'undefined' && document.querySelector('meta[name="mantur-project-media"]')?.getAttribute('content') === 'enabled';
++}
++
++async function requestProjectMedia(body: object): Promise<unknown> {
++  const response = await fetch('/api/mantur/project-media', {
++    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
++  });
++  const value = await response.json();
++  if (!response.ok) throw new Error(typeof value?.error === 'string' ? value.error : `Project media request failed (${response.status})`);
++  return value;
++}
++
++export async function listProjectMedia(path: string, offset = 0): Promise<ProjectMediaListing> {
++  const value = await requestProjectMedia({ action: 'list', path, offset }) as ProjectMediaListing;
++  if (typeof value?.root !== 'string' || typeof value.directory !== 'string' || !Array.isArray(value.entries)
++    || !value.entries.every(entry => typeof entry.path === 'string' && typeof entry.name === 'string'
++      && ['directory', 'video', 'audio', 'image', 'gif', 'svg'].includes(entry.kind))
++    || (value.nextOffset !== null && !Number.isSafeInteger(value.nextOffset))) throw new Error('Invalid project media listing');
++  return value;
++}
++
++export async function importProjectMedia(request: AgentPathImportRequest): Promise<AgentPathImportResult> {
++  const value = await requestProjectMedia({ action: 'import', ...request }) as AgentPathImportResult;
++  if (!Array.isArray(value?.imported) || !Array.isArray(value.errors) || !Array.isArray(value.unsupportedFiles)
++    || !Number.isSafeInteger(value.duplicateCount)) throw new Error('Invalid project media import result');
++  return value;
++}

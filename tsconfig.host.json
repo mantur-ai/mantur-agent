@@ -121,6 +121,7 @@
     "scripts/client-bundle-purity.spec.ts"
   ],
   "references": [
+    { "path": "./packages/client/ui-mantur-editing/tsconfig.host.json" },
     { "path": "./packages/bundle/mantur-app" },
     { "path": "./vendor/cosmokit" },
     { "path": "./vendor/schemastery" },

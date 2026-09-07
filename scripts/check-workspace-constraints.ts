@@ -152,7 +152,7 @@ const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
   '@deepseek-ai/dsh-client-web': ['lib/**/*.css'],
   '@deepseek-ai/dsh-client-ui-theme': ['lib/styles'],
   // The external editor loads this standalone browser module without the client plugin loader.
-  '@deepseek-ai/dsh-client-ui-mantur-editing': ['adapters/openchatcut-theme.mjs', 'adapters/openchatcut-theme.d.mts'],
+  '@deepseek-ai/dsh-client-ui-mantur-editing': ['adapters/openchatcut-theme.mjs', 'adapters/openchatcut-theme.d.mts', 'adapters/mantur-cut.patch', 'adapters/mantur-runtime.mjs'],
   // The CPython side ships as source .py files, published as-is rather than built.
   '@deepseek-ai/dsh-experimental-code-runtime-python': ['py/**/*.py'],
   // The shipped preset compositions travel inside the roster package.

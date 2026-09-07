@@ -97,6 +97,9 @@ export function AppFrame({
   t,
 }: AppFrameProps) {
   const panels = useStore(s => s)
+  const workbenchSession = useSessions(s => s.current)
+  useLayoutEffect(() => { actions.setWorkbenchSession(workbenchSession) }, [actions, workbenchSession])
+  const sessionWorkbenchOpen = panels.workbenchSessions.includes(workbenchSession)
   const detailsSession = useSessions((s) => {
     const current = s.current
     return current !== undefined && s.byId[current]?.blank === false ? current : undefined
@@ -150,7 +153,7 @@ export function AppFrame({
     ? 0
     : panels.sidebar === 0 ? SIDEBAR_DEFAULT : panels.sidebar
   const mainPageOpen = panels.mainPage !== undefined
-  const workbenchOpen = panels.workbench && !mainPageOpen
+  const workbenchOpen = sessionWorkbenchOpen && !mainPageOpen
   const detailsPreference = mainPageOpen || detailsSession === undefined ? 0 : panels.details
   const cols = computeColumns(viewport, sidebarPreference, detailsPreference)
   const colsRef = useRef(cols)
@@ -211,8 +214,8 @@ export function AppFrame({
         <CenterColumn>
           <div className={css.conversationSurface} hidden={mainPageOpen} data-workbench-open={workbenchOpen || undefined}>
             <div className={css.conversationPane}>{renderSlot('conversation', {})}</div>
-            {panels.workbench && (
-              <div className={css.workbenchPane}>
+            {sessionWorkbenchOpen && (
+              <div key={workbenchSession} className={css.workbenchPane}>
                 {renderSlot('main.workbench', { closeWorkbench: actions.closeWorkbench })}
               </div>
             )}

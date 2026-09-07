@@ -86,7 +86,7 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/client/ui-brand-official': { kind: 'none', reason: 'Browser-side presentation occupants; registers nothing model-facing.' },
   'packages/client/ui-brand-mantur': { kind: 'none', reason: 'Browser-side Mantur presentation occupants; registers nothing model-facing.' },
   'packages/client/ui-mantur-navigation': { kind: 'none', reason: 'Browser-side Mantur navigation and marketplace presentation; registers nothing model-facing.' },
-  'packages/client/ui-mantur-editing': { kind: 'none', reason: 'Browser-side editor presentation; registers no model context or tools.' },
+  'packages/client/ui-mantur-editing': { kind: 'indirect', reason: 'The scoped MCP client owns editing tool schemas and model-visible results.' },
   'packages/client/ui-conversation': { kind: 'none', reason: 'Browser-side UI plugin layer; registers nothing model-facing.' },
   'packages/client/ui-approval': { kind: 'none', reason: 'Browser-side approval presentation; registers nothing model-facing.' },
   'packages/client/ui-chat': { kind: 'none', reason: 'Browser-side Chat presentation; registers nothing model-facing.' },

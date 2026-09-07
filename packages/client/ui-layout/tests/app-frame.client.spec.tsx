@@ -288,6 +288,31 @@ describe('AppFrame', () => {
     expect(getByTestId('workbench-content')).toBeTruthy()
   })
 
+  it('remembers workbench visibility separately for each session and the home screen', () => {
+    const { instance, queryByTestId, rerenderFrame } = mountFrame()
+    act(() => { instance.actions.openWorkbench() })
+    expect(queryByTestId('workbench-content')).not.toBeNull()
+    selectedSession.current = 's-other' as SessionId
+    rerenderFrame()
+    expect(queryByTestId('workbench-content')).toBeNull()
+    act(() => { instance.actions.openWorkbench() })
+    expect(queryByTestId('workbench-content')).not.toBeNull()
+    act(() => { instance.actions.closeWorkbench() })
+    selectedSession.current = 's-test' as SessionId
+    rerenderFrame()
+    expect(queryByTestId('workbench-content')).not.toBeNull()
+    selectedSession.current = undefined
+    rerenderFrame()
+    expect(queryByTestId('workbench-content')).toBeNull()
+    act(() => { instance.actions.openWorkbench() })
+    selectedSession.current = 's-other' as SessionId
+    rerenderFrame()
+    expect(queryByTestId('workbench-content')).toBeNull()
+    selectedSession.current = undefined
+    rerenderFrame()
+    expect(queryByTestId('workbench-content')).not.toBeNull()
+  })
+
   it('switches the center to a main page, keeps conversation state mounted, and returns', () => {
     const { instance, getByTestId, queryByTestId, slotCalls } = mountFrame()
     expect(queryByTestId('main-page-content')).toBeNull()
