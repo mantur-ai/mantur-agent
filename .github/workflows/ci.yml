@@ -618,9 +618,10 @@ jobs:
           }
       - name: Run Windows-specific native tests
         shell: pwsh
-        run: |
-          pnpm exec vitest run --no-file-parallelism --testTimeout 90000 packages/shell/tool-pwsh/tests/loader.spec.ts packages/workflow/workflow-worker-thread/tests/workflow-worker-thread.spec.ts packages/workflow/tool-ralph/tests/integration.spec.ts
-          pnpm exec vitest run --no-file-parallelism --testTimeout 90000 packages/subprocess/subprocess-local/tests/process-exit.spec.ts
+        run: pnpm exec vitest run --no-file-parallelism --testTimeout 90000 packages/shell/tool-pwsh/tests/loader.spec.ts packages/workflow/workflow-worker-thread/tests/workflow-worker-thread.spec.ts packages/workflow/tool-ralph/tests/integration.spec.ts
+      - name: Run Windows process-exit tests
+        shell: pwsh
+        run: pnpm exec vitest run --no-file-parallelism --testTimeout 90000 packages/subprocess/subprocess-local/tests/process-exit.spec.ts
 
   windows-observational:
     if: github.event_name == 'pull_request'
