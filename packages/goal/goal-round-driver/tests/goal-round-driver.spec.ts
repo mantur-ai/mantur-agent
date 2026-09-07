@@ -1,4 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import JsonlPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { Context } from '@deepseek-ai/cordis'
 import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
 import { agentEvents } from '@deepseek-ai/dsh-agent'
@@ -80,16 +84,19 @@ interface Harness {
 }
 
 const contexts: Context[] = []
+const roots: string[] = []
 
 afterEach(async () => {
   await Promise.allSettled(contexts.splice(0).map(context => context.fiber.dispose()))
+  await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true })))
 })
 
 /** Mount a real loop with only its model scripted. */
-async function harness(script: ScriptEntry[]): Promise<Harness> {
+async function harness(script: ScriptEntry[], persistenceRoot?: string): Promise<Harness> {
   const ctx = new Context()
   contexts.push(ctx)
   await mountAgentLoopTestDependencies(ctx)
+  if (persistenceRoot !== undefined) await ctx.plugin(JsonlPersistence, { root: persistenceRoot })
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(GoalService)
   const driver = await ctx.plugin(goalSession)
@@ -143,6 +150,99 @@ async function waitForRequests(adapter: ScriptedAdapter, count: number): Promise
     expect(adapter.requests).toHaveLength(count)
   })
 }
+
+describe('explicit Host shutdown', () => {
+  it('preserves claimed context when shutdown interrupts a goal pre-step hook', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'goal-prestep-shutdown-'))
+    roots.push(root)
+    const test = await harness([], root)
+    const message = createUserMessage({ content: [{ type: 'text', text: 'keep claimed context' }], source: { kind: 'user' } })
+    onInboxMessage(test.ctx, test.agent, (queued) => {
+      if (queued.source.kind === 'goal') test.agent.inbox.prepend('next-step', message)
+    })
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const errors: unknown[] = []
+    test.ctx.on('agent/error', ({ error }) => { errors.push(error) })
+    test.ctx.on('agent/pre-step', async (_request, next) => {
+      entered.resolve(undefined)
+      await release.promise
+      return next()
+    })
+    test.ctx.goals.create(test.agent, { objective: 'stop before admission' })
+    await entered.promise
+    const writers = test.ctx.agentLoop.stopForShutdown()
+    const stopping = test.ctx.goalRoundDriver.stopForShutdown()
+    try {
+      release.resolve(undefined)
+      await Promise.all([writers, stopping])
+      await test.ctx.agentLoop.verifyShutdown()
+      expect(test.agent.inbox.nextStep).toEqual([message])
+      expect(test.adapter.requests).toHaveLength(0)
+      expect(errors).toEqual([])
+    } finally {
+      release.resolve(undefined)
+      await Promise.allSettled([writers, stopping])
+    }
+  })
+
+  it('does not reactivate automatic driving when later manual work emits lifecycle events', async () => {
+    const test = await harness([new Error('manual request failed')])
+    await test.ctx.goalRoundDriver.stopForShutdown()
+    const agent = await test.ctx.agentLoop.create(SessionId('manual-after-goal-stop'), { provider: 'mock', model: 'mock' })
+    test.ctx.goals.create(agent, { objective: 'remain unscheduled' })
+    agentEvents(test.ctx, agent).emit('agent/session-start', { source: 'resume' })
+    const discarded = createUserMessage({ content: [{ type: 'text', text: 'discard this pending manual input' }], source: { kind: 'user' } })
+    agent.inbox.append('next-turn', discarded)
+    agent.inbox.clear()
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'manual request' }], source: { kind: 'user' } }))
+    await waitForRequests(test.adapter, 1)
+    await agent.whenIdle()
+    expect(test.adapter.requests).toHaveLength(1)
+    expect(test.ctx.goals.get(agent)?.roundsStarted).toBe(0)
+  })
+
+  it('joins an original driver checkpoint before writer shutdown', async () => {
+    const test = await harness([])
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    test.ctx.on('session/flush', async () => {
+      entered.resolve(undefined)
+      await release.promise
+    })
+    test.ctx.goals.create(test.agent, { objective: 'held shutdown checkpoint' })
+    await entered.promise
+    const stopping = test.ctx.goalRoundDriver.stopForShutdown()
+    expect(test.ctx.goalRoundDriver.stopForShutdown()).toBe(stopping)
+    let stopped = false
+    void stopping.then(() => { stopped = true })
+    try {
+      await new Promise<void>(resolve => setImmediate(resolve))
+      expect(stopped).toBe(false)
+      release.resolve(undefined)
+      await stopping
+      expect(test.adapter.requests).toHaveLength(0)
+    } finally {
+      release.resolve(undefined)
+      await stopping
+    }
+  })
+
+  it('preserves pending user input when the Host freezes agents before the goal driver', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'goal-shutdown-'))
+    roots.push(root)
+    const test = await harness(['hang'], root)
+    test.ctx.goals.create(test.agent, { objective: 'stop a live goal round' })
+    await waitForRequests(test.adapter, 1)
+    const message = createUserMessage({ content: [{ type: 'text', text: 'keep this pending input' }], source: { kind: 'user' } })
+    test.agent.inbox.append('next-turn', message)
+    const writers = test.ctx.agentLoop.stopForShutdown()
+    await Promise.all([writers, test.ctx.goalRoundDriver.stopForShutdown()])
+    await test.ctx.agentLoop.verifyShutdown()
+    expect(test.agent.inbox.nextTurn).toEqual([message])
+    expect(test.adapter.requests).toHaveLength(1)
+  })
+})
 
 describe('goal-round outcome policy', () => {
   it('renders the objective, round budget, authority boundary, and completion protocol', () => {

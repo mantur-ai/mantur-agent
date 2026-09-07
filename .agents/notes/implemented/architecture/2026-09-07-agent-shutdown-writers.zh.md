@@ -55,3 +55,5 @@ Gateway 的操作归属由 `packages/api/gateway/src/index.ts` 管理：关闭�
 投影缓存的操作由 `packages/session/session-projection-cache/src/index.ts` 管理：实时检查点队列不包含冷读取写回。显式停止会冻结生产者，并在存储所有者关闭领域之前等待两类写入。挂起的冷写入、保留的警告语义和清除的检查点定时器验证升级。缓存写入错误仍是派生数据失败，不作为领域清理回执。
 
 设置关闭由 `packages/settings/settings/src/index.ts` 和 `packages/settings/settings-file/src/index.ts` 管理：命名空间写入与观察回调可能晚于文件操作队列结束。就绪提供者停止两类生产者，并等待两层队列及监听器关闭。已启动的回调、挂起的文档创建、重复停止及监听器关闭失败验证升级。请求就绪提供者关闭前，必须先完成启动组合。
+
+目标轮次驱动关闭由 `packages/goal/goal-round-driver/src/index.ts` 管理：调度 Promise 和轮次预留是生产者私有状态。显式生命周期接口冻结自动触发，并独立于活动智能体查找保留原始驱动任务。步骤检查持续到插件卸载；已接纳的轮次在保留待执行输入的同时取消。Host 在停止此生产者前冻结智能体接纳。智能体接纳冻结后，AgentLoop 保留并恢复原始收件箱领取记录；目标驱动不修改已冻结的收件箱。挂起的检查点、之后的手动工作，以及使用真实 JSONL 写入器与 AgentLoop 联合关闭期间中断的步骤前钩子验证升级。

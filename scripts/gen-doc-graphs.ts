@@ -458,6 +458,14 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'The one concrete loop plugin; extension packages depend on dsh-agent events and services, not on this package.',
   },
   {
+    key: 'goalRoundDriver',
+    pkg: 'goal-round-driver',
+    title: 'Automatic goal-round producer',
+    mode: 'bundle',
+    consumers: ['base'],
+    note: 'Owns automatic same-session round scheduling and an explicit stop that joins its driver tasks.',
+  },
+  {
     key: 'goals',
     pkg: 'goal',
     title: 'Same-session goal domain',

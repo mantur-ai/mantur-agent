@@ -152,6 +152,22 @@ interface GoalChanged {
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.zh.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
+<a id="ctxgoalrounddriver--goalrounddriver"></a>
+
+### `ctx.goalRoundDriver` — `GoalRoundDriver`
+
+Explicit shutdown of the installed automatic goal-round producer.
+
+```ts cordis-catalog
+/**
+ * Freeze scheduling, disarm goals, and join owned driver tasks and admitted rounds.
+ * @returns completion after the producer becomes quiescent.
+ */
+stopForShutdown(): Promise<void>
+```
+
+Source: [`packages/goal/goal-round-driver/src/index.ts`](../../packages/goal/goal-round-driver/src/index.ts)
+
 <a id="ctxgoals--goalservice"></a>
 
 ### `ctx.goals` — `GoalService`

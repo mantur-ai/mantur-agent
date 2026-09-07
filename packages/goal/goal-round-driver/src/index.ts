@@ -18,6 +18,22 @@ export { renderGoalRoundPrompt } from './prompt.ts'
 export const name = 'goal-round-driver'
 export const inject = ['agents', 'goals', 'sessions']
 
+/** Explicit shutdown of the installed automatic goal-round producer. */
+export interface GoalRoundDriver {
+  /**
+   * Freeze scheduling, disarm goals, and join owned driver tasks and admitted rounds.
+   * @returns completion after the producer becomes quiescent.
+   */
+  stopForShutdown(): Promise<void>
+}
+
+declare module '@deepseek-ai/cordis' {
+  interface Context {
+    /** Lifecycle control for the automatic goal-round producer. */
+    goalRoundDriver: GoalRoundDriver
+  }
+}
+
 /** Identity reserved before a goal continuation enters the agent inbox. */
 interface RoundIdentity {
   readonly goalId: GoalRef['id']
@@ -75,6 +91,34 @@ function renderThrown(value: unknown): string {
 /** Install automatic same-session continuation and its race fences. */
 export function apply(ctx: Context): void {
   const states = new Map<Agent, DriverState>()
+  const runs = new Set<Promise<void>>()
+  let stopping = false
+  let shutdown: Promise<void> | undefined
+
+  const stopForShutdown = (): Promise<void> => {
+    stopping = true
+    shutdown ??= (async () => {
+      const waits: Promise<void>[] = []
+      for (const state of states.values()) {
+        state.stopping = true
+        disarm(state)
+        const attempt = state.attempt
+        if (attempt !== undefined) {
+          attempt.stale = true
+          /* v8 ignore next -- followup reserves the live agent before publishing a queued attempt */
+          if (state.agent.status === 'running') {
+            state.agent.cancel({ kind: 'parent' }, { keepInbox: true })
+            waits.push(state.agent.whenIdle())
+          }
+        }
+      }
+      await Promise.allSettled(waits)
+      while (runs.size > 0) await Promise.allSettled([...runs])
+      states.clear()
+    })()
+    return shutdown
+  }
+  ctx.provide('goalRoundDriver', { stopForShutdown })
 
   /** Create state for an exact currently live agent. */
   function stateFor(agent: Agent): DriverState {
@@ -87,7 +131,7 @@ export function apply(ctx: Context): void {
       needsCheckpoint: false,
       requested: false,
       run: undefined,
-      stopping: false,
+      stopping,
     }
     states.set(agent, state)
     return state
@@ -125,6 +169,8 @@ export function apply(ctx: Context): void {
 
   /** Preserve claimed step context when this driver drops only its own round. */
   function restoreOtherClaimed(agent: Agent, messages: UserMessage[], messageId: MessageId): void {
+    // Frozen admission leaves the original claim with AgentLoop for exact restoration.
+    if (!ctx.agents.acceptingWork) return
     const retained = messages.filter(message => message.id !== messageId
       && !(message.source.kind === 'goal' && message.source.round === 0))
     for (const message of retained.toReversed()) {
@@ -229,7 +275,9 @@ export function apply(ctx: Context): void {
       return
     }
     state.run = run
+    runs.add(run)
     const retire = (): void => {
+      runs.delete(run)
       state.run = undefined
       if (state.requested && !state.stopping) requestDrive(state)
     }
@@ -244,19 +292,22 @@ export function apply(ctx: Context): void {
   // plugin's own scheduling tasks settle.
   ctx.effect(function* () {
     ctx.on('agent/error', ({ agent }) => {
+      if (stopping) return
       const state = stateFor(agent)
       disarm(state)
     })
 
-    ctx.on('agent/created', ({ agent }) => { stateFor(agent) })
+    ctx.on('agent/created', ({ agent }) => { if (!stopping) stateFor(agent) })
     ctx.on('agent/disposed', ({ agent }) => { states.delete(agent) })
     ctx.on('agent/session-start', ({ agent }) => {
+      if (stopping) return
       const state = stateFor(agent)
       state.attempt = undefined
       state.competingQueued = false
       state.needsCheckpoint = false
     })
     ctx.on('agent/status', ({ agent, status }) => {
+      if (stopping) return
       const state = stateFor(agent)
       if (status === 'idle') {
         state.competingQueued = false
@@ -281,6 +332,7 @@ export function apply(ctx: Context): void {
       }
     })
     ctx.on('goal/changed', ({ agent, change }) => {
+      if (stopping) return
       const state = stateFor(agent)
       state.needsCheckpoint = true
       // A host-initiated pause stops goal execution: abort the live turn so the
@@ -294,6 +346,7 @@ export function apply(ctx: Context): void {
     })
 
     ctx.on('agent/inbox/inserted', ({ agent, message }) => {
+      if (stopping) return
       if (!agent.inbox.nextTurn.some(candidate => candidate.id === message.id)) return
       const state = stateFor(agent)
       const attempt = state.attempt
@@ -302,6 +355,7 @@ export function apply(ctx: Context): void {
       if (attempt?.phase === 'queued') attempt.stale = true
     })
     ctx.on('agent/inbox/claimed', ({ agent, message }) => {
+      if (stopping) return
       const state = stateFor(agent)
       const attempt = state.attempt
       if (attempt !== undefined && sameQueued(message.content, message.source, attempt)) {
@@ -309,6 +363,7 @@ export function apply(ctx: Context): void {
       }
     })
     ctx.on('agent/inbox/discarded', ({ agent, message }) => {
+      if (stopping) return
       const state = stateFor(agent)
       const attempt = state.attempt
       if (attempt !== undefined && sameQueued(message.content, message.source, attempt)) {
@@ -317,6 +372,7 @@ export function apply(ctx: Context): void {
     })
 
     ctx.on('session/event', (session: Session, event: SessionEvent) => {
+      if (stopping) return
       const agent = ctx.agents.get(session.id)
       if (agent === undefined || agent.session !== session) return
       const state = stateFor(agent)
@@ -434,24 +490,6 @@ export function apply(ctx: Context): void {
 
     // Yielded after listener registration, so this close runs first and the
     // composite effect removes listeners only after its promise settles.
-    yield async () => {
-      const waits: Promise<void>[] = []
-      for (const state of states.values()) {
-        state.stopping = true
-        disarm(state)
-        const attempt = state.attempt
-        if (attempt !== undefined) {
-          attempt.stale = true
-          /* v8 ignore next -- followup reserves the live agent before publishing a queued attempt */
-          if (state.agent.status === 'running') {
-            state.agent.cancel({ kind: 'parent' })
-            waits.push(state.agent.whenIdle())
-          }
-        }
-        if (state.run !== undefined) waits.push(state.run)
-      }
-      await Promise.allSettled(waits)
-      states.clear()
-    }
+    yield stopForShutdown
   }, 'goal-round-driver lifecycle')
 }

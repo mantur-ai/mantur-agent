@@ -961,6 +961,19 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'goalRoundDriver',
+    summary: 'Explicit shutdown of the installed automatic goal-round producer.',
+    description: 'Explicit shutdown of the installed automatic goal-round producer.',
+    methods: [
+      {
+        signature: 'stopForShutdown(): Promise<void>',
+        description: 'Freeze scheduling, disarm goals, and join owned driver tasks and admitted rounds.',
+        parameters: [],
+        returns: 'completion after the producer becomes quiescent.',
+      },
+    ],
+  },
+  {
     key: 'goals',
     summary: 'Goal service (`ctx.goals`) backed exclusively by the owning session log.',
     description: 'Goal service (`ctx.goals`) backed exclusively by the owning session log.',
