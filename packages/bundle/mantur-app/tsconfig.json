@@ -43,6 +43,12 @@
     },
     {
       "path": "../../llm/llm"
+    },
+    {
+      "path": "../../code-runtime/code-runtime-worker-thread"
+    },
+    {
+      "path": "../../extensions/cordis-host-runner"
     }
   ]
 }

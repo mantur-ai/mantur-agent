@@ -8,6 +8,8 @@ import Include from '@deepseek-ai/cordis-plugin-include'
 import Group from '@deepseek-ai/cordis-plugin-group'
 import AgentPresets, { COMPOSITION_FILE } from '@deepseek-ai/dsh-agent-presets'
 import { Context } from '@deepseek-ai/cordis'
+import { WorkerThreadCodeRuntime } from '@deepseek-ai/dsh-code-runtime-worker-thread'
+import DynamicRunner from '@deepseek-ai/dsh-cordis-host-runner'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Llm from '@deepseek-ai/dsh-llm'
 import * as Telemetry from '@deepseek-ai/dsh-session-telemetry-otel'
@@ -428,4 +430,80 @@ it('saves authoritative events before a failing telemetry upload and retains ord
     server.closeAllConnections()
     await closed
   }
+})
+
+it.each(['dynamicCordisRunner'])('freezes a never-started %s and rechecks its history after every receipt', async (name) => {
+  const test = await fixture()
+  const owner = { hasStartedPrograms: false, stopForShutdown: vi.fn(async () => {}) }
+  test.ctx.provide(name, owner)
+  try {
+    const shutdown = createHostUpdateShutdown(test.ctx)
+    await shutdown.prepare()
+    expect(owner.stopForShutdown).toHaveBeenCalledOnce()
+    owner.hasStartedPrograms = true
+    await expect(shutdown.prepare()).rejects.toThrow('unmanaged operating-system descendants')
+    await test.ctx.fiber.dispose()
+    await expect(shutdown.prepare()).rejects.toThrow('unmanaged operating-system descendants')
+  } finally { await test.close() }
+})
+
+it.each(['dynamicCordisRunner'])('rejects %s execution admitted during shutdown before issuing a receipt', async (name) => {
+  const test = await fixture()
+  const owner = { hasStartedPrograms: false, async stopForShutdown() { this.hasStartedPrograms = true } }
+  test.ctx.provide(name, owner)
+  try { await expect(createHostUpdateShutdown(test.ctx).prepare()).rejects.toThrow('Host update shutdown failed') }
+  finally { await test.close() }
+})
+
+it('keeps the unused worker provider blocked without freezing normal agent admission', async () => {
+  const test = await fixture()
+  await test.ctx.plugin(WorkerThreadCodeRuntime, {})
+  try {
+    expect((test.ctx.codeRuntime as WorkerThreadCodeRuntime).hasStartedPrograms).toBe(false)
+    await expect(createHostUpdateShutdown(test.ctx).prepare()).rejects.toThrow('codeRuntime')
+    const handle = await test.ctx.agents.create({ sessionId: SessionId('unused-does-not-freeze') })
+    await handle.dispose()
+  } finally { await test.close() }
+})
+
+it.each(['worker', 'dynamic'])('rejects %s history even if its provider was removed before coordinator creation', async (kind) => {
+  const test = await fixture()
+  try {
+    if (kind === 'worker') {
+      const fiber = test.ctx.plugin(WorkerThreadCodeRuntime, {})
+      await fiber
+      await test.ctx.codeRuntime.run({ program: 'return 1', bindings: [] })
+      await fiber.dispose()
+    } else {
+      const fiber = test.ctx.plugin(DynamicRunner, {})
+      await fiber
+      const runner = test.ctx.dynamicCordisRunner
+      const definition = runner.define({ sessionId: test.agent.id, plugin: { kind: 'new', idPrefix: 'old' }, name: 'old', purpose: 'history', code: { host: 'return { apply() {} }' } })
+      expect(await runner.run(test.agent, definition.pluginId, definition.packageId, 'run')).toMatchObject({ ok: true })
+      await runner.undefine(test.agent, definition.pluginId)
+      await fiber.dispose()
+    }
+    await expect(createHostUpdateShutdown(test.ctx).prepare()).rejects.toThrow('previously executed programs')
+    const handle = await test.ctx.agents.create({ sessionId: SessionId('history-does-not-freeze') })
+    await handle.dispose()
+  } finally { await test.close() }
+})
+
+it('keeps the shipped dynamic runner module blocked even when no activation occurred', async () => {
+  const test = await fixture()
+  try {
+    await test.ctx.loader.create({ name: '@deepseek-ai/dsh-cordis-host-runner' })
+    expect(test.ctx.dynamicCordisRunner.hasStartedPrograms).toBe(false)
+    await expect(createHostUpdateShutdown(test.ctx).prepare()).rejects.toThrow('@deepseek-ai/dsh-cordis-host-runner')
+  } finally { await test.close() }
+})
+
+it('freezes an unused real dynamic runner in an explicitly managed test composition', async () => {
+  const test = await fixture()
+  await test.ctx.plugin(DynamicRunner, {})
+  const runner = test.ctx.dynamicCordisRunner
+  try {
+    await createHostUpdateShutdown(test.ctx).prepare()
+    expect(() => runner.define({ sessionId: test.agent.id, plugin: { kind: 'new', idPrefix: 'new' }, name: 'late', purpose: 'late', code: { host: 'return { apply() {} }' } })).toThrow('stopping for shutdown')
+  } finally { await test.close() }
 })

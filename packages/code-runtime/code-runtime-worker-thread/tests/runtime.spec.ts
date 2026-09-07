@@ -967,3 +967,22 @@ describe('WorkerThreadCodeRuntime — seam misuse and lifecycle', () => {
     expect(ctx.get('codeRuntime')).toBeUndefined()
   })
 })
+
+it('keeps worker-start history across scoped providers, removal and replacement', async () => {
+  const { ctx, runtime } = await setup()
+  const foreign = await setup()
+  try {
+    expect(runtime.hasStartedPrograms).toBe(false)
+    await runtime.run({ program: 'enum Invalid { A }', bindings: [] })
+    await runtime.run({ program: 'return 1', bindings: [], signal: AbortSignal.abort() })
+    expect(runtime.hasStartedPrograms).toBe(false)
+    expect((await runtime.run({ program: 'return 42', bindings: [] })).value).toBe(42)
+    await runtime.stopForShutdown()
+    expect(runtime.hasStartedPrograms).toBe(true)
+    await [...ctx.registry.get(WorkerThreadCodeRuntime)!.fibers][0]!.dispose()
+    const scoped = ctx.isolate('codeRuntime')
+    await scoped.plugin(WorkerThreadCodeRuntime, {})
+    expect((scoped.codeRuntime as WorkerThreadCodeRuntime).hasStartedPrograms).toBe(true)
+    expect(foreign.runtime.hasStartedPrograms).toBe(false)
+  } finally { await Promise.all([ctx.fiber.dispose(), foreign.ctx.fiber.dispose()]) }
+})

@@ -228,6 +228,17 @@ class OutputLedger {
   }
 }
 
+const executionRoots = new WeakSet<Context>()
+
+/**
+ * Read monotonic execution history even after every provider has been removed.
+ * @param ctx - any context under the Host root being checked.
+ * @returns whether that root has attempted a worker start; another root has independent history.
+ */
+export function hasStartedWorkerPrograms(ctx: Context): boolean {
+  return executionRoots.has(ctx.root)
+}
+
 /**
  * The shipped {@link CodeRuntime} backend (`ctx.codeRuntime`). Registers as
  * the `codeRuntime` service; every cap comes from validated config. See the
@@ -246,6 +257,7 @@ export class WorkerThreadCodeRuntime extends CodeRuntime {
   readonly language = 'typescript'
   readonly isolation = 'worker-thread'
 
+  private readonly executionRoot: Context
   private readonly config: ResolvedConfig
   private readonly live = new Set<LiveRun>()
   private disposed = false
@@ -254,6 +266,7 @@ export class WorkerThreadCodeRuntime extends CodeRuntime {
 
   constructor(ctx: Context, config: Config) {
     super(ctx)
+    this.executionRoot = ctx.root
     // Schemastery filled the defaults; the cast records that. Positivity is a
     // semantic check the schema's plain number type does not carry.
     this.config = config as ResolvedConfig
@@ -270,6 +283,11 @@ export class WorkerThreadCodeRuntime extends CodeRuntime {
       throw new Error(`dsh-code-runtime-worker-thread: config.maxWallMs must be at most ${MAX_TIMER_DELAY_MS} (Node clamps a longer setTimeout delay to 1ms), got ${String(this.config.maxWallMs)}`)
     }
     ctx.effect(() => () => this.stopForShutdown(), 'worker code-runtime teardown')
+  }
+
+  /** Whether this Host root has attempted a worker start, across scoped and replaced providers. Never cleared by shutdown. */
+  get hasStartedPrograms(): boolean {
+    return executionRoots.has(this.executionRoot)
   }
 
   /**
@@ -380,6 +398,7 @@ export class WorkerThreadCodeRuntime extends CodeRuntime {
       })),
       maxOutputBytes: this.config.maxOutputBytes,
     }
+    executionRoots.add(this.executionRoot)
     const worker = new Worker(WORKER_PATH, {
       workerData: bootData,
       // Model code gets NO ambient environment — stronger than the scrubbed

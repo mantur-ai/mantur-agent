@@ -1,5 +1,7 @@
 /** Ordered Host shutdown for an explicit desktop installation request. */
 import type { Context } from '@deepseek-ai/cordis'
+import { hasStartedWorkerPrograms } from '@deepseek-ai/dsh-code-runtime-worker-thread'
+import { hasStartedDynamicPrograms } from '@deepseek-ai/dsh-cordis-host-runner'
 import { errorChain } from '@deepseek-ai/dsh-llm'
 import { livePresetMounts } from '@deepseek-ai/dsh-agent-presets'
 import { stopUserPatchWatches } from '@deepseek-ai/dsh-app-boot'
@@ -11,6 +13,7 @@ import { supportedUpdateModules } from './update-policy.ts'
 import { updateSaveRequest, type UpdateSaveReply, type UpdateSessionCheckpoint } from './update-protocol.ts'
 
 interface StopOwner { stopForShutdown(): Promise<unknown> }
+interface ProgramOwner { readonly hasStartedPrograms: boolean }
 interface NativeOwner { stopNativeForShutdown(): Promise<void> }
 interface PickerOwner { capability(): DirectoryPickerCapability }
 interface OwnedService { readonly name: string; readonly value: unknown }
@@ -26,6 +29,18 @@ function owners(ctx: Context): OwnedService[] {
   })
 }
 
+function assertProgramHistory(ctx: Context, services: readonly OwnedService[]): void {
+  if (hasStartedWorkerPrograms(ctx) || hasStartedDynamicPrograms(ctx)) {
+    throw new Error('Update cannot verify shutdown of: previously executed programs: unmanaged operating-system descendants')
+  }
+  for (const owner of services) {
+    if (owner.name === 'codeRuntime' || owner.name === 'dynamicCordisRunner'
+      && (owner.value as Partial<ProgramOwner>).hasStartedPrograms !== false) {
+      throw new Error(`Update cannot verify shutdown of: ${owner.name}: unmanaged operating-system descendants`)
+    }
+  }
+}
+
 function assertSupported(ctx: Context, services: readonly OwnedService[], priorUnsupported: ReadonlySet<string>): void {
   if (!ctx.get('agentLoop') || !ctx.get('agents')) throw new Error('Update saving requires AgentLoop and AgentRegistry')
   const entries = [...ctx.loader.entries(), ...livePresetMounts(ctx.root.fiber).flatMap(mount => [...mount.tree.entries()])]
@@ -36,13 +51,13 @@ function assertSupported(ctx: Context, services: readonly OwnedService[], priorU
   }
   for (const owner of services) {
     if (owner.name === 'hmr' && (owner.value as Context['hmr']).config.root.length > 0) unsupported.add('module HMR')
-    if (owner.name === 'codeRuntime') unsupported.add('codeRuntime: unmanaged operating-system descendants')
     if (owner.name === 'directoryPicker') {
       const kind = (owner.value as PickerOwner).capability().kind
       if (!new Set(['native', 'browse']).has(kind)) unsupported.add(`directoryPicker: ${kind}`)
     }
   }
   if (unsupported.size) throw new Error(`Update cannot verify shutdown of: ${[...unsupported].join(', ')}`)
+  assertProgramHistory(ctx, services)
 }
 
 /**
@@ -94,7 +109,8 @@ export function createHostUpdateShutdown(ctx: Context): { prepare(): Promise<rea
   ctx.on('internal/status', () => { collect() })
   const freeze = (services: readonly OwnedService[]): Promise<unknown>[] => {
     for (const owner of services) if (owner.name === 'agents') (owner.value as AgentRegistry).freezeAdmission()
-    return services.filter(owner => owner.name === 'agentLoop').map((owner) => {
+    const programs = stopNamed(services, new Set(['codeRuntime', 'dynamicCordisRunner']))
+    return [...programs, ...services.filter(owner => owner.name === 'agentLoop').map((owner) => {
       let pending = quiescing.get(owner.value)
       if (pending === undefined) {
         try { pending = (owner.value as AgentLoop).quiesceForShutdown() }
@@ -103,9 +119,10 @@ export function createHostUpdateShutdown(ctx: Context): { prepare(): Promise<rea
         quiescing.set(owner.value, pending)
       }
       return pending
-    })
+    })]
   }
   const verify = async (): Promise<readonly UpdateSessionCheckpoint[]> => {
+    assertProgramHistory(ctx, [...retained.values()])
     const checkpoints = new Map<UpdateSessionCheckpoint['sessionId'], UpdateSessionCheckpoint>()
     for (const owner of retained.values()) {
       if (owner.name !== 'agentLoop') continue

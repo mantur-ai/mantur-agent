@@ -1479,6 +1479,12 @@ importers:
       '@deepseek-ai/dsh-client-ui-mantur-navigation':
         specifier: workspace:^
         version: link:../../client/ui-mantur-navigation
+      '@deepseek-ai/dsh-code-runtime-worker-thread':
+        specifier: workspace:^
+        version: link:../../code-runtime/code-runtime-worker-thread
+      '@deepseek-ai/dsh-cordis-host-runner':
+        specifier: workspace:^
+        version: link:../../extensions/cordis-host-runner
       '@deepseek-ai/dsh-host-directory-picker':
         specifier: workspace:^
         version: link:../../host/directory-picker

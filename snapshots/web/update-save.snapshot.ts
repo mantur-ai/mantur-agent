@@ -14,7 +14,7 @@ import { requestUpdateSave } from '../../apps/desktop/src/update-save.ts'
 import { composeEntries, loadOverlayPatches } from '@deepseek-ai/dsh-app-boot'
 import { parseSessionLog } from '@deepseek-ai/dsh-llm-replay'
 
-it('saves the recorded session through dsh --profile web update IPC before normal exit', async () => {
+it.each([false, true])('preserves the recorded session through dsh update IPC with an unused worker provider: %s', async (worker) => {
   const home = await mkdtemp(join(tmpdir(), 'dsh-update-launch-'))
   const profile = join(home, 'profiles', 'web')
   const sessions = join(home, 'sessions')
@@ -33,7 +33,7 @@ it('saves the recorded session through dsh --profile web update IPC before norma
   await seed.fiber.dispose()
   await mkdir(profile, { recursive: true })
   await writeFile(join(profile, 'package.json'), JSON.stringify({ type: 'module', dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'], patchReload: 'startup' } } }))
-  const modules = ['llm', 'session', 'session-projection', 'system-prompt', 'tools', 'agent']
+  const modules = ['llm', 'session', 'session-projection', 'system-prompt', 'tools', 'agent', ...worker ? ['code-runtime-worker-thread'] : []]
   const rows = modules.map(name => ({ id: `update-${name}`, name: `@deepseek-ai/dsh-${name}` }))
   const repository = fileURLToPath(new URL('../../', import.meta.url))
   const shipped = composeEntries(['base', 'web-app'].map(name => loadOverlayPatches('update snapshot', join(repository, 'packages/bundle', name, 'cordis.patch.yml'))))
@@ -58,13 +58,20 @@ it('saves the recorded session through dsh --profile web update IPC before norma
   try {
     const ready: unknown = (await once(child, 'message', { signal: AbortSignal.timeout(10_000) }).catch((error: unknown) => { throw new Error(output || 'Host sent no startup output', { cause: error }) }))[0]
     expect(ready, output).toEqual({ type: 'mantur:update:ready' })
-    const checkpoints = await requestUpdateSave({ child, timeoutMs: 10_000 })
+    const checkpoints = worker ? [] : await requestUpdateSave({ child, timeoutMs: 10_000 })
     // An admitted restore can finish or roll back before publication; both must preserve this log.
     expect(checkpoints.every(checkpoint => checkpoint.sessionId === sessionId && checkpoint.nextSeq === events.length), output).toBe(true)
     expect(child.exitCode).toBeNull()
-    const exited = once(child, 'close', { signal: AbortSignal.timeout(5_000) })
-    child.send({ type: 'mantur:update:exit' })
-    expect(await exited, output).toEqual([0, null])
+    if (worker) {
+      await expect(requestUpdateSave({ child, timeoutMs: 10_000 })).rejects.toThrow('codeRuntime')
+      // Refused installation leaves the Host alive; the fixture requests ordinary application shutdown.
+      child.kill('SIGTERM')
+      await closed
+    } else {
+      const exited = once(child, 'close', { signal: AbortSignal.timeout(5_000) })
+      child.send({ type: 'mantur:update:exit' })
+      expect(await exited, output).toEqual([0, null])
+    }
     const verify = new Context()
     await verify.plugin(Persistence, { root: sessions, compression: 'none' })
     try {

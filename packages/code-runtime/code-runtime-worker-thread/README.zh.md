@@ -56,6 +56,8 @@ kind: "package-reference"
 
 `stopForShutdown()` 冻结新运行，并等待 worker 终止、管道排空和每个已接纳的 Host 绑定调用，包括程序没有 await 的调用。程序已返回结果并不能证明这些绑定已完成。终止失败返回 `exception` 结果，并保留失败记录，使每次关闭调用都拒绝。永不结束的绑定会阻止关闭完成。此操作覆盖 worker 线程和 Host 绑定调用；程序代码直接启动的 OS 进程仍需部署层清理。
 
+`hasStartedPrograms` 与 `hasStartedWorkerPrograms(ctx)` 为整个 Host 根保留 worker 启动历史，包括已移除和隔离的提供方。解析失败与提前取消的请求不会启动 worker。停止或替换提供方不能清除执行历史。
+
 ### 包含而非安全边界
 
 程序运行时的权限与 bash 工具相当：它可以访问 Node API，后端也刻意不承诺与宿主的隔离。它提供的是包含——独立 isolate、空环境（没有环境变量凭据，也不继承 loader 标志）、可配置堆上限，以及也能终止同步热循环的强制终止。程序派生的 OS 进程在 `terminate()` 后仍然存活，需要部署层面的清理。
