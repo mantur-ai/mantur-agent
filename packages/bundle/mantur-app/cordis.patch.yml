@@ -29,7 +29,8 @@
 
 - id: command-scopes
   config:
-    identity: !!js process.env.DSH_MANTUR_NATIVE_ACCOUNT === '1' ? 'required' : 'none'
+    identity: !!js >-
+      process.env.DSH_MANTUR_NATIVE_ACCOUNT === '1' ? 'required' : 'none'
 
 - insert:
     - id: mantur-identity
@@ -44,7 +45,8 @@
     - id: mantur-account
       name: '@deepseek-ai/dsh-authorization-manturhub'
       config:
-        identity: !!js process.env.DSH_MANTUR_NATIVE_ACCOUNT === '1' ? 'desktop-managed' : 'standalone'
+        identity: !!js >-
+          process.env.DSH_MANTUR_NATIVE_ACCOUNT === '1' ? 'desktop-managed' : 'standalone'
         native: !!js >-
           process.env.DSH_MANTUR_NATIVE_ACCOUNT === '1'
             ? { environmentLabel: 'ManturHub', requestTimeoutMs: 30000, maxResponseBytes: 65536, leaseMs: 86400000, revocationRetryMs: 60000 }

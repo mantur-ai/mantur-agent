@@ -1,24 +1,12 @@
 /** Profile-local native login orchestration; passwords are transient, and only confirmed activation enables requests. */
 import { assertNever } from '@deepseek-ai/dsh-util-values'
+import type { NativeAccountSnapshot } from '@deepseek-ai/dsh-authorization-manturhub/types'
 import { NativeAccountAccess, type NativeRevocationResult } from './access.ts'
 import {
   NativeHttpClient, NativeHttpFailure, type NativeAttemptId, type NativePollResult,
 } from './http.ts'
 import { createNativeSecrets, type NativeActiveMetadata, type NativeMetadata, type NativeSecrets } from './protocol.ts'
 import { NativeAccountStore, type NativeRecord } from './store.ts'
-
-/** Non-secret account state suitable for a guarded Main-to-renderer message. */
-export interface NativeAccountSnapshot {
-  readonly phase: 'idle' | 'signed-out' | 'authorizing' | 'signed-in' | 'pending-activation' | 'link-required' | 'failed'
-  readonly busy: boolean
-  /** A locally active, unexpired grant; a recoverable offline check failure does not change this fact. */
-  readonly authenticated: boolean
-  readonly skipped: boolean
-  readonly pendingRevocations: number
-  readonly account?: { readonly email: string; readonly expiresAt: number }
-  readonly attempt?: { readonly userCode: string; readonly verificationUrl: string; readonly expiresAt: number }
-  readonly failure?: { readonly kind: string; readonly code?: string; readonly retryAfterMs?: number }
-}
 
 /** Fixed operation rejection; diagnostic payloads never include passwords or backend response text. */
 export class NativeAccountFailure extends Error {
@@ -67,17 +55,20 @@ export class NativeAccountController {
     const current = records.find(record => record.phase === 'pending' || record.phase === 'active')
     const account = current?.metadata.credential
     const attempt = current?.metadata.attempt
+    const locallyBlocked = current !== undefined && this.access.isLocallyBlocked(current.requestId)
+    const expired = current?.phase === 'active' && !locallyBlocked
+      && account !== undefined && account.expiresAt <= this.options.now()
+    const failure = expired ? { kind: 'credential-expired' } : this.failure
     return {
-      phase: this.phase, busy: this.foreground !== undefined || this.cancellation !== undefined,
-      authenticated: current?.phase === 'active' && !this.access.isLocallyBlocked(current.requestId)
-        && account !== undefined && account.expiresAt > this.options.now(),
+      phase: expired ? 'signed-out' : this.phase, busy: this.foreground !== undefined || this.cancellation !== undefined,
+      authenticated: current?.phase === 'active' && !locallyBlocked && account !== undefined && !expired,
       skipped: this.store.skipped(),
       pendingRevocations: records.filter(record => record.phase === 'pending-cancel' || record.phase === 'pending-revoke').length,
       ...(account === undefined ? {} : { account: { email: account.email, expiresAt: account.expiresAt } }),
       ...(attempt === undefined || current?.phase !== 'pending' ? {} : { attempt: {
         userCode: attempt.userCode, verificationUrl: attempt.verificationUrl, expiresAt: attempt.expiresAt,
       } }),
-      ...(this.failure === undefined ? {} : { failure: { ...this.failure } }),
+      ...(failure === undefined ? {} : { failure: { ...failure } }),
     }
   }
 
@@ -99,7 +90,7 @@ export class NativeAccountController {
         if (metadata.expiresAt <= this.options.now()) {
           await this.access.disable(record.requestId)
           this.phase = 'signed-out'
-          throw new NativeAccountFailure('expired')
+          throw new NativeAccountFailure('credential-expired')
         }
         try {
           await this.access.withCredential(signal, async (secrets, lifetime) => {
@@ -133,7 +124,23 @@ export class NativeAccountController {
       const saved = await this.pending(signal)
       if (saved.metadata.credential !== undefined) throw new NativeAccountFailure('resume-required')
       signal.throwIfAborted()
-      await this.options.openBrowser(saved.metadata.attempt.verificationUrl)
+      try { await this.options.openBrowser(saved.metadata.attempt.verificationUrl) }
+      catch { throw new NativeAccountFailure('browser') }
+      signal.throwIfAborted()
+      this.phase = 'authorizing'
+    })
+  }
+
+  /** Reopen the saved, unexpired authorization page without creating or replaying an attempt. */
+  reopenBrowser(): Promise<void> {
+    return this.perform(async (signal) => {
+      const record = this.current()
+      const attempt = record?.metadata.attempt
+      if (record?.phase !== 'pending' || attempt === undefined || record.metadata.credential !== undefined) throw new NativeAccountFailure('resume-required')
+      if (attempt.expiresAt <= this.options.now()) throw new NativeAccountFailure('expired')
+      signal.throwIfAborted()
+      try { await this.options.openBrowser(attempt.verificationUrl) }
+      catch { throw new NativeAccountFailure('browser') }
       signal.throwIfAborted()
       this.phase = 'authorizing'
     })

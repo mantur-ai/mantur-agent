@@ -39,6 +39,45 @@ async function bench() {
 }
 
 describe('native account controller', () => {
+  it('reports absolute expiry from saved metadata even while offline, without making a new request', async () => {
+    const b = await bench()
+    b.queue(b.receipt, b.ready, b.active)
+    await b.controller.password(credentials)
+    b.transport.mockRejectedValueOnce(new Error('isolated offline check'))
+    await expect(b.controller.refresh()).rejects.toMatchObject({ kind: 'network' })
+    expect(b.controller.getSnapshot()).toMatchObject({ authenticated: true, failure: { kind: 'network' } })
+    b.options.now = () => Date.parse(b.expires)
+    expect(b.controller.getSnapshot()).toMatchObject({ phase: 'signed-out', authenticated: false,
+      failure: { kind: 'credential-expired' }, account: { expiresAt: Date.parse(b.expires) } })
+    expect(b.transport).toHaveBeenCalledTimes(4)
+  })
+
+  it('reopens only the same unexpired browser attempt without replaying create or password', async () => {
+    const b = await bench()
+    await expect(b.controller.reopenBrowser()).rejects.toMatchObject({ kind: 'resume-required' })
+    b.queue(b.receipt)
+    await b.controller.startBrowser()
+    await b.controller.reopenBrowser()
+    expect(b.options.openBrowser.mock.calls).toEqual([[b.receipt.verification_uri_complete], [b.receipt.verification_uri_complete]])
+    expect(b.transport).toHaveBeenCalledOnce()
+    b.options.now = () => Date.parse(b.receipt.attempt_expires_at) + 1
+    await expect(b.controller.reopenBrowser()).rejects.toMatchObject({ kind: 'expired' })
+    expect(b.transport).toHaveBeenCalledOnce()
+    expect(b.options.openBrowser).toHaveBeenCalledTimes(2)
+  })
+
+  it('reports browser-open failure without leaking OS details or creating a replacement attempt', async () => {
+    const b = await bench()
+    b.queue(b.receipt)
+    b.options.openBrowser.mockRejectedValueOnce(new Error('private OS details'))
+    await expect(b.controller.startBrowser()).rejects.toMatchObject({ kind: 'browser' })
+    expect(b.controller.getSnapshot()).toMatchObject({ failure: { kind: 'browser' } })
+    b.options.openBrowser.mockRejectedValueOnce(new Error('other private detail'))
+    await expect(b.controller.reopenBrowser()).rejects.toMatchObject({ kind: 'browser' })
+    expect(b.transport).toHaveBeenCalledOnce()
+    expect(JSON.stringify(b.controller.getSnapshot())).not.toContain('private')
+  })
+
   it('publishes locally blocked authority and a persistence error when logout cannot be saved, then permits an explicit retry', async () => {
     const b = await bench()
     b.queue(b.receipt, b.ready, b.active)

@@ -2,7 +2,8 @@
 import type { BrowserWindow, IpcMain, IpcMainInvokeEvent } from 'electron'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { NativeAccountController } from '../src/auth/controller.ts'
-import { installNativeAccountBridge, type NativeAccountReply } from '../src/auth/ipc.ts'
+import type { NativeAccountReply } from '@deepseek-ai/dsh-authorization-manturhub/types'
+import { installNativeAccountBridge } from '../src/auth/ipc.ts'
 import { nativeBrokerBench } from './native-account-broker-support.ts'
 
 afterEach(() => { vi.restoreAllMocks() })

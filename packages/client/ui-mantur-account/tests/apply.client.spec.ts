@@ -1,11 +1,13 @@
+// @vitest-environment jsdom
 import { Context } from '@deepseek-ai/cordis'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
 import { resolveSlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
 import { AccountOnboarding } from '../src/client/AccountOnboarding.tsx'
 import { AccountSection } from '../src/client/AccountSection.tsx'
+import { NativeAccountOnboarding, NativeAccountSection, type NativeAccountInjected } from '../src/client/NativeAccountSurfaces.tsx'
 import { apply, inject } from '../src/client/index.ts'
 import { apply as hostApply } from '../src/index.ts'
 
@@ -13,7 +15,9 @@ vi.mock('@deepseek-ai/dsh-authorization-manturhub/remote', () => ({
   default: { package: '@deepseek-ai/dsh-authorization-manturhub', descriptors: [] },
 }))
 
-async function bench() {
+afterEach(() => { vi.unstubAllGlobals() })
+
+async function bench(mode: 'standalone' | 'desktop-managed' = 'standalone', available = true) {
   const ctx = new Context()
   await ctx.plugin(SlotRegistry).await()
   const locale = new LocaleRuntime(ctx)
@@ -21,6 +25,9 @@ async function bench() {
   ctx.provide('locale', locale)
   const remote = new TestRemote(ctx, {
     manturAccount: {
+      identityMode: vi.fn(() => Promise.resolve(available
+        ? { ok: true, value: mode }
+        : { ok: false, error: { code: 'gateway/internal', message: 'unavailable' } })),
       status: vi.fn(() => Promise.resolve({
         ok: true,
         value: { status: 'signed-out' },
@@ -44,6 +51,42 @@ async function bench() {
 }
 
 describe('ui-mantur-account apply', () => {
+  it('selects Main only from the Host mode and supplies narrow native callbacks', async () => {
+    const invoke = vi.fn(async () => ({ ok: true, revision: 1, snapshot: {
+      phase: 'signed-out', busy: false, authenticated: false, skipped: false, pendingRevocations: 0,
+    } }))
+    const unsubscribe = vi.fn()
+    window.manturAccount = { invoke, subscribe: () => unsubscribe }
+    const subject = await bench('desktop-managed')
+    const fiber = subject.ctx.plugin({ inject: [...inject], apply })
+    try {
+      await fiber.await()
+      const onboarding = subject.slots.entries('settings.onboarding')[0]!
+      expect(onboarding.component).toBe(NativeAccountOnboarding)
+      expect(subject.slots.entries('settings.section')[0]!.component).toBe(NativeAccountSection)
+      const props = (onboarding.inject as unknown as () => NativeAccountInjected)()
+      expect(resolveSlotLabel(subject.slots.entries('settings.section')[0]!.options.label)).toBe('漫途账号')
+      expect(props).not.toHaveProperty('controller')
+      expect(props.hooks.nativeAccount.getSnapshot().snapshot?.authenticated).toBe(false)
+      expect(props.formatExpiry(1_999_999_999_999)).toBe(new Intl.DateTimeFormat('zh', { dateStyle: 'medium', timeStyle: 'short' }).format(1_999_999_999_999))
+      await props.run({ kind: 'browser' })
+      expect(invoke).toHaveBeenLastCalledWith({ kind: 'browser' })
+    } finally { await fiber.dispose(); delete window.manturAccount }
+    expect(unsubscribe).toHaveBeenCalledOnce()
+  })
+
+  it.each([true, false])('shows native unavailable without a legacy fallback when identity availability is %s', async (available) => {
+    const subject = await bench('desktop-managed', available)
+    const fiber = subject.ctx.plugin({ inject: [...inject], apply })
+    try {
+      await fiber.await()
+      const onboarding = subject.slots.entries('settings.onboarding')[0]!
+      expect(onboarding.component).toBe(NativeAccountOnboarding)
+      const props = (onboarding.inject as unknown as () => NativeAccountInjected)()
+      expect(props.hooks.nativeAccount.getSnapshot().failure).toEqual({ kind: 'unavailable' })
+    } finally { await fiber.dispose() }
+  })
+
   it('keeps the host Loader entry inert and declares the browser services', () => {
     expect(hostApply).not.toThrow()
     expect(inject).toEqual(['slots', 'locale', 'remote'])

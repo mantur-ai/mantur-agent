@@ -570,6 +570,9 @@ importers:
       '@deepseek-ai/cordis-plugin-group':
         specifier: workspace:^
         version: link:../../vendor/group
+      '@deepseek-ai/dsh-authorization-manturhub':
+        specifier: workspace:^
+        version: link:../../packages/credentials/authorization-manturhub
       '@deepseek-ai/dsh-client-modules':
         specifier: workspace:^
         version: link:../../packages/client/modules
@@ -1471,6 +1474,9 @@ importers:
       '@deepseek-ai/cordis-plugin-include':
         specifier: workspace:^
         version: link:../../../vendor/include
+      '@deepseek-ai/cordis-plugin-loader':
+        specifier: workspace:^
+        version: link:../../../vendor/loader
       js-yaml:
         specifier: ^4.1.1
         version: 4.3.1
@@ -2758,6 +2764,10 @@ importers:
         version: 18.3.1
 
   packages/client/ui-mantur-account:
+    dependencies:
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
     devDependencies:
       '@deepseek-ai/cordis':
         specifier: workspace:^

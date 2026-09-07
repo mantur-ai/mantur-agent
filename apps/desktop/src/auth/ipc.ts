@@ -2,25 +2,17 @@
 import type { BrowserWindow, IpcMain, IpcMainInvokeEvent } from 'electron'
 import { z } from 'zod'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
-import { NativeAccountController, NativeAccountFailure, type NativeAccountSnapshot } from './controller.ts'
+import type { NativeAccountAction, NativeAccountReply } from '@deepseek-ai/dsh-authorization-manturhub/types'
+import { NativeAccountController, NativeAccountFailure } from './controller.ts'
 import { NativeHttpFailure } from './http.ts'
 
 const action = z.discriminatedUnion('kind', [
-  z.strictObject({ kind: z.enum(['snapshot', 'refresh', 'browser', 'poll', 'skip', 'sign-out', 'retry-revocations']) }),
+  z.strictObject({ kind: z.enum(['snapshot', 'refresh', 'browser', 'reopen-browser', 'poll', 'skip', 'sign-out', 'retry-revocations']) }),
   z.strictObject({ kind: z.literal('password'), email: z.email().max(320), password: z.string().min(1).max(1_024), consent: z.literal(true) }),
   z.strictObject({ kind: z.literal('send-code'), email: z.email().max(320) }),
   z.strictObject({ kind: z.literal('register'), email: z.email().max(320), password: z.string().min(1).max(1_024),
     code: z.string().min(1).max(100), invite_code: z.string().min(1).max(128).optional() }),
-])
-
-/** Revisioned, secret-free account state and a fixed operation result. */
-export interface NativeAccountReply {
-  readonly ok: boolean
-  readonly revision: number
-  readonly snapshot?: NativeAccountSnapshot
-  readonly codeExpirySeconds?: number
-  readonly failure?: { readonly kind: string; readonly code?: string; readonly retryAfterMs?: number }
-}
+]) satisfies z.ZodType<NativeAccountAction>
 
 /** Electron Main owns both the active controller and the currently trusted local frame. */
 export interface NativeAccountBridgeOptions {
@@ -67,6 +59,7 @@ export function installNativeAccountBridge(options: NativeAccountBridgeOptions):
         case 'snapshot': break
         case 'refresh': await controller.refresh(); break
         case 'browser': await controller.startBrowser(); break
+        case 'reopen-browser': await controller.reopenBrowser(); break
         case 'poll': await controller.poll(); break
         case 'skip': await controller.skip(); break
         case 'sign-out': await controller.signOut(); break
