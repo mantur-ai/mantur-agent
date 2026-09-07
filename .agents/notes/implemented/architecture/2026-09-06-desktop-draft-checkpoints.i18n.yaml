@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-06-desktop-draft-checkpoints.md
+2026-09-06-desktop-draft-checkpoints.md: 02f0fcf971ed460b1097b21f6c0c7f08dac8e3b7
+2026-09-06-desktop-draft-checkpoints.zh.md: 324914cfacc9528042ca8b8182342c0e97180d6a

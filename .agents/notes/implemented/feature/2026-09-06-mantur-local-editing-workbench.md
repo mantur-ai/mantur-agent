@@ -24,7 +24,7 @@ The existing details seat is too narrow and unavailable on the home screen; a ma
 
 ## Verification
 
-Focused component and composition tests cover opening before a Session exists, preserving the conversation node, close/reopen, repeated choices, rejected writes, invalid editor addresses, localization snapshots, and disposal. A real `dsh --profile mantur` composition opens the saved editor project from its home Editing tab.
+Focused component and composition tests cover opening before a Session exists, preserving the conversation node, close/reopen, repeated choices, rejected writes, invalid editor addresses, localization snapshots, and disposal. Host registration tests verify normalized settings and namespace removal on unload. Client tests exercise settings loading and unavailability, injected theme reads and listener disposal, and rejection of malformed frame-ready messages. The existing package-wide style assertion enforces 0.5px neutral borders on the workbench and its conversation divider. A real `dsh --profile mantur` composition opens the saved editor project from its home Editing tab.
 
 Three synthetic local MP4 clips were imported in the real editor. Public MCP staged three trims and a reorder; manual UI approval applied four operations. The timeline changed from nine seconds to six, and one undo/redo reversed/restored the batch. Reopening the project inside Mantur restored the six-second timeline. Browser export produced 180 H.264 frames at 1920×1080; full decode and samples at seconds 1, 3, and 5 confirmed C, A, B. No model request was made.
 

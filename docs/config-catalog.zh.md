@@ -422,6 +422,22 @@ export type CreationMode = typeof CREATION_MODES[number]
 
 来源：[`packages/client/ui-mantur-navigation/src/index.ts:9`](../packages/client/ui-mantur-navigation/src/index.ts)
 
+<a id="deepseek-aidsh-client-ui-workspace"></a>
+
+## `@deepseek-ai/dsh-client-ui-workspace`
+
+需要：`settings`
+
+```ts config-catalog
+/** Explicit selection leaves new conversations unassigned until the user chooses or sends. */
+export interface Config {
+  /** Whether an unscoped New Session inherits an existing Workspace. */
+  newSessionWorkspace: 'recent' | 'explicit'
+}
+```
+
+来源：[`packages/client/ui-workspace/src/navigation-settings.ts:8`](../packages/client/ui-workspace/src/navigation-settings.ts)
+
 <a id="deepseek-aidsh-code-runtime-worker-thread"></a>
 
 ## `@deepseek-ai/dsh-code-runtime-worker-thread`
@@ -1493,6 +1509,22 @@ export interface Config {
 ```
 
 来源：[`packages/bundle/mantur-app/src/index.ts:13`](../packages/bundle/mantur-app/src/index.ts)
+
+<a id="deepseek-aidsh-mantur-projects"></a>
+
+## `@deepseek-ai/dsh-mantur-projects`
+
+需要：`storageDomain` · `workspaceRegistry`
+
+```ts config-catalog
+/** The desktop supplies its OS-resolved Documents project directory. */
+export interface Config {
+  /** Default root; omission requires an explicit user selection before creation. */
+  readonly defaultRoot?: string
+}
+```
+
+来源：[`packages/workspace/mantur-projects/src/index.ts:16`](../packages/workspace/mantur-projects/src/index.ts)
 
 <a id="deepseek-aidsh-manturhub-marketplace"></a>
 
@@ -3485,7 +3517,6 @@ export interface Config {
 - `@deepseek-ai/dsh-client-ui-trajectory`（[`packages/client/ui-trajectory/src/index.ts`](../packages/client/ui-trajectory/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-user-questions`（[`packages/client/ui-user-questions/src/index.ts`](../packages/client/ui-user-questions/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-workflow-run`（[`packages/client/ui-workflow-run/src/index.ts`](../packages/client/ui-workflow-run/src/index.ts)）
-- `@deepseek-ai/dsh-client-ui-workspace`（[`packages/client/ui-workspace/src/index.ts`](../packages/client/ui-workspace/src/index.ts)）
 - `@deepseek-ai/dsh-command-compact` — 需要 `commands` · `compact`（[`packages/compaction/command-compact/src/index.ts`](../packages/compaction/command-compact/src/index.ts)）
 - `@deepseek-ai/dsh-command-feedback` — 需要 `commands`（[`packages/feedback/command-feedback/src/index.ts`](../packages/feedback/command-feedback/src/index.ts)）
 - `@deepseek-ai/dsh-command-goal` — 需要 `commands` · `goals`（[`packages/goal/command-goal/src/index.ts`](../packages/goal/command-goal/src/index.ts)）

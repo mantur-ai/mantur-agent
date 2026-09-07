@@ -8,6 +8,9 @@
     "src"
   ],
   "references": [
+    { "path": "../../../vendor/schemastery" },
+    { "path": "../../settings/settings" },
+    { "path": "../ui-settings" },
     {
       "path": "../../api/session-controller/tsconfig.client.json"
     },

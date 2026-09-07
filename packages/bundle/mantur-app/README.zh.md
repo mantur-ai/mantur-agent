@@ -25,6 +25,8 @@ kind: "package-bundle"
 
 通过 `dsh --profile mantur` 启动完整产品；桌面载体会自动选择该 profile。有序 bundle 栈为 `dsh-base`、`dsh-web-app` 与本层。`web` profile 保持不变。
 
+新对话保持未关联状态，直到用户选择项目或提交首条草稿。本层挂载[自动项目准备](../../workspace/mantur-projects/README.zh.md)，通过 `DSH_MANTUR_PROJECTS_ROOT` 提供桌面解析的根目录。首次发送要求已持久保存的原生草稿标识；打开首页不创建项目。用户可以在输入框页脚查看或更改根目录。
+
 漫途侧栏在“项目”之前增加“功能”分组，并固定提供“技能广场”和“配方广场”入口。两个入口分别打开独立主页面，可以返回当前对话，且不会持久化页面选择。Skill 页面加载 ManturHub 公开目录与详情，复用 ManturHub 设备登录，并请求 Host 把校验后的压缩包安装到当前 profile 的实时 Skill 目录。配方页面把配方定义为带有效果样片、提示词模板、可复现算子参数、模型与算子信息和预计复刻成本的优秀验证案例，而不是通用工作流模板。账号页只提供登录与退出。登录、两个广场、详情与下载统一使用本机 profile 配置选定的部署，且每个 origin 的授权分开保存。
 
 维护者通过编辑 `~/Library/Application Support/mantur-agent/harness/profiles/mantur/cordis.patch.yml` 切换已安装的 macOS 应用。开发运行使用并列的 `mantur-agent-dev` 目录。patch 会替换完整的 `mantur-account` config，因此应保留三个字段，日常切换只改 `environment`：

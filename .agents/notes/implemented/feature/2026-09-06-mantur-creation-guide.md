@@ -18,7 +18,9 @@ The product composition supplies ordered real marketplace slugs. The browser int
 
 Recommendation buttons use a curated localized short name, at most four Chinese characters. Catalog titles remain in tooltips, details, and inserted references; missing mappings produce an explicit configuration warning. Short names never change Skill IDs or model-visible references.
 
-馒头仔 presents fixed copy in a fixed-position bubble anchored above/right of the mascot. It does not occupy a layout row, so its visibility and copy cannot move the recommendation row or composer. Narrow windows constrain the scrollable body below the mode tabs and above the mascot, with the close button outside the scroll area. Dismissal persists without forcing the bubble open after mode changes. The first message collapses the welcome region. The [Mantur brand identity](2026-09-02-mantur-brand-identity.md) remains unchanged; the assistant is not a replacement product logo.
+馒头仔 presents fixed copy in a fixed-position bubble anchored above/right of the mascot. It does not occupy a layout row, so its visibility and copy cannot move the recommendation row or composer. A constrained gap below the mode tabs uses the space beside them when it provides at least 180px of reading width; narrower windows keep the scrollable body below the tabs. This avoids clipping guidance to less than one line at the desktop's 880×600 minimum without changing text size, composer layout, or distance above the mascot. The close button stays outside the scroll area. Dismissal persists without forcing the bubble open after mode changes. The first message collapses the welcome region. The [Mantur brand identity](2026-09-02-mantur-brand-identity.md) remains unchanged; the assistant is not a replacement product logo.
+
+Below 820px viewport width, the hero recommendation row reserves an additional 32px whether the guide is open or closed. This preserves a readable body below the tabs when the right-hand placement is too narrow, including the unassigned editor's automatic-project footer. The original font size and mascot-to-card overlap stay unchanged; guide interaction cannot change the reserved height.
 
 ## Alternatives considered
 
@@ -32,6 +34,6 @@ Recommendation buttons use a curated localized short name, at most four Chinese 
 
 The shared conversation adds placement slots and one append-reference operation; product copy and recommendation policy remain in the Mantur plugin. Preferences use the existing Host settings transport. Guide details have their own open state because the conversation remains mounted behind marketplace pages. Focused tests cover dismissal, late installation settlement, draft preservation, and duplicate insertion; the built browser expectation checks the real Loader, Remote, composer, and narrow-window layout. No guide copy or mode change consumes model tokens.
 
-Workspace switching transfers the existing draft string and images, not reference-occurrence metadata. Switching back can therefore show a Skill slug as plain text instead of its titled chip; this layout does not change that state-transfer behavior.
+Workspace switching transfers the complete editor document, reference occurrences, and images through the conversation owner. The [automatic-project decision](2026-09-06-mantur-automatic-project.md) owns durable transfer from the unassigned editor, including cancellation and retry behavior.
 
 Every Web build includes the assistant PNG because the shipped Mantur overlay can load its UI plugin against the common frontend. Only the Mantur plugin renders the artwork. Document metadata, favicon, and install-manifest branding remain profile-owned.
