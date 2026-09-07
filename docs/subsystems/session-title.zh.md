@@ -161,6 +161,12 @@ Log-backed title fold plus asynchronous fallback generation.
 
 ```ts cordis-catalog
 /**
+ * Freeze title writes and provider registration, abort generation, and join admitted work.
+ * @returns completion after original provider calls settle, including providers that ignore cancellation.
+ */
+stopForShutdown(): Promise<void>
+
+/**
  * Read the latest folded title from one live or replayed session.
  * @param session - session whose log is the title source of truth.
  * @returns latest title snapshot, or `undefined` before eligible input.

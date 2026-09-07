@@ -1938,6 +1938,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Log-backed title fold plus asynchronous fallback generation.',
     methods: [
       {
+        signature: 'stopForShutdown(): Promise<void>',
+        description: 'Freeze title writes and provider registration, abort generation, and join admitted work.',
+        parameters: [],
+        returns: 'completion after original provider calls settle, including providers that ignore cancellation.',
+      },
+      {
         signature: 'get(session: Session): SessionTitleSnapshot | undefined',
         description: 'Read the latest folded title from one live or replayed session.',
         parameters: [{ name: 'session', description: 'session whose log is the title source of truth.' }],
