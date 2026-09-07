@@ -42,6 +42,8 @@ Source details own post-login focus because their pre-login buttons unmount whil
 
 Source-mode UI tests resolve the generated account Remote only for an explicit test-owned mock; built Loader tests exercise the generated implementation. Shell and terminal fixtures mount real command-scopes with the profile's declared identity policy. The required-identity session retains canonical event references and verifies that rejected admission creates no command output file. IPC fixture diagnostics record request identifiers, timestamps and public failure categories, never credential values.
 
+Authorization unit tests instrument the child-side connection and provider, including refused cleanup and cancellation during streaming. Their fixture releases held barriers, awaits API and command-scope cleanup, and restores the exact IPC properties and listeners after failed assertions. In-process protocol coverage does not establish native OS storage or Windows DACL acceptance.
+
 The actual Main/preload/provider/UI path must exercise login, Skip, registration, browser authorization, restart recovery and partial logout failure against the frozen backend. The traceable bundled CLI must pass broker-v2 joint tests for environment isolation, descriptor permissions, process-tree ownership, expiry, logout, complete streaming cancellation and presigned uploads. Tests must demonstrate that renderer publications, command arguments and diagnostics contain no device bearer or password; password submission uses only its guarded transient IPC operation. Native Keychain and Windows DPAPI/ACL acceptance requires their actual platforms; substituted cipher tests do not establish it.
 
 ## Risks
