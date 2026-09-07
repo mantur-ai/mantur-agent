@@ -1221,7 +1221,8 @@ def smoke_sdk_profile_plugin(base_url: str) -> None:
         )
         if installed.returncode != 0:
             raise AssertionError(
-                f"Python-installed dsh could not add the external profile plugin: "
+                f"Python-installed dsh could not add the external profile plugin "
+                f"(platform={sys.platform!r}, returncode={installed.returncode}): "
                 f"stdout={installed.stdout!r} stderr={installed.stderr!r}"
             )
         manifest = json.loads((dsh_home / "profiles" / "sdk" / "package.json").read_text())
