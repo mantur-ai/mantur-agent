@@ -9,6 +9,47 @@ const runnerPrivatePnpmDestination = /^\$\{\{ runner\.temp \}\}\/setup-pnpm-\$\{
 const nativeWindowsPnpmDestination = '${{ runner.temp }}/setup-pnpm-js-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}'
 
 describe('CI workflow', () => {
+  it('preserves existing native worker observations after a failed test step', () => {
+    const job = workflowJob(loadWorkflow('.github/workflows/ci.yml'), 'windows-native-tests')
+    const steps = job.steps as Array<Record<string, unknown>>
+    const nativeTests = steps.find(step => step.name === 'Run Windows-specific native tests')
+    expect(nativeTests).toMatchObject({ env: {
+      DSH_WORKFLOW_CASE_DIAGNOSTICS: '${{ runner.temp }}/native-workflow-cases.jsonl',
+      DSH_VITEST_FORK_DIAGNOSTICS: '${{ runner.temp }}/native-vitest-fork-exits.jsonl',
+    } })
+    expect(nativeTests?.run).toContain('--reporter=default --reporter=./scripts/workflow-case-reporter.ts')
+    const upload = steps.find(step => step.name === 'Preserve native Windows test diagnostic facts')
+    expect(upload).toMatchObject({
+      if: 'failure()', uses: 'actions/upload-artifact@v4',
+      with: { name: 'windows-native-test-diagnostics', 'retention-days': 7, 'if-no-files-found': 'error' },
+    })
+    const paths = (upload?.with as { path: string }).path.trim().split('\n')
+    expect(paths).toEqual([
+      '${{ runner.temp }}/native-workflow-cases.jsonl',
+      '${{ runner.temp }}/native-workflow-cases.jsonl.worker.jsonl',
+      '${{ runner.temp }}/native-vitest-fork-exits.jsonl',
+    ])
+    expect(steps.indexOf(upload!)).toBeGreaterThan(steps.indexOf(nativeTests!))
+  })
+
+  it('keeps each native Windows test command in its own blocking step', () => {
+    const job = workflowJob(loadWorkflow('.github/workflows/ci.yml'), 'windows-native-tests')
+    const steps = (job.steps as unknown[]).filter((step): step is Record<string, unknown> & { run: string } => (
+      isRecord(step) && typeof step.run === 'string' && step.run.includes('pnpm exec vitest run')
+    ))
+
+    // The Actions pwsh wrapper reports only the last native command's exit code.
+    expect(steps).toHaveLength(2)
+    expect(job['continue-on-error']).toBeUndefined()
+    for (const step of steps) {
+      expect(step.shell).toBe('pwsh')
+      expect(step['continue-on-error']).toBeUndefined()
+      expect(step.if).toBeUndefined()
+      expect(step.run.trim().split('\n')).toHaveLength(1)
+      expect(step.run.trim()).toMatch(/^pnpm exec vitest run [^;|&\r\n]+$/u)
+    }
+  })
+
   it('isolates every pnpm action setup destination per runner', () => {
     const files = ['.github/workflows/ci.yml', '.github/workflows/ci-master.yml']
     const setups: Array<{ jobName: string; step: unknown }> = []

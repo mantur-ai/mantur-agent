@@ -24,6 +24,12 @@ Windows 覆盖率运行加载 [fork 诊断预加载脚本](../../../../scripts/v
 
 [原生账号 Host 夹具](../../../../apps/desktop/tests/native-account-host-support.ts) 将当前 Vitest 用例的预算传给真实 IPC 子进程。Windows 覆盖率为每例提供 90 秒，而[运行 34089493592](https://github.com/mantur-ai/mantur-harness/actions/runs/34089493592/job/101639924686) 的描述符 ACL 用例耗时 27–51 秒；夹具原先的 10 秒父进程回复期限在准备完成前就已到期。握手测试观察子进程实际发来的预算，而不只检查父进程输入。产品通信期限和独立 Bash 命令夹具保持不变。消费方回执断言失败后，夹具清理仍尝试关闭 Main；两步都拒绝时保留两个错误。子进程结束和临时目录清理仍需等待；这既不会把失败回执视为成功，也不代表本地完成了原生 Windows 验收。
 
+可选的 [workflow reporter](../../../../scripts/workflow-case-reporter.ts) 记录父进程收到的模块与用例回调。将 `DSH_WORKFLOW_CASE_DIAGNOSTICS` 设为已存在的产物目录中的文件路径，并在 Vitest 命令后添加 `--reporter=default --reporter=./scripts/workflow-case-reporter.ts`。[测试 setup](../../../../scripts/workflow-case-setup.ts) 将同步的 `before-each` 和 `after-each` 记录写入该路径追加 `.worker.jsonl` 后的文件；配置仅在设置该变量时加载它。两个观察器仅选择 `workflow-worker-thread.spec.ts`，记录标识、时间戳和阶段，不包含载荷或错误。两个文件应与 fork 退出证据一同保留。空路径或写入失败会使诊断运行失败。
+
+[ci.yml](../../../../.github/workflows/ci.yml) 的 native-tests 命令启用这两种已有观察器。其 `failure()` 上传只选择作业临时目录中的父进程用例、worker hook 和 fork 退出 JSONL 文件，保留七天；诊断文件全部缺失时报告错误。它不上传任意临时文件，也不改变测试失败结果。
+
+worker 死亡可能丢失缓冲的父进程回调，因此缺少父进程用例事件不能证明用例未开始。同步测试 hook 会在 worker 突然退出前保留已进入的 hook 记录；它们不覆盖导入失败、不证明所有清理均已完成，也不能将原生崩溃归因于最后一个用例。先前启动的原生工作仍可能重叠。正常和强制退出的子进程检查验证 hook 记录已落盘；Windows 原生异常归因仍需 Windows 证据。
+
 ## 考虑过的替代方案
 
 延长各 fixture 的轮询截止时间仍然测量存储延迟，而不是写入是否完成。重复邮箱场景不能确保覆盖冷回执路径。忽略清理错误会留下临时数据。这些做法都不能证明所需结果。

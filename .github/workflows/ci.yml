@@ -618,9 +618,24 @@ jobs:
           }
       - name: Run Windows-specific native tests
         shell: pwsh
-        run: |
-          pnpm exec vitest run --no-file-parallelism --testTimeout 90000 packages/shell/tool-pwsh/tests/loader.spec.ts packages/workflow/workflow-worker-thread/tests/workflow-worker-thread.spec.ts packages/workflow/tool-ralph/tests/integration.spec.ts
-          pnpm exec vitest run --no-file-parallelism --testTimeout 90000 packages/subprocess/subprocess-local/tests/process-exit.spec.ts
+        env:
+          DSH_WORKFLOW_CASE_DIAGNOSTICS: ${{ runner.temp }}/native-workflow-cases.jsonl
+          DSH_VITEST_FORK_DIAGNOSTICS: ${{ runner.temp }}/native-vitest-fork-exits.jsonl
+        run: pnpm exec vitest run --no-file-parallelism --testTimeout 90000 packages/shell/tool-pwsh/tests/loader.spec.ts packages/workflow/workflow-worker-thread/tests/workflow-worker-thread.spec.ts packages/workflow/tool-ralph/tests/integration.spec.ts --reporter=default --reporter=./scripts/workflow-case-reporter.ts
+      - name: Run Windows process-exit tests
+        shell: pwsh
+        run: pnpm exec vitest run --no-file-parallelism --testTimeout 90000 packages/subprocess/subprocess-local/tests/process-exit.spec.ts
+      - name: Preserve native Windows test diagnostic facts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-native-test-diagnostics
+          path: |
+            ${{ runner.temp }}/native-workflow-cases.jsonl
+            ${{ runner.temp }}/native-workflow-cases.jsonl.worker.jsonl
+            ${{ runner.temp }}/native-vitest-fork-exits.jsonl
+          if-no-files-found: error
+          retention-days: 7
 
   windows-observational:
     if: github.event_name == 'pull_request'
