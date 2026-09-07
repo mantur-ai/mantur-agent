@@ -9,6 +9,8 @@ import { AccountOnboarding } from '../src/client/AccountOnboarding.tsx'
 import { AccountSection } from '../src/client/AccountSection.tsx'
 import { NativeAccountOnboarding, NativeAccountSection, type NativeAccountInjected } from '../src/client/NativeAccountSurfaces.tsx'
 import { apply, inject } from '../src/client/index.ts'
+import { createNativeAccountDialogStore } from '../src/client/native-dialog.ts'
+import type { NativeAccountDialogInjected } from '../src/client/NativeAccountDialog.tsx'
 import { apply as hostApply } from '../src/index.ts'
 
 vi.mock('@deepseek-ai/dsh-authorization-manturhub/remote', () => ({
@@ -45,12 +47,60 @@ async function bench(mode: 'standalone' | 'desktop-managed' = 'standalone', avai
     children: {
       'settings.section': { kind: 'list', scope: 'root' },
       'settings.onboarding': { kind: 'list', scope: 'root' },
+      'shell.overlay': { kind: 'list', scope: 'root' },
     },
   } as never, () => null)
   return { ctx, slots, locale }
 }
 
 describe('ui-mantur-account apply', () => {
+  it('registers one native dialog owner, preserves another modal and releases its pending request on unload', async () => {
+    let revision = 0
+    const unsubscribe = vi.fn()
+    const subscribe = vi.fn(() => unsubscribe)
+    window.manturAccount = { invoke: async () => ({ ok: true, revision: ++revision, snapshot: {
+      phase: 'signed-out', busy: false, authenticated: false, skipped: true, pendingRevocations: 0,
+    } }), subscribe }
+    const subject = await bench('desktop-managed')
+    const fiber = subject.ctx.plugin({ inject: [...inject], apply })
+    const modal = document.createElement('div')
+    modal.setAttribute('role', 'dialog')
+    modal.setAttribute('aria-modal', 'true')
+    const appRoot = document.createElement('div')
+    appRoot.id = 'root'
+    try {
+      await fiber.await()
+      const entry = subject.slots.entries('shell.overlay')[0]!
+      const view = createNativeAccountDialogStore().create()
+      const props = (entry.inject as unknown as (actions: typeof view.actions) => NativeAccountDialogInjected)(view.actions)
+      const onboarding = (subject.slots.entries('settings.onboarding')[0]!.inject as unknown as () => NativeAccountInjected)()
+      expect(props.hooks.nativeAccount).toBe(onboarding.hooks.nativeAccount)
+      document.body.append(modal)
+      expect(() => subject.ctx.bail('mantur/native-account-open')).toThrow('unavailable')
+      modal.remove()
+      document.body.append(appRoot)
+      appRoot.inert = true
+      expect(() => subject.ctx.bail('mantur/native-account-open')).toThrow('unavailable')
+      appRoot.inert = false
+      const request = subject.ctx.bail('mantur/native-account-open')!
+      expect(view.store.getSnapshot().open).toBe(true)
+      expect(subject.ctx.bail('mantur/native-account-open')).toBe(request)
+      await props.run({ kind: 'skip' })
+      expect(await request).toBe('skipped')
+      const returned = subject.ctx.bail('mantur/native-account-open')!
+      props.close()
+      expect(await returned).toBe('closed')
+      const pending = subject.ctx.bail('mantur/native-account-open')!
+      const rejected = expect(pending).rejects.toThrow('unavailable')
+      await fiber.dispose()
+      await rejected
+      expect(subject.ctx.bail('mantur/native-account-open')).toBeUndefined()
+      expect(subject.slots.entries('shell.overlay')).toEqual([])
+    } finally { await fiber.dispose(); delete window.manturAccount; modal.remove(); appRoot.remove() }
+    expect(subscribe).toHaveBeenCalledOnce()
+    expect(unsubscribe).toHaveBeenCalledOnce()
+  })
+
   it('selects Main only from the Host mode and supplies narrow native callbacks', async () => {
     const invoke = vi.fn(async () => ({ ok: true, revision: 1, snapshot: {
       phase: 'signed-out', busy: false, authenticated: false, skipped: false, pendingRevocations: 0,

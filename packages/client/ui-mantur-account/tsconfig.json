@@ -9,6 +9,7 @@
     { "path": "../locale" },
     { "path": "../store" },
     { "path": "../ui-primitives" },
+    { "path": "../ui-layout" },
     { "path": "../ui-renderer" },
     { "path": "../ui-settings" },
     { "path": "../ui-slots" }

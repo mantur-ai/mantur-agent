@@ -11,7 +11,22 @@ import { AccountSection, type AccountSectionInjected } from './AccountSection.ts
 import { ManturAccountStore } from './store.ts'
 import { NativeAccountClient } from './native-account.ts'
 import { NativeAccountOnboarding, NativeAccountSection, type NativeAccountInjected } from './NativeAccountSurfaces.tsx'
+import { NativeAccountDialog, type NativeAccountDialogInjected } from './NativeAccountDialog.tsx'
+import { createNativeAccountDialogStore, NativeAccountDialogController, type NativeAccountDialogOutcome } from './native-dialog.ts'
 import { en, zh, type ManturAccountKey } from './locales.ts'
+
+export { createNativeAccountDialogStore } from './native-dialog.ts'
+
+declare module '@deepseek-ai/cordis' {
+  interface Events {
+    /**
+     * Request the mounted native account view without changing the caller's page or repeating its action.
+     * @returns dialog outcome; no handler means the native UI is unavailable.
+     * @mode bail
+     */
+    'mantur/native-account-open'(): Promise<NativeAccountDialogOutcome> | undefined
+  }
+}
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -23,7 +38,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 /** Dictionary namespace owned by this plugin. */
 export const NS = 'settings.manturAccount'
 
-/** Services required by the two account surfaces. */
+/** Services required by the account surfaces. */
 export const inject = ['slots', 'locale', 'remote']
 
 /** Register Mantur account onboarding before model credentials and expose later sign-out. */
@@ -50,6 +65,21 @@ export async function apply(ctx: Context): Promise<void> {
         name: 'settings.section', id: 'mantur-account', order: 5,
         label: () => t('nav'), locale: NS, inject: injected,
       }, NativeAccountSection))
+      scope.slots.inject('shell.overlay', () => {
+        const dialog = new NativeAccountDialogController(client, () =>
+          document.getElementById('root')?.inert !== true && document.querySelector('[role="dialog"][aria-modal="true"]') === null)
+        const offState = dialog.connect()
+        const close = () => { dialog.close() }
+        const offEntry = scope.slots.register({
+          name: 'shell.overlay', id: 'mantur-account', locale: NS, store: createNativeAccountDialogStore,
+          inject: (actions): NativeAccountDialogInjected => {
+            dialog.attach(actions)
+            return { ...injected(), run: action => dialog.run(action), close }
+          },
+        }, NativeAccountDialog)
+        const offRequest = scope.on('mantur/native-account-open', () => dialog.open())
+        return () => { offRequest(); offState(); offEntry() }
+      })
       return
     }
     const controller = new ManturAccountStore(scope)

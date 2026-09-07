@@ -15,6 +15,136 @@ const anchor = fileURLToPath(new URL('../../../packages/bundle/mantur-app/packag
 const expected = fileURLToPath(new URL('./expected/mantur-native-account.md', import.meta.url))
 const images = fileURLToPath(new URL('../../../.artifacts/mantur-native-account', import.meta.url))
 
+it('returns from both native marketplace entrypoints with the selected detail and complete unsent draft intact', async () => {
+  const skill = { slug: 'short-drama', name: '爽文短剧剧本创作', description: '从创意到分集剧本。',
+    category: '剧本创作', version: '1.0.0', triggers: ['写剧本'], uses_operators: [], kind: 'skill', assets: null }
+  const requests: string[] = []
+  const catalog = createServer((request, response) => {
+    requests.push(`${request.method} ${request.url}`)
+    response.writeHead(200, { 'content-type': 'application/json' })
+    response.end(JSON.stringify(request.url === '/api/v1/skills' ? { skills: [skill] } : { skill }))
+  })
+  await new Promise<void>((resolve, reject) => { catalog.once('error', reject); catalog.listen(0, '127.0.0.1', resolve) })
+  let scaffold: Awaited<ReturnType<typeof launchWebScaffold>> | undefined
+  let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
+  let page: Page | undefined
+  let restoreMode: (() => void) | undefined
+  try {
+    const address = catalog.address()
+    if (address === null || typeof address === 'string') throw new Error('Expected fixture catalog port')
+    scaffold = await launchWebScaffold({ extraOverlayPath: overlay, extraInstallAnchors: [anchor],
+      manturHubBaseUrl: `http://127.0.0.1:${address.port}` })
+    const mode = vi.spyOn(scaffold.ctx.manturAccount, 'identityMode').mockReturnValue('desktop-managed')
+    const legacy = vi.spyOn(scaffold.ctx.manturAccount, 'startLogin')
+    restoreMode = () => { mode.mockRestore(); legacy.mockRestore() }
+    browser = await chromium.launch()
+    page = await browser.newPage({ viewport: { width: 1280, height: 820 }, locale: ZH_BROWSER_LOCALE })
+    const console = watchConsole(page)
+    let prompts = 0
+    page.on('request', (request) => { if (new URL(request.url()).pathname === '/api/session/prompt') prompts++ })
+    let snapshot: NativeAccountSnapshot = { phase: 'signed-out', busy: false, authenticated: false, skipped: true, pendingRevocations: 0 }
+    let revision = 0
+    const operations: NativeAccountAction['kind'][] = []
+    await page.exposeFunction('invokeNativeAccountFixture', (action: NativeAccountAction) => {
+      operations.push(action.kind)
+      if (action.kind === 'password') snapshot = { ...snapshot, phase: 'signed-in', authenticated: true,
+        account: { email: 'fixture@example.com', expiresAt: 1_999_999_999_999 } }
+      else if (action.kind !== 'refresh' && action.kind !== 'skip') throw new Error(`Unexpected native action: ${action.kind}`)
+      return { ok: true, revision: ++revision, snapshot }
+    })
+    await page.addInitScript(() => {
+      const target = window as unknown as { manturAccount: NativeAccountBridge; invokeNativeAccountFixture: NativeAccountBridge['invoke'] }
+      target.manturAccount = { invoke: action => target.invokeNativeAccountFixture(action), subscribe: () => () => {} }
+    })
+    await page.goto(scaffold.authenticatedUrl)
+    const workspaceButton = page.locator('[data-workspace-footer]').getByRole('button', { name: '选择工作区' })
+    await workspaceButton.click()
+    const directory = page.getByRole('dialog', { name: '选择工作区目录' })
+    await directory.getByRole('button', { name: '编辑路径' }).click()
+    await directory.getByRole('textbox', { name: '编辑路径' }).fill(scaffold.workspaceCwd)
+    await directory.getByRole('textbox', { name: '编辑路径' }).press('Enter')
+    await directory.getByRole('button', { name: '打开', exact: true }).click()
+    const selected = page.getByRole('treeitem', { selected: true })
+    await selected.waitFor()
+    const session = await selected.elementHandle()
+    const editor = page.locator('[data-composer-input][contenteditable="true"]')
+    const draft = '第一集：保留主角、场景和对白。\n不要发送，也不要安装技能。'
+    await editor.fill(draft)
+    await editor.evaluate((element) => {
+      const bytes = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a5FkAAAAASUVORK5CYII='), char => char.charCodeAt(0))
+      const clipboard = new DataTransfer()
+      clipboard.items.add(new File([bytes], 'native-reference.png', { type: 'image/png' }))
+      element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: clipboard, bubbles: true, cancelable: true }))
+    })
+    await page.getByRole('img', { name: 'native-reference.png' }).waitFor()
+    const initialDraft = await editor.innerText()
+    expect(initialDraft).toBe(draft)
+    const project = await workspaceButton.innerText()
+    const model = await page.getByRole('button', { name: '选择模型' }).innerText()
+    const permission = await page.getByRole('button', { name: /访问模式/ }).innerText()
+    const detail = page.getByRole('dialog', { name: skill.name, exact: true })
+    const account = page.getByRole('dialog', { name: '登录漫途账号', exact: true })
+    const captures: string[] = []
+    await page.getByRole('button', { name: '短剧编剧', exact: true }).click()
+    await detail.getByRole('button', { name: '登录后安装' }).click()
+    await account.getByRole('button', { name: '返回创作' }).waitFor()
+    expect(await detail.count()).toBe(0)
+    expect(await page.getByRole('dialog').count()).toBe(1)
+    captures.push(`## Native account from guide\n\n${await account.ariaSnapshot()}`)
+    await page.keyboard.press('Escape')
+    await detail.getByRole('button', { name: '登录后安装' }).waitFor()
+    await detail.getByRole('button', { name: '登录后安装' }).click()
+    await account.getByRole('button', { name: '暂时跳过' }).click()
+    await detail.getByRole('button', { name: '登录后安装' }).waitFor()
+    captures.push(`## Guide after Skip\n\n${await detail.ariaSnapshot()}`)
+    await detail.getByRole('button', { name: '关闭引导' }).click()
+    await page.getByRole('button', { name: '技能广场', exact: true }).click()
+    await page.locator('article').getByRole('button', { name: /爽文短剧剧本创作/ }).click()
+    await detail.getByRole('button', { name: '登录后安装' }).click()
+    await account.getByRole('button', { name: '返回创作' }).click()
+    await detail.getByRole('button', { name: '登录后安装' }).waitFor()
+    await detail.getByRole('button', { name: '登录后安装' }).click()
+    await account.getByLabel('邮箱', { exact: true }).fill('fixture@example.com')
+    await account.getByLabel('密码', { exact: true }).fill('Fixture-only password')
+    await account.getByRole('button', { name: '登录', exact: true }).click()
+    await detail.getByRole('button', { name: '安装技能', exact: true }).waitFor()
+    expect(await account.count()).toBe(0)
+    captures.push(`## Marketplace after login\n\n${await detail.ariaSnapshot()}`)
+    await detail.getByRole('button', { name: '关闭', exact: true }).click()
+    await page.getByRole('button', { name: '返回对话', exact: true }).click()
+    await editor.waitFor()
+    expect(await editor.innerText()).toBe(initialDraft)
+    expect(await page.getByRole('img', { name: 'native-reference.png' }).count()).toBe(1)
+    expect(await workspaceButton.innerText()).toBe(project)
+    expect(await selected.evaluate((element, original) => element === original, session)).toBe(true)
+    await session?.dispose()
+    expect(await page.getByRole('button', { name: '选择模型' }).innerText()).toBe(model)
+    expect(await page.getByRole('button', { name: /访问模式/ }).innerText()).toBe(permission)
+    await page.getByRole('button', { name: '短剧编剧', exact: true }).click()
+    await detail.getByRole('button', { name: '安装并使用' }).waitFor()
+    expect(legacy).not.toHaveBeenCalled()
+    expect(requests.every(request => request === 'GET /api/v1/skills' || request === 'GET /api/v1/skills/short-drama')).toBe(true)
+    expect(prompts).toBe(0)
+    expect(operations).toEqual(['refresh', 'skip', 'password'])
+    expect(console.pageErrors).toEqual([])
+    await mkdir(images, { recursive: true })
+    await page.screenshot({ path: join(images, 'native-entrypoints.png') })
+    await compareOrRefreshGolden(fileURLToPath(new URL('./expected/mantur-native-entrypoints.md', import.meta.url)), captures.join('\n\n'), webSnapshotMode())
+  } catch (error) {
+    if (page !== undefined) {
+      await mkdir(images, { recursive: true })
+      await page.screenshot({ path: join(images, 'entrypoints-failure.png') })
+      await writeFile(join(images, 'entrypoints-failure.md'), await page.locator('body').ariaSnapshot())
+    }
+    throw error
+  } finally {
+    await browser?.close()
+    restoreMode?.()
+    await scaffold?.close()
+    await new Promise<void>((resolve, reject) => { catalog.close((error) => { if (error === undefined) resolve(); else reject(error) }) })
+  }
+})
+
 function luminance(rgb: string): number {
   const channels = rgb.match(/[\d.]+/g)?.slice(0, 3).map(Number)
   if (channels?.length !== 3) throw new Error(`Expected computed RGB color: ${rgb}`)

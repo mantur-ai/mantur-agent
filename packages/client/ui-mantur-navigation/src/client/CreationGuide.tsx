@@ -67,7 +67,7 @@ export interface CreationGuideInjected extends GuidePreferencesInjected {
   marketplaceText: (key: 'skills.loading' | 'skills.failed' | 'skills.retry' | 'skills.search' | 'skills.noMatches'
     | 'skills.loadingDetail' | 'skills.detailFailed' | 'skills.installing' | 'skills.loginToInstall'
     | 'skills.loginPreparing' | 'skills.loginCode' | 'skills.openLogin' | 'skills.cancelLogin'
-    | 'skills.loginFailed' | 'skills.localConflict' | 'skills.noWorkspace') => string
+    | 'skills.loginFailed' | 'skills.loginUnavailable' | 'skills.localConflict' | 'skills.noWorkspace') => string
   hooks: GuidePreferencesInjected['hooks'] & {
     marketplace: SnapshotStore<ManturMarketplaceState>
     guideInput: ObservableSnapshot<InputState | undefined>
@@ -213,7 +213,7 @@ function ReadyGuide({ hero, disabled, sessionId, preferences, useMarketplace, us
         {market.phase === 'failed' && <button type="button" onClick={() => { void load() }}>{mt('skills.retry')}</button>}
       </div>
     </Modal>
-    <Modal open={detailOpen} onClose={closeDetail} title={detail?.name ?? mt('skills.loadingDetail')} closeLabel={t('close')}
+    <Modal open={detailOpen && ready?.loginPhase !== 'starting'} onClose={closeDetail} title={detail?.name ?? mt('skills.loadingDetail')} closeLabel={t('close')}
       {...(detail === undefined ? {} : { description: detail.description })}>
       {detailError !== undefined && <><p role="alert">{mt('skills.detailFailed')}</p><button type="button" onClick={() => { void openDetail(detailError) }}>{mt('skills.retry')}</button></>}
       {detail !== undefined && ready !== undefined && <div className={css.detail}>
@@ -221,6 +221,7 @@ function ReadyGuide({ hero, disabled, sessionId, preferences, useMarketplace, us
         {notice !== undefined && ready.installError === undefined && <p role="alert">{notice}</p>}
         {ready.installError !== undefined && <p role="alert">{t('installFailed')}{ready.installError === 'local-conflict' ? mt('skills.localConflict') : ''}</p>}
         {ready.loginPhase === 'failed' && <p role="alert">{mt('skills.loginFailed')}</p>}
+        {ready.loginPhase === 'unavailable' && <p role="alert">{mt('skills.loginUnavailable')}</p>}
         {detail.installed || ready.catalog.signedIn
           ? <button type="button" disabled={disabled || ready.installing !== undefined}
             onClick={() => { if (detail.installed) insert(detail); else void installAndUse(detail) }}

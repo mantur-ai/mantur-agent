@@ -234,6 +234,7 @@ export const EVENT_WALK_EXEMPTIONS: Record<string, string> = {
   'slots/changed': 'client-face slot invalidation signal — packages/client/ui-renderer/README.md owns the API',
   'theme/change': 'client-face theme switch signal — packages/client/ui-theme/README.md owns the API',
   'mantur/creation-mode-selected': 'client-face explicit mode selection — packages/client/ui-mantur-navigation/README.md owns the API',
+  'mantur/native-account-open': 'client-face requested account dialog — packages/client/ui-mantur-account/README.md owns the API',
 }
 
 /**

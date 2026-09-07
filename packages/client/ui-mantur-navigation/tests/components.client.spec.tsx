@@ -450,7 +450,7 @@ describe('Mantur marketplace navigation', () => {
         {...globalProps} {...preparingProps} activePage={MANTUR_MARKET_PAGES.skills} closePage={closePage} t={t}
       />,
     )
-    expect(screen.getByRole('button', { name: '正在准备登录…' }).hasAttribute('disabled')).toBe(true)
+    expect(screen.queryByRole('dialog')).toBeNull()
 
     const installed = { ...listed, installed: true }
     const installedProps = marketplaceProps({
@@ -597,6 +597,11 @@ describe('Mantur marketplace navigation', () => {
     )
     expect(screen.getByText('技能安装失败，原有文件没有被覆盖。请稍后重试。')).toBeTruthy()
     expect(screen.getByText('ManturHub 登录没有完成，请重试。')).toBeTruthy()
+    const unavailableProps = marketplaceProps({ ...base, detail: { ...story, usesOperators: [] }, loginPhase: 'unavailable' })
+    view.rerender(
+      <MarketplacePage {...globalProps} {...unavailableProps} activePage={MANTUR_MARKET_PAGES.skills} closePage={vi.fn()} t={t} />,
+    )
+    expect(screen.getByRole('alert').textContent).toBe('账号登录界面暂不可用，请关闭其他弹窗或重新连接客户端后重试。')
 
     const loginProps = marketplaceProps({
       ...base,

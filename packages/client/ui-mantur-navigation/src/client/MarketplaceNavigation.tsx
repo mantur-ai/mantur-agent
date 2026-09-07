@@ -284,7 +284,7 @@ function SkillMarketplace({ closePage, controller, useMarketplace, t }: {
               )}
       </section>
       <Modal
-        open={detail !== undefined || ready?.detailLoading !== undefined || detailError !== undefined}
+        open={ready?.loginPhase !== 'starting' && (detail !== undefined || ready?.detailLoading !== undefined || detailError !== undefined)}
         onClose={() => { controller.closeDetail() }}
         title={detail?.name ?? (detailError === undefined ? t('skills.loadingDetail') : t('skills.detailFailedTitle'))}
         closeLabel={t('close')}
@@ -309,6 +309,7 @@ function SkillMarketplace({ closePage, controller, useMarketplace, t }: {
             {installErrorNotice}
             {useErrorNotice}
             {ready.loginPhase === 'failed' && <p className={css.installError}>{t('skills.loginFailed')}</p>}
+            {ready.loginPhase === 'unavailable' && <p className={css.installError} role="alert">{t('skills.loginUnavailable')}</p>}
             {ready.loginPhase === 'authorizing' && ready.login !== undefined && (
               <div className={css.loginGate}>
                 <span>{t('skills.loginCode')}</span>
