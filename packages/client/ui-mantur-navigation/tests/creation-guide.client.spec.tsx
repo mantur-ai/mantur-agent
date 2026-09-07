@@ -70,7 +70,7 @@ describe('Mantur creation guide', () => {
     render(guide(p))
     expect(screen.getByText(zh['welcome.title'])).toBeTruthy()
     expect(screen.getByText(zh['welcome.body'])).toBeTruthy()
-    expect(screen.getByRole('button', { name: '馒头仔' }).querySelector('img')?.getAttribute('src')).toBe('./mantou-clapper.png')
+    expect(screen.getByRole('button', { name: '馒头仔' }).querySelector('img')?.getAttribute('src')).toBe('./mantoo-script-peek@3x.png')
     expect(screen.getByRole('button', { name: '短剧编剧' }).getAttribute('title')).toBe(skill.name)
     expect(screen.queryByText('not-in-catalog')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: '短剧编剧' }))
@@ -103,6 +103,18 @@ describe('Mantur creation guide', () => {
     expect(screen.queryByRole('button', { name: '短剧编剧' })).toBeNull()
     expect(screen.getByRole('button', { name: '馒头仔' }).getAttribute('aria-expanded')).toBe('false')
     expect(screen.getByRole('button', { name: '馒头仔' }).getAttribute('data-hero')).toBe('false')
+    expect(screen.getByRole('button', { name: '馒头仔' }).querySelector('img')?.getAttribute('src')).toBe('./mantoo-welcome@3x.png')
+  })
+
+  it.each(['script', 'production', 'editing', 'assets'] as const)('uses the approved %s artwork without changing the draft', (mode) => {
+    const p = props({ ...settings, mode })
+    render(guide(p))
+    const image = screen.getByRole('button', { name: '馒头仔' }).querySelector('img')!
+    expect(image.getAttribute('src')).toBe(`./mantoo-${mode}-peek@3x.png`)
+    expect(image.getAttribute('srcset')).toBe(`./mantoo-${mode}-peek@2x.png 2x, ./mantoo-${mode}-peek@3x.png 3x`)
+    expect([image.width, image.height, image.alt]).toEqual([184, 120, ''])
+    expect(p.appendReference).not.toHaveBeenCalled()
+    expect(p.inputActions.submit).not.toHaveBeenCalled()
   })
 
   it('shows details before installation and only inserts after successful installation', async () => {

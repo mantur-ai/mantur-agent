@@ -73,11 +73,12 @@ it('ships the profile-owned favicon', async () => {
   expect(favicon).toContain('fill="#000"')
 })
 
-it('ships the transparent artwork required by the optional Mantur plugin in every Web profile', async () => {
-  const asset = join(DIST_ROOT, 'mantou-clapper.png')
-  expect(existsSync(asset)).toBe(true)
-  const png = await readFile(asset)
-  expect(png.readUInt32BE(16)).toBe(552)
-  expect(png.readUInt32BE(20)).toBe(300)
-  expect(png[25]).toBe(6)
+it.each(['script', 'production', 'editing', 'assets', 'welcome'])('ships the transparent %s artwork in every Web profile', async (mode) => {
+  for (const scale of [2, 3]) {
+    const name = mode === 'welcome' ? 'mantoo-welcome' : `mantoo-${mode}-peek`
+    const png = await readFile(join(DIST_ROOT, `${name}@${scale}x.png`))
+    expect(png.readUInt32BE(16)).toBe((mode === 'welcome' ? 96 : 184) * scale)
+    expect(png.readUInt32BE(20)).toBe((mode === 'welcome' ? 96 : 120) * scale)
+    expect(png[25]).toBe(6)
+  }
 })

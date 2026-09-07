@@ -133,11 +133,14 @@
 .helper[data-hero='true'] {
   position: relative;
   z-index: 1;
-  width: clamp(80px, 30%, 184px);
-  /* Clear the 18px composer spacing and 6% transparent image foot; rest 3px on the card. */
-  transform: translateY(calc(21px + 6%));
+  width: 184px;
+  height: 104px;
+  margin-right: calc(var(--dsh-composer-side-clearance) + 8px);
+  /* The hit target ends at the card; the 16px transparent image foot cannot intercept editor clicks. */
+  transform: translateY(18px);
 }
-.helper img { display: block; width: 100%; height: auto; }
+.helper img { display: block; width: 100%; height: auto; object-fit: contain; }
+.helper[data-hero='true'] img { pointer-events: none; }
 .guide button.helper:hover:not(:disabled) { background: transparent; }
 .guide button:disabled { opacity: 0.5; cursor: not-allowed; }
 .guide button:hover:not(:disabled), .modes button:hover:not([aria-selected='true']) { background: var(--dsw-alias-interactive-bg-hover); }
@@ -177,7 +180,7 @@
 
 @media (max-width: 819px) {
   /* Keep a text line below the mode tabs when their right side is too narrow for the bubble. */
-  .shortcutRow[data-hero='true'] { height: 152px; }
+  .shortcutRow[data-hero='true'] { height: 160px; }
 }
 
 @container (max-width: 400px) {

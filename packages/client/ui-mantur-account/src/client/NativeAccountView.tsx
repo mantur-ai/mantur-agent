@@ -184,7 +184,8 @@ export function NativeAccountView(props: NativeAccountViewProps): ReactNode {
       <div><h1 id={titleId}><img src="/mantur-logo.png" alt="" width={24} height={24} />{t(titleKey)}</h1>
         {!signedIn && !pending && !waiting && <p>{t(registering ? 'nativeRegisterDescription' : 'nativeDescription')}</p>}
       </div>
-      <img className={css.mascot} src="/mantou-clapper.png" alt="" width={72} height={72} />
+      <img className={css.mascot} src="/mantoo-welcome@3x.png"
+        srcSet="/mantoo-welcome@2x.png 2x, /mantoo-welcome@3x.png 3x" alt="" width={72} height={72} />
     </header>
     {snapshot === undefined && failure === undefined && <p role="status">{t('nativeChecking')}</p>}
     {!state.online && <p className={css.note} role="status">{t(signedIn ? 'nativeUnconfirmed' : 'nativeOffline')}</p>}

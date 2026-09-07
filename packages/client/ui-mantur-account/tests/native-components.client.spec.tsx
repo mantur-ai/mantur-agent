@@ -20,6 +20,22 @@ function bench(state: NativeAccountViewState = { online: true, snapshot: signedO
 }
 
 describe('native account controls', () => {
+  it('keeps the welcome artwork across login, registration and account settings', async () => {
+    const b = bench()
+    const artwork = () => {
+      const image = b.container.querySelector('img[src="/mantoo-welcome@3x.png"]') as HTMLImageElement
+      expect(image).not.toBeNull()
+      expect([image.width, image.height, image.alt]).toEqual([72, 72, ''])
+      expect(image.srcset).toBe('/mantoo-welcome@2x.png 2x, /mantoo-welcome@3x.png 3x')
+    }
+    artwork()
+    await act(async () => { fireEvent.click(b.getByRole('button', { name: '注册账号' })) })
+    artwork()
+    b.rerender(<NativeAccountView {...b.props} showSkip={false} />)
+    artwork()
+    expect(b.run).toHaveBeenCalledExactlyOnceWith({ kind: 'sign-out' })
+  })
+
   it('does not recheck rejected credentials and retries a failed logout through its exact action', async () => {
     const b = bench({ online: true, snapshot: signedOut, failure: { kind: 'remote', code: 'INVALID_CREDENTIALS' } })
     expect(b.queryByRole('button', { name: '重新检查登录状态' })).toBeNull()

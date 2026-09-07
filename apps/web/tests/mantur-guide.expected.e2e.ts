@@ -29,7 +29,7 @@ it('does not display Mantur artwork or mode controls without the Mantur plugin',
     expect(await page.getByRole('button', { name: '馒头仔', exact: true }).count()).toBe(0)
     expect(await page.getByRole('tablist', { name: '创作方向' }).count()).toBe(0)
     expect(await page.locator('[data-workspace-footer]').count()).toBe(0)
-    expect(await page.locator('img[src$="mantou-clapper.png"]').count()).toBe(0)
+    expect(await page.locator('img[src*="mantoo-"]').count()).toBe(0)
   } finally {
     await browser?.close()
     await scaffold.close()
@@ -69,15 +69,23 @@ it('keeps guidance readable at the desktop minimum without moving the composer o
       await expect.poll(() => page.locator('[data-sidebar-collapsed]').count()).toBe(width < 1024 ? 1 : 0)
       await expect.poll(sidebarWidth).toBe(width < 1024 ? '56px' : expandedSidebarWidth)
       const before = await positions()
-      for (const name of ['剧本创作', '漫剧制作', '剪辑成片', '素材创作']) {
+      for (const [mode, name] of [['script', '剧本创作'], ['production', '漫剧制作'], ['editing', '剪辑成片'], ['assets', '素材创作']] as const) {
         const tab = page.getByRole('tab', { name, exact: true })
         await tab.click()
         await expect.poll(() => tab.getAttribute('aria-selected')).toBe('true')
+        const artwork = page.getByRole('button', { name: '馒头仔', exact: true }).locator('img')
+        await expect.poll(() => artwork.getAttribute('src')).toBe(`./mantoo-${mode}-peek@3x.png`)
+        await artwork.evaluate(image => (image as HTMLImageElement).decode())
+        expect(await artwork.evaluate((image) => {
+          const rect = image.getBoundingClientRect()
+          const card = image.closest('[data-composer-seat]')!.querySelector('[data-composer-card]')!.getBoundingClientRect()
+          return { width: rect.width, height: rect.height, contact: rect.top + 104 - card.top, right: card.right - rect.right }
+        })).toEqual({ width: 184, height: 120, contact: 0, right: 12 })
         await expect.poll(() => page.getByRole('region', { name: '馒头仔' }).evaluate((element) => {
           const panel = element.getBoundingClientRect()
           const body = element.querySelector<HTMLElement>('[tabindex="0"]')!
           const seat = element.closest('[data-composer-seat]')!
-          const mascot = seat.querySelector('img[src$="mantou-clapper.png"]')!.getBoundingClientRect()
+          const mascot = seat.querySelector('img[src*="mantoo-"]')!.getBoundingClientRect()
           const protectedRects = [...seat.querySelectorAll(
             '[role="tablist"], [aria-label="推荐技能"] > *, [data-composer-card], [data-workspace-footer]',
           )]
@@ -108,6 +116,14 @@ it('keeps guidance readable at the desktop minimum without moving the composer o
         if (width === 880 && name === '漫剧制作') {
           await mkdir(images, { recursive: true })
           await page.screenshot({ path: join(images, 'desktop-minimum.png') })
+        }
+        if (width === 1280) {
+          await mkdir(images, { recursive: true })
+          for (const colorScheme of ['light', 'dark'] as const) {
+            await page.emulateMedia({ colorScheme })
+            await page.screenshot({ path: join(images, `mascot-${mode}-${colorScheme}.png`) })
+          }
+          await page.emulateMedia({ colorScheme: 'light' })
         }
         const body = page.getByRole('region', { name: '馒头仔' }).locator('[tabindex="0"]')
         if (await body.evaluate(element => element.scrollHeight > element.clientHeight)) {
@@ -302,8 +318,10 @@ it('preserves a live draft, attachments and controls while changing modes and ad
     await page.screenshot({ path: join(images, 'narrow.png') })
     const geometry = await page.locator('[data-composer-seat]').evaluate((element) => {
       const bubble = element.querySelector('section[aria-label="馒头仔"]')?.getBoundingClientRect()
-      const editor = element.querySelector('[contenteditable="true"]')?.getBoundingClientRect()
-      const mascot = element.querySelector('img[src$="mantou-clapper.png"]')?.getBoundingClientRect()
+      const editorNode = element.querySelector('[contenteditable="true"]')
+      const editor = editorNode?.getBoundingClientRect()
+      const mascot = element.querySelector('img[src*="mantoo-"]')?.getBoundingClientRect()
+      const helper = element.querySelector('button[aria-label="馒头仔"]')?.getBoundingClientRect()
       const card = element.querySelector('[data-composer-card]')?.getBoundingClientRect()
       const empty = element.querySelector('[aria-label="推荐技能"] span')
       const protectedRects = [...element.querySelectorAll(
@@ -317,8 +335,10 @@ it('preserves a live draft, attachments and controls while changing modes and ad
           && rect.right > bubble.left && rect.top < bubble.bottom && rect.bottom > bubble.top),
         bubbleAnchorGap: bubble !== undefined && mascot !== undefined ? mascot.top - bubble.bottom : undefined,
         editorTop: editor?.top,
-        mascotBottom: mascot?.bottom,
-        handOverlap: mascot !== undefined && card !== undefined ? mascot.top + mascot.height * 0.94 - card.top : undefined,
+        helperBottom: helper?.bottom,
+        inputReceivesPointer: mascot !== undefined && editor !== undefined
+          && document.elementFromPoint(mascot.left + mascot.width / 2, editor.top + 1)?.closest('[contenteditable="true"]') === editorNode,
+        contactOffset: mascot !== undefined && card !== undefined ? mascot.top + 104 - card.top : undefined,
         emptyFits: empty !== null && empty.clientWidth >= empty.scrollWidth,
       }
     })
@@ -327,9 +347,9 @@ it('preserves a live draft, attachments and controls while changing modes and ad
     expect(geometry.bubbleOverlaps).toBe(false)
     expect(geometry.bubbleAnchorGap).toBeGreaterThanOrEqual(7)
     expect(geometry.bubbleAnchorGap).toBeLessThanOrEqual(9)
-    expect(geometry.mascotBottom).toBeLessThanOrEqual(geometry.editorTop ?? 0)
-    expect(geometry.handOverlap).toBeGreaterThanOrEqual(2)
-    expect(geometry.handOverlap).toBeLessThanOrEqual(4)
+    expect(geometry.helperBottom).toBeLessThanOrEqual(geometry.editorTop ?? 0)
+    expect(geometry.inputReceivesPointer).toBe(true)
+    expect(geometry.contactOffset).toBe(0)
     expect(geometry.emptyFits).toBe(true)
     expect(await page.getByRole('button', { name: '馒头仔', exact: true }).evaluate(
       element => getComputedStyle(element).backgroundColor,

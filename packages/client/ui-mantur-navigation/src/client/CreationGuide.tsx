@@ -182,6 +182,7 @@ function ReadyGuide({ hero, disabled, sessionId, preferences, useMarketplace, us
   const detailError = ready?.detailError
   const detailOpen = detailSlug !== undefined
   const intro = notice ?? t(`intro.${preferences.mode}`)
+  const artwork = hero ? `mantoo-${preferences.mode}-peek` : 'mantoo-welcome'
   const matching = skills.filter(skill => `${skill.name} ${skill.description}`.toLocaleLowerCase().includes(query.toLocaleLowerCase()))
 
   return <div ref={source} className={css.guide}>
@@ -211,7 +212,8 @@ function ReadyGuide({ hero, disabled, sessionId, preferences, useMarketplace, us
       <button ref={helper} type="button" className={css.helper} aria-expanded={panelVisible} aria-controls={bubbleId}
         aria-label={t('assistant')} data-hero={hero}
         onClick={() => { if (panelVisible) close(); else { setWelcome(false); setOpen(true) } }}
-      ><img src="./mantou-clapper.png" width={184} height={100} alt="" draggable={false} /></button>
+      ><img src={`./${artwork}@3x.png`} srcSet={`./${artwork}@2x.png 2x, ./${artwork}@3x.png 3x`}
+          width={hero ? 184 : 96} height={hero ? 120 : 96} alt="" draggable={false} /></button>
     </div>
     <Modal open={more && !detailOpen} onClose={() => { setMore(false) }} title={t('more')} closeLabel={t('close')}>
       <input className={css.search} aria-label={mt('skills.search')} placeholder={mt('skills.search')} value={query} onChange={(event) => { setQuery(event.target.value) }} />
