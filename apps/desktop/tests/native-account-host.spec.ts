@@ -7,6 +7,12 @@ import { NativeAccountStore } from '../src/auth/store.ts'
 import { hostFixture } from './native-account-host-support.ts'
 
 describe('native account Main and dsh IPC', () => {
+  it('forwards the active test budget through the real child configuration handshake', { timeout: 90_000 }, async () => {
+    const b = await hostFixture((_request, response) => { response.end('unexpected') })
+    expect(b.nativeRequestTimeouts).toEqual([90_000])
+    expect(b.backend.observed).toEqual([])
+  })
+
   it('reports blocked authority to the dsh child when saving logout fails', async () => {
     const b = await hostFixture((_request, response) => { response.end('unexpected') })
     await b.login()
