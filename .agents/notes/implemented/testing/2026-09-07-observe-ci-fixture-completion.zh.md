@@ -20,7 +20,7 @@ Status: implemented
 
 [Team 恢复夹具](../../../../packages/experimental/agent-team/tests/persistence.spec.ts) 区分子任务从注册表移除与邮箱确认完成。屏障延迟真实目标 flush 的返回，随后等待已登记的确认操作，再检查投递结果。确认尚未完成时，目标就可能离开注册表；一秒轮询不能证明操作完成。
 
-Windows 覆盖率运行加载 [fork 诊断预加载脚本](../../../../scripts/vitest-fork-diagnostics.cjs)，并在失败时保留其 JSONL 文件。记录仅包含生命周期事件、父进程和 worker PID、Node 版本、平台、退出码和信号。观察器不改变子进程结果，不记录参数、环境、测试载荷或原始崩溃报告。退出事实用于缩小未解释的 worker 死亡范围；收集信息本身不是修复。
+Windows 覆盖率运行加载 [fork 诊断预加载脚本](../../../../scripts/vitest-fork-diagnostics.cjs)，并在失败时保留其 JSONL 文件。记录包含生命周期与派发事件、时间戳、父进程和 worker PID、父进程内的 fork 序号、Node 版本、平台、退出码、信号以及派发的测试文件路径。序号用于区分被复用的 worker PID。派发信息提取遵循 Vitest 4.1.8 的 worker 请求，只复制 run 或 collect 方法和文件路径。观察器不改变子进程结果，不记录参数、环境、其余测试载荷或原始崩溃报告。退出事实用于缩小未解释的 worker 死亡范围；收集信息本身不是修复。
 
 ## 考虑过的替代方案
 
