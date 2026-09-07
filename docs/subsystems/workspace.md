@@ -195,6 +195,13 @@ Runtime and tools share the exact Agent identity resolved by the authenticated R
 
 ```ts cordis-catalog
 /**
+ * Refuse new opens and MCP executions, then drain every acquired or opening editor before releasing its scope.
+ * The Host must retain accepted execution signals, its model and attachment services, HTTP and editor windows until completion.
+ * @returns The retained shutdown result; failed or unconfirmed work rejects and prevents installation.
+ */
+stopForShutdown(): Promise<void>
+
+/**
  * Open the Session's workspace and connect its tools only to that Agent.
  * @param agent - Live or resumed Agent resolved by the gateway from the Session id.
  * @param parentOrigin - Mantur browser origin, checked against this Host's listening port.

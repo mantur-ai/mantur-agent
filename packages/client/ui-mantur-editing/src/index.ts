@@ -6,12 +6,10 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
-import { apply as applyMcpClient, Config as McpClientConfig, inject as mcpClientInject, name as mcpClientName } from '@deepseek-ai/dsh-mcp-client'
-import { startEditor, type EditorRuntime, type RuntimeConfig } from './runtime.ts'
+import { connectMcpServer, type ConnectionHandle } from '@deepseek-ai/dsh-mcp-client'
+import { startEditor, type EditorProcess, type EditorRuntime, type RuntimeConfig } from './runtime.ts'
 import { resolvePackagedResources } from '@deepseek-ai/dsh-client-ui-mantur-editing/packaged-resources'
 import type { EditingWorkspace } from './types.ts'
-
-const McpClient = { apply: applyMcpClient, Config: McpClientConfig, inject: mcpClientInject, name: mcpClientName }
 
 const EDITING_WORKFLOW = `Mantur Cut editing workflow
 
@@ -43,24 +41,54 @@ export const Config: z<Config> = z.object({
   toolCallTimeoutMs: z.number().step(1).min(1).max(2147483647).required(),
 })
 
+interface EditingOwner {
+  readonly ready: PromiseWithResolvers<EditorRuntime>
+  startup?: Promise<EditorRuntime>
+  child?: Fiber
+  runtime?: EditorRuntime
+  process?: EditorProcess
+  connection?: ConnectionHandle
+  stopping?: Promise<void>
+}
+
 /** Runtime and tools share the exact Agent identity resolved by the authenticated Remote gateway. */
 export class ManturEditing extends TypertRemoteService {
   static inject = ['typert', 'webServer', 'tools', 'systemPrompt']
   static Config = Config
-  private readonly opening = new Map<Agent, Promise<EditorRuntime>>()
-  private readonly children = new Map<Agent, Fiber>()
+  private readonly owners = new Map<Agent, EditingOwner>()
   private closing = false
+  private shutdown: Promise<void> | undefined
 
   /** @param ctx - Host services. @param config - Explicit editor deployment. */
   constructor(ctx: Context, private readonly config: Config) {
     super(ctx, 'manturEditing', { namespace: 'manturEditing' })
     if (!isAbsolute(config.editorRoot) || !isAbsolute(config.nodeExecutable)) throw new Error('Editing runtime paths must be absolute')
     if (config.runtimeMode === 'packaged') resolvePackagedResources(config.editorRoot)
-    ctx.effect(() => async () => {
-      this.closing = true
-      await Promise.allSettled(this.opening.values())
-      await Promise.all([...this.children.values()].map(child => child.dispose()))
-    }, 'editing: drain session runtimes')
+    ctx.effect(() => () => this.stopForShutdown(), 'editing: drain session runtimes')
+  }
+
+  /**
+   * Refuse new opens and MCP executions, then drain every acquired or opening editor before releasing its scope.
+   * The Host must retain accepted execution signals, its model and attachment services, HTTP and editor windows until completion.
+   * @returns The retained shutdown result; failed or unconfirmed work rejects and prevents installation.
+   */
+  stopForShutdown(): Promise<void> {
+    if (this.shutdown) return this.shutdown
+    this.closing = true
+    const owners = [...this.owners.values()]
+    const cutoff = Promise.allSettled(owners.flatMap(owner => owner.connection ? [owner.connection.stopAccepting()] : []))
+    this.shutdown = (async () => {
+      const started = await Promise.allSettled(owners.map(owner => owner.ready.promise))
+      const cutoffs = await cutoff
+      const stopped = await Promise.allSettled(owners.map(owner => this.stopOwner(owner)))
+      const failures = [...started, ...cutoffs, ...stopped]
+        .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
+        .map(result => result.reason as unknown)
+      if (failures.length) throw new AggregateError(failures, 'Editing shutdown failed; installation is blocked')
+      await Promise.all(owners.flatMap(owner => owner.child ? [owner.child.dispose()] : []))
+      this.owners.clear()
+    })()
+    return this.shutdown
   }
 
   /**
@@ -76,57 +104,74 @@ export class ManturEditing extends TypertRemoteService {
       || !['127.0.0.1', 'localhost', '[::1]'].includes(parent.hostname)
       || Number(parent.port || 80) !== this.ctx.webServer.port) throw new Error('Editing requires this local Mantur origin')
     if (this.closing) throw new Error('Editing runtime owner is shutting down')
-    let opening = this.opening.get(agent)
-    if (opening === undefined) {
-      opening = this.launch(agent, parentOrigin)
-      this.opening.set(agent, opening)
-      void opening.catch(() => { if (this.opening.get(agent) === opening) this.opening.delete(agent) })
+    let owner = this.owners.get(agent)
+    if (owner === undefined) {
+      owner = { ready: Promise.withResolvers<EditorRuntime>() }
+      this.owners.set(agent, owner)
+      void this.launch(agent, parentOrigin, owner).then(owner.ready.resolve, owner.ready.reject)
     }
-    const runtime = await opening
+    const runtime = await owner.ready.promise
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- Shutdown can start while readiness is awaited.
+    if (this.closing) throw new Error('Editing runtime owner is shutting down')
     try { runtime.assertRunning() }
-    catch (error) { await this.children.get(agent)?.dispose(); throw error }
+    catch (error) { await this.stopOwner(owner); throw error }
     return runtime.workspace
   }
 
-  private async launch(agent: Agent, parentOrigin: string): Promise<EditorRuntime> {
-    let runtime: EditorRuntime | undefined
+  private stopOwner(owner: EditingOwner): Promise<void> {
+    return owner.stopping ??= (async () => {
+      const failures: unknown[] = []
+      try { await owner.startup } catch { /* The open promise reports startup; acquired resources still require proven cleanup. */ }
+      let disconnected = false
+      try { await owner.connection?.dispose(); disconnected = true }
+      catch (error) { failures.push(error) }
+      if (disconnected) {
+        try { await owner.process?.dispose() } catch (error) { failures.push(error) }
+      }
+      if (failures.length) throw new AggregateError(failures, 'Session editing cleanup failed')
+    })()
+  }
+
+  private async launch(agent: Agent, parentOrigin: string, owner: EditingOwner): Promise<EditorRuntime> {
     const config = this.config
-    const release = () => {
-      this.opening.delete(agent)
-      this.children.delete(agent)
-    }
-    const fiber = agent.ctx.plugin({
+    const child = agent.ctx.plugin({
       name: 'mantur-session-editing',
-      inject: ['systemPrompt'],
-      async apply(ctx: Context) {
-        runtime = await startEditor(config, agent.session.header.cwd, agent.id, parentOrigin)
-        const owned = runtime
-        ctx.effect(() => release, 'editing: release session binding')
-        ctx.effect(() => () => owned.dispose(), 'editing: subprocess')
-        await ctx.plugin(McpClient, {
-          transport: 'streamable-http', serverName: 'mantur_cut',
-          url: new URL('/api/external-mcp/mcp', runtime.workspace.editorUrl).href,
-          headers: { Authorization: `Bearer ${runtime.token}` },
-          failOnStartupError: true, toolCallTimeoutMs: config.toolCallTimeoutMs,
-        }).await()
-        ctx.systemPrompt.section({
-          name: 'mantur:editing-workflow',
-          order: ctx.systemPrompt.getSectionOrder('TOOL_WORKFLOW'),
-          text: EDITING_WORKFLOW,
-        })
+      inject: ['systemPrompt', 'tools'],
+      apply: async (ctx: Context) => {
+        if (this.closing) throw new Error('Editing runtime owner is shutting down')
+        ctx.effect(() => async () => {
+          await this.stopOwner(owner)
+          if (!this.closing && this.owners.get(agent) === owner) this.owners.delete(agent)
+        }, 'editing: owned runtime shutdown')
+        owner.startup = (async () => {
+          const runtime = await startEditor(config, agent.session.header.cwd, agent.id, parentOrigin, (process) => {
+            owner.process = process
+          })
+          owner.runtime = runtime
+          owner.process = runtime
+          const connection = connectMcpServer(ctx, {
+            transport: 'streamable-http', serverName: 'mantur_cut',
+            url: new URL('/api/external-mcp/mcp', runtime.workspace.editorUrl).href,
+            headers: { Authorization: `Bearer ${runtime.token}` },
+            failOnStartupError: true, toolCallTimeoutMs: config.toolCallTimeoutMs,
+          }, () => runtime.drainForShutdown())
+          owner.connection = connection
+          if (this.closing) await connection.stopAccepting()
+          await connection.ready
+          ctx.systemPrompt.section({
+            name: 'mantur:editing-workflow',
+            order: ctx.systemPrompt.getSectionOrder('TOOL_WORKFLOW'),
+            text: EDITING_WORKFLOW,
+          })
+          return runtime
+        })()
+        await owner.startup
       },
     })
-    this.children.set(agent, fiber)
-    try {
-      await fiber.await()
-      if (this.closing) throw new Error('Editing runtime owner is shutting down')
-      if (runtime === undefined) throw new Error('Editing runtime did not start')
-      return runtime
-    } catch (error) {
-      await fiber.dispose()
-      this.children.delete(agent)
-      throw error
-    }
+    owner.child = child
+    await child.await()
+    if (owner.runtime === undefined) throw new Error('Editing runtime did not start')
+    return owner.runtime
   }
 }
 

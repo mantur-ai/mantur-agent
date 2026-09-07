@@ -428,14 +428,14 @@ export interface RuntimeConfig {
   nodeExecutable: string
   /** Maximum wait for the editor's ready handshake. */
   startupTimeoutMs: number
-  /** Grace period before killing an editor that has not stopped. */
+  /** Maximum wait for editor close acknowledgement and subprocess pipes. */
   stopTimeoutMs: number
-  /** Maximum duration of one editing tool invocation. */
+  /** Maximum duration of one editing tool invocation or editor drain request. */
   toolCallTimeoutMs: number
 }
 ```
 
-来源： [`packages/client/ui-mantur-editing/src/index.ts:36`](../packages/client/ui-mantur-editing/src/index.ts)
+来源： [`packages/client/ui-mantur-editing/src/index.ts:34`](../packages/client/ui-mantur-editing/src/index.ts)
 
 <a id="deepseek-aidsh-client-ui-mantur-navigation"></a>
 

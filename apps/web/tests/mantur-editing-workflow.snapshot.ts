@@ -29,6 +29,7 @@ it.skipIf(webSnapshotMode() === 'record')('records native workbench guidance in 
     await writeFile(join(viteRoot, 'package.json'), '{"type":"module"}\n')
     await writeFile(join(viteRoot, 'dist/node/index.js'), `
 import { createServer as createHttpServer, request } from 'node:http';
+import { writeFile } from 'node:fs/promises';
 export async function createServer() {
   const httpServer = createHttpServer((incoming, outgoing) => {
     const upstream = request(${JSON.stringify(mcp.url)}, { method: incoming.method, headers: incoming.headers }, response => {
@@ -38,8 +39,12 @@ export async function createServer() {
     upstream.on('error', error => { outgoing.writeHead(502).end(error.message); });
     incoming.pipe(upstream);
   });
+  httpServer.manturShutdown = { stopForShutdown: async () => {} };
   return { config: { server: {}, inlineConfig: { server: {} } }, httpServer,
-    close: () => new Promise(resolve => { httpServer.close(resolve); httpServer.closeAllConnections(); }) };
+    close: async () => {
+      await new Promise(resolve => { httpServer.close(resolve); httpServer.closeAllConnections(); });
+      await writeFile('editor-closed.txt', 'saved and closed');
+    } };
 }
 `)
     const overlay = join(root, 'editing.patch.yml')
@@ -68,6 +73,11 @@ export async function createServer() {
     expect(header.data.header.tools?.some(tool => tool.name === 'mcp__mantur_cut__ping')).toBe(true)
     expect(mcp.authorization.length).toBeGreaterThan(0)
     expect(mcp.authorization.every(value => value?.startsWith('Bearer '))).toBe(true)
+    const stopping = scaffold.ctx.manturEditing.stopForShutdown()
+    expect(scaffold.ctx.manturEditing.stopForShutdown()).toBe(stopping)
+    await stopping
+    expect(await readFile(join(editorRoot, 'editor-closed.txt'), 'utf8')).toBe('saved and closed')
+    await expect(scaffold.ctx.manturEditing.open(handle.agent, scaffold.baseUrl)).rejects.toThrow('shutting down')
   } finally {
     try { await scaffold?.close() }
     finally {

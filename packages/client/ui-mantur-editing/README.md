@@ -25,7 +25,7 @@ Open the local editor beside the Mantur conversation by selecting Editing on the
 <a id="use-this-package"></a>
 ## Use this package
 
-The packaged desktop enables `ui-mantur-editing` with its installed resource directory and Electron executable. A development profile explicitly selects `runtimeMode: development` and supplies the runtime fields below. Selecting Editing opens the current Session through the authenticated Remote gateway. The conversation header also offers Editing to reopen a saved Session after closing the view or refreshing the page. Without a selected Session and working directory, the workbench shows a diagnostic. Hiding the workbench retains the current Session’s editor page and native Agent binding. Reopening that view continues the same editing draft. Disposing the Agent or Host releases the runtime.
+The packaged desktop enables `ui-mantur-editing` with its installed resource directory and Electron executable. A development profile explicitly selects `runtimeMode: development` and supplies the runtime fields below. Selecting Editing opens the current Session through the authenticated Remote gateway. The conversation header also offers Editing to reopen a saved Session after closing the view or refreshing the page. Without a selected Session and working directory, the workbench shows a diagnostic. Hiding the workbench retains the current Session’s editor page and native Agent binding. Reopening that view continues the same editing draft. Agent or Host disposal requests the same checked runtime shutdown; an unconfirmed drain retains its owner.
 
 Each Session uses `<cwd>/剪辑/<session-id>/`: `工程/` contains project persistence and runtime state, `素材/` contains imported media, and `导出/` is the default export destination. The Host reads `cwd` from the resolved Agent's Session header; the browser cannot select another path. Session directory components reject traversal and symbolic links. Reopening preserves files. Different Sessions use separate runtimes and tool scopes even within one project.
 
@@ -47,10 +47,10 @@ The compact host header and bounded conversation width leave more room for the e
 | `editorRoot` | required | Absolute prepared checkout or packaged resource directory |
 | `nodeExecutable` | required | Absolute Node executable for development; installed Electron executable for packaged mode |
 | `startupTimeoutMs` | required | Maximum editor startup wait |
-| `stopTimeoutMs` | required | Shutdown grace before forced termination |
-| `toolCallTimeoutMs` | required | Maximum duration of one editing tool call |
+| `stopTimeoutMs` | required | Maximum close acknowledgement and child/pipes close wait; expiry rejects without killing |
+| `toolCallTimeoutMs` | required | Maximum duration of one editing tool call and each editor drain request |
 
-Packaged mode validates the platform-specific `manifest.json` before opening a Session. The `./packaged-resources` export exposes the same resource check for installer smokes. Missing assets, unsupported targets and paths outside the installation fail; the runtime does not download replacements or start Vite. The production entry copies only the writable Remotion bundle and compositor into a private Session directory and places temporary files there. Normal shutdown removes that directory after HTTP closure; the Host then waits for child close. Forced termination can retain private runtime files. Persistent project, media and export directories remain. Resource fields and unresolved distribution checks are recorded in the [packaged runtime proposal](../../../.agents/notes/proposed/architecture/2026-09-07-mantur-packaged-editing-runtime.md).
+Packaged mode validates the platform-specific `manifest.json` before opening a Session. The `./packaged-resources` export exposes the same resource check for installer smokes. Missing assets, unsupported targets and paths outside the installation fail; the runtime does not download replacements or start Vite. The production entry copies only the writable Remotion bundle and compositor into a private Session directory and places temporary files there. Normal shutdown removes that directory after HTTP closure; the Host then waits for child close. A failed drain or close retains private runtime files and rejects shutdown. Persistent project, media and export directories remain. Resource fields and unresolved distribution checks are recorded in the [packaged runtime proposal](../../../.agents/notes/proposed/architecture/2026-09-07-mantur-packaged-editing-runtime.md).
 
 -----
 
@@ -59,6 +59,16 @@ Packaged mode validates the platform-specific `manifest.json` before opening a S
 
 <details>
 <summary>Implementation internals — click to expand</summary>
+
+`ctx.manturEditing.stopForShutdown()` freezes new opens and native MCP executions, retains opening and opened owners, and waits for accepted responses and attachment writes. The editor then freezes browser input, drains accepted browser work and its late jobs, saves project and run state through the existing authenticated poll/result channel, and confirms durable browser unregistration. Native transport closure follows that acknowledgement; the Host then requires the actual editor child `close`, including its pipes. Repeated calls retain the original success or failure. Timeouts leave work running and reject; the coordinator must keep Agent services, HTTP and the editor page alive until this promise settles.
+
+After applying [the packaged patch](adapters/mantur-cut-packaged.patch), apply [the shutdown patch](adapters/mantur-cut-shutdown.patch) on editor tree `2a5be55239826a9e74bde5a5a5484a0f033d4da0`. It adds no public MCP tool and does not change the pinned audio finalizer. The owned render path propagates `browser.close()` failures, but Remotion 4.0.509 exposes no supported child-and-pipe close completion; an instance that acquired its render browser therefore refuses shutdown confirmation. Used unowned producers and retained save/job errors also refuse confirmation. This increment is not complete installation approval; [the shutdown decision](../../../.agents/notes/implemented/bug-fix/2026-09-08-mantur-editing-owned-shutdown.md) records verification limits.
+
+| Shutdown layer | Fixed value |
+|---|---|
+| Editor commit | `62b063a423afdfa7343d3ee75b777053308dc3d7` |
+| Result tree | `538363abfa8d3b2fa668a784072445c22ee722aa` |
+| Patch SHA-256 | `6a1a28ee51dddc2cbae5ae531dbb3f5f1bfed62fac508c296f55304a2d2af75f` |
 
 The Host Remote resolves the Agent, coalesces concurrent opens, and launches `adapters/mantur-runtime.mjs`. It mounts the existing MCP client inside that Agent's scope. All mounted MCP clients resolve the same peer instance, preserving Agent-scoped server-name reservations. The MCP bearer remains in Host memory and the child environment. Disposal drains both connection and subprocess. The Client ignores startup responses from a Session that is no longer selected. No invariant companion is published: subprocess exit state belongs to the child handle; connection and tool-generation invariants belong to the MCP client.
 

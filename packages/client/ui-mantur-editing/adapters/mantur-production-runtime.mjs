@@ -3,6 +3,7 @@ import { cp, mkdir, mkdtemp, realpath, rm } from 'node:fs/promises'
 import { isAbsolute, join, relative, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { resolvePackagedResources } from './mantur-packaged-resources.mjs'
+import { installRuntimeShutdown } from './mantur-runtime-shutdown.mjs'
 
 const resources = resolvePackagedResources(process.env.MANTUR_CUT_RESOURCES)
 const resourceRoot = await realpath(process.env.MANTUR_CUT_RESOURCES)
@@ -18,27 +19,19 @@ if (await realpath(process.env.OPENCHATCUT_DATA_DIR) !== engine) throw new Error
 
 let server
 let temporary
-let stopping = false
-let shutdown
 let startup
-let startupFailure
-const stop = () => shutdown ??= (async () => {
-  stopping = true
-  try {
-    // Startup owns copies and server acquisition even when cancellation arrives first.
-    try { await startup } catch { /* Startup reports its own failure; cleanup must still run. */ }
-    if (server) await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
-  } finally {
+const shutdown = installRuntimeShutdown({
+  drain: async () => {
+    await startup
+    const owner = server?.manturShutdown
+    if (!owner || typeof owner.stopForShutdown !== 'function') throw new Error('Editor does not expose its authoritative shutdown owner')
+    await owner.stopForShutdown()
+  },
+  close: async () => {
+    await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
     if (temporary) await rm(temporary, { recursive: true })
-  }
-})()
-const requestStop = () => {
-  void stop().then(() => process.exit(startupFailure ? 1 : 0), error => { console.error(error); process.exit(1) })
-}
-process.once('SIGTERM', requestStop)
-process.once('SIGINT', requestStop)
-process.once('disconnect', requestStop)
-process.on('message', message => { if (message?.type === 'mantur-cut:stop') requestStop() })
+  },
+})
 
 startup = (async () => {
   temporary = await mkdtemp(join(engine, '.mantur-runtime-'))
@@ -62,15 +55,15 @@ startup = (async () => {
     OPENCHATCUT_FFMPEG: resources.ffmpeg, OPENCHATCUT_FFPROBE: resources.ffprobe,
     OPENCHATCUT_WHISPER_CLI: resources.whisperCli,
   })
-  if (stopping) return
   const { startEmbeddedServer } = await import(pathToFileURL(resources.server).href)
   const embedded = await startEmbeddedServer(resources.web, { port: 0, parentOrigin })
   server = embedded.server
-  if (!stopping) process.send({ type: 'mantur-cut:ready', port: embedded.port })
-})().catch(error => { startupFailure = error; throw error })
+  process.send({ type: 'mantur-cut:ready', port: embedded.port })
+})()
 try { await startup }
 catch (error) {
   console.error(error)
-  try { await stop() } catch (cleanupError) { console.error(cleanupError) }
-  process.exit(1)
+  await shutdown.startupFailed(error)
+  try { await shutdown.stop() } catch (cleanupError) { console.error(cleanupError) }
+  process.exitCode = 1
 }
