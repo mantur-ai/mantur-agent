@@ -11,14 +11,18 @@ it.each([0, 7])('records Vitest fork exit %i without copying environment or unre
     const directory = join(root, 'vitest', 'dist', 'workers')
     mkdirSync(directory, { recursive: true })
     const worker = join(directory, 'forks.js')
-    writeFileSync(worker, `process.exit(${exitCode})\n`)
+    writeFileSync(worker, `process.on('message', message => { if (message.type === 'run') process.exit(${exitCode}) })\n`)
     const unrelated = join(root, 'other.js')
     writeFileSync(unrelated, 'process.exit(9)\n')
     const output = join(root, 'forks.jsonl')
     const preload = fileURLToPath(new URL('./vitest-fork-diagnostics.cjs', import.meta.url))
     const parent = spawnSync(process.execPath, [
       '--require', preload, '--input-type=module', '-e',
-      'import { fork } from "node:child_process"; fork(process.argv[1], ["private-argument"], { execArgv: [] }); fork(process.argv[2], [], { execArgv: [] })',
+      `import { fork } from "node:child_process";
+      const child = fork(process.argv[1], ["private-argument"], { execArgv: [] });
+      child.send({ type: 'private-message', context: 'private-context' });
+      for (const type of ['collect', 'run']) child.send({ __vitest_worker_request__: true, type, context: { files: [{ filepath: 'sample.spec.ts', private: 'private-file-metadata' }], config: 'private-config' }, otelCarrier: 'private-trace' });
+      fork(process.argv[2], [], { execArgv: [] })`,
       worker, unrelated,
     ], {
       env: { ...process.env, DSH_VITEST_FORK_DIAGNOSTICS: output, PRIVATE_CANARY: 'private-environment' },
@@ -33,11 +37,15 @@ it.each([0, 7])('records Vitest fork exit %i without copying environment or unre
     const identity = {
       parentPid: expect.any(Number) as unknown,
       pid: expect.any(Number) as unknown,
+      forkId: 1,
+      timestamp: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u) as unknown,
       node: process.version,
       platform: process.platform,
     }
     expect(records).toEqual([
       { ...identity, event: 'start' },
+      { ...identity, event: 'dispatch', method: 'collect', files: ['sample.spec.ts'] },
+      { ...identity, event: 'dispatch', method: 'run', files: ['sample.spec.ts'] },
       { ...identity, event: 'exit', code: exitCode, signal: null },
     ])
     expect(raw).not.toContain('private-')
