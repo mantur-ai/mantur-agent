@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { load as parseYaml } from 'js-yaml'
 import { entryListSchema } from '@deepseek-ai/cordis-plugin-include'
@@ -13,6 +13,8 @@ import type { GuideSettings } from '../src/guide-settings.ts'
 import type { ManturMarketplaceState } from '../src/client/store.ts'
 
 afterEach(cleanup)
+beforeEach(() => { vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} }) })
+afterEach(() => { vi.unstubAllGlobals() })
 const t = makeTranslate(zh)
 const mt = makeTranslate(marketZh)
 const skill = { slug: 'short-drama', name: '爽文短剧剧本创作', description: '写分集剧本', category: '剧本', installed: true, version: '1.0.0', triggers: [] }

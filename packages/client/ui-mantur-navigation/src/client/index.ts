@@ -119,6 +119,7 @@ export async function apply(ctx: Context): Promise<void> {
     }, CreationModes))
     scope.slots.inject('conversation.composer.layout', () => scope.slots.register({
       name: 'conversation.composer.layout', locale: 'projects.mantur',
+      children: { 'conversation.composer.layout.permissions': { kind: 'single', scope: 'session-maybe' } },
       inject: () => ({
         hooks: projectSettings.hooks, reloadRoot: projectSettings.reloadRoot,
       }),

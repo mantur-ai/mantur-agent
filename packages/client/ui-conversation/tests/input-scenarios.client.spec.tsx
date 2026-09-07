@@ -151,6 +151,7 @@ async function scopedBench(register?: (inputTriggers: InputTriggerService) => vo
     useConversation: bindSnapshotSelector(createSnapshotStore(conversationSnapshot())),
     useInput: bindSnapshotSelector(shell.state),
     useComposerInput: bindSnapshotSelector(shell.state),
+    useExternalPermissions: bindSnapshotSelector(createSnapshotStore(false)),
     unassignedActions: undefined,
     inputActions: shell.actions,
     keyboard: shell,

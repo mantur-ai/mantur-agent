@@ -133,8 +133,10 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     'conversation.composer.layout': {
       kind: 'single'
       scope: 'session-maybe'
-      owner: { hero: boolean; heading: ReactNode; workspace: ReactNode; content: ReactNode }
+      owner: { hero: boolean; disabled: boolean; heading: ReactNode; workspace: ReactNode; content: ReactNode }
     }
+    /** Permission control declared by an alternate composer layout; otherwise rendered inline. */
+    'conversation.composer.layout.permissions': { kind: 'single'; scope: 'session-maybe'; owner: { disabled: boolean } }
     /** Agent-preset control staged for a New Session. */
     'conversation.hero.agentPreset': { kind: 'single'; scope: 'root'; owner: HeroAgentPresetOwnerProps }
     /** Full-width entries above the composer card. */
@@ -274,11 +276,17 @@ export interface ComposerBarOwnerProps {
   accessory?: ReactNode
 }
 
-/** Package-private operations injected into the resident composer bar. */
-export interface ComposerBarInjected {
+/** Package-private input and command faces shared by composer controls. */
+export interface ComposerControlInjected {
   /** Actions for the browser-only draft when no Session is selected. */
   unassignedActions: InputActions | undefined
   keyboard: ComposerKeyboard | undefined
+  command: ((line: string) => Promise<boolean>) | undefined
+  hooks: { composerInput: ObservableSnapshot<InputState | undefined> }
+}
+
+/** Package-private operations injected into the resident composer bar. */
+export interface ComposerBarInjected extends ComposerControlInjected {
   addImages: ((files: readonly File[]) => string | null) | undefined
   removeImage: ((id: DraftAttachmentId) => void) | undefined
   draftImages: ((ids: readonly DraftAttachmentId[]) => readonly ComposerAttachment[]) | undefined
@@ -289,9 +297,9 @@ export interface ComposerBarInjected {
   ) => InputSubmitMode
   toggleCommandMenu: ((selection: EditSelection) => void) | undefined
   stop: (() => void) | undefined
-  command: ((line: string) => Promise<boolean>) | undefined
   hooks: {
     composerInput: ObservableSnapshot<InputState | undefined>
+    externalPermissions: ObservableSnapshot<boolean>
     notices: ObservableSnapshot<InputNotice | null>
     lexicon: ObservableSnapshot<ReadonlyMap<'/' | '@', readonly string[]>>
     menuLauncher: ObservableSnapshot<string | null>

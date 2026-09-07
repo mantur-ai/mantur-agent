@@ -14,7 +14,6 @@
 - textbox "描述你想要构建的内容… / 调用指令 @ 文件或对话"
 - button "指令":
   - img
-- button "访问模式，当前：工作区内修改": 工作区内修改
 - button "选择模型，当前 DeepSeek-V4-Flash":
   - text: DeepSeek-V4-Flash
   - img
@@ -23,3 +22,4 @@
   - img
   - text: workspace
   - img
+- button "访问模式，当前：工作区内修改": 工作区内修改

@@ -1,7 +1,6 @@
 /** Mode navigation and contextual guidance beside the resident composer. */
 
 import { useEffect, useId, useRef, useState } from 'react'
-import clsx from 'clsx'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { ManturMarketplaceSkill } from '@deepseek-ai/dsh-manturhub-marketplace/types'
@@ -14,6 +13,7 @@ import { GUIDE_SKILL_LABELS } from './guide-locales.ts'
 import { useGuidePopover } from './useGuidePopover.ts'
 import css from './CreationGuide.module.css'
 import { focusDetailAction } from './detail-focus.ts'
+import { GuideSkillRail } from './GuideSkillRail.tsx'
 
 /** Settings operations shared by the two guide locations. */
 export interface GuidePreferencesInjected {
@@ -209,7 +209,7 @@ function ReadyGuide({ hero, disabled, sessionId, preferences, useMarketplace, us
       </div>
     </section>}
     <div className={css.shortcutRow} data-hero={hero}>
-      {hero && <div className={clsx(css.shortcuts, recommended.length === 0 && css.noRecommendations)} aria-label={t('recommended')}>
+      {hero && <GuideSkillRail empty={recommended.length === 0} t={t}>
         {market.phase === 'idle' || market.phase === 'loading' ? <span role="status">{mt('skills.loading')}</span>
           : market.phase === 'failed' ? <><span role="alert">{mt('skills.failed')}</span><button type="button" onClick={() => { void load() }}>{mt('skills.retry')}</button></>
             : recommended.length === 0 ? <span className={css.empty}>{t('empty')}</span>
@@ -223,7 +223,7 @@ function ReadyGuide({ hero, disabled, sessionId, preferences, useMarketplace, us
               })}
         {missingAlias && <span role="alert">{t('aliasMissing')}</span>}
         <button type="button" onClick={() => { setMore(true) }}>{t('more')}</button>
-      </div>}
+      </GuideSkillRail>}
       <button ref={helper} type="button" className={css.helper} aria-expanded={panelVisible} aria-controls={bubbleId}
         aria-label={t('assistant')} data-hero={hero}
         onClick={() => { if (panelVisible) close(); else { setWelcome(false); setOpen(true) } }}

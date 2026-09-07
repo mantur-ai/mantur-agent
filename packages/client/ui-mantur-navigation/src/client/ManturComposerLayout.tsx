@@ -1,6 +1,6 @@
 /** Mantur workspace footer using the conversation owner's existing controls. */
 
-import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { AutomaticProjectState } from './automatic-project.ts'
 import css from './CreationGuide.module.css'
@@ -16,15 +16,16 @@ export interface ManturComposerInjected {
  * @param props - owner-created composer nodes and the current hero state.
  * @returns Mantur's visual and keyboard order without changing the supplied controls.
  */
-export function ManturComposerLayout({ hero, heading, workspace, content, sessionId,
-  useAutomaticProject, reloadRoot, t,
-}: PropsRuntime<'conversation.composer.layout'> & InjectFace<ManturComposerInjected> & PropsLocale<'projects.mantur'>) {
+export function ManturComposerLayout({ hero, disabled, heading, workspace, content, sessionId,
+  useAutomaticProject, reloadRoot, renderSlot, t,
+}: PropsRuntime<'conversation.composer.layout'> & InjectFace<ManturComposerInjected> & PropsLocale<'projects.mantur'>
+  & PropsRenderSlots<'conversation.composer.layout.permissions'>) {
   const project = useAutomaticProject(state => state)
   return <>
     {heading}
     {content}
-    {hero && <div className={css.workspaceFooter} data-workspace-footer>
-      {sessionId === undefined && (project.preparing || project.error !== null) && <div className={css.projectStatus}>
+    <div className={css.workspaceFooter} data-workspace-footer>
+      {hero && sessionId === undefined && (project.preparing || project.error !== null) && <div className={css.projectStatus}>
         {project.preparing && <p role="status">{t('creating')}</p>}
         {project.error !== null && <p role="alert">{project.error}
           {project.settings === undefined && <button type="button" disabled={project.loading || project.choosing} onClick={() => { void reloadRoot() }}>{t('retry')}</button>}
@@ -32,6 +33,7 @@ export function ManturComposerLayout({ hero, heading, workspace, content, sessio
         </p>}
       </div>}
       {workspace}
-    </div>}
+      {renderSlot('conversation.composer.layout.permissions', { disabled })}
+    </div>
   </>
 }

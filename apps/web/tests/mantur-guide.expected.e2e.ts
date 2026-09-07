@@ -108,7 +108,7 @@ it('keeps guidance readable at the desktop minimum without moving the composer o
     await page.getByRole('button', { name: '暂时跳过' }).click()
     await page.getByRole('button', { name: '短剧编剧', exact: true }).waitFor()
     const positions = () => page.locator('[data-composer-seat]').evaluate(element =>
-      ['[data-composer-card]', '[aria-label="推荐技能"]'].map((selector) => {
+      ['[data-composer-card]', '[data-skill-rail]'].map((selector) => {
         const rect = element.querySelector(selector)!.getBoundingClientRect()
         return { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
       }))
@@ -123,6 +123,25 @@ it('keeps guidance readable at the desktop minimum without moving the composer o
         const tab = page.getByRole('tab', { name, exact: true })
         await tab.click()
         await expect.poll(() => tab.getAttribute('aria-selected')).toBe('true')
+        const rail = page.getByLabel('推荐技能', { exact: true })
+        expect(await rail.evaluate(element => getComputedStyle(element).scrollbarWidth)).toBe('none')
+        expect(await rail.getByRole('button').evaluateAll(elements => elements.every(element =>
+          element.getBoundingClientRect().height >= 40 && getComputedStyle(element).borderTopWidth === '1px',
+        ))).toBe(true)
+        if (await page.getByRole('button', { name: '向右查看技能' }).count() > 0) {
+          await page.getByRole('button', { name: '向右查看技能' }).click()
+          await expect.poll(() => rail.evaluate(element => element.scrollLeft)).toBeGreaterThan(0)
+          await page.getByRole('button', { name: '向左查看技能' }).click()
+          await expect.poll(() => rail.evaluate(element => element.scrollLeft)).toBe(0)
+          await rail.hover()
+          await page.mouse.wheel(120, 0)
+          await expect.poll(() => rail.evaluate(element => element.scrollLeft)).toBeGreaterThan(0)
+          await rail.evaluate((element) => { element.scrollLeft = 0 })
+          await rail.getByRole('button').first().focus()
+          for (let index = 1; index < await rail.getByRole('button').count(); index++) await page.keyboard.press('Tab')
+          expect(await rail.getByRole('button').last().evaluate(element => element === document.activeElement)).toBe(true)
+          await rail.evaluate((element) => { element.scrollLeft = 0 })
+        }
         const artwork = page.getByRole('button', { name: '馒头仔', exact: true }).locator('img')
         await expect.poll(() => artwork.getAttribute('src')).toBe(`./mantoo-${mode}-peek@3x.png`)
         await artwork.evaluate(image => (image as HTMLImageElement).decode())
@@ -293,9 +312,14 @@ it('preserves a live draft, attachments and controls while changing modes and ad
     const attachments = await page.getByRole('img', { name: 'reference.png' }).count()
     const model = await page.getByRole('button', { name: '选择模型' }).innerText()
     const permission = await page.getByRole('button', { name: /访问模式/ }).innerText()
+    expect(await page.getByRole('button', { name: /访问模式/ }).count()).toBe(1)
+    expect(await page.locator('[data-composer-card]').getByRole('button', { name: /访问模式/ }).count()).toBe(0)
+    expect(await page.locator('[data-workspace-footer]').getByRole('button', { name: /访问模式/ }).count()).toBe(1)
     await page.getByRole('button', { name: '发送消息', exact: true }).focus()
     await page.keyboard.press('Tab')
     expect(await workspaceButton.evaluate(element => document.activeElement === element)).toBe(true)
+    await page.keyboard.press('Tab')
+    expect(await page.getByRole('button', { name: /访问模式/ }).evaluate(element => document.activeElement === element)).toBe(true)
     expect(await workspaceButton.evaluate((element) => {
       const card = document.querySelector('[data-composer-card]')!.getBoundingClientRect()
       const footer = element.closest('[data-workspace-footer]')!.getBoundingClientRect()

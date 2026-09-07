@@ -35,6 +35,7 @@ import { registerComposerKeymap } from '../input/editor/keymap.ts'
 import { attachmentErrorText, imageSizeText } from '../image-labels.ts'
 import { ContextMeter } from './ContextMeter.tsx'
 import { PermissionSelect } from './PermissionSelect.tsx'
+import { composerAvailability } from './composer-availability.ts'
 import css from './InputBar.module.css'
 
 export type InputBarProps = ComposerBarProps
@@ -42,7 +43,7 @@ export type InputBarProps = ComposerBarProps
 export const InputBar = memo(function InputBar({
   useSession, inputActions: sessionInputActions, keyboard, addImages, removeImage, draftImages,
   resolveSubmitMode, toggleCommandMenu, stop, command, t,
-  renderSlot, useNotices, useLexicon, useMenuLauncher, useComposerInput, unassignedActions,
+  renderSlot, useNotices, useLexicon, useMenuLauncher, useComposerInput, useExternalPermissions, unassignedActions,
   useProjection, sessionId, variant, disabled: inert = false, blocked,
   workspacePickerOpen = false, onRequestWorkspace,
   placeholder, accessory,
@@ -63,7 +64,9 @@ export const InputBar = memo(function InputBar({
   const hasGoal = useProjection('goal', goal => goal != null)
   // Session-maybe: the machine faces are absent together while no session is
   // current; the bar renders the same DOM inert instead of a parallel tree.
-  const live = input !== undefined && keyboard !== undefined && inputActions !== undefined
+  const { live, locked, parentOffline } = composerAvailability({ input, keyboard, actions: inputActions,
+    subagent, removed, disabled: inert || blocked !== undefined })
+  const externalPermissions = useExternalPermissions(value => value)
   const draft = input?.draft ?? ''
   const editor = keyboard?.editor ?? null
   const attachments = useMemo(
@@ -112,13 +115,11 @@ export const InputBar = memo(function InputBar({
   // A continuable child without its live parent cannot accept human input,
   // but its independent Stop below stays available while it runs.
   const continuable = subagent?.address.mode === 'continuable'
-  const parentOffline = continuable && subagent.parentAvailable !== true
   // Running input stays free; locked = session removed, the
   // inert no-workspace state, the machine faces absent (no session), or a
   // parent-offline continuable child. An owner block also disables input;
   // adjudicating and submitting render read-only so the draft stays visible.
-  const disabled = removed || inert || !live || blocked !== undefined || parentOffline
-  const locked = disabled
+  const disabled = locked
   // The model seat is the ONE control a block leaves live: every block this
   // contract has is cleared by choosing a model, so locking it too would leave
   // the composer asking for the only thing it prevents. The other reasons to
@@ -133,7 +134,7 @@ export const InputBar = memo(function InputBar({
   const editorDisabled = removed || (locked && !workspaceTrigger)
   const editable = live && !locked && !machineBusy
   const canSteerQueue = !locked && !machineBusy && !commandMenuOpen && empty && running && subagent === null
-    && input.queue.some(row => row.placement === 'queued')
+    && input?.queue.some(row => row.placement === 'queued') === true
 
   useEffect(() => {
     if (input === undefined || inputActions === undefined) return
@@ -329,7 +330,7 @@ export const InputBar = memo(function InputBar({
   // The Access seat: the projection-fed permission chip (renders nothing
   // while the permissions key is absent — permission-less host or Draft —
   // or while the command face is absent with the session).
-  const accessSelect: ReactNode = command === undefined
+  const accessSelect: ReactNode = command === undefined || externalPermissions
     ? null
     : <PermissionSelect key={sessionId} value={permissions} locked={locked} command={command} t={t} />
 
