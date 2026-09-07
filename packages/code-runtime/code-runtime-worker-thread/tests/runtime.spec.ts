@@ -1,13 +1,13 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { Worker } from 'node:worker_threads'
 import { Context } from '@deepseek-ai/cordis'
 import { WorkerThreadCodeRuntime } from '@deepseek-ai/dsh-code-runtime-worker-thread'
 import type { Config } from '@deepseek-ai/dsh-code-runtime-worker-thread'
 import type { CodeBindingFunction, CodeBindingNamespace, CodeRunResult } from '@deepseek-ai/dsh-code-runtime'
 
 /**
- * Integration suite over REAL worker threads (no mocks — workers are cheap
- * and local, per docs/testing.md's real-over-mock policy). Each test builds
- * a fresh context so budgets can be tuned per case.
+ * Integration suite over real worker threads. Lifecycle cases control termination
+ * while retaining the real worker and its cleanup. Each test owns a fresh context.
  */
 async function setup(config: Config = {}) {
   const ctx = new Context()
@@ -26,6 +26,82 @@ function tools(functions: Record<string, (args: unknown) => Promise<unknown>>): 
 }
 
 describe('WorkerThreadCodeRuntime — programs and bindings (real workers)', () => {
+  it('keeps scope disposal behind a completed program\'s pending worker cleanup', async () => {
+    const { ctx, runtime } = await setup()
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const terminate = Reflect.get(Worker.prototype, 'terminate')
+    const spy = vi.spyOn(Worker.prototype, 'terminate').mockImplementation(async function (this: Worker) {
+      entered.resolve(undefined)
+      await release.promise
+      return terminate.call(this)
+    })
+    const running = runtime.run({ program: 'return 42', bindings: [] })
+    await entered.promise
+    let disposed = false
+    const disposing = ctx.fiber.dispose().then(() => { disposed = true })
+    try {
+      await new Promise<void>(resolve => setImmediate(resolve))
+      expect(disposed).toBe(false)
+      release.resolve(undefined)
+      expect((await running).value).toBe(42)
+      await disposing
+    } finally {
+      release.resolve(undefined)
+      await Promise.allSettled([running, disposing])
+      spy.mockRestore()
+    }
+  })
+
+  it('joins a detached Host binding after returning the program outcome', async () => {
+    const { ctx, runtime } = await setup()
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const running = runtime.run({
+      program: 'void tools.hold({}); return 42',
+      bindings: tools({ hold: async () => { entered.resolve(undefined); await release.promise; return null } }),
+    })
+    await entered.promise
+    expect((await running).value).toBe(42)
+    const stopping = runtime.stopForShutdown()
+    expect(runtime.stopForShutdown()).toBe(stopping)
+    let stopped = false
+    void stopping.then(() => { stopped = true })
+    try {
+      await new Promise<void>(resolve => setImmediate(resolve))
+      expect(stopped).toBe(false)
+      await expect(runtime.run({ program: 'return 1', bindings: [] })).rejects.toThrow('after disposal')
+      release.resolve(undefined)
+      await stopping
+    } finally {
+      release.resolve(undefined)
+      await stopping
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('retains a termination failure after the program result is delivered', async () => {
+    const { ctx, runtime } = await setup()
+    const failure = new Error('worker termination refused')
+    const terminate = Reflect.get(Worker.prototype, 'terminate')
+    let reapWorker: (() => Promise<number>) | undefined
+    const spy = vi.spyOn(Worker.prototype, 'terminate').mockImplementation(function (this: Worker) {
+      reapWorker = () => terminate.call(this)
+      return Promise.reject(failure)
+    })
+    try {
+      const result = await runtime.run({ program: 'return 42', bindings: [] })
+      expect(result.error).toEqual({ kind: 'exception', message: 'worker cleanup failed: worker termination refused' })
+      const stopping = runtime.stopForShutdown()
+      expect(runtime.stopForShutdown()).toBe(stopping)
+      await expect(stopping).rejects.toMatchObject({ errors: [failure] })
+    } finally {
+      spy.mockRestore()
+      await reapWorker?.()
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('registers with the seam descriptors', async () => {
     const { runtime } = await setup()
     expect(runtime.language).toBe('typescript')
