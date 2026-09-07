@@ -19,7 +19,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { ToolListChangedNotificationSchema } from '@modelcontextprotocol/sdk/types.js'
 import type { Context } from '@deepseek-ai/cordis'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
-import { createTransport } from './transport.ts'
+import { createTransport, isExpiredHttpSession } from './transport.ts'
 import { syncTools } from './tools.ts'
 import type { ToolBridgeOptions, ToolDisposers } from './tools.ts'
 import type { Config } from './index.ts'
@@ -122,7 +122,7 @@ export interface ConnectionHandle {
  */
 export function startConnection(ctx: Context, config: Config, policy: ResolvedReconnectPolicy): ConnectionHandle {
   const label = `mcp-client(${config.serverName})`
-  const opts: ToolBridgeOptions = {
+  const opts: Omit<ToolBridgeOptions, 'isCurrent'> = {
     registrationFailure: 'contain',
     serverName: config.serverName,
     toolCallTimeoutMs: config.toolCallTimeoutMs,
@@ -130,7 +130,7 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
   // The initial sync uses 'throw' when failOnStartupError is configured, so
   // a registration conflict propagates to the startup-await path. Re-syncs
   // and reconnect syncs always contain conflicts.
-  const startupOpts: ToolBridgeOptions = config.failOnStartupError
+  const startupOpts: Omit<ToolBridgeOptions, 'isCurrent'> = config.failOnStartupError
     ? { ...opts, registrationFailure: 'throw' }
     : opts
 
@@ -139,6 +139,9 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
   let client: Client | undefined
   /** Close signal paired with {@link client}; captured by dispose before current ownership is cleared. */
   let clientClosed: Promise<void> | undefined
+  /** HTTP generation whose session expired and whose local close is still owned here. */
+  let expiredClient: Client | undefined
+  let retirement: Promise<void> = Promise.resolve()
   /** Live tool registrations owned by this server; only {@link enqueueSync} and dispose swap it. */
   let disposers: ToolDisposers = new Map()
   let reconnectTimer: NodeJS.Timeout | undefined
@@ -150,7 +153,8 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
   let firstAttemptError: unknown
 
   /** A generation may act only while it is the current one on a live plugin. */
-  const isCurrent = (generation: Client): boolean => !disposed && client === generation
+  const ownsGeneration = (generation: Client): boolean => !disposed && client === generation
+  const isCurrent = (generation: Client): boolean => ownsGeneration(generation) && expiredClient !== generation
 
   /**
    * Serializes every syncTools call — initial syncs and notification re-syncs
@@ -159,19 +163,19 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
    * generation and leak another).
    */
   let syncChain: Promise<void> = Promise.resolve()
-  function enqueueSync(generation: Client, syncOpts: ToolBridgeOptions = opts): Promise<void> {
+  function enqueueSync(generation: Client, syncOpts = opts): Promise<void> {
     const run = syncChain.then(async () => {
       if (!isCurrent(generation)) return
-      disposers = await syncTools(generation, ctx, syncOpts, disposers)
+      disposers = await syncTools(generation, ctx, { ...syncOpts, isCurrent: () => isCurrent(generation) }, disposers)
     })
     // The chain tail must survive a failed sync; the enqueuing caller owns reporting.
     syncChain = run.catch(() => {})
     return run
   }
 
-  /** One disconnect decision per generation: the isCurrent guard makes racing close/error signals idempotent. */
+  /** One disconnect decision per owned generation, including racing close/error signals. */
   function generationDown(generation: Client): void {
-    if (!isCurrent(generation)) return
+    if (!ownsGeneration(generation)) return
     client = undefined
     clientClosed = undefined
     scheduleReconnect()
@@ -193,7 +197,7 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
     const lostEstablishedConnection = connectedAt !== undefined
     if (!policy.enabled) {
       const message = lostEstablishedConnection
-        ? 'connection lost and reconnect is disabled — registered tools will fail until an HMR reload or Host restart'
+        ? 'connection lost and reconnect is disabled — reload the plugin or restart the Host to restore tools'
         : 'connection failed and reconnect is disabled — no tools were registered; reload the plugin or restart the Host to connect'
       ctx.logger.error(`${label}: ${message}`)
       return
@@ -250,7 +254,7 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
       closed.resolve()
       // A failed connect owns its close barrier in the catch path below. An
       // established generation can transition down directly from this signal.
-      if (attemptSettled) generationDown(generation)
+      if (attemptSettled && expiredClient !== generation) generationDown(generation)
     }
     // Registered before connect so a list change during the initial sync is
     // queued behind it rather than dropped.
@@ -269,7 +273,27 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
       },
     )
     try {
-      await generation.connect(createTransport(config))
+      const transport = createTransport(config)
+      generation.onerror = (error) => {
+        if (!attemptSettled || !isCurrent(generation) || !isExpiredHttpSession(transport, error)) return
+        expiredClient = generation
+        syncChain = syncChain.then(() => {
+          for (const dispose of disposers.values()) dispose()
+          disposers = new Map()
+        })
+        retirement = (async () => {
+          // Both close completion and onclose must settle before a fresh initialize.
+          const closing = generation.close().catch(() => { /* the expired transport may already be closed */ })
+          const quiesced = await waitForClose(Promise.all([closing, closed.promise]).then(() => {}))
+          if (!ownsGeneration(generation)) return
+          if (!quiesced) {
+            ctx.logger.error(`${label}: expired HTTP generation did not close within ${GENERATION_CLOSE_TIMEOUT_MS}ms — reconnect stopped; reload the plugin or restart the Host to retry`)
+            return
+          }
+          generationDown(generation)
+        })()
+      }
+      await generation.connect(transport)
       if (hasClosed()) {
         attemptSettled = true
         generationDown(generation)
@@ -334,7 +358,7 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
       const currentClosed = clientClosed
       client = undefined
       clientClosed = undefined
-      if (current !== undefined) {
+      if (current !== undefined && current !== expiredClient) {
         try { await current.close() } catch { /* transport already gone */ }
         if (currentClosed !== undefined && !await waitForClose(currentClosed)) {
           ctx.logger.error(`${label}: generation did not close within ${GENERATION_CLOSE_TIMEOUT_MS}ms during disposal — server shutdown may be incomplete`)
@@ -343,6 +367,7 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
       // Quiesce, don't just request it: the in-flight attempt enqueues its
       // sync before settling, so awaiting both leaves `disposers` final.
       await settling
+      await retirement
       await syncChain
       for (const dispose of disposers.values()) dispose()
       disposers = new Map()

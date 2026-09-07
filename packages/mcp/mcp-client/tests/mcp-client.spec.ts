@@ -145,6 +145,7 @@ function textAt(content: readonly ContentBlock[], index = 0): string {
 }
 
 const defaultOpts: ToolBridgeOptions = {
+  isCurrent: () => true,
   registrationFailure: 'contain',
   serverName: 'srv',
   toolCallTimeoutMs: 60_000,
@@ -294,6 +295,35 @@ describe('syncTools', () => {
     expect(ctx.tools.get('mcp__srv__old_tool')).toBeUndefined()
     expect(ctx.tools.get('mcp__srv__new_tool')).toBeDefined()
     expect(secondDisposers.size).toBe(1)
+  })
+
+  it('does not publish a tool list returned after its generation retired', async () => {
+    let current = true
+    const opts = { ...defaultOpts, isCurrent: () => current }
+    const client = createMockClient([{ name: 'old', inputSchema: { type: 'object' } }])
+    const previous = await syncTools(client as never, ctx, opts, new Map())
+    const gate: PromiseWithResolvers<Awaited<ReturnType<typeof client.listTools>>> = Promise.withResolvers()
+    client.listTools.mockImplementation(() => gate.promise)
+    const pending = syncTools(client as never, ctx, opts, previous)
+    current = false
+    gate.resolve({ tools: [{ name: 'late', inputSchema: { type: 'object' } }], nextCursor: undefined })
+    expect(await pending).toBe(previous)
+    expect(ctx.tools.get('mcp__srv__late')).toBeUndefined()
+  })
+
+  it('reports an uncertain result when the generation retires during a call', async () => {
+    let current = true
+    const client = createMockClient([{ name: 'held', inputSchema: { type: 'object' } }])
+    const gate: PromiseWithResolvers<Record<string, unknown>> = Promise.withResolvers()
+    client.callTool.mockImplementation(() => gate.promise)
+    await syncTools(client as never, ctx, { ...defaultOpts, isCurrent: () => current }, new Map())
+    const pending = ctx.tools.execute({ name: 'mcp__srv__held', arguments: {}, callId: ToolCallId('retired-result'), signal: testToolSignal })
+    await vi.waitFor(() => { expect(client.callTool).toHaveBeenCalledOnce() })
+    current = false
+    gate.resolve({ content: [{ type: 'text', text: 'late success' }] })
+    const result = await pending
+    expect(result.isError).toBe(true)
+    expect(textAt(result.content)).toContain('inspect saved state before retrying')
   })
 
   it('drains paginated listTools responses', async () => {

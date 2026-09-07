@@ -1,0 +1,11 @@
+version: 1
+scenario: mcp-http-recovery
+profile: web
+composition: web-mcp-http-recovery
+recording: authored
+header:
+  class: web-mcp-http-recovery
+  pin: true
+  changes: 2
+replay:
+  override: true
