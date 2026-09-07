@@ -59,6 +59,8 @@ The compact host header and bounded conversation width leave more room for the e
 
 The Host Remote resolves the Agent, coalesces concurrent opens, and launches `adapters/mantur-runtime.mjs`. It mounts the existing MCP client inside that Agent's scope. All mounted MCP clients resolve the same peer instance, preserving Agent-scoped server-name reservations. The MCP bearer remains in Host memory and the child environment. Disposal drains both connection and subprocess. The Client ignores startup responses from a Session that is no longer selected. No invariant companion is published: subprocess exit state belongs to the child handle; connection and tool-generation invariants belong to the MCP client.
 
+Opening the workbench mounts the native MCP tools and a `systemPrompt.section` in that Agent's scope after startup succeeds. The section explains draft reads, review and terminal status, starting a fresh draft after application, inspecting saved work before repeating mutations, and project versus source frame rates. The next model request records this guidance in `request/header`. Unopened Agents receive no editing section; hiding the view retains it, while Agent or Host disposal removes it. This guidance does not repair a disconnected transport or prove that an edit succeeded.
+
 The controlled [editor patch](adapters/mantur-cut.patch) has these fixed sources. Apply it to a clean upstream checkout with `git apply --index`; `git write-tree` must match the result tree before building. It includes the local-import draft fix and terminal-checkpoint persistence fix, without additional editor changes.
 
 | Source | Fixed value |
@@ -84,11 +86,11 @@ The controlled [editor patch](adapters/mantur-cut.patch) has these fixed sources
 <a id="model-experience"></a>
 ## Model Experience
 
-Indirectly, through the Agent-scoped MCP client that owns editing tool discovery, execution, and logged results.
+Indirectly, through the Agent-scoped MCP tools and workflow section recorded in model requests.
 
 #### KV Cache effect
 
-Opening editing changes the Agent's available tool definitions; subsequent requests may rebuild the corresponding prompt-cache prefix.
+Opening editing changes that Agent's tool definitions and system prompt; subsequent requests may rebuild the corresponding prompt-cache prefix.
 
 ## Known Limitations and Deferred Work
 

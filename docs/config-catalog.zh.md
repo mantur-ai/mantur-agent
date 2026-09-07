@@ -412,7 +412,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-client-ui-mantur-editing`
 
-需要： `typert` · `webServer` · `tools`
+需要： `typert` · `webServer` · `tools` · `systemPrompt`
 
 ```ts config-catalog
 /** Editing deployment configuration; no browser-visible credentials. */
@@ -433,7 +433,7 @@ export interface RuntimeConfig {
 }
 ```
 
-来源： [`packages/client/ui-mantur-editing/src/index.ts:22`](../packages/client/ui-mantur-editing/src/index.ts)
+来源： [`packages/client/ui-mantur-editing/src/index.ts:35`](../packages/client/ui-mantur-editing/src/index.ts)
 
 <a id="deepseek-aidsh-client-ui-mantur-navigation"></a>
 

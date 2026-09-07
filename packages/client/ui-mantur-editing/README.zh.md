@@ -59,6 +59,8 @@ Agent 导入本地文件在手动模式下保留单次确认，素材先加入�
 
 Host Remote 解析 Agent，合并并发打开请求，并启动 `adapters/mantur-runtime.mjs`。既有 MCP 客户端挂载于该 Agent 作用域。所有挂载的 MCP 客户端解析到同一 peer 实例，保留 Agent 作用域内的服务器名称预留。MCP bearer 只存在于 Host 内存和子进程环境。卸载等待连接与子进程退出。Client 忽略已切走会话的启动结果。本包不发布 invariant companion：退出状态由子进程句柄直接持有，连接和工具版本约束由 MCP 客户端负责。
 
+工作台成功启动后，在所属 Agent 的作用域内挂载原生 MCP 工具和一个 `systemPrompt.section`。该说明涵盖草稿读取、审核与终态确认、应用后开启新草稿、重复修改前核对已保存内容，以及工程与源素材帧率的区别。下一次模型请求通过 `request/header` 记录这段说明。未打开工作台的 Agent 不接收剪辑说明；隐藏视图保留说明，释放 Agent 或 Host 则移除。说明本身不能修复断开的连接，也不能证明剪辑成功。
+
 受控的[编辑器补丁](adapters/mantur-cut.patch)采用下列固定来源。在干净的上游源码目录执行 `git apply --index`，构建前用 `git write-tree` 核对结果树。补丁包含本地导入写入草稿的修复及终态检查点持久化修复，没有额外编辑器修改。
 
 | 来源 | 固定值 |
@@ -84,11 +86,11 @@ Host Remote 解析 Agent，合并并发打开请求，并启动 `adapters/mantur
 <a id="model-experience"></a>
 ## 模型体验
 
-通过当前 Agent 作用域内的 MCP 客户端间接影响模型；该客户端负责剪辑工具的发现、执行和结果日志。
+通过记录在模型请求中的 Agent 作用域内 MCP 工具和工作流提示段间接影响模型。
 
 #### KV Cache 影响
 
-打开剪辑会改变当前 Agent 可用的工具定义；后续请求可能重建相应的提示缓存前缀。
+打开剪辑会改变当前 Agent 的工具定义和系统提示；后续请求可能重建相应的提示缓存前缀。
 
 ## 已知限制与待办工作
 

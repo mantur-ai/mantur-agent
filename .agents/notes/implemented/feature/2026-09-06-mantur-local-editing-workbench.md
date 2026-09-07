@@ -26,9 +26,13 @@ Project media uses the canonical Agent working directory supplied by the Host. A
 
 Approved local imports use the existing draft executor and checkpoint persistence. Writing their assets directly to the live project would invalidate the importing edit session's own base revision. Manual file-access confirmation remains separate from draft review; cancellation and concurrent live edits reject the candidate without publishing its assets. Other real-project tools retain their existing execution path. Terminal editing sessions retain their original revision, saved draft and operations as evidence. The initial checkpoint, later draft saves, review and terminal closure share one persistence queue. Terminal records close in-memory editing before ledger finalization, so a ledger failure cannot leave a durable terminal session writable. The reader never resumes terminal sessions, rebases stale changes or reconstructs missing history. Fixed adapter sources and the expected result tree are recorded in the [package README](../../../../packages/client/ui-mantur-editing/README.md#understand-the-implementation).
 
+The editing child contributes workflow guidance through the existing Agent-scoped `systemPrompt.section` after MCP startup succeeds. Tool schemas describe individual calls but do not fully explain the transition from applied review to a fresh read draft. The section makes that sequence visible in the actual logged request without changing the shared MCP consumer or agent loop. Its lifetime matches the workbench runtime, including retained hidden views. The [package model experience](../../../../packages/client/ui-mantur-editing/README.md#understand-the-implementation) owns the scope and contents.
+
 ## Alternatives considered
 
 The existing details seat is too narrow and unavailable on the home screen; a main page hides the conversation. Copying editor state would duplicate its persistence and undo logic. The generic workbench seat keeps those responsibilities with their existing owners.
+
+**Relying only on upstream Skills or server instructions.** Skill discovery does not establish that an Agent loaded a workflow, and the current MCP client does not project server instructions into model requests. A local section supplies the necessary sequence through an existing logged extension point. Copying the editor's internal Agent instructions would describe a different tool channel; a generic MCP prompt framework would expand this integration's ownership unnecessarily.
 
 ## Verification
 
@@ -45,6 +49,8 @@ Host tests cover separate Session directories, retained files, rejected traversa
 Three synthetic local MP4 clips were imported in the real editor. Public MCP staged three trims and a reorder; manual UI approval applied four operations. The timeline changed from nine seconds to six, and one undo/redo reversed/restored the batch. Reopening the project inside Mantur restored the six-second timeline. Browser export produced 180 H.264 frames at 1920×1080; full decode and samples at seconds 1, 3, and 5 confirmed C, A, B. No model request was made.
 
 The compact host header and bounded conversation width leave more room for the editor. The presentation patch starts with a narrower media panel, a lower timeline, and a collapsed Inspector; existing saved editor panel preferences still apply. Panel dividers and the Inspector toggle remain available.
+
+The keyless Mantur editing snapshot boots the shipped Web composition through Loader, launches an external editor fixture, discovers tools through the real MCP client, and compares the recorded session and full request-header prompt. Controller tests cover unopened and different Agent scopes, repeated opens, failed startup and removal after Agent or Host disposal. These checks establish prompt delivery and lifetime, not model compliance, real editing outcomes or connection recovery. The Web fixture replaces its exact temporary working directory in prompt pins, including paths followed by Chinese punctuation, while retaining the full session and prompt comparisons.
 
 ## Upgrade check
 

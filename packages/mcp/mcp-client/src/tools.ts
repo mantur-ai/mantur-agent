@@ -28,6 +28,8 @@ import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 
 /** Resolved options relevant to tool bridging. */
 export interface ToolBridgeOptions {
+  /** Whether this connection generation may still publish tools or issue calls. */
+  isCurrent: () => boolean
   /** Whether a registry conflict is contained or rejects this synchronization. */
   registrationFailure: 'contain' | 'throw'
   serverName: string
@@ -175,6 +177,7 @@ export async function syncTools(
   } while (cursor)
 
   // Phase 2: swap generations.
+  if (!opts.isCurrent()) return previous
   for (const dispose of previous.values()) dispose()
   const disposers: ToolDisposers = new Map()
   try {
@@ -310,6 +313,7 @@ function createExecutor(
   projections: WeakMap<ToolExecution, PreparedProjection>,
 ): ToolDefinition['execute'] {
   return async (args: unknown, exec: ToolExecution) => {
+    if (!opts.isCurrent()) throw new Error(`MCP connection for "${opts.serverName}" is unavailable; this call was not sent`)
     if (taskRequired) {
       throw new Error(`Tool "${rawName}" requires task-based execution, which this bridge does not support`)
     }
@@ -319,6 +323,7 @@ function createExecutor(
     // specific "missing required param" error the model can learn from.
     const argsObj = (typeof args === 'object' && args !== null ? args : {}) as Record<string, unknown>
     const result = await callToolUncached(client, rawName, argsObj, exec, opts)
+    if (!opts.isCurrent()) throw new Error(`MCP connection for "${opts.serverName}" changed during this call; inspect saved state before retrying`)
 
     // The SDK may return a legacy `toolResult` shape; normalize to content array.
     if (!Array.isArray(result.content)) {

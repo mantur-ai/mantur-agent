@@ -9,6 +9,8 @@
   },
   "include": [
     "apps/web/tests/scaffold.ts",
+    "apps/web/tests/mantur-editing-workflow.snapshot.ts",
+    "apps/web/tests/mcp-http-recovery.snapshot.ts",
     "apps/web/tests/desktop-drafts.e2e.ts",
     "apps/web/tests/desktop-updates.e2e.ts",
     "apps/web/tests/default-model.e2e.ts",

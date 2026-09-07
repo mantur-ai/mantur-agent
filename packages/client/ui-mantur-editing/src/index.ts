@@ -4,12 +4,25 @@ import z from '@deepseek-ai/schemastery'
 import { isAbsolute } from 'node:path'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-host-webserver'
+import type {} from '@deepseek-ai/dsh-system-prompt'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { apply as applyMcpClient, Config as McpClientConfig, inject as mcpClientInject, name as mcpClientName } from '@deepseek-ai/dsh-mcp-client'
 import { startEditor, type EditorRuntime, type RuntimeConfig } from './runtime.ts'
 import type { EditingWorkspace } from './types.ts'
 
 const McpClient = { apply: applyMcpClient, Config: McpClientConfig, inject: mcpClientInject, name: mcpClientName }
+
+const EDITING_WORKFLOW = `Mantur Cut editing workflow
+
+This Agent has opened the 漫途Cut workbench. Use its mcp__mantur_cut__ tools for editing; the workbench and this conversation share the project. Follow each tool's current schema and confirmation requirements.
+
+Bind to the project shown in the workbench with target_project. Inspect list_edit_sessions before starting or recovering work. Use begin_edit_session to create a draft before read_project or draft edits; pass the returned editSessionId and the bound editorProjectId. Read the existing media pool and timeline before importing or placing clips. Match existing asset and timeline item identities to avoid duplicate imports or placements.
+
+review_edit_session finishes drafting: manual mode awaits review, while auto mode applies the staged proposal. Use get_edit_session on that session, through its owning connection, to confirm the terminal result. Only applied confirms application; awaiting_review is not success. Never continue draft reads or edits with an applied, rejected, cancelled, stale or failed editSessionId. To inspect the saved project or make the next edit after application, start a new edit session and read its fresh draft.
+
+If the connection expires or a session becomes stale, stop mutations and report the error. Do not blindly retry imports, placements or review. After the connection is restored, bind to the workbench project again, inspect its edit sessions, and read a fresh draft before deciding what remains. A new connection does not own the old connection's edit session; do not assume the old draft can resume or discard other active work.
+
+Use the project's timeline fps for timeline frame positions and durations. Source-media fps is separate; read or probe source timing as needed, and do not treat source fps as project fps. Verify canvas dimensions, clip order, trims and original audio against the requested edit. Report only verified applied changes; project saving, preview checks and export are distinct results.`
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -30,7 +43,7 @@ export const Config: z<Config> = z.object({
 
 /** Runtime and tools share the exact Agent identity resolved by the authenticated Remote gateway. */
 export class ManturEditing extends TypertRemoteService {
-  static inject = ['typert', 'webServer', 'tools']
+  static inject = ['typert', 'webServer', 'tools', 'systemPrompt']
   static Config = Config
   private readonly opening = new Map<Agent, Promise<EditorRuntime>>()
   private readonly children = new Map<Agent, Fiber>()
@@ -81,6 +94,7 @@ export class ManturEditing extends TypertRemoteService {
     }
     const fiber = agent.ctx.plugin({
       name: 'mantur-session-editing',
+      inject: ['systemPrompt'],
       async apply(ctx: Context) {
         runtime = await startEditor(config, agent.session.header.cwd, agent.id, parentOrigin)
         const owned = runtime
@@ -92,6 +106,11 @@ export class ManturEditing extends TypertRemoteService {
           headers: { Authorization: `Bearer ${runtime.token}` },
           failOnStartupError: true, toolCallTimeoutMs: config.toolCallTimeoutMs,
         }).await()
+        ctx.systemPrompt.section({
+          name: 'mantur:editing-workflow',
+          order: ctx.systemPrompt.getSectionOrder('TOOL_WORKFLOW'),
+          text: EDITING_WORKFLOW,
+        })
       },
     })
     this.children.set(agent, fiber)
