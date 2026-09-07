@@ -3,7 +3,7 @@ import { createScope, scopeOf } from '@deepseek-ai/dsh-scope'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { afterEach, expect, it, vi } from 'vitest'
-import ManturEditing, { type Config } from '../src/index.ts'
+import ManturEditing, { Config } from '../src/index.ts'
 
 const harness = vi.hoisted(() => ({ start: vi.fn(), scopes: [] as unknown[], stopped: [] as ReturnType<typeof vi.fn>[] }))
 vi.mock('../src/runtime.ts', () => ({ startEditor: harness.start }))
@@ -19,6 +19,20 @@ afterEach(async () => {
   harness.start.mockReset(); harness.scopes.length = 0; harness.stopped.length = 0
 })
 const config: Config = { editorRoot: '/editor', nodeExecutable: '/node', startupTimeoutMs: 1000, stopTimeoutMs: 1000, toolCallTimeoutMs: 1000 }
+
+it('requires explicit runtime paths and positive operation budgets', () => {
+  expect(() => Config({} as Config)).toThrow()
+  for (const key of ['startupTimeoutMs', 'stopTimeoutMs', 'toolCallTimeoutMs'] as const) {
+    expect(() => Config({ ...config, [key]: 0 })).toThrow()
+  }
+  expect(Config(config)).toEqual(config)
+  for (const key of ['editorRoot', 'nodeExecutable'] as const) {
+    const ctx = new Context()
+    contexts.push(ctx)
+    ctx.provide('typert', {} as never)
+    expect(() => new ManturEditing(ctx, { ...config, [key]: 'relative-path' })).toThrow('absolute')
+  }
+})
 async function setup() {
   const ctx = new Context()
   contexts.push(ctx)

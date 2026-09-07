@@ -86,6 +86,8 @@ A scenario requiring a non-Windows host declares `posixOnly`, which skips its ru
 
 ### What can go wrong
 
+`waitForSubagentTurnEnd` stops polling at its configured deadline and reports the child index and required turn on timeout. An already-started filesystem harvest finishes before scenario cleanup, so slow I/O can delay error delivery beyond that deadline.
+
 - **A fixture guard rejects the committed files** — orphan scenario dirs, missing files, multiple pins for one header class, duplicate sidecar content, unscrubbed JSONL headers, and malformed pinning headers all fail the suite before comparisons run.
 - **The session harvest needs raw JSONL mode** — snapshot configs set the JSONL backend's `compression: 'none'`; compressed JSONL has no snapshot-harvest path.
 - **Built mode needs current artifacts** — run `pnpm run build` before selecting `DSH_EXAMPLE_MODE=lib`; source mode remains the zero-build path.

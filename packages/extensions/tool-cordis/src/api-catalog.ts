@@ -1297,6 +1297,31 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'manturProjects',
+    summary: 'Prepare one project per first-send identity, without creating or sending a Session.',
+    description: 'Prepare one project per first-send identity, without creating or sending a Session.',
+    methods: [
+      {
+        signature: '@Remote settings(): ProjectRootSettings',
+        description: 'Read the configured project location without creating directories.',
+        parameters: [],
+        returns: 'the selected root or an explicit unconfigured state.',
+      },
+      {
+        signature: '@Remote async setRoot(path: string): Promise<ProjectRootSettings>',
+        description: 'Select the root for future projects; existing directories remain untouched.',
+        parameters: [{ name: 'path', description: 'absolute project root selected by the user.' }],
+        returns: 'the durable root selection.',
+      },
+      {
+        signature: '@Remote prepare(creationId: ProjectCreationId, title: string): Promise<PreparedProject>',
+        description: 'Create or resume the same first-send project. No Session or message is created here.',
+        parameters: [{ name: 'creationId', description: 'UUID retained by the client until draft transfer succeeds.' }, { name: 'title', description: 'localized initial Workspace title, retained for this creation identity.' }],
+        returns: 'its durable Workspace and deterministic Session identity.',
+      },
+    ],
+  },
+  {
     key: 'messageFeedback',
     summary: 'Storage-domain sidecar service.',
     description: 'Storage-domain sidecar service. It inspects persisted Session history and never creates or resumes an Agent or Session.',
@@ -4660,6 +4685,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface PreparedLlmCall {\n    readonly config: LlmCallConfig;\n    readonly retryPolicy: ResolvedRetryPolicy;\n    readonly context?: LlmModelContext;\n    readonly inputModalities?: readonly ModelModality[];\n    readonly adapterDefaults: LlmCallConfigAdapterDefaults;\n    stream(options: GenerateOptions): AsyncIterable<StreamChunk>;\n}',
   },
   {
+    name: 'PreparedProject',
+    declaration: 'export interface PreparedProject {\n    readonly workspaceId: WorkspaceId;\n    readonly sessionId: SessionId;\n    readonly path: string;\n}',
+  },
+  {
     name: 'PreparedReferencedMessage',
     declaration: 'export interface PreparedReferencedMessage {\n    content: ContentBlock[];\n    additionalContext?: UserMessage;\n}',
   },
@@ -4688,6 +4717,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type PreToolDecision = {\n    kind: \'allow\';\n} | {\n    kind: \'deny\';\n    reason: string;\n} | {\n    kind: \'ask\';\n    reason?: string;\n};',
   },
   {
+    name: 'ProjectCreationId',
+    declaration: 'export type ProjectCreationId = Branded<\'ProjectCreationId\'>;',
+  },
+  {
     name: 'ProjectionChangeListener',
     declaration: 'export type ProjectionChangeListener = (session: Session, key: Extract<keyof SessionProjectionMap, string>, value: unknown, seq: SessionSeq) => void;',
   },
@@ -4706,6 +4739,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ProjectionSnapshot',
     declaration: 'export interface ProjectionSnapshot {\n    asOfSeq: SessionSeqCursor;\n    values: Partial<SessionProjectionMap>;\n}',
+  },
+  {
+    name: 'ProjectRootSettings',
+    declaration: 'export type ProjectRootSettings = {\n    readonly source: \'unconfigured\';\n} | {\n    readonly source: \'desktop\' | \'custom\';\n    readonly rootPath: string;\n};',
   },
   {
     name: 'PromptAssembly',

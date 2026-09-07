@@ -312,7 +312,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     pkg: 'storage-domain',
     title: 'Domain data facility',
     mode: 'core',
-    consumers: ['workspace', 'message-feedback'],
+    consumers: ['workspace', 'message-feedback', 'mantur-projects'],
     note: 'Waits for every configured backend, then publishes the domain form as one lifecycle-bound service for typed durable state.',
   },
   {
@@ -327,8 +327,16 @@ const SERVICE_ROLES: ServiceRole[] = [
     pkg: 'workspace',
     title: 'Workspace entity registry',
     mode: 'core',
-    consumers: ['api-workspace-controller', 'api-session-controller'],
+    consumers: ['api-workspace-controller', 'api-session-controller', 'mantur-projects'],
     note: 'Owns WorkspaceId-branded records over the domain facility; stable sessionIds accounts drive Host RPC and GUI projections.',
+  },
+  {
+    key: 'manturProjects',
+    pkg: 'mantur-projects',
+    title: 'Mantur first-send project preparation',
+    mode: 'core',
+    consumers: ['ui-mantur-navigation'],
+    note: 'Persists project roots and retry identities, creates exclusive directories, and returns Workspace and Session identities without submitting input.',
   },
   {
     key: 'sessionQuery',

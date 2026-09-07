@@ -77,22 +77,35 @@ export function parseCoveragePartitionCount(raw: string | undefined): number | u
 }
 
 /**
- * Resolve the paired Vitest timeout arguments used by coverage partitions.
- * `--hookTimeout` travels with the test budget because setup and teardown pay
- * the same host contention the raised test budget accounts for: fixtures that
- * await child exit or retry Windows handle release spend that cost in
- * `afterEach`, where Vitest's separate 10 s default would otherwise fail a
- * suite whose cases all passed.
- * @param raw - the configured millisecond budget, or undefined to keep Vitest's defaults.
- * @returns the Vitest arguments applying that budget, empty when unset.
+ * Resolve one coverage budget for each Vitest project's tests, polling, and hooks.
+ * @param raw - millisecond budget, or undefined to retain Vitest defaults.
+ * @returns project options; empty when no budget is configured.
  */
-export function coverageTestTimeoutArgs(raw: string | undefined): string[] {
-  if (raw === undefined || raw === '') return []
-  const parsed = Number.parseInt(raw, 10)
-  if (!Number.isSafeInteger(parsed) || parsed < 1 || String(parsed) !== raw) {
+export function coverageTestTimeoutConfig(raw: string | undefined): {
+  testTimeout?: number
+  hookTimeout?: number
+  expect?: { poll: { timeout: number } }
+} {
+  if (raw === undefined || raw === '') return {}
+  const timeout = Number.parseInt(raw, 10)
+  if (!Number.isSafeInteger(timeout) || timeout < 1 || String(timeout) !== raw) {
     throw new Error(`${COVERAGE_TEST_TIMEOUT_ENV} must be a positive integer, got ${JSON.stringify(raw)}.`)
   }
-  return [`--testTimeout=${raw}`, `--expect.poll.timeout=${raw}`, `--hookTimeout=${raw}`]
+  return { testTimeout: timeout, hookTimeout: timeout, expect: { poll: { timeout } } }
+}
+
+/**
+ * Resolve matching CLI arguments for coverage commands.
+ * @param raw - millisecond budget, or undefined to retain Vitest defaults.
+ * @returns arguments for the root runner; project options are configured separately.
+ */
+export function coverageTestTimeoutArgs(raw: string | undefined): string[] {
+  const { testTimeout: timeout } = coverageTestTimeoutConfig(raw)
+  return timeout === undefined ? [] : [
+    `--testTimeout=${String(timeout)}`,
+    `--expect.poll.timeout=${String(timeout)}`,
+    `--hookTimeout=${String(timeout)}`,
+  ]
 }
 
 /** Remove pnpm's package-script separator before forwarding Vitest arguments. */

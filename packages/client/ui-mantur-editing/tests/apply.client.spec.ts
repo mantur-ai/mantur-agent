@@ -1,18 +1,22 @@
 import { Context } from '@deepseek-ai/cordis'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import * as client from '../src/client/index.ts'
 import { Workbench } from '../src/client/Workbench.tsx'
 
+vi.mock('@deepseek-ai/dsh-client-ui-mantur-editing/remote', () => ({ default: {} }))
+
 describe('editing workbench composition', () => {
   it('opens only for explicit editing selections and releases its occupant and listener', async () => {
     const ctx = new Context()
+    onTestFinished(() => ctx.fiber.dispose())
     await ctx.plugin(SlotRegistry).await()
     const locale = new LocaleRuntime(ctx)
     locale.setLocale('zh')
     ctx.provide('locale', locale)
-    ctx.provide('theme', { getTheme: () => ({ active: { colorScheme: 'light' } }) } as never)
+    let colorScheme: 'light' | 'dark' = 'light'
+    ctx.provide('theme', { getTheme: () => ({ active: { colorScheme } }) } as never)
     const layout = { openWorkbench: vi.fn(), closeWorkbench: vi.fn() }
     ctx.provide('layout', layout as never)
     const disposeRemote = vi.fn(async () => {})
@@ -24,6 +28,20 @@ describe('editing workbench composition', () => {
     await fiber.await()
     expect(slots.entries('main.workbench')[0]?.component).toBe(Workbench)
     expect(slots.entries('conversation.session.header.actions')).toHaveLength(1)
+    const entry = slots.entries('main.workbench')[0]!
+    const face = (entry.inject as unknown as () => client.WorkbenchInjection)()
+    expect(face.getColorScheme()).toBe('light')
+    const notify = vi.fn()
+    const unsubscribe = face.subscribeTheme(notify)
+    colorScheme = 'dark'
+    ctx.emit('theme/change', ctx.theme.getTheme())
+    expect(notify).toHaveBeenCalledOnce()
+    expect(face.getColorScheme()).toBe('dark')
+    unsubscribe()
+    ctx.emit('theme/change', ctx.theme.getTheme())
+    expect(notify).toHaveBeenCalledOnce()
+    const disposedNotify = vi.fn()
+    face.subscribeTheme(disposedNotify)
     expect(layout.openWorkbench).not.toHaveBeenCalled()
     ctx.emit('mantur/creation-mode-selected', 'editing')
     ctx.emit('mantur/creation-mode-selected', 'editing')
@@ -35,6 +53,8 @@ describe('editing workbench composition', () => {
     expect(layout.closeWorkbench).toHaveBeenCalledTimes(4)
     expect(slots.entries('main.workbench')).toEqual([])
     expect(slots.entries('conversation.session.header.actions')).toEqual([])
+    ctx.emit('theme/change', ctx.theme.getTheme())
+    expect(disposedNotify).not.toHaveBeenCalled()
     ctx.emit('mantur/creation-mode-selected', 'editing')
     expect(layout.openWorkbench).toHaveBeenCalledTimes(2)
   })

@@ -10,20 +10,28 @@ import * as clientEntry from '../src/client/index.ts'
 import { apply, inject } from '../src/client/index.ts'
 import { apply as hostApply } from '../src/index.ts'
 import { CreationGuide, CreationModes, type CreationGuideInjected, type GuidePreferencesInjected } from '../src/client/CreationGuide.tsx'
-import { ManturComposerLayout } from '../src/client/ManturComposerLayout.tsx'
+import { ManturComposerLayout, type ManturComposerInjected } from '../src/client/ManturComposerLayout.tsx'
 import { GUIDE_NAMESPACE, type GuideSettings } from '../src/guide-settings.ts'
 import type { ManturMarketplaceStore } from '../src/client/store.ts'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import { DesktopUpdate, type DesktopUpdateInjected } from '../src/client/DesktopUpdate.tsx'
 
-afterEach(() => { vi.restoreAllMocks() })
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
 vi.mock('@deepseek-ai/dsh-manturhub-marketplace/remote', () => ({
   default: { package: '@deepseek-ai/dsh-manturhub-marketplace', descriptors: [] },
 }))
+vi.mock('@deepseek-ai/dsh-mantur-projects/remote', () => ({
+  default: { package: '@deepseek-ai/dsh-mantur-projects', descriptors: [] },
+}))
 
 async function bench() {
   const ctx = new Context()
-  const remote = new TestRemote(ctx, { manturMarketplace: {}, manturAccount: {} })
+  vi.stubGlobal('sessionStorage', { getItem: () => null, setItem: vi.fn(), removeItem: vi.fn() })
+  const remote = new TestRemote(ctx, {
+    manturMarketplace: {}, manturAccount: {},
+    manturProjects: { settings: () => ({ ok: true, value: { source: 'unconfigured' } }) },
+  })
   remote.$mount = () => Promise.resolve(() => Promise.resolve())
   await ctx.plugin(SlotRegistry).await()
   const locale = new LocaleRuntime(ctx)
@@ -31,9 +39,13 @@ async function bench() {
   ctx.provide('locale', locale)
   const binding = vi.fn()
   const appendReference = vi.fn(() => true)
+  const inputState = { getSnapshot: () => undefined, subscribe: () => () => {} }
+  const pickDirectory = vi.fn(async () => null)
   ctx.provide('sessions', { binding } as never)
   ctx.provide('workspaces', {} as never)
-  ctx.provide('conversation', { input: { for: () => ({ appendReference }) } } as never)
+  ctx.provide('conversation', { input: { for: () => ({ appendReference, state: inputState }) } } as never)
+  ctx.provide('conversationDrafts', { input: { appendReference, state: inputState }, register: () => () => {} } as never)
+  ctx.provide('uiWorkspace', { pickDirectory } as never)
   const preferences = {
     getSnapshot: vi.fn(() => ({ value: undefined as GuideSettings | undefined })), subscribe: () => () => {}, set: vi.fn(),
   }
@@ -43,6 +55,7 @@ async function bench() {
     name: 'root',
     children: {
       'sidebar.navigation': { kind: 'single', scope: 'root' },
+      'sidebar.footer.action': { kind: 'list', scope: 'root' },
       'sidebar.workspaces.heading': { kind: 'single', scope: 'root' },
       'main.page': { kind: 'single', scope: 'root' },
       'conversation.hero.modes': { kind: 'single', scope: 'root' },
@@ -50,17 +63,69 @@ async function bench() {
       'conversation.composer.layout': { kind: 'single', scope: 'session-maybe' },
     },
   } as never, () => null)
-  return { ctx, locale, slots, preferences, binding, appendReference }
+  return { ctx, remote, locale, slots, preferences, binding, appendReference, inputState, pickDirectory }
 }
 
 describe('ui-mantur-navigation apply', () => {
+  it('releases native updates and the first Remote when the second mount fails and its owner closes', async () => {
+    const unsubscribe = vi.fn()
+    vi.stubGlobal('window', { manturUpdates: {
+      getSnapshot: async () => ({ revision: 1, enabled: true, currentVersion: '1.0.0', state: { kind: 'idle' } }),
+      subscribe: () => unsubscribe, check: async () => {}, download: async () => {}, install: async () => {},
+    } })
+    const subject = await bench()
+    const release = vi.fn(async () => {})
+    subject.remote.$mount = vi.fn()
+      .mockResolvedValueOnce(release)
+      .mockRejectedValueOnce(new Error('project Remote failed'))
+    try {
+      await expect(apply(subject.ctx)).rejects.toThrow('project Remote failed')
+      expect(subject.slots.entries('conversation.composer.layout')).toEqual([])
+    } finally {
+      await subject.ctx.fiber.dispose()
+    }
+    expect(release).toHaveBeenCalledOnce()
+    expect(unsubscribe).toHaveBeenCalledOnce()
+    expect(subject.slots.entries('sidebar.footer.action')).toEqual([])
+  })
+
+  it('owns the native update slot, subscription and dictionaries for its whole lifetime', async () => {
+    const unsubscribe = vi.fn()
+    const snapshot = { revision: 1, enabled: true, currentVersion: '1.0.0', state: { kind: 'idle' } }
+    vi.stubGlobal('window', { manturUpdates: {
+      getSnapshot: async () => snapshot, subscribe: () => unsubscribe,
+      check: async () => {}, download: async () => {}, install: async () => {},
+    } })
+    const subject = await bench()
+    const fiber = subject.ctx.plugin({ inject: [...inject], apply })
+    try {
+      await fiber.await()
+      const entry = subject.slots.entries('sidebar.footer.action')[0]
+      expect(entry?.component).toBe(DesktopUpdate)
+      const value = (entry?.inject as unknown as () => DesktopUpdateInjected)()
+      expect(value.hooks.updates.getSnapshot().snapshot).toEqual(snapshot)
+      expect(value.controller).toBeTruthy()
+      expect(subject.locale.bind('updates.mantur')('download')).toBe('下载更新')
+    } finally { await fiber.dispose() }
+    expect(unsubscribe).toHaveBeenCalledOnce()
+    expect(subject.slots.entries('sidebar.footer.action')).toEqual([])
+  })
+  it('omits native update registration when a browser has no preload capability', async () => {
+    vi.stubGlobal('window', {})
+    const subject = await bench()
+    const fiber = subject.ctx.plugin({ inject: [...inject], apply })
+    try {
+      await fiber.await()
+      expect(subject.slots.entries('sidebar.footer.action')).toEqual([])
+    } finally { await fiber.dispose() }
+  })
   it('registers host preferences and declares browser services', () => {
     const register = vi.fn()
     const ctx = { inject: (_services: string[], callback: (scope: unknown) => void) => { callback({ settings: { register } }) } }
     const config = { recommendations: { script: [], production: [], editing: [], assets: [] } }
     hostApply(ctx as unknown as Context, config)
     expect(register).toHaveBeenCalledWith(GUIDE_NAMESPACE, expect.anything(), { base: { ...config, mode: 'script', closed: false } })
-    expect(inject).toEqual(['slots', 'locale', 'remote', 'sessions', 'workspaces', 'conversation', 'settingsScope'])
+    expect(inject).toEqual(['slots', 'locale', 'remote', 'sessions', 'workspaces', 'conversation', 'conversationDrafts', 'uiWorkspace', 'settingsScope'])
     expect(Object.keys(clientEntry).sort()).toEqual(['apply', 'inject'])
   })
 
@@ -83,6 +148,11 @@ describe('ui-mantur-navigation apply', () => {
     expect(subject.slots.entries('conversation.hero.modes')[0]?.component).toBe(CreationModes)
     expect(subject.slots.entries('conversation.composer.guide')[0]?.component).toBe(CreationGuide)
     expect(subject.slots.entries('conversation.composer.layout')[0]?.component).toBe(ManturComposerLayout)
+    const footer = (subject.slots.entries('conversation.composer.layout')[0]!.inject as unknown as () => ManturComposerInjected)()
+    await footer.chooseRoot()
+    await footer.reloadRoot()
+    expect(subject.pickDirectory).toHaveBeenCalledOnce()
+    expect(footer.hooks.automaticProject.getSnapshot()).toMatchObject({ loading: false, settings: { source: 'unconfigured' } })
 
     await fiber.dispose()
     expect(subject.slots.entries('sidebar.navigation')).toEqual([])
@@ -121,10 +191,13 @@ describe('ui-mantur-navigation apply', () => {
       const createGuide = subject.slots.entries('conversation.composer.guide')[0]!.inject as unknown as
         (id: SessionId | undefined) => CreationGuideInjected
       const reference = { source: 'skill', ref: 'short-drama', label: '爽文短剧剧本创作', clipboardText: '/short-drama' }
-      expect(createGuide(undefined).appendReference(reference)).toBe(false)
+      expect(createGuide(undefined).appendReference(reference)).toBe(true)
       const guide = createGuide('guide-session' as SessionId)
+      expect(guide.hooks.guideInput.getSnapshot()).toBeUndefined()
+      guide.hooks.guideInput.subscribe(() => {})()
       expect(guide.appendReference(reference)).toBe(false)
       subject.binding.mockReturnValue({ ctx: subject.ctx })
+      expect(createGuide('guide-session' as SessionId).hooks.guideInput).toBe(subject.inputState)
       expect(guide.appendReference(reference)).toBe(true)
       expect(subject.appendReference).toHaveBeenCalledWith(reference)
       const { controller } = (subject.slots.entries('main.page')[0]!.inject as () => { controller: ManturMarketplaceStore })()

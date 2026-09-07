@@ -8,6 +8,7 @@ import type { WorkspaceBrowserInjected, WorkspacePickerInjected } from '@deepsee
 import { WorkspaceBrowser } from '../src/client/rows/WorkspaceBrowser.tsx'
 import { WorkspacePicker } from '../src/client/WorkspacePicker.tsx'
 import { apply as hostApply } from '../src/index.ts'
+import { Config, WORKSPACE_SETTINGS_NAMESPACE } from '../src/navigation-settings.ts'
 
 async function bench() {
   const ctx = new Context()
@@ -29,6 +30,9 @@ async function bench() {
   const binding = vi.fn(() => ({ session: { rename: renameSession } }))
   const fork = vi.fn(async () => 'forked' as never)
   const subscribe = () => () => {}
+  ctx.provide('settingsScope', {
+    bind: () => ({ getSnapshot: () => ({ value: { newSessionWorkspace: 'recent' } }), subscribe }),
+  } as never)
   ctx.provide('workspaces', {
     list: {
       getSnapshot: () => ({
@@ -84,13 +88,17 @@ function declare(slots: SlotRegistry, ...names: HoleName[]): () => void {
 }
 
 describe('ui-workspace apply', () => {
-  it('keeps the host Loader entry inert', () => {
-    expect(hostApply).not.toThrow()
+  it('registers the schema-resolved navigation policy with Host settings', () => {
+    const ctx = new Context()
+    const register = vi.fn()
+    ctx.provide('settings', { register } as never)
+    hostApply(ctx, { newSessionWorkspace: 'explicit' })
+    expect(register).toHaveBeenCalledWith(WORKSPACE_SETTINGS_NAMESPACE, Config, { base: { newSessionWorkspace: 'explicit' } })
   })
 
   it('declares the services it drives', () => {
     expect(inject).toEqual([
-      'slots', 'sessions', 'workspaces', 'locale', 'remote', 'remote.directoryPicker',
+      'slots', 'sessions', 'workspaces', 'locale', 'remote', 'remote.directoryPicker', 'settingsScope',
     ])
   })
 

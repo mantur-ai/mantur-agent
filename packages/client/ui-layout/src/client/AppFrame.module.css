@@ -152,7 +152,7 @@
   max-width: 70%;
   resize: horizontal;
   overflow: auto;
-  border-right: 1px solid var(--dsw-alias-border-l3);
+  border-right: 0.5px solid var(--dsw-alias-border-l3);
 }
 
 .workbenchPane {

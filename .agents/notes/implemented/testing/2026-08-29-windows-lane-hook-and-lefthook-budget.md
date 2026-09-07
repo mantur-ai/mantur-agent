@@ -16,7 +16,7 @@ Separately, `coverageTestTimeoutArgs` in [`scripts/coverage-partitions.ts`](../.
 
 The Lefthook suite takes `{ timeout: 90_000 }`, matching `DSH_COVERAGE_TEST_TIMEOUT_MS` in [`.github/workflows/ci.yml`](../../../../.github/workflows/ci.yml). The per-case constant is deleted rather than raised: it restated the `describe` value, and the translation-pairing-merge note already rejected per-case allowances because a later case added without one silently inherits a different ceiling.
 
-`coverageTestTimeoutArgs` emits `--hookTimeout` beside the other two arguments. One environment variable governs one budget for the work a contended lane must finish, whether that work sits in a case or in its setup and teardown.
+`coverageTestTimeoutConfig` resolves the test, polling, and hook options from one environment variable. [vitest.config.ts](../../../../vitest.config.ts) applies them to both inline projects, and `coverageTestTimeoutArgs` emits matching root CLI arguments. Vitest 4.1.8 forwards CLI `testTimeout` to inline projects but omits `expect` and `hookTimeout`; explicit project options preserve the configured budget through coverage partitioning. Unset budgets retain Vitest defaults, and malformed budgets fail configuration.
 
 ## Consequences
 

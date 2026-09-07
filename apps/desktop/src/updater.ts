@@ -10,8 +10,8 @@ export type DesktopUpdateState =
   | { kind: 'idle' }
   | { kind: 'checking' }
   | { kind: 'available'; version: string; prompting: boolean }
-  | { kind: 'downloading'; version: string; percent: number }
-  | { kind: 'ready'; version: string; prompting: boolean }
+  | { kind: 'downloading'; version: string; percent: number | null; transferred: number; total: number | null }
+  | { kind: 'ready'; version: string; prompting: boolean; error?: string }
   | { kind: 'up-to-date'; requestedByUser: boolean }
   | { kind: 'error'; detail: string; requestedByUser: boolean }
 
@@ -32,14 +32,14 @@ export interface DesktopUpdater {
   /** Register one updater lifecycle listener. */
   on: {
     (event: 'update-available' | 'update-not-available', listener: (info: UpdateInfo) => void): void
-    (event: 'download-progress', listener: (info: { percent: number }) => void): void
+    (event: 'download-progress', listener: (info: { percent: number; transferred: number; total: number }) => void): void
     (event: 'update-downloaded', listener: (info: UpdateDownloadedEvent) => void): void
     (event: 'error', listener: (error: Error) => void): void
   }
   /** Remove one updater lifecycle listener. */
   off: {
     (event: 'update-available' | 'update-not-available', listener: (info: UpdateInfo) => void): void
-    (event: 'download-progress', listener: (info: { percent: number }) => void): void
+    (event: 'download-progress', listener: (info: { percent: number; transferred: number; total: number }) => void): void
     (event: 'update-downloaded', listener: (info: UpdateDownloadedEvent) => void): void
     (event: 'error', listener: (error: Error) => void): void
   }
@@ -47,8 +47,6 @@ export interface DesktopUpdater {
 
 /** Prompts owned by the native desktop update flow. */
 export interface UpdatePrompts {
-  /** Ask before downloading an available version. */
-  confirmDownload: (version: string) => Promise<boolean>
   /** Ask before stopping Harness and installing a downloaded version. */
   confirmInstall: (version: string) => Promise<boolean>
 }
@@ -71,6 +69,8 @@ export interface DesktopUpdateController {
   getState: () => DesktopUpdateState
   /** Check the configured release feed after an explicit user action. */
   checkNow: () => void
+  /** Download the available version after an explicit user action. */
+  downloadAvailableUpdate: () => void
   /** Ask again to install the downloaded version represented by the ready state. */
   installReadyUpdate: () => void
   /** Stop scheduled work and ignore pending prompt completions. */
@@ -95,6 +95,9 @@ export function startAutoUpdates(options: StartAutoUpdatesOptions): DesktopUpdat
   updater.allowPrerelease = allowsPrerelease(options.currentVersion)
   let active = true
   let checkingManually = false
+  let checkAttempt = 0
+  let downloadPending = false
+  let installAttempt = 0
   let downloadedVersion: string | undefined
   let state: DesktopUpdateState = { kind: 'idle' }
 
@@ -107,6 +110,11 @@ export function startAutoUpdates(options: StartAutoUpdatesOptions): DesktopUpdat
     if (!active) return
     const detail = error instanceof Error ? error.message : String(error)
     options.log(`desktop update: ${detail}`)
+    if (state.kind === 'ready') {
+      installAttempt += 1
+      publish({ kind: 'ready', version: state.version, prompting: false, error: detail })
+      return
+    }
     if (state.kind !== 'error' || state.detail !== detail || state.requestedByUser !== requestedByUser) {
       publish({ kind: 'error', detail, requestedByUser })
     }
@@ -115,19 +123,24 @@ export function startAutoUpdates(options: StartAutoUpdatesOptions): DesktopUpdat
   const installReadyUpdate = (): void => {
     if (!active || state.kind !== 'ready' || state.prompting) return
     const version = state.version
+    const attempt = ++installAttempt
     publish({ kind: 'ready', version, prompting: true })
-    void options.prompts.confirmInstall(version).then(async (confirmed) => {
-      if (!active) return
+    void Promise.resolve().then(() => active && attempt === installAttempt
+      ? options.prompts.confirmInstall(version) : false).then(async (confirmed) => {
+      if (!active || attempt !== installAttempt) return
       if (!confirmed) {
         publish({ kind: 'ready', version, prompting: false })
         return
       }
       await options.beforeInstall()
       // oxlint-disable-next-line typescript/no-unnecessary-condition -- dispose can run while Harness shutdown awaits.
-      if (!active) return
+      if (!active || attempt !== installAttempt) return
       updater.quitAndInstall(false, true)
     }).catch((error: unknown) => {
-      fail(error, true)
+      if (!active || attempt !== installAttempt) return
+      const detail = error instanceof Error ? error.message : String(error)
+      options.log(`desktop update: ${detail}`)
+      publish({ kind: 'ready', version, prompting: false, error: detail })
     })
   }
 
@@ -138,36 +151,39 @@ export function startAutoUpdates(options: StartAutoUpdatesOptions): DesktopUpdat
       || state.kind === 'ready'
       || (state.kind === 'available' && state.prompting)) return
     const version = info.version
-    publish({ kind: 'available', version, prompting: true })
-    void options.prompts.confirmDownload(version).then(async (confirmed) => {
-      if (!active) return
-      if (!confirmed) {
-        publish({ kind: 'available', version, prompting: false })
-        return
-      }
-      publish({ kind: 'downloading', version, percent: 0 })
-      options.log(`desktop update: downloading ${version}`)
-      try {
-        await updater.downloadUpdate()
-      } catch (error) {
-        fail(error, true)
-      }
+    publish({ kind: 'available', version, prompting: false })
+  }
+
+  const downloadAvailableUpdate = (): void => {
+    if (!active || downloadPending || state.kind !== 'available') return
+    const version = state.version
+    downloadPending = true
+    publish({ kind: 'downloading', version, percent: null, transferred: 0, total: null })
+    options.log(`desktop update: downloading ${version}`)
+    void Promise.resolve().then(() => {
+      if (active && state.kind === 'downloading' && state.version === version) return updater.downloadUpdate()
     }).catch((error: unknown) => {
-      fail(error, true)
-    })
+      if (state.kind === 'downloading') fail(error, true)
+    }).finally(() => { downloadPending = false })
   }
 
   const onNotAvailable = (): void => {
-    if (!active) return
+    if (!active || state.kind !== 'checking') return
     const requestedByUser = checkingManually
     checkingManually = false
     publish({ kind: 'up-to-date', requestedByUser })
   }
 
-  const onDownloadProgress = (info: { percent: number }): void => {
+  const onDownloadProgress = (info: { percent: number; transferred: number; total: number }): void => {
     if (!active || state.kind !== 'downloading') return
-    const percent = Math.max(0, Math.min(100, Math.floor(info.percent)))
-    if (percent !== state.percent) publish({ ...state, percent })
+    if (!Number.isFinite(info.transferred) || info.transferred < 0) { fail(new Error('Invalid download byte count'), true); return }
+    const transferred = info.transferred
+    const total = Number.isFinite(info.total) && info.total > 0 ? info.total : null
+    const percent = total === null || !Number.isFinite(info.percent)
+      ? null : Math.max(0, Math.min(100, Math.floor(info.percent)))
+    if (percent !== state.percent || transferred !== state.transferred || total !== state.total) {
+      publish({ ...state, percent, transferred, total })
+    }
   }
 
   const onDownloaded = (info: UpdateDownloadedEvent): void => {
@@ -193,15 +209,18 @@ export function startAutoUpdates(options: StartAutoUpdatesOptions): DesktopUpdat
   updater.on('error', onError)
 
   const check = (manual: boolean): void => {
-    if (!active
+    if (!active || downloadPending
       || state.kind === 'checking'
       || state.kind === 'downloading'
       || state.kind === 'ready'
       || (state.kind === 'available' && state.prompting)) return
+    if (!manual && state.kind === 'available') return
+    const attempt = ++checkAttempt
     checkingManually = manual
     publish({ kind: 'checking' })
     options.log('desktop update: checking')
     void updater.checkForUpdates().catch((error: unknown) => {
+      if (attempt !== checkAttempt || state.kind !== 'checking') return
       checkingManually = false
       fail(error, manual)
     })
@@ -223,6 +242,7 @@ export function startAutoUpdates(options: StartAutoUpdatesOptions): DesktopUpdat
   return {
     getState: () => state,
     checkNow: () => { check(true) },
+    downloadAvailableUpdate,
     installReadyUpdate,
     dispose,
   }

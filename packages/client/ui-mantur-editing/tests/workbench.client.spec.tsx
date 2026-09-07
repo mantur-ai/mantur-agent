@@ -79,6 +79,21 @@ describe('Session editor workbench', () => {
     expect(view.getByTitle(en.title).getAttribute('src')).toContain(':5300/')
   })
 
+  it('shows loading until the selected Session runtime is ready', async () => {
+    const props = propsFor()
+    let ready!: (value: EditingWorkspace) => void
+    props.openWorkspace = () => new Promise((resolve) => { ready = resolve })
+    const view = render(<Workbench {...props} />)
+    try {
+      expect(view.getByRole('status').textContent).toBe(en.loading)
+      expect(view.queryByTitle(en.title)).toBeNull()
+    } finally {
+      await act(async () => { ready(workspace) })
+    }
+    expect(view.getByTitle(en.title)).not.toBeNull()
+    expect(view.queryByRole('status')).toBeNull()
+  })
+
   it.each(['https://127.0.0.1/', 'http://127.0.0.1.evil.test/', 'http://user:secret@127.0.0.1/', 'http://localhost/?token=secret'])('rejects an unsupported editor address %s', (url) => {
     expect(() => localEditorUrl(url)).toThrow()
   })
@@ -96,8 +111,15 @@ it('updates theme and locale without replacing the iframe and checks ready-messa
   const ready = { type: 'mantur:theme-ready', version: 1 }
   fireEvent(window, new MessageEvent('message', { source: frame.contentWindow, origin: 'http://evil.test', data: ready }))
   fireEvent(window, new MessageEvent('message', { source: window, origin: 'http://127.0.0.1:5299', data: ready }))
+  for (const data of [null, 'ready', {}, { type: 'mantur:theme-ready' },
+    { type: 'other', version: 1 }, { type: 'mantur:theme-ready', version: 2 }]) {
+    fireEvent(window, new MessageEvent('message', { source: frame.contentWindow, origin: 'http://127.0.0.1:5299', data }))
+  }
   expect(send).not.toHaveBeenCalled()
   fireEvent(window, new MessageEvent('message', { source: frame.contentWindow, origin: 'http://127.0.0.1:5299', data: ready }))
   expect(send).toHaveBeenCalledTimes(2)
+  const child = frame.contentWindow
   unmount()
+  fireEvent(window, new MessageEvent('message', { source: child, origin: 'http://127.0.0.1:5299', data: ready }))
+  expect(send).toHaveBeenCalledTimes(2)
 })

@@ -29,6 +29,8 @@ kind: "package-reference"
 
 每个会话使用 `<cwd>/剪辑/<session-id>/`：`工程/` 保存工程和运行状态，`素材/` 保存导入媒体，`导出/` 是默认成片目录。Host 从已解析 Agent 的 Session header 读取 `cwd`，浏览器不能指定其他目录。会话目录拒绝路径穿越和符号链接，重新打开保留已有文件。同一项目内的不同会话也使用独立编辑进程和工具作用域。
 
+工作台标题栏、按钮与对话分隔线使用漫途的 0.5px 中性边框。
+
 嵌入的剪辑器跟随漫途解析后的明暗主题，包括系统偏好变化，切换时不重新加载页面。OpenChatCut 部署必须在应用渲染前加载[主题适配器](adapters/openchatcut-theme.mjs)，并以明确可信的漫途回环源地址调用 `installManturTheme(window, parentOrigin)`。在剪辑器入口导入该模块，或通过服务器注入等效的模块脚本；部署资源中必须包含适配器。独立打开的剪辑器继续使用自己的皮肤偏好。适配器只修改界面颜色变量，保留媒体颜色和工程状态，不写入独立皮肤偏好。
 
 构建前，在固定的 OpenChatCut 0.2.14 源码目录用 `git apply` 应用[漫途Cut 补丁](adapters/mantur-cut.patch)。补丁移除内置对话、外部连接配置、重复的模型及外观设置、生成入口、技能扩展、品牌设计和上游推广。保留素材、字幕、时间线、历史、导出与浮动修改确认卡片。语言通过与主题相同的受校验消息通道跟随漫途。界面品牌为漫途Cut，源码归属、许可证、协议标识和工程格式保留上游名称。
@@ -55,7 +57,7 @@ Agent 导入本地文件在手动模式下保留单次确认，素材先加入�
 <details>
 <summary>实现细节 — 点击展开</summary>
 
-Host Remote 解析 Agent，合并并发打开请求，并启动 `adapters/mantur-runtime.mjs`。既有 MCP 客户端挂载于该 Agent 作用域，MCP bearer 只存在于 Host 内存和子进程环境。卸载等待连接与子进程退出。Client 忽略已切走会话的启动结果。本包不发布 invariant companion：退出状态由子进程句柄直接持有，连接和工具版本约束由 MCP 客户端负责。
+Host Remote 解析 Agent，合并并发打开请求，并启动 `adapters/mantur-runtime.mjs`。既有 MCP 客户端挂载于该 Agent 作用域。所有挂载的 MCP 客户端解析到同一 peer 实例，保留 Agent 作用域内的服务器名称预留。MCP bearer 只存在于 Host 内存和子进程环境。卸载等待连接与子进程退出。Client 忽略已切走会话的启动结果。本包不发布 invariant companion：退出状态由子进程句柄直接持有，连接和工具版本约束由 MCP 客户端负责。
 
 受控的[编辑器补丁](adapters/mantur-cut.patch)采用下列固定来源。在干净的上游源码目录执行 `git apply --index`，构建前用 `git write-tree` 核对结果树。补丁包含本地导入写入草稿的修复及终态检查点持久化修复，没有额外编辑器修改。
 
