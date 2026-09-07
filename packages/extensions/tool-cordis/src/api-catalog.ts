@@ -150,6 +150,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Registry over the deployment\'s agent presets.\n\nDiscovery is unmemoized: `list()` and `resolve()` re-read the roots on every call so a preset authored while the process runs is visible immediately, and a preset deleted underneath a picker disappears from the next read.',
     methods: [
       {
+        signature: 'stopForShutdown(): Promise<void>',
+        description: 'Freeze composition and authoring admission before the Host enumerates installed owners. Standing plugin trees remain installed for their individual shutdown operations.',
+        parameters: [],
+        returns: 'once admitted operations settle; operation failures retain their original callers.',
+      },
+      {
         signature: 'async list(): Promise<AgentPreset[]>',
         description: 'Every preset the configured roots currently supply.',
         parameters: [],

@@ -422,6 +422,13 @@ Discovery is unmemoized: `list()` and `resolve()` re-read the roots on every cal
 
 ```ts cordis-catalog
 /**
+ * Freeze composition and authoring admission before the Host enumerates installed owners.
+ * Standing plugin trees remain installed for their individual shutdown operations.
+ * @returns once admitted operations settle; operation failures retain their original callers.
+ */
+stopForShutdown(): Promise<void>
+
+/**
  * Every preset the configured roots currently supply.
  * @returns the presets, first-root-wins per id.
  */

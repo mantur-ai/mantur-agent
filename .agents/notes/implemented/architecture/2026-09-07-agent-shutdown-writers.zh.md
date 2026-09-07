@@ -57,3 +57,5 @@ Gateway 的操作归属由 `packages/api/gateway/src/index.ts` 管理：关闭�
 设置关闭由 `packages/settings/settings/src/index.ts` 和 `packages/settings/settings-file/src/index.ts` 管理：命名空间写入与观察回调可能晚于文件操作队列结束。就绪提供者停止两类生产者，并等待两层队列及监听器关闭。已启动的回调、挂起的文档创建、重复停止及监听器关闭失败验证升级。请求就绪提供者关闭前，必须先完成启动组合。
 
 目标轮次驱动关闭由 `packages/goal/goal-round-driver/src/index.ts` 管理：调度 Promise 和轮次预留是生产者私有状态。显式生命周期接口冻结自动触发，并独立于活动智能体查找保留原始驱动任务。步骤检查持续到插件卸载；已接纳的轮次在保留待执行输入的同时取消。Host 在停止此生产者前冻结智能体接纳。智能体接纳冻结后，AgentLoop 保留并恢复原始收件箱领取记录；目标驱动不修改已冻结的收件箱。挂起的检查点、之后的手动工作，以及使用真实 JSONL 写入器与 AgentLoop 联合关闭期间中断的步骤前钩子验证升级。
+
+预设准入停机归 `packages/preset/agent-presets/src/index.ts` 所有：冷会话读取的解析可能在 Host 首次读取所有者后分配常驻插件树。显式停止会冻结修改和挂载调用、等待已接收的操作，并保留已安装代次供后续 `livePresetMounts(rootFiber)` 清点。调用方可见的操作失败仍由原调用方接收；单独排空不证明插件清理成功。受控冷读取分配，以及停机后的组合和编写拒绝用于验证升级。
