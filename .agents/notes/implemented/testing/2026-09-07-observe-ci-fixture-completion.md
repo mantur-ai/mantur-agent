@@ -20,7 +20,7 @@ The [snapshot child-turn waiter](../../../../packages/test-support/session-snaps
 
 The [Team recovery fixture](../../../../packages/experimental/agent-team/tests/persistence.spec.ts) separates child registry removal from mailbox acknowledgement completion. Its barrier delays the return from a real target flush, then joins the registered acknowledgement operations before checking delivery. The target can leave the registry while that acknowledgement is pending; a one-second poll does not establish completion.
 
-Windows coverage loads a [fork diagnostic preload](../../../../scripts/vitest-fork-diagnostics.cjs) and preserves its JSONL file on failure. Records contain only lifecycle event, parent and worker PIDs, Node version, platform, exit code, and signal. The observer does not change child outcomes or record arguments, environment, test payloads, or raw crash reports. Exit facts narrow an unexplained worker death; collecting them is not a repair.
+Windows coverage loads a [fork diagnostic preload](../../../../scripts/vitest-fork-diagnostics.cjs) and preserves its JSONL file on failure. Records contain lifecycle and dispatch events, timestamps, parent and worker PIDs, a parent-local fork sequence, Node version, platform, exit code, signal, and dispatched test file paths. The sequence distinguishes reused worker PIDs. Dispatch extraction follows Vitest 4.1.8 worker requests and copies only the run or collect method and file paths. The observer does not change child outcomes or record arguments, environment, remaining test payloads, or raw crash reports. Exit facts narrow an unexplained worker death; collecting them is not a repair.
 
 ## Alternatives considered
 
