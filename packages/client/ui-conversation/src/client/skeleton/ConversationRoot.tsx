@@ -355,7 +355,7 @@ export function ConversationRoot({
   )
   const composerBar = (
     <div className={clsx(css.composerStack, hero && css.composerHero)}>
-      {renderSlot('conversation.composer.layout', { hero, heading, workspace, content }, {
+      {renderSlot('conversation.composer.layout', { hero, disabled: inert || blocked, heading, workspace, content }, {
         fallback: <>{heading}{workspace}{content}</>,
       })}
     </div>

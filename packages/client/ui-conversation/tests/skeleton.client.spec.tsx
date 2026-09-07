@@ -252,6 +252,7 @@ function mount(
           inputActions={inputActions}
           keyboard={wiring}
           useComposerInput={useInput}
+          useExternalPermissions={bindSnapshotSelector(createSnapshotStore(false))}
           unassignedActions={undefined}
           addImages={() => null}
           removeImage={() => {}}

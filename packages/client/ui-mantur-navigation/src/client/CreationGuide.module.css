@@ -96,9 +96,19 @@
   height: 100%;
   box-sizing: border-box;
   overflow-x: auto;
-  padding: 4px;
-  scrollbar-width: thin;
+  padding: 4px 4px 0;
+  scrollbar-width: none;
 }
+.shortcuts::-webkit-scrollbar { display: none; }
+.skillRail { position: relative; flex: 1; min-width: 0; max-height: 100%; }
+.skillRail[data-overflow='true'] { padding-inline: 28px; }
+.railEdge { position: absolute; bottom: 0; display: flex; align-items: center; height: 40px; width: 28px; }
+.railEdge[data-side='left'] { left: 0; }
+.railEdge[data-side='right'] { right: 0; justify-content: end; }
+.railEdge::after { content: ''; position: absolute; pointer-events: none; width: 12px; height: 100%; }
+.railEdge[data-side='left'][data-active='true']::after { left: 100%; background: linear-gradient(to right, var(--dsw-alias-bg-base), transparent); }
+.railEdge[data-side='right'][data-active='true']::after { right: 100%; background: linear-gradient(to left, var(--dsw-alias-bg-base), transparent); }
+.railEdge button { display: grid; place-items: center; width: 26px; height: 36px; padding: 0; border: 1px solid var(--dsw-alias-border-l1); border-radius: 10px; background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); cursor: pointer; }
 
 .shortcuts > * { flex: none; }
 .shortcuts .empty { flex: 1 0 100%; max-width: 34ch; white-space: normal; overflow-wrap: anywhere; }
@@ -115,6 +125,7 @@
   font: inherit;
   cursor: pointer;
 }
+.shortcuts button { min-height: 40px; padding: 9px 14px; border-width: 1px; border-radius: 12px; white-space: nowrap; }
 
 .shortcuts button[aria-pressed='true'] {
   border-color: var(--dsw-alias-brand-primary);
@@ -133,11 +144,14 @@
 .helper[data-hero='true'] {
   position: relative;
   z-index: 1;
-  width: clamp(80px, 30%, 184px);
-  /* Clear the 18px composer spacing and 6% transparent image foot; rest 3px on the card. */
-  transform: translateY(calc(21px + 6%));
+  width: 184px;
+  height: 104px;
+  margin-right: calc(var(--dsh-composer-side-clearance) + 8px);
+  /* The hit target ends at the card; the 16px transparent image foot cannot intercept editor clicks. */
+  transform: translateY(18px);
 }
-.helper img { display: block; width: 100%; height: auto; }
+.helper img { display: block; width: 100%; height: auto; object-fit: contain; }
+.helper[data-hero='true'] img { pointer-events: none; }
 .guide button.helper:hover:not(:disabled) { background: transparent; }
 .guide button:disabled { opacity: 0.5; cursor: not-allowed; }
 .guide button:hover:not(:disabled), .modes button:hover:not([aria-selected='true']) { background: var(--dsw-alias-interactive-bg-hover); }
@@ -151,18 +165,23 @@
 .search { width: 100%; padding: 10px; box-sizing: border-box; border: 0.5px solid var(--dsw-alias-border-l1); border-radius: 8px; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); font: inherit; }
 
 .workspaceFooter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 4px;
   margin: -8px var(--dsh-composer-side-clearance) 0;
   padding: 8px 0;
   border-radius: 0 0 16px 16px;
   background: var(--dsw-alias-bg-layer-1);
 }
+.workspaceFooter:empty { display: none; }
 .workspaceFooter > div { margin-top: 0; padding-left: 8px; }
-.automaticProject { padding: 8px; color: var(--dsw-alias-label-secondary); font-size: 12px; }
-.automaticProject summary { width: fit-content; cursor: pointer; }
-.projectLocation { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 12px 0 4px; }
-.projectLocation code { overflow-wrap: anywhere; white-space: normal; }
-.automaticProject p { margin: 8px 0 0; line-height: 1.5; }
-.automaticProject button { color: var(--dsw-alias-brand-primary); border: 0; background: transparent; font: inherit; cursor: pointer; }
+.projectStatus { flex-basis: 100%; padding: 8px; color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 18px; }
+.projectStatus p { margin: 0; }
+.projectStatus span { display: block; margin-top: 4px; }
+.projectStatus button { margin-left: 8px; color: var(--dsw-alias-brand-primary); border: 0; background: transparent; font: inherit; cursor: pointer; }
+.projectStatus button:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 2px; }
 .automaticProject summary:focus-visible, .automaticProject button:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 2px; }
 
 @media (max-width: 640px) {
@@ -177,7 +196,7 @@
 
 @media (max-width: 819px) {
   /* Keep a text line below the mode tabs when their right side is too narrow for the bubble. */
-  .shortcutRow[data-hero='true'] { height: 152px; }
+  .shortcutRow[data-hero='true'] { height: 160px; }
 }
 
 @container (max-width: 400px) {

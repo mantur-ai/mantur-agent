@@ -410,20 +410,30 @@ Source: [`packages/client/hmr/src/index.ts:31`](../packages/client/hmr/src/index
 
 ## `@deepseek-ai/dsh-client-ui-mantur-editing`
 
-Requires: `settings`
+Requires: `typert` · `webServer` · `tools` · `systemPrompt`
 
 ```ts config-catalog
-/** Explicit local editor address selected by the application profile. */
-export type Config = EditingSettings
+/** Editing deployment configuration; no browser-visible credentials. */
+export type Config = RuntimeConfig
 
-/** Configured address; never contains the host-only MCP bearer token. */
-export interface EditingSettings {
-  /** Absolute loopback HTTP address of the running OpenChatCut editor. */
-  editorUrl: string
+/** Deployment settings for the pinned editor source and Node runtime. */
+export interface RuntimeConfig {
+  /** Explicit development checkout or packaged production server selection. */
+  runtimeMode: 'development' | 'packaged'
+  /** Absolute development checkout or installed editor resource directory. */
+  editorRoot: string
+  /** Absolute Node executable for development, or packaged Electron executable. */
+  nodeExecutable: string
+  /** Maximum wait for the editor's ready handshake. */
+  startupTimeoutMs: number
+  /** Maximum wait for editor close acknowledgement and subprocess pipes. */
+  stopTimeoutMs: number
+  /** Maximum duration of one editing tool invocation or editor drain request. */
+  toolCallTimeoutMs: number
 }
 ```
 
-Source: [`packages/client/ui-mantur-editing/src/index.ts:8`](../packages/client/ui-mantur-editing/src/index.ts)
+Source: [`packages/client/ui-mantur-editing/src/index.ts:34`](../packages/client/ui-mantur-editing/src/index.ts)
 
 <a id="deepseek-aidsh-client-ui-mantur-navigation"></a>
 
@@ -1664,7 +1674,7 @@ export interface ReconnectConfig {
 }
 ```
 
-Source: [`packages/mcp/mcp-client/src/index.ts:98`](../packages/mcp/mcp-client/src/index.ts)
+Source: [`packages/mcp/mcp-client/src/index.ts:99`](../packages/mcp/mcp-client/src/index.ts)
 
 <a id="deepseek-aidsh-message-feedback"></a>
 

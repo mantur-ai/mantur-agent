@@ -930,6 +930,7 @@ flowchart TD
   pkg_api_settings_controller --> pkg_typert_protocol
   pkg_web_app --> pkg_shell_env
   pkg_web_app --> pkg_system_prompt
+  pkg_client_ui_mantur_editing --> pkg_mcp_client
   pkg_compaction_tool_result_pruner --> pkg_compaction
   pkg_compaction_tool_result_pruner --> pkg_llm
   pkg_compaction_tool_result_pruner --> pkg_session
@@ -1215,7 +1216,6 @@ flowchart TD
 | [`client-ui-jobs`](../packages/client/ui-jobs) | `client` | — |
 | [`client-ui-layout`](../packages/client/ui-layout) | `client` | — |
 | [`client-ui-mantur-account`](../packages/client/ui-mantur-account) | `client` | — |
-| [`client-ui-mantur-editing`](../packages/client/ui-mantur-editing) | `client` | — |
 | [`client-ui-mantur-navigation`](../packages/client/ui-mantur-navigation) | `client` | — |
 | [`client-ui-message-feedback`](../packages/client/ui-message-feedback) | `client` | — |
 | [`client-ui-model-selection`](../packages/client/ui-model-selection) | `client` | — |
@@ -1399,6 +1399,7 @@ flowchart TD
 | [`acp`](../packages/acp/acp) | `acp` | [`agent`](../packages/core/agent), [`attachment`](../packages/attachment/attachment), [`llm`](../packages/llm/llm), [`mcp-client`](../packages/mcp/mcp-client), [`session`](../packages/core/session), [`session-persistence`](../packages/session/session-persistence), [`token-meter`](../packages/llm/token-meter), [`user-approval`](../packages/interaction/user-approval) |
 | [`api-settings-controller`](../packages/api/settings-controller) | `api` | [`agent-presets`](../packages/preset/agent-presets), [`credentials`](../packages/credentials/credentials), [`native-command`](../packages/util/native-command), [`session`](../packages/core/session), [`settings`](../packages/settings/settings), [`typert-protocol`](../packages/typert/protocol) |
 | [`web-app`](../packages/bundle/web-app) | `bundle` | [`shell-env`](../packages/shell/shell-env), [`system-prompt`](../packages/core/system-prompt) |
+| [`client-ui-mantur-editing`](../packages/client/ui-mantur-editing) | `client` | [`mcp-client`](../packages/mcp/mcp-client) |
 | [`compaction-tool-result-pruner`](../packages/compaction/compaction-tool-result-pruner) | `compaction` | [`compaction`](../packages/compaction/compaction), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`token-meter`](../packages/llm/token-meter) |
 | [`tool-cordis`](../packages/extensions/tool-cordis) | `extensions` | [`agent`](../packages/core/agent), [`cordis-host-runner`](../packages/extensions/cordis-host-runner), [`llm`](../packages/llm/llm), [`scope`](../packages/core/scope), [`session`](../packages/core/session), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools) |
 | [`host-plugin-inventory`](../packages/host/plugin-inventory) | `host` | [`agent-presets`](../packages/preset/agent-presets), [`brand`](../packages/util/brand), [`typert-protocol`](../packages/typert/protocol) |

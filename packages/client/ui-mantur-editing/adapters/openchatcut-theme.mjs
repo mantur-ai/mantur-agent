@@ -45,6 +45,10 @@ export function installManturTheme(target, parentOrigin) {
   const receive = event => {
     if (event.source !== target.parent || event.origin !== parentOrigin) return
     const data = event.data
+    if (data?.type === 'mantur:locale' && data.version === 1 && ['zh', 'en', 'it', 'ru'].includes(data.locale)) {
+      target.dispatchEvent(new target.CustomEvent('mantur:locale', { detail: data.locale }))
+      return
+    }
     if (data?.type !== 'mantur:theme' || data.version !== 1 || !['light', 'dark'].includes(data.scheme)) return
     apply(data.scheme)
   }

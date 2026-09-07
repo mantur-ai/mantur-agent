@@ -9,6 +9,8 @@
 
 ```mermaid
 flowchart LR
+  pkg_client_ui_mantur_editing["client-ui-mantur-editing"]
+  svc_manturEditing["ctx.manturEditing<br/>Session editing workspace"]
   pkg_attachment["attachment"]
   svc_attachments["ctx.attachments<br/>Durable binary attachment storage"]
   pkg_attachment_local["attachment-local"]
@@ -250,6 +252,7 @@ flowchart LR
   pkg_bash_local --> svc_shell
   pkg_bash_sandbox --> svc_shell
   pkg_client_modules --> svc_clientModules
+  pkg_client_ui_mantur_editing --> svc_manturEditing
   pkg_code_runtime --> svc_codeRuntime
   pkg_code_runtime_worker_thread --> svc_codeRuntime
   pkg_command_scopes --> svc_commandScopes
@@ -399,6 +402,7 @@ flowchart LR
   svc_llm --> pkg_agent_loop
   svc_llm --> pkg_compaction_basic
   svc_lsp --> pkg_tool_lsp
+  svc_manturEditing --> pkg_client_ui_mantur_editing
   svc_manturMarketplace --> pkg_ui_mantur_navigation
   svc_manturProjects --> pkg_ui_mantur_navigation
   svc_sandbox --> pkg_bash_sandbox
@@ -490,6 +494,7 @@ flowchart LR
 
 | ctx 键 | 角色 | 所属包 | 实现 | 直接消费方 | 配套插件 | 说明 |
 | --- | --- | --- | --- | --- | --- | --- |
+| `ctx.manturEditing` | `core` | [`client-ui-mantur-editing`](../packages/client/ui-mantur-editing) | - | [`client-ui-mantur-editing`](../packages/client/ui-mantur-editing) | - | 可选的漫途插件为每个 Agent 管理独立的编辑器进程，并在同一 Agent 作用域挂载 MCP 客户端。 |
 | `ctx.attachments` | `seam` | [`attachment`](../packages/attachment/attachment) | [`attachment-local`](../packages/attachment/attachment-local) | [`api-session-controller`](../packages/api/session-controller), [`tool-fs`](../packages/fs/tool-fs), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`llm-deepseek`](../packages/llm/llm-deepseek) | - | 宿主会在会话事件之前提交已接受的图片；提供方适配器将已授权的持久引用解析为提供方原生内容。 |
 | `ctx.llm` | `seam` | [`llm`](../packages/llm/llm) | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`llm-replay`](../packages/test-support/llm-replay) | [`agent-loop`](../packages/core/agent-loop), [`compaction-basic`](../packages/compaction/compaction-basic) | - | 适配器注册提供方实现；agent loop（智能体循环）与压缩功能调用提供方无关的流服务。 |
 | `ctx.deepseekLlmApiExtensions` | `seam` | [`deepseek-llm-api-extensions`](../packages/llm/deepseek-llm-api-extensions) | [`session-log-deepseek`](../packages/session/session-log-deepseek), [`plugin-package-inventory-deepseek`](../packages/llm/plugin-package-inventory-deepseek) | [`llm-deepseek`](../packages/llm/llm-deepseek) | - | 插件准备彼此独立的顶层字段；官方适配器会合并这些字段，并在 HTTP 接受后提交其交付状态。 |

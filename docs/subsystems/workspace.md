@@ -187,6 +187,33 @@ Host service backing the generated `ctx.remote.directoryPicker` namespace. The s
 
 Source: [`packages/api/workspace-controller/src/directory-picker.ts`](../../packages/api/workspace-controller/src/directory-picker.ts)
 
+<a id="ctxmanturediting--manturediting"></a>
+
+### `ctx.manturEditing` — `ManturEditing`
+
+Runtime and tools share the exact Agent identity resolved by the authenticated Remote gateway.
+
+```ts cordis-catalog
+/**
+ * Refuse new opens and MCP executions, then drain every acquired or opening editor before releasing its scope.
+ * The Host must retain accepted execution signals, its model and attachment services, HTTP and editor windows until completion.
+ * @returns The retained shutdown result; failed or unconfirmed work rejects and prevents installation.
+ */
+stopForShutdown(): Promise<void>
+
+/**
+ * Open the Session's workspace and connect its tools only to that Agent.
+ * @param agent - Live or resumed Agent resolved by the gateway from the Session id.
+ * @param parentOrigin - Mantur browser origin, checked against this Host's listening port.
+ * @returns Loopback editor address and canonical Session editing directory.
+ */
+@Remote('open') async open(agent: Agent, parentOrigin: string): Promise<EditingWorkspace>
+```
+
+Types: [Agent](core.md)
+
+Source: [`packages/client/ui-mantur-editing/src/index.ts`](../../packages/client/ui-mantur-editing/src/index.ts)
+
 <a id="ctxmanturprojects--manturprojectcontroller"></a>
 
 ### `ctx.manturProjects` — `ManturProjectController`

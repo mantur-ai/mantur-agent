@@ -122,6 +122,11 @@ describe('package payload constraints', () => {
       'lib/client.js',
       'adapters/openchatcut-theme.mjs',
       'adapters/openchatcut-theme.d.mts',
+      'adapters/mantur-cut.patch', 'adapters/mantur-runtime.mjs',
+      'adapters/mantur-runtime-shutdown.mjs',
+      'adapters/mantur-production-runtime.mjs', 'adapters/mantur-packaged-resources.mjs',
+      'adapters/mantur-packaged-resources.d.mts', 'adapters/mantur-cut-packaged.patch',
+      'adapters/mantur-cut-shutdown.patch',
       'lib/types/**/*.d.ts',
     ])
   })

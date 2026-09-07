@@ -1,7 +1,6 @@
 /** Mode navigation and contextual guidance beside the resident composer. */
 
 import { useEffect, useId, useRef, useState } from 'react'
-import clsx from 'clsx'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { ManturMarketplaceSkill } from '@deepseek-ai/dsh-manturhub-marketplace/types'
@@ -14,6 +13,7 @@ import { GUIDE_SKILL_LABELS } from './guide-locales.ts'
 import { useGuidePopover } from './useGuidePopover.ts'
 import css from './CreationGuide.module.css'
 import { focusDetailAction } from './detail-focus.ts'
+import { GuideSkillRail } from './GuideSkillRail.tsx'
 
 /** Settings operations shared by the two guide locations. */
 export interface GuidePreferencesInjected {
@@ -57,6 +57,7 @@ export function CreationModes({ usePreferences, saveMode, t }: CreationModesProp
 
 /** Guide callbacks keep marketplace services outside components. */
 export interface CreationGuideInjected extends GuidePreferencesInjected {
+  navigationVersion: () => number
   appendReference: (reference: ReferenceInsert) => boolean
   load: () => Promise<void>
   ensureCatalog: () => Promise<void>
@@ -72,6 +73,7 @@ export interface CreationGuideInjected extends GuidePreferencesInjected {
   hooks: GuidePreferencesInjected['hooks'] & {
     marketplace: SnapshotStore<ManturMarketplaceState>
     guideInput: ObservableSnapshot<InputState | undefined>
+    guideNavigation: SnapshotStore<number>
   }
 }
 
@@ -86,12 +88,14 @@ export function CreationGuide(props: CreationGuideProps) {
   return <ReadyGuide {...props} preferences={preferences.value} />
 }
 
-function ReadyGuide({ hero, disabled, sessionId, preferences, useMarketplace, useGuideInput, appendReference,
+function ReadyGuide({ hero, disabled, sessionId, preferences, useMarketplace, useGuideInput,
+  useGuideNavigation, navigationVersion, appendReference,
   saveClosed, load, ensureCatalog, openDetail: loadDetail, closeDetail: clearDetail,
   install, startLogin, cancelLogin, marketplaceText: mt, t,
 }: CreationGuideProps & { preferences: GuideSettings }) {
   const market = useMarketplace(snapshot => snapshot)
   const input = useGuideInput(snapshot => snapshot)
+  const navigation = useGuideNavigation(snapshot => snapshot)
   const ready = market.phase === 'ready' ? market : undefined
   const [open, setOpen] = useState(hero && !preferences.closed)
   const [welcome, setWelcome] = useState(true)
@@ -122,13 +126,17 @@ function ReadyGuide({ hero, disabled, sessionId, preferences, useMarketplace, us
     setDetailSlug(undefined)
     setMore(false)
     return () => { ++operation.current }
-  }, [sessionId])
+  }, [sessionId, navigation])
 
   const openDetail = (slug: string): Promise<void> => {
+    ++operation.current
+    setNotice(undefined)
     setDetailSlug(slug)
     return loadDetail(slug)
   }
   const closeDetail = (): void => {
+    ++operation.current
+    loginSource.current = undefined
     setDetailSlug(undefined)
     clearDetail()
   }
@@ -149,12 +157,17 @@ function ReadyGuide({ hero, disabled, sessionId, preferences, useMarketplace, us
     return () => { document.removeEventListener('keydown', onKey) }
   })
 
+  const displayName = (skill: ManturMarketplaceSkill): string => {
+    const alias = GUIDE_SKILL_LABELS.get(skill.slug)
+    return alias === undefined ? skill.name : t(alias)
+  }
   const insert = (skill: ManturMarketplaceSkill): void => {
-    if (!appendReference({ source: 'skill', ref: skill.slug, label: skill.name, clipboardText: `/${skill.slug}` })) {
+    const label = displayName(skill)
+    if (!appendReference({ source: 'skill', ref: skill.slug, label, clipboardText: `/${skill.slug}` })) {
       setNotice(t('insertFailed'))
       return
     }
-    setNotice(t('selected').replace('{name}', skill.name))
+    setNotice(t('selected').replace('{name}', label))
     setWelcome(false)
     setMore(false)
     closeDetail()
@@ -162,9 +175,11 @@ function ReadyGuide({ hero, disabled, sessionId, preferences, useMarketplace, us
   const installAndUse = async (skill: ManturMarketplaceSkill): Promise<void> => {
     setWelcome(false)
     const attempt = ++operation.current
-    if (await install(skill.slug)) {
-      if (attempt === operation.current) insert(skill)
-    } else if (attempt === operation.current) setNotice(t('installFailed'))
+    const origin = navigationVersion()
+    const installed = await install(skill.slug)
+    if (attempt !== operation.current || origin !== navigationVersion()) return
+    if (installed) insert(skill)
+    else setNotice(t('installFailed'))
   }
   const skills = ready?.catalog.skills ?? []
   const recommended = preferences.recommendations[preferences.mode].flatMap((slug) => {
@@ -182,6 +197,7 @@ function ReadyGuide({ hero, disabled, sessionId, preferences, useMarketplace, us
   const detailError = ready?.detailError
   const detailOpen = detailSlug !== undefined
   const intro = notice ?? t(`intro.${preferences.mode}`)
+  const artwork = hero ? `mantoo-${preferences.mode}-peek` : 'mantoo-welcome'
   const matching = skills.filter(skill => `${skill.name} ${skill.description}`.toLocaleLowerCase().includes(query.toLocaleLowerCase()))
 
   return <div ref={source} className={css.guide}>
@@ -193,7 +209,7 @@ function ReadyGuide({ hero, disabled, sessionId, preferences, useMarketplace, us
       </div>
     </section>}
     <div className={css.shortcutRow} data-hero={hero}>
-      {hero && <div className={clsx(css.shortcuts, recommended.length === 0 && css.noRecommendations)} aria-label={t('recommended')}>
+      {hero && <GuideSkillRail empty={recommended.length === 0} t={t}>
         {market.phase === 'idle' || market.phase === 'loading' ? <span role="status">{mt('skills.loading')}</span>
           : market.phase === 'failed' ? <><span role="alert">{mt('skills.failed')}</span><button type="button" onClick={() => { void load() }}>{mt('skills.retry')}</button></>
             : recommended.length === 0 ? <span className={css.empty}>{t('empty')}</span>
@@ -207,11 +223,12 @@ function ReadyGuide({ hero, disabled, sessionId, preferences, useMarketplace, us
               })}
         {missingAlias && <span role="alert">{t('aliasMissing')}</span>}
         <button type="button" onClick={() => { setMore(true) }}>{t('more')}</button>
-      </div>}
+      </GuideSkillRail>}
       <button ref={helper} type="button" className={css.helper} aria-expanded={panelVisible} aria-controls={bubbleId}
         aria-label={t('assistant')} data-hero={hero}
         onClick={() => { if (panelVisible) close(); else { setWelcome(false); setOpen(true) } }}
-      ><img src="./mantou-clapper.png" width={184} height={100} alt="" draggable={false} /></button>
+      ><img src={`./${artwork}@3x.png`} srcSet={`./${artwork}@2x.png 2x, ./${artwork}@3x.png 3x`}
+          width={hero ? 184 : 96} height={hero ? 120 : 96} alt="" draggable={false} /></button>
     </div>
     <Modal open={more && !detailOpen} onClose={() => { setMore(false) }} title={t('more')} closeLabel={t('close')}>
       <input className={css.search} aria-label={mt('skills.search')} placeholder={mt('skills.search')} value={query} onChange={(event) => { setQuery(event.target.value) }} />
@@ -223,11 +240,11 @@ function ReadyGuide({ hero, disabled, sessionId, preferences, useMarketplace, us
         {market.phase === 'failed' && <button type="button" onClick={() => { void load() }}>{mt('skills.retry')}</button>}
       </div>
     </Modal>
-    <Modal open={detailOpen && ready?.loginPhase !== 'starting'} onClose={closeDetail} title={detail?.name ?? mt('skills.loadingDetail')} closeLabel={t('close')}
-      {...(detail === undefined ? {} : { description: detail.description })}>
+    <Modal open={detailOpen && ready?.loginPhase !== 'starting'} onClose={closeDetail}
+      title={detail === undefined ? mt('skills.loadingDetail') : displayName(detail)} closeLabel={t('close')}>
       {detailError !== undefined && <><p role="alert">{mt('skills.detailFailed')}</p><button type="button" onClick={() => { void openDetail(detailError) }}>{mt('skills.retry')}</button></>}
       {detail !== undefined && ready !== undefined && <div className={css.detail}>
-        {detail.introduction !== undefined && <p>{detail.introduction}</p>}
+        {!detail.installed && <p>{t('notInstalled')}</p>}
         {notice !== undefined && ready.installError === undefined && <p role="alert">{notice}</p>}
         {ready.installError !== undefined && <p role="alert">{t('installFailed')}{ready.installError === 'local-conflict' ? mt('skills.localConflict') : ''}</p>}
         {ready.loginPhase === 'failed' && <p role="alert">{mt('skills.loginFailed')}</p>}

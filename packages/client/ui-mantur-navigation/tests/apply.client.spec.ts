@@ -4,13 +4,14 @@ import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import {
-  MarketplaceNavigation, MarketplacePage, ProjectsHeading,
+  MarketplaceNavigation, MarketplacePage, ProjectsHeading, type MarketplaceNavigationInjected,
 } from '../src/client/MarketplaceNavigation.tsx'
 import * as clientEntry from '../src/client/index.ts'
 import { apply, inject } from '../src/client/index.ts'
 import { apply as hostApply } from '../src/index.ts'
 import { CreationGuide, CreationModes, type CreationGuideInjected, type GuidePreferencesInjected } from '../src/client/CreationGuide.tsx'
 import { ManturComposerLayout, type ManturComposerInjected } from '../src/client/ManturComposerLayout.tsx'
+import { ProjectPathSettings, type ProjectPathSettingsInjected } from '../src/client/ProjectPathSettings.tsx'
 import { GUIDE_NAMESPACE, type GuideSettings } from '../src/guide-settings.ts'
 import type { ManturMarketplaceStore } from '../src/client/store.ts'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -61,6 +62,7 @@ async function bench() {
       'conversation.hero.modes': { kind: 'single', scope: 'root' },
       'conversation.composer.guide': { kind: 'single', scope: 'session-maybe' },
       'conversation.composer.layout': { kind: 'single', scope: 'session-maybe' },
+      'settings.general.item': { kind: 'list', scope: 'root' },
     },
   } as never, () => null)
   return { ctx, remote, locale, slots, preferences, binding, appendReference, inputState, pickDirectory }
@@ -148,8 +150,14 @@ describe('ui-mantur-navigation apply', () => {
     expect(subject.slots.entries('conversation.hero.modes')[0]?.component).toBe(CreationModes)
     expect(subject.slots.entries('conversation.composer.guide')[0]?.component).toBe(CreationGuide)
     expect(subject.slots.entries('conversation.composer.layout')[0]?.component).toBe(ManturComposerLayout)
+    expect(subject.slots.spec('conversation.composer.layout.permissions')).toEqual({ kind: 'single', scope: 'session-maybe' })
     const footer = (subject.slots.entries('conversation.composer.layout')[0]!.inject as unknown as () => ManturComposerInjected)()
-    await footer.chooseRoot()
+    const pathEntry = subject.slots.entries('settings.general.item')[0]!
+    expect(pathEntry.component).toBe(ProjectPathSettings)
+    expect(pathEntry.options.id).toBe('mantur.project-path')
+    const path = (pathEntry.inject as unknown as () => ProjectPathSettingsInjected)()
+    expect(path.hooks.automaticProject).toBe(footer.hooks.automaticProject)
+    await path.chooseRoot()
     await footer.reloadRoot()
     expect(subject.pickDirectory).toHaveBeenCalledOnce()
     expect(footer.hooks.automaticProject.getSnapshot()).toMatchObject({ loading: false, settings: { source: 'unconfigured' } })
@@ -161,6 +169,8 @@ describe('ui-mantur-navigation apply', () => {
     expect(subject.slots.entries('conversation.hero.modes')).toEqual([])
     expect(subject.slots.entries('conversation.composer.guide')).toEqual([])
     expect(subject.slots.entries('conversation.composer.layout')).toEqual([])
+    expect(subject.slots.entries('settings.general.item')).toEqual([])
+    expect(subject.slots.spec('conversation.composer.layout.permissions')).toBeUndefined()
   })
 
   it('confirms persisted choices and delegates guide actions to their existing owners', async () => {
@@ -193,6 +203,16 @@ describe('ui-mantur-navigation apply', () => {
       const reference = { source: 'skill', ref: 'short-drama', label: '爽文短剧剧本创作', clipboardText: '/short-drama' }
       expect(createGuide(undefined).appendReference(reference)).toBe(true)
       const guide = createGuide('guide-session' as SessionId)
+      const navigation = (subject.slots.entries('sidebar.navigation')[0]!.inject as unknown as () => MarketplaceNavigationInjected)()
+      const changed = vi.fn()
+      const unsubscribe = guide.hooks.guideNavigation.subscribe(changed)
+      try {
+        expect(guide.navigationVersion()).toBe(0)
+        navigation.beforeOpenPage()
+        expect(guide.navigationVersion()).toBe(1)
+        expect(createGuide(undefined).hooks.guideNavigation.getSnapshot()).toBe(1)
+        expect(changed).toHaveBeenCalledOnce()
+      } finally { unsubscribe() }
       expect(guide.hooks.guideInput.getSnapshot()).toBeUndefined()
       guide.hooks.guideInput.subscribe(() => {})()
       expect(guide.appendReference(reference)).toBe(false)

@@ -114,11 +114,12 @@ describe('Mantur marketplace navigation', () => {
   })
 
   it('renders Features before the two fixed entries and opens the selected page', () => {
+    const beforeOpenPage = vi.fn()
     const openPage = vi.fn()
     const { rerender } = render(
       <MarketplaceNavigation
         {...globalProps}
-        wide activePage={undefined} openPage={openPage} closePage={vi.fn()} t={t}
+        wide activePage={undefined} openPage={openPage} beforeOpenPage={beforeOpenPage} closePage={vi.fn()} t={t}
       />,
     )
     expect(screen.getByRole('navigation', { name: '功能' })).toBeTruthy()
@@ -127,11 +128,12 @@ describe('Mantur marketplace navigation', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '技能广场' }))
     expect(openPage).toHaveBeenCalledWith(MANTUR_MARKET_PAGES.skills)
+    expect(beforeOpenPage.mock.invocationCallOrder[0]).toBeLessThan(openPage.mock.invocationCallOrder[0]!)
 
     rerender(
       <MarketplaceNavigation
         {...globalProps}
-        wide activePage={MANTUR_MARKET_PAGES.skills} openPage={openPage} closePage={vi.fn()} t={t}
+        wide activePage={MANTUR_MARKET_PAGES.skills} openPage={openPage} beforeOpenPage={beforeOpenPage} closePage={vi.fn()} t={t}
       />,
     )
     expect(screen.getByRole('button', { name: '技能广场' }).getAttribute('aria-current')).toBe('page')
@@ -364,6 +366,7 @@ describe('Mantur marketplace navigation', () => {
         wide={false}
         activePage={MANTUR_MARKET_PAGES.recipes}
         openPage={openPage}
+        beforeOpenPage={vi.fn()}
         closePage={vi.fn()}
         t={t}
       />,

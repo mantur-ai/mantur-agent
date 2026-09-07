@@ -28,6 +28,23 @@ function composedRows() {
 }
 
 describe('dsh-mantur-app bundle', () => {
+  it('selects installed editing resources without enabling a development checkout', () => {
+    const row = composedRows().find(entry => entry.id === 'ui-mantur-editing')
+    if (!row) throw new Error('Mantur composition is missing its editing entry')
+    expect(interpolate({ process: { env: {} } }, row.disabled)).toBe(true)
+    const context = { process: { env: {
+      DSH_MANTUR_EDITOR_ROOT: '/Applications/漫途 Agent.app/Contents/Resources/mantur-cut',
+      DSH_MANTUR_EDITOR_NODE: '/Applications/漫途 Agent.app/Contents/MacOS/漫途Agent',
+    } } }
+    expect(interpolate(context, row.disabled)).toBe(false)
+    expect(interpolate(context, row.config)).toEqual({
+      runtimeMode: 'packaged',
+      editorRoot: context.process.env.DSH_MANTUR_EDITOR_ROOT,
+      nodeExecutable: context.process.env.DSH_MANTUR_EDITOR_NODE,
+      startupTimeoutMs: 90000, stopTimeoutMs: 5000, toolCallTimeoutMs: 30000,
+    })
+  })
+
   it.each([
     [undefined, 'none', 'standalone'],
     ['1', 'required', 'desktop-managed'],

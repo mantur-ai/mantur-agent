@@ -12,6 +12,7 @@ import {
   clampWidth, DETAILS_DEFAULT, DETAILS_MAX, DETAILS_MIN,
   SIDEBAR_DEFAULT, SIDEBAR_MAX, SIDEBAR_MIN,
 } from './columns.ts'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { MainPageId } from './main-page.ts'
 
 /**
@@ -26,7 +27,8 @@ type LayoutState = {
   details: number
   narrow: boolean
   narrowExpanded: boolean
-  workbench: boolean
+  workbenchSessions: (SessionId | undefined)[]
+  workbenchSession: SessionId | undefined
   mainPage: MainPageId | undefined
 }
 
@@ -35,6 +37,7 @@ type LayoutState = {
  * return type); drift fails assignability at the defineStore call.
  */
 type LayoutActions = {
+  setWorkbenchSession: (draft: LayoutState, session: SessionId | undefined) => void
   openWorkbench: (draft: LayoutState) => void
   closeWorkbench: (draft: LayoutState) => void
   setSidebar: (draft: LayoutState, px: number) => void
@@ -65,11 +68,16 @@ export function createLayoutStore(): EngineStoreHandle<LayoutState, LayoutAction
       narrow: false,
       narrowExpanded: false,
       mainPage: undefined,
-      workbench: false,
+      workbenchSessions: [],
+      workbenchSession: undefined,
     }),
     actions: {
-      openWorkbench: (d) => { d.workbench = true; d.mainPage = undefined },
-      closeWorkbench: (d) => { d.workbench = false },
+      setWorkbenchSession: (d, session: SessionId | undefined) => { d.workbenchSession = session },
+      openWorkbench: (d) => {
+        if (!d.workbenchSessions.includes(d.workbenchSession)) d.workbenchSessions.push(d.workbenchSession)
+        d.mainPage = undefined
+      },
+      closeWorkbench: (d) => { d.workbenchSessions = d.workbenchSessions.filter(session => session !== d.workbenchSession) },
       setSidebar: (d, px: number) => { d.sidebar = clampWidth(px, SIDEBAR_MIN, SIDEBAR_MAX) },
       setDetails: (d, px: number) => { d.details = clampWidth(px, DETAILS_MIN, DETAILS_MAX) },
       // Narrow toggles flip only the override: the width preference survives

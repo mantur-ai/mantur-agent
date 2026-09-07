@@ -4,6 +4,7 @@ import type { PanelActions } from '@deepseek-ai/dsh-client-ui-layout/src/client/
 
 function fakePanels(): PanelActions {
   return {
+    setWorkbenchSession: vi.fn(),
     openWorkbench: vi.fn(),
     closeWorkbench: vi.fn(),
     setSidebar: vi.fn(),

@@ -15,6 +15,8 @@ The native preload publishes revisioned public account metadata, never the devic
 
 The requested native dialog uses `shell.overlay` and the same account form. Return and Escape dismiss the view without cancelling Main's accepted operation. Explicit successful Not now closes the dialog; an earlier saved Not now does not close a newly requested view. Repeated openings share one result. Another active modal, a busy account operation or a missing owner fails explicitly. Unloading rejects unfinished requests and releases the observer; late results do not reopen dismissed dialogs.
 
+Existing native login, registration, and account settings illustrations use the transparent welcome mascot at 72×72, or 48×48 in compact windows. The blue infinity logo remains the product identity.
+
 ## Table of Contents
 
 - [Model Experience](#model-experience)

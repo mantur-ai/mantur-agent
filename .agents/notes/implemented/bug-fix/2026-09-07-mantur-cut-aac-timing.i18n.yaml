@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-07-mantur-cut-aac-timing.md
+2026-09-07-mantur-cut-aac-timing.md: c3423c66093c8891e9d7c15ea63078f4fba047c4
+2026-09-07-mantur-cut-aac-timing.zh.md: c4361c20add86d1ad9304163806b1fb42f69279c

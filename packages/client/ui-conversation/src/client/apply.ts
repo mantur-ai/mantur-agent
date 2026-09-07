@@ -1,7 +1,7 @@
 /** Registers the target-neutral Conversation assembly, shell, input, and docks. */
 import type { Context } from '@deepseek-ai/cordis'
 import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
-import { createSnapshotStore, type BoundActions } from '@deepseek-ai/dsh-client-store'
+import { createSnapshotStore, type BoundActions, type ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import { resolveSlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 // Type-only service and declaration merges used by this assembly.
@@ -12,7 +12,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import { UiConversation } from './conversation/assembly.ts'
 import type { ViewTab } from './contract/views.ts'
 import type {
-  ComposerBarInjected, ConversationInjected, ConversationSessionHeaderInjected,
+  ComposerBarInjected, ComposerControlInjected, ConversationInjected, ConversationSessionHeaderInjected,
   ConversationSessionInjected,
 } from './contract/slots.ts'
 import { createConversationStore, readConversationViewPreference } from './stores.ts'
@@ -30,6 +30,7 @@ import type { EnterBehaviorRowInjected } from './settings/EnterBehaviorRow.tsx'
 import { ConversationRoot } from './skeleton/ConversationRoot.tsx'
 import { ConversationSession, ConversationSessionHeader } from './skeleton/ConversationSession.tsx'
 import { InputBar } from './skeleton/InputBar.tsx'
+import { PermissionControl } from './skeleton/PermissionControl.tsx'
 import { todoDockEntry } from './skeleton/TodoPanel.tsx'
 import { resolveActiveView } from './view-selection.ts'
 import { en, NS, zh, type ConversationKey } from './locales.ts'
@@ -281,6 +282,28 @@ export function apply(ctx: Context): void {
     }),
   }, ConversationSessionHeader)
 
+  const externalPermissions: ObservableSnapshot<boolean> = {
+    getSnapshot: () => slots.entries('conversation.composer.layout.permissions').length > 0,
+    subscribe: listener => slots.subscribe('conversation.composer.layout.permissions', listener),
+  }
+  const composerControls = (sessionId: SessionId | undefined): ComposerControlInjected => {
+    const shell = sessionId === undefined ? drafts.input : inputHub.shell(sessionId)
+    return {
+      keyboard: shell,
+      unassignedActions: sessionId === undefined ? shell.actions : undefined,
+      command: sessionId === undefined ? undefined : async (line) => {
+        const session = sessions.binding(sessionId)?.session
+        if (session === undefined) return false
+        const result = await session.command(line)
+        return result.ok && result.value.matched
+      },
+      hooks: { composerInput: shell.state },
+    }
+  }
+  slots.inject('conversation.composer.layout.permissions', () => slots.register({
+    name: 'conversation.composer.layout.permissions', locale: NS, inject: composerControls,
+  }, PermissionControl))
+
   const registerComposerBar = () => slots.register({
     name: 'conversation.composer.bar',
     locale: NS,
@@ -297,9 +320,9 @@ export function apply(ctx: Context): void {
       const conversation = concreteConversation(ctx)
       const shell = sessionId === undefined ? drafts.input : inputHub.shell(sessionId)
       const inputTriggers = sessionId === undefined ? undefined : inputHub.inputTriggers(sessionId)
+      const controls = composerControls(sessionId)
       return {
-        keyboard: shell,
-        unassignedActions: sessionId === undefined ? shell.actions : undefined,
+        ...controls,
         addImages: (files) => {
           try {
             const images = conversation.createDraftImages(files)
@@ -337,14 +360,9 @@ export function apply(ctx: Context): void {
             // Stop failure is published through Session promptError.
           })
         },
-        command: sessionId === undefined ? undefined : async (line) => {
-          const session = sessions.binding(sessionId)?.session
-          if (session === undefined) return false
-          const result = await session.command(line)
-          return result.ok && result.value.matched
-        },
         hooks: {
-          composerInput: shell.state,
+          ...controls.hooks,
+          externalPermissions,
           notices: shell.notices,
           lexicon: shell.lexicon,
           menuLauncher: inputTriggers?.launcher ?? ABSENT_MENU_LAUNCHER,
