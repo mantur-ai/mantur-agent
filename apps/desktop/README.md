@@ -26,7 +26,7 @@ Development uses the `mantur-agent-dev` user-data directory, while installed bui
 
 ## Build an internal installer
 
-Install the immutable dependency graph and build every host and client artifact with the Mantur title before invoking the native packager:
+Install the immutable dependency graph and build every host and client artifact with the Mantur title before invoking the native packager. macOS builders also require CMake because the pinned whisper.cpp source has no upstream macOS release binary:
 
 ```sh
 pnpm install --frozen-lockfile
@@ -34,6 +34,8 @@ pnpm run build:mantur
 pnpm run desktop:dist:mac:arm64
 pnpm run desktop:smoke
 ```
+
+Each `desktop:dist:*` command first prepares the matching Mantur Cut resource tree from pinned OpenChatCut and whisper.cpp commits. It verifies both Mantur patch digests and resulting Git trees, package-lock integrities, downloaded archive hashes, and the requested native target. The package carries the embedded server, built editor, Remotion bundle and compositor, Chrome Headless Shell, FFmpeg, ffprobe, Whisper CLI and server, exact source records, retained license files, and a production dependency audit. No packaged runtime downloads a missing executable or falls back to a developer checkout.
 
 Run the x64 macOS command on an Intel Mac and the Windows command on x64 Windows. The manual `Desktop package` GitHub Actions workflow checks out one commit on three native runners, runs the packaged smoke, and retains these files for seven days:
 
@@ -43,23 +45,24 @@ Run the x64 macOS command on an Intel Mac and the Windows command on x64 Windows
 | macOS x64 | `pnpm run desktop:dist:mac:x64` | `Mantur-Agent-macOS-x64.dmg`, `Mantur-Agent-macOS-x64.zip` |
 | Windows x64 | `pnpm run desktop:dist:win:x64` | `Mantur-Agent-Windows-x64.exe` |
 
-The smoke starts `dsh` from the unpacked application's own dependency directory, exchanges the printed process token for a session cookie, and requires the branded Web page to return HTTP 200. It also requires the packaged updater dependency and GitHub release configuration. It uses an empty temporary Harness home so developer data cannot make the package check pass or fail.
+The smoke starts `dsh` from the unpacked application's own dependency directory, exchanges the printed process token for a session cookie, and requires the branded Web page to return HTTP 200. It also validates every Mantur Cut manifest path, starts the packaged Whisper CLI and server with `--help`, requires the source, license, build, and security records, and checks the updater dependency and GitHub release configuration. It uses an empty temporary Harness home so developer data cannot make the package check pass or fail.
 
 ## Publish a signed macOS release
 
 The manual `Desktop release` GitHub Actions workflow builds arm64 and x64 on native macOS runners. Both jobs sign the application with a Developer ID Application identity, submit it to Apple's notarization service, validate the signature, Gatekeeper assessment, and stapled ticket, and run the packaged smoke before their artifacts can be assembled.
 
-Before public distribution, enable Release Immutability in the repository settings. Configure the `macos-release` GitHub environment with one variable and four encrypted secrets:
+Before public distribution, enable Release Immutability in the repository settings. Configure the `macos-release` GitHub environment with two variables and four encrypted secrets:
 
 | Kind | Name | Value |
 |---|---|---|
 | Variable | `APPLE_TEAM_ID` | Apple Developer Team ID |
+| Variable | `MANTUR_CUT_DISTRIBUTION_APPROVAL` | `approved:<source-config-sha256>` after review of those exact source, patch, binary, dependency, audit, source-delivery, and license pins |
 | Secret | `MACOS_CERTIFICATE` | Base64-encoded `.p12` containing the Developer ID Application certificate and private key |
 | Secret | `MACOS_CERTIFICATE_PASSWORD` | Password used to export the `.p12` |
 | Secret | `APPLE_ID` | Apple ID used for notarization |
 | Secret | `APPLE_APP_SPECIFIC_PASSWORD` | App-specific password for that Apple ID |
 
-The workflow combines both native `latest-mac.yml` files into one architecture-aware update channel and retains the complete candidate plus `SHA256SUMS` for seven days. Run it from the exact `v<apps/desktop version>` tag; this semver-compatible tag lets electron-updater select prereleases from the GitHub feed. `publish=false` stops after assembling the candidate; `publish=true` creates a GitHub release with the DMGs, update ZIPs, blockmaps, update metadata, and hashes. The workflow refuses a tag that already owns a release instead of replacing published files; repository-level Release Immutability then prevents later tag or asset changes.
+The workflow combines both native `latest-mac.yml` files into one architecture-aware update channel and retains the complete candidate plus `SHA256SUMS` for seven days. Run it from the exact `v<apps/desktop version>` tag; this semver-compatible tag lets electron-updater select prereleases from the GitHub feed. `publish=false` stops after assembling the candidate. `publish=true` additionally requires the approval variable to name the SHA-256 digest of the complete pinned source configuration before it creates a GitHub release with the DMGs, update ZIPs, blockmaps, update metadata, and hashes. The workflow refuses a tag that already owns a release instead of replacing published files; repository-level Release Immutability then prevents later tag or asset changes.
 
 ## Runtime design
 
@@ -89,6 +92,8 @@ The carrier passes `app.getPath('documents')` with a `漫途项目` child to the
 
 ## Known limitations
 
+- Packaging and starting the Whisper executables proves that their native files and adjacent libraries load on the target; it does not make local transcription available in the embedded workbench. The Mantur iframe does not yet install OpenChatCut's desktop inference preload, so the editor's native-ASR adapter currently returns unavailable.
+- A built internal installer is not distribution approval. OpenChatCut's AGPL source-delivery obligations, Remotion's entity and use terms, FFmpeg and ffprobe GPL/LGPL obligations, retained notices, binary redistribution terms, and every production audit finding require review for the exact patched tree before public release.
 - Native account Main, preload, provider, forms and Bash/PowerShell/PTY consumers are connected in source. Forms expose registration, browser authorization, persisted Skip and exact expiry without publishing the device bearer. Marketplace login routing, packaged CLI invocation and native OS acceptance remain incomplete. Loopback IPC, simulated-preload browser and fixed-CLI tests do not establish complete native login availability; the [integration proposal](../../.agents/notes/proposed/architecture/2026-09-07-desktop-native-account-identity.md) owns the remaining acceptance conditions.
 - The `Desktop package` artifacts remain unsigned internal installers. macOS Gatekeeper and Windows SmartScreen can warn for those files; use only the `Desktop release` artifacts for external macOS distribution.
 - The native icon source is a 1024 px PNG with a white rounded tile and transparent outer corners. The Web client uses the transparent logo separately. macOS and Windows packages derive their platform icon formats during the native build; a vector source remains unavailable.

@@ -23,6 +23,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       version: ${{ steps.version.outputs.version }}
+      mantur_cut_distribution: ${{ steps.version.outputs.mantur_cut_distribution }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -37,7 +38,9 @@ jobs:
         run: |
           set -euo pipefail
           version="$(node -p "require('./apps/desktop/package.json').version")"
+          mantur_cut_distribution="$(sha256sum apps/desktop/mantur-cut/source.json | cut -d ' ' -f1)"
           printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
+          printf 'mantur_cut_distribution=%s\n' "$mantur_cut_distribution" >> "$GITHUB_OUTPUT"
           if [ "$PUBLISH" = true ]; then
             [ "$REF_TYPE" = tag ] && [ "$REF_NAME" = "v$version" ] || {
               echo "::error::Publication must run from tag v$version."
@@ -100,6 +103,15 @@ jobs:
 
       - name: Test desktop launch contract
         run: pnpm exec vitest run apps/desktop/tests/runtime.spec.ts scripts/client-build-environment.client.spec.ts
+
+      - name: Restore pinned Mantur Cut source cache
+        uses: actions/cache@v5
+        with:
+          path: .cache/mantur-cut
+          key: mantur-cut-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('apps/desktop/mantur-cut/source.json', 'packages/client/ui-mantur-editing/adapters/mantur-cut.patch', 'packages/client/ui-mantur-editing/adapters/mantur-cut-packaged.patch') }}
+
+      - name: Require native Whisper build tools
+        run: cmake --version
 
       - name: Build, sign, and notarize native installer
         run: pnpm run ${{ matrix.script }}
@@ -200,6 +212,8 @@ jobs:
     environment: macos-release
     permissions:
       contents: write
+    env:
+      MANTUR_CUT_DISTRIBUTION_APPROVAL: ${{ vars.MANTUR_CUT_DISTRIBUTION_APPROVAL }}
     steps:
       - uses: actions/download-artifact@v8
         with:
@@ -208,6 +222,16 @@ jobs:
 
       - name: Verify release artifact hashes
         run: cd release && sha256sum -c SHA256SUMS
+
+      - name: Require review of the exact Mantur Cut distribution
+        env:
+          MANTUR_CUT_DISTRIBUTION: ${{ needs.validate.outputs.mantur_cut_distribution }}
+        run: |
+          expected="approved:$MANTUR_CUT_DISTRIBUTION"
+          [ "$MANTUR_CUT_DISTRIBUTION_APPROVAL" = "$expected" ] || {
+            echo "::error::MANTUR_CUT_DISTRIBUTION_APPROVAL must approve the exact pinned distribution."
+            exit 1
+          }
 
       - name: Create GitHub release
         env:

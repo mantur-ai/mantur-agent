@@ -57,6 +57,16 @@ jobs:
       - name: Test desktop launch contract
         run: pnpm exec vitest run apps/desktop/tests/runtime.spec.ts scripts/client-build-environment.client.spec.ts
 
+      - name: Restore pinned Mantur Cut source cache
+        uses: actions/cache@v5
+        with:
+          path: .cache/mantur-cut
+          key: mantur-cut-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('apps/desktop/mantur-cut/source.json', 'packages/client/ui-mantur-editing/adapters/mantur-cut.patch', 'packages/client/ui-mantur-editing/adapters/mantur-cut-packaged.patch') }}
+
+      - name: Require native Whisper build tools
+        if: runner.os == 'macOS'
+        run: cmake --version
+
       - name: Build native installer
         run: pnpm run ${{ matrix.script }}
 

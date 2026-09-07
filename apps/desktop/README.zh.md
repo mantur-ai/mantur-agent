@@ -26,7 +26,7 @@ pnpm run desktop:dev
 
 ## 构建内部安装包
 
-调用原生打包器之前，先安装不可变依赖图，再使用漫途标题构建全部 host 与 client 产物：
+调用原生打包器之前，先安装不可变依赖图，再使用漫途标题构建全部 host 与 client 产物。macOS 构建机还必须安装 CMake，因为固定的 whisper.cpp 源码没有上游 macOS 发布二进制：
 
 ```sh
 pnpm install --frozen-lockfile
@@ -34,6 +34,8 @@ pnpm run build:mantur
 pnpm run desktop:dist:mac:arm64
 pnpm run desktop:smoke
 ```
+
+每条 `desktop:dist:*` 命令都会先从固定的 OpenChatCut 与 whisper.cpp commit 准备对应的 Mantur Cut 资源树。该步骤会校验两层漫途补丁的摘要与结果 Git tree、package-lock integrity、下载归档哈希以及请求的原生目标。安装包会携带内嵌服务端、已构建编辑器、Remotion bundle 与 compositor、Chrome Headless Shell、FFmpeg、ffprobe、Whisper CLI 与 server、精确源码记录、保留的许可证文件和生产依赖审计。打包运行时不会下载缺失可执行文件，也不会回退到开发检出。
 
 macOS x64 命令必须在 Intel Mac 上运行，Windows 命令必须在 x64 Windows 上运行。手动触发的 `Desktop package` GitHub Actions 工作流会在三个原生 runner 上检出同一个 commit、运行打包 smoke，并将以下文件保留七天：
 
@@ -43,23 +45,24 @@ macOS x64 命令必须在 Intel Mac 上运行，Windows 命令必须在 x64 Wind
 | macOS x64 | `pnpm run desktop:dist:mac:x64` | `Mantur-Agent-macOS-x64.dmg`、`Mantur-Agent-macOS-x64.zip` |
 | Windows x64 | `pnpm run desktop:dist:win:x64` | `Mantur-Agent-Windows-x64.exe` |
 
-smoke 会从解包应用自己的依赖目录启动 `dsh`，把打印出的进程 token 换成会话 cookie，并要求带品牌标题的 Web 页面返回 HTTP 200。它还要求包内存在 updater 依赖与 GitHub release 配置。它使用空的临时 Harness home，避免开发者数据影响包检查结果。
+smoke 会从解包应用自己的依赖目录启动 `dsh`，把打印出的进程 token 换成会话 cookie，并要求带品牌标题的 Web 页面返回 HTTP 200。它还会校验 Mantur Cut manifest 中的每条路径，以 `--help` 启动包内 Whisper CLI 与 server，要求源码、许可证、构建及安全记录齐全，并检查 updater 依赖与 GitHub release 配置。它使用空的临时 Harness home，避免开发者数据影响包检查结果。
 
 ## 发布已签名的 macOS release
 
 手动触发的 `Desktop release` GitHub Actions 工作流会在原生 macOS runner 上分别构建 arm64 与 x64。两个任务都会使用 Developer ID Application 身份签名应用、提交 Apple notarization，并验证签名、Gatekeeper 评估与 stapled ticket；它们还会在产物进入组装步骤前运行 packaged smoke。
 
-对外发布前，先在仓库设置中启用 Release Immutability。然后在 GitHub 的 `macos-release` 环境中配置一个变量和四个加密 secret：
+对外发布前，先在仓库设置中启用 Release Immutability。然后在 GitHub 的 `macos-release` 环境中配置两个变量和四个加密 secret：
 
 | 类型 | 名称 | 值 |
 |---|---|---|
 | 变量 | `APPLE_TEAM_ID` | Apple Developer Team ID |
+| 变量 | `MANTUR_CUT_DISTRIBUTION_APPROVAL` | 对精确源码、补丁、二进制、依赖、审计、源码交付及许可证固定项完成审核后填写 `approved:<source-config-sha256>` |
 | Secret | `MACOS_CERTIFICATE` | 含 Developer ID Application 证书与私钥的 `.p12` 所对应的 Base64 内容 |
 | Secret | `MACOS_CERTIFICATE_PASSWORD` | 导出 `.p12` 时使用的密码 |
 | Secret | `APPLE_ID` | 用于 notarization 的 Apple ID |
 | Secret | `APPLE_APP_SPECIFIC_PASSWORD` | 该 Apple ID 的 App 专用密码 |
 
-工作流会把两份原生 `latest-mac.yml` 合并为一份可区分架构的更新通道，并把完整候选产物与 `SHA256SUMS` 保留七天。必须从精确匹配 `v<apps/desktop 版本>` 的 tag 运行；electron-updater 可以从 GitHub feed 中选择这种兼容 semver 的预发布 tag。`publish=false` 会在组装候选产物后停止；`publish=true` 会创建 GitHub release，并同时上传 DMG、更新 ZIP、blockmap、更新元数据与哈希。工作流会拒绝使用已有 release 的 tag，不会替换已发布文件；仓库级 Release Immutability 则会继续阻止之后修改 tag 或产物。
+工作流会把两份原生 `latest-mac.yml` 合并为一份可区分架构的更新通道，并把完整候选产物与 `SHA256SUMS` 保留七天。必须从精确匹配 `v<apps/desktop 版本>` 的 tag 运行；electron-updater 可以从 GitHub feed 中选择这种兼容 semver 的预发布 tag。`publish=false` 会在组装候选产物后停止。`publish=true` 还要求审批变量指向完整固定源码配置的 SHA-256 摘要，之后才会创建 GitHub release，并同时上传 DMG、更新 ZIP、blockmap、更新元数据与哈希。工作流会拒绝使用已有 release 的 tag，不会替换已发布文件；仓库级 Release Immutability 则会继续阻止之后修改 tag 或产物。
 
 ## 运行时设计
 
@@ -89,6 +92,8 @@ macOS Intel、macOS Apple Silicon 与 Windows 使用同一个更新控制器。m
 
 ## 已知限制
 
+- 将 Whisper 可执行文件打入安装包并启动，只能证明其原生文件及相邻动态库能在目标平台加载，不能让内嵌工作台直接具备本地转写能力。Mantur iframe 尚未安装 OpenChatCut 的桌面推理 preload，因此编辑器的原生 ASR adapter 当前会返回不可用。
+- 构建出内部安装包不等于获得分发批准。OpenChatCut 的 AGPL 源码交付义务、Remotion 的实体与用途条款、FFmpeg 与 ffprobe 的 GPL/LGPL 义务、需保留的 notice、二进制再分发条款及全部生产依赖审计发现，都必须针对精确补丁 tree 完成审核后才能公开发布。
 - 原生账号 Main、preload、provider、表单与 Bash、PowerShell、PTY 消费方已在源码中连接。表单提供注册、浏览器授权、持久跳过和精确到期状态，不发布设备 bearer。广场登录路由、打包 CLI 调用和原生操作系统验收仍未完成。Loopback IPC、模拟 preload 浏览器测试和固定 CLI 测试不能证明完整原生登录已可用；[接入提案](../../.agents/notes/proposed/architecture/2026-09-07-desktop-native-account-identity.zh.md)记录剩余验收条件。
 - `Desktop package` 产物仍是未签名的内部安装包。macOS Gatekeeper 与 Windows SmartScreen 可能对这些文件显示警告；对外分发 macOS 客户端时只能使用 `Desktop release` 产物。
 - 原生图标源文件是带白色圆角底和透明外角的 1024 px PNG，Web 客户端单独使用透明 Logo。macOS 和 Windows 包会在原生构建时生成各自的平台图标格式；当前没有矢量源文件。

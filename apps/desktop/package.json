@@ -8,10 +8,11 @@
   "scripts": {
     "bundle": "tsdown",
     "dev": "tsx watch --clear-screen=false --include \"src/**/*\" --include \"resources/**/*\" --include package.json --include tsconfig.json --include tsdown.config.ts scripts/dev.ts",
-    "pack": "electron-builder --dir --publish never",
-    "dist:mac:arm64": "electron-builder --mac dmg zip --arm64 --publish never",
-    "dist:mac:x64": "electron-builder --mac dmg zip --x64 --publish never",
-    "dist:win:x64": "electron-builder --win nsis --x64 --publish never",
+    "pack": "pnpm run prepare:mantur-cut && electron-builder --dir --publish never",
+    "prepare:mantur-cut": "tsx ../../scripts/mantur-cut-distribution.ts",
+    "dist:mac:arm64": "pnpm run prepare:mantur-cut -- --target darwin-arm64 && electron-builder --mac dmg zip --arm64 --publish never",
+    "dist:mac:x64": "pnpm run prepare:mantur-cut -- --target darwin-x64 && electron-builder --mac dmg zip --x64 --publish never",
+    "dist:win:x64": "pnpm run prepare:mantur-cut -- --target win32-x64 && electron-builder --win nsis --x64 --publish never",
     "smoke:packaged": "tsx scripts/smoke-packaged.ts"
   },
   "license": "MIT",
@@ -60,6 +61,12 @@
     "directories": {
       "output": "dist"
     },
+    "extraResources": [
+      {
+        "from": ".generated/mantur-cut",
+        "to": "mantur-cut"
+      }
+    ],
     "publish": [
       {
         "provider": "github",
