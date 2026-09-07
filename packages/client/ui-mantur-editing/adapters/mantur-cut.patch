@@ -136,10 +136,22 @@ index 4009a34..7a6883d 100644
    <body>
      <div id="root"></div>
 diff --git a/package.json b/package.json
-index a8f2712..ae6e90e 100644
+index a8f2712..69a1f6b 100644
 --- a/package.json
 +++ b/package.json
-@@ -72,7 +72,8 @@
+@@ -47,9 +47,10 @@
+     "verify:desktop-worker-lifecycle": "tsx --tsconfig tsconfig.node.json desktop/native-asr-worker-lifecycle.verify.ts",
+     "verify:desktop-update": "tsx desktop/update-service.verify.ts && tsx desktop/update-packaging.verify.ts && tsx src/ui/upstreamUpdate.verify.ts && tsx src/ui/upstreamUpdateDesktop.verify.ts && tsx --tsconfig tsconfig.app.json src/ui/upstream-update-notice.verify.tsx && tsx --tsconfig tsconfig.app.json src/components/settings/settings-version.verify.tsx",
+     "verify:toolbar-tooltips": "tsx src/media/media-toolbar-tooltips.verify.tsx && tsx src/components/generation-activity.verify.tsx && tsx src/components/topbar-tooltips.verify.tsx",
++    "verify:audio-finalization": "node remotion/audio-finalization.verify.mjs && node remotion/audio-finalization.integration.verify.mjs",
+     "verify:export-adaptive": "npx tsx src/export/exportDestination.verify.ts && npx tsx src/export/exportRoutePlanner.verify.ts && npx tsx src/export/materializeBlobMedia.verify.ts && npx tsx src/export/serverExportOperation.verify.ts && npx tsx server/plugins/export-destination.verify.ts && npx tsx server/plugins/export-stage.verify.ts && npx tsx server/plugins/export-media-plan.verify.ts && npx tsx server/plugins/export-reference-materialization.verify.ts && npx tsx server/plugins/export-product-assets.verify.ts && npx tsx server/plugins/export-submission.verify.ts",
+     "test": "node scripts/run-tests.mjs",
+-    "test:serial": "node remotion/performance.verify.mjs && tsx src/transcript/local-asr-warmup.verify.ts && tsx src/transcript/assemblyai.verify.ts && tsx src/transcript/assemblyai-resume.verify.ts && tsx src/transcript/transcribe-jobs.verify.ts && tsx src/persist/mediaIntelligenceStores.verify.ts && tsx src/editor/rateStretch.verify.ts && tsx server/media-acceleration.verify.ts && tsx server/plugins/scene-detection.verify.ts && tsx server/plugins/stock.verify.ts && tsx src/agent/proposal.verify.ts && tsx src/agent/external-edit-session.verify.ts && tsx src/agent/serverRunToolExecutor.race.verify.ts && tsx src/components/chat/widget-parse.verify.ts && tsx src/agent/tools/generation-tool-input.verify.ts && tsx server/plugins/image.verify.ts && tsx server/plugins/video.verify.ts && tsx server/plugins/music.verify.ts && tsx server/plugins/music-sonilo.verify.ts && tsx server/plugins/music-media.verify.ts && tsx server/plugins/sound.verify.ts && tsx server/plugins/voice.verify.ts && tsx src/agent/tools/followup-tools.verify.ts && tsx src/agent/tools/clean-script-rules.verify.ts && tsx src/agent/tools/mg-export-params.verify.ts && tsx src/agent/tools/scene-detection-tools.verify.ts && tsx src/agent/tools/isolate-voice-tools.verify.ts && tsx src/agent/tools/template-tools.verify.ts && tsx src/agent/tools/script-tools.verify.ts && tsx src/agent/tools/timeline-target-tools.verify.ts && tsx src/agent/tools/track-tools.verify.ts && tsx server/plugins/generation-jobs.verify.ts && tsx server/plugins/export-runtime.verify.ts && tsx server/plugins/export-params.verify.ts && tsx src/export/browserExport.verify.ts && tsx src/agent/ai-sdk.verify.ts && tsx server/llm-proxy.verify.ts && tsx server/external-agent/broker.verify.ts && tsx server/plugins/project-store.verify.ts && tsx server/plugins/extension-store.verify.ts && tsx server/plugins/normalize-media.verify.ts && tsx src/persist/projectStore.verify.ts && tsx src/persist/design-style-metadata.verify.ts && tsx src/persist/designStyleTransfer.verify.ts && tsx src/captions/manualCaptions.verify.ts && tsx src/captions/captionPreviewTarget.verify.ts && tsx src/agent/tools/captions-track-order.verify.ts && tsx src/skins.verify.ts && tsx src/theme-tokenization.verify.ts && tsx server/mobile-upload-service.verify.ts && tsx src/media/mobileUploadApi.verify.ts && tsx src/tracking/tracking.verify.ts && tsx src/media/semantic-search/semanticSearch.verify.ts && tsx src/color/autoGrade.verify.ts && tsx server/plugins/auto-grade.verify.ts && tsx src/transcript/phrases.verify.ts && tsx src/agent/tools/transcript-read.verify.ts && tsx src/export/quality.verify.ts && tsx src/export/autoQa.verify.ts && tsx server/plugins/export-qa.verify.ts && tsx src/agent/tools/export-qa-tools.verify.ts && tsx src/persist/migrations/migrations.verify.ts && tsx server/keystore.verify.ts && tsx src/components/timeline/transition-context-menu.verify.ts && tsx shared/model-capabilities.verify.ts && tsx desktop/agent-path-import.verify.ts && tsx desktop/agent-path-import.e2e.verify.ts && tsx src/agent/tools/agent-path-import-tools.verify.ts && tsx server/key-probes.verify.ts && tsx src/agent/settings/agent-settings.verify.ts && tsx src/editor/layouts.verify.ts && tsx src/audio/silence.verify.ts && tsx src/editor/silenceRebuild.verify.ts && tsx src/color/scopes.verify.ts && tsx src/audio/beats.verify.ts && tsx src/editor/keyframes.verify.ts && tsx src/editor/camSwitch.verify.ts && tsx src/export/fcpxml.verify.ts && tsx src/agent/timelineDelta.verify.ts && tsx server/plugins/extract-frames.verify.ts && tsx src/agent/tools/undo-tools.verify.ts && tsx src/editor/clipFit.verify.ts && tsx src/editor/sourceLimit.verify.ts && tsx src/editor/rippleChain.verify.ts && tsx src/editor/snap.verify.ts && tsx src/transcript/cutPad.verify.ts && tsx src/agent/tools/track-gaps.verify.ts && tsx src/persist/uploadRefs.verify.ts && tsx server/plugins/result-download.verify.ts && tsx src/agent/systemPromptOrder.verify.ts && tsx src/review/reviewModel.verify.ts && tsx src/editor/historyGesture.verify.ts && tsx src/agent/abortedTurn.verify.ts && tsx src/agent/changeLog.verify.ts && tsx server/plugins/reference-mime.verify.ts && tsx src/components/inspector/inspector-controls.verify.ts && tsx --tsconfig tsconfig.app.json src/components/timeline/timelineFitRange.verify.ts && tsx --tsconfig tsconfig.app.json src/components/timeline/timeline-clip-duration.verify.ts && tsx --tsconfig tsconfig.app.json src/components/timeline/trackOverlap.verify.ts && node src/components/timeline/playhead-watchdog.verify.mjs && tsx --tsconfig tsconfig.app.json src/components/timeline/timelineSeek.verify.ts && tsx --tsconfig tsconfig.app.json src/components/timeline/trackDelete.verify.ts && tsx --tsconfig tsconfig.app.json src/components/timeline/track-mute-visual.verify.ts && npm run test:contrib-timeline-preview && tsx server/external-agent/client-connect.verify.ts && tsx config/vite.config.verify.ts && tsx desktop/embedded-project-store-http.verify.ts && tsx desktop/embedded-server.verify.ts && node remotion/direct-hardware.verify.mjs && tsx server/agent-runs/acceptance-loop.verify.ts && tsx server/agent-runs/llm-retry.verify.ts && tsx server/agent-runs/store-business-failure.verify.ts && tsx server/error-scrub.verify.ts && tsx server/external-agent/broker-poll-refresh.verify.ts && tsx server/external-agent/jianying-export.verify.ts && tsx server/external-agent/offline-mcp-process-recovery.verify.ts && tsx server/outbound-proxy.verify.ts && tsx server/plugins/mobile-upload.verify.ts && tsx server/plugins/read-path-auth.verify.ts && tsx server/plugins/sonilo-media.verify.ts && tsx server/plugins/sound-sonilo-job.verify.ts && tsx server/storage/fulltext-search.verify.ts && tsx server/storage/hybrid-search.verify.ts && tsx server/storage/semantic-vectors.verify.ts && tsx server/xai-oauth-session.verify.ts && tsx shared/transcript-window.verify.ts && tsx src/agent/approval-mode.verify.ts && tsx src/agent/codex/runtime-tool-boundary.verify.ts && tsx src/agent/execution-modes.verify.ts && tsx src/agent/execution-policy-args.verify.ts && tsx src/agent/external-bridge-attempt-error.verify.ts && tsx src/agent/serverRunDraftStore.verify.ts && tsx src/agent/serverRunToolBusinessFailure.verify.ts && tsx src/agent/tools/agent-export-media-pool.verify.ts && tsx src/agent/tools/core-data-tools.verify.ts && tsx src/agent/tools/livestream-sequence-workflow.verify.ts && tsx src/agent/tools/search-tools.verify.ts && tsx src/audio/silero-vad.verify.ts && tsx src/captions/captionFallback.verify.ts && tsx src/captions/wordAlignment.verify.ts && tsx src/components/chat/chatRunStatus.verify.ts && tsx src/components/timeline/usePlayheadPaint.verify.ts && tsx src/editor/reducerGuards.verify.ts && tsx src/editor/sharedVisual.verify.ts && tsx src/editor/trackCreateBatching.verify.ts && tsx src/export/downloadBlob.verify.ts && tsx src/export/export-reachability.verify.ts && tsx src/generate/asset-reference.verify.ts && tsx src/gl/clipFxPreview.verify.ts && tsx src/i18n/dictRegistry.verify.ts && tsx src/media/previewMedia.verify.ts && tsx src/media/semantic-search/vectorStore.verify.ts && tsx src/media/transcriptParagraphs.verify.ts && tsx src/multicam/professionalMulticamPersistence.verify.ts && tsx src/multicam/professionalMulticamSwitch.verify.ts && tsx src/multicam/professionalMulticamSync.verify.ts && tsx src/persist/multicamPreservation.verify.ts && tsx src/persist/unreadablePreservation.verify.ts && tsx src/transcript/auto-transcribe-ingest.verify.ts && tsx src/transcript/local-asr-silence.verify.ts && tsx src/components/timeline/frameCoalescer.verify.ts && node scripts/run-affected-verifies.verify.mjs && node scripts/sync-whisper-cli.verify.mjs && node scripts/verify-registration.verify.mjs && tsx src/media/drag.verify.ts && tsx shared/file-name.verify.ts && tsx server/external-agent/external-skill.verify.mjs && node src/gl/clipFxExport.verify.mjs && tsx src/components/settings/mcpGuideLoader.verify.ts && tsx shared/onnxruntime-version.verify.ts && node scripts/verify-gate-coverage.verify.mjs",
++    "test:serial": "node remotion/audio-finalization.verify.mjs && node remotion/performance.verify.mjs && tsx src/transcript/local-asr-warmup.verify.ts && tsx src/transcript/assemblyai.verify.ts && tsx src/transcript/assemblyai-resume.verify.ts && tsx src/transcript/transcribe-jobs.verify.ts && tsx src/persist/mediaIntelligenceStores.verify.ts && tsx src/editor/rateStretch.verify.ts && tsx server/media-acceleration.verify.ts && tsx server/plugins/scene-detection.verify.ts && tsx server/plugins/stock.verify.ts && tsx src/agent/proposal.verify.ts && tsx src/agent/external-edit-session.verify.ts && tsx src/agent/serverRunToolExecutor.race.verify.ts && tsx src/components/chat/widget-parse.verify.ts && tsx src/agent/tools/generation-tool-input.verify.ts && tsx server/plugins/image.verify.ts && tsx server/plugins/video.verify.ts && tsx server/plugins/music.verify.ts && tsx server/plugins/music-sonilo.verify.ts && tsx server/plugins/music-media.verify.ts && tsx server/plugins/sound.verify.ts && tsx server/plugins/voice.verify.ts && tsx src/agent/tools/followup-tools.verify.ts && tsx src/agent/tools/clean-script-rules.verify.ts && tsx src/agent/tools/mg-export-params.verify.ts && tsx src/agent/tools/scene-detection-tools.verify.ts && tsx src/agent/tools/isolate-voice-tools.verify.ts && tsx src/agent/tools/template-tools.verify.ts && tsx src/agent/tools/script-tools.verify.ts && tsx src/agent/tools/timeline-target-tools.verify.ts && tsx src/agent/tools/track-tools.verify.ts && tsx server/plugins/generation-jobs.verify.ts && tsx server/plugins/export-runtime.verify.ts && tsx server/plugins/export-params.verify.ts && tsx src/export/browserExport.verify.ts && tsx src/agent/ai-sdk.verify.ts && tsx server/llm-proxy.verify.ts && tsx server/external-agent/broker.verify.ts && tsx server/plugins/project-store.verify.ts && tsx server/plugins/extension-store.verify.ts && tsx server/plugins/normalize-media.verify.ts && tsx src/persist/projectStore.verify.ts && tsx src/persist/design-style-metadata.verify.ts && tsx src/persist/designStyleTransfer.verify.ts && tsx src/captions/manualCaptions.verify.ts && tsx src/captions/captionPreviewTarget.verify.ts && tsx src/agent/tools/captions-track-order.verify.ts && tsx src/skins.verify.ts && tsx src/theme-tokenization.verify.ts && tsx server/mobile-upload-service.verify.ts && tsx src/media/mobileUploadApi.verify.ts && tsx src/tracking/tracking.verify.ts && tsx src/media/semantic-search/semanticSearch.verify.ts && tsx src/color/autoGrade.verify.ts && tsx server/plugins/auto-grade.verify.ts && tsx src/transcript/phrases.verify.ts && tsx src/agent/tools/transcript-read.verify.ts && tsx src/export/quality.verify.ts && tsx src/export/autoQa.verify.ts && tsx server/plugins/export-qa.verify.ts && tsx src/agent/tools/export-qa-tools.verify.ts && tsx src/persist/migrations/migrations.verify.ts && tsx server/keystore.verify.ts && tsx src/components/timeline/transition-context-menu.verify.ts && tsx shared/model-capabilities.verify.ts && tsx desktop/agent-path-import.verify.ts && tsx desktop/agent-path-import.e2e.verify.ts && tsx src/agent/tools/agent-path-import-tools.verify.ts && tsx server/key-probes.verify.ts && tsx src/agent/settings/agent-settings.verify.ts && tsx src/editor/layouts.verify.ts && tsx src/audio/silence.verify.ts && tsx src/editor/silenceRebuild.verify.ts && tsx src/color/scopes.verify.ts && tsx src/audio/beats.verify.ts && tsx src/editor/keyframes.verify.ts && tsx src/editor/camSwitch.verify.ts && tsx src/export/fcpxml.verify.ts && tsx src/agent/timelineDelta.verify.ts && tsx server/plugins/extract-frames.verify.ts && tsx src/agent/tools/undo-tools.verify.ts && tsx src/editor/clipFit.verify.ts && tsx src/editor/sourceLimit.verify.ts && tsx src/editor/rippleChain.verify.ts && tsx src/editor/snap.verify.ts && tsx src/transcript/cutPad.verify.ts && tsx src/agent/tools/track-gaps.verify.ts && tsx src/persist/uploadRefs.verify.ts && tsx server/plugins/result-download.verify.ts && tsx src/agent/systemPromptOrder.verify.ts && tsx src/review/reviewModel.verify.ts && tsx src/editor/historyGesture.verify.ts && tsx src/agent/abortedTurn.verify.ts && tsx src/agent/changeLog.verify.ts && tsx server/plugins/reference-mime.verify.ts && tsx src/components/inspector/inspector-controls.verify.ts && tsx --tsconfig tsconfig.app.json src/components/timeline/timelineFitRange.verify.ts && tsx --tsconfig tsconfig.app.json src/components/timeline/timeline-clip-duration.verify.ts && tsx --tsconfig tsconfig.app.json src/components/timeline/trackOverlap.verify.ts && node src/components/timeline/playhead-watchdog.verify.mjs && tsx --tsconfig tsconfig.app.json src/components/timeline/timelineSeek.verify.ts && tsx --tsconfig tsconfig.app.json src/components/timeline/trackDelete.verify.ts && tsx --tsconfig tsconfig.app.json src/components/timeline/track-mute-visual.verify.ts && npm run test:contrib-timeline-preview && tsx server/external-agent/client-connect.verify.ts && tsx config/vite.config.verify.ts && tsx desktop/embedded-project-store-http.verify.ts && tsx desktop/embedded-server.verify.ts && node remotion/direct-hardware.verify.mjs && tsx server/agent-runs/acceptance-loop.verify.ts && tsx server/agent-runs/llm-retry.verify.ts && tsx server/agent-runs/store-business-failure.verify.ts && tsx server/error-scrub.verify.ts && tsx server/external-agent/broker-poll-refresh.verify.ts && tsx server/external-agent/jianying-export.verify.ts && tsx server/external-agent/offline-mcp-process-recovery.verify.ts && tsx server/outbound-proxy.verify.ts && tsx server/plugins/mobile-upload.verify.ts && tsx server/plugins/read-path-auth.verify.ts && tsx server/plugins/sonilo-media.verify.ts && tsx server/plugins/sound-sonilo-job.verify.ts && tsx server/storage/fulltext-search.verify.ts && tsx server/storage/hybrid-search.verify.ts && tsx server/storage/semantic-vectors.verify.ts && tsx server/xai-oauth-session.verify.ts && tsx shared/transcript-window.verify.ts && tsx src/agent/approval-mode.verify.ts && tsx src/agent/codex/runtime-tool-boundary.verify.ts && tsx src/agent/execution-modes.verify.ts && tsx src/agent/execution-policy-args.verify.ts && tsx src/agent/external-bridge-attempt-error.verify.ts && tsx src/agent/serverRunDraftStore.verify.ts && tsx src/agent/serverRunToolBusinessFailure.verify.ts && tsx src/agent/tools/agent-export-media-pool.verify.ts && tsx src/agent/tools/core-data-tools.verify.ts && tsx src/agent/tools/livestream-sequence-workflow.verify.ts && tsx src/agent/tools/search-tools.verify.ts && tsx src/audio/silero-vad.verify.ts && tsx src/captions/captionFallback.verify.ts && tsx src/captions/wordAlignment.verify.ts && tsx src/components/chat/chatRunStatus.verify.ts && tsx src/components/timeline/usePlayheadPaint.verify.ts && tsx src/editor/reducerGuards.verify.ts && tsx src/editor/sharedVisual.verify.ts && tsx src/editor/trackCreateBatching.verify.ts && tsx src/export/downloadBlob.verify.ts && tsx src/export/export-reachability.verify.ts && tsx src/generate/asset-reference.verify.ts && tsx src/gl/clipFxPreview.verify.ts && tsx src/i18n/dictRegistry.verify.ts && tsx src/media/previewMedia.verify.ts && tsx src/media/semantic-search/vectorStore.verify.ts && tsx src/media/transcriptParagraphs.verify.ts && tsx src/multicam/professionalMulticamPersistence.verify.ts && tsx src/multicam/professionalMulticamSwitch.verify.ts && tsx src/multicam/professionalMulticamSync.verify.ts && tsx src/persist/multicamPreservation.verify.ts && tsx src/persist/unreadablePreservation.verify.ts && tsx src/transcript/auto-transcribe-ingest.verify.ts && tsx src/transcript/local-asr-silence.verify.ts && tsx src/components/timeline/frameCoalescer.verify.ts && node scripts/run-affected-verifies.verify.mjs && node scripts/sync-whisper-cli.verify.mjs && node scripts/verify-registration.verify.mjs && tsx src/media/drag.verify.ts && tsx shared/file-name.verify.ts && tsx server/external-agent/external-skill.verify.mjs && node src/gl/clipFxExport.verify.mjs && tsx src/components/settings/mcpGuideLoader.verify.ts && tsx shared/onnxruntime-version.verify.ts && node scripts/verify-gate-coverage.verify.mjs",
+     "posttest": "npm run verify:background-fill && npm run verify:speech-providers && npm run verify:desktop-worker-lifecycle && npm run verify:server-runs && npm run verify:extract-audio",
+     "verify:server-runs": "tsx server/agent-runs/model.verify.ts && tsx server/agent-runs/tool-catalog-generation.verify.ts && tsx server/agent-runs/codex-turn.verify.ts && tsx server/agent-runs/executor.verify.ts && tsx server/agent-runs/tool-policy.verify.ts && tsx server/agent-runs/store.verify.ts && tsx server/agent-runs/store-approval.verify.ts && tsx server/agent-runs/store-capability.verify.ts && tsx server/agent-runs/routes.verify.ts && tsx src/agent/useServerRun.verify.ts && tsx src/agent/serverRunFetchEventStream.verify.ts && tsx src/agent/serverRunSessionStorage.verify.ts && tsx src/agent/serverRunModelHistory.verify.ts && tsx src/agent/serverRunOwnership.verify.ts && tsx src/agent/serverRunProtocol.verify.ts && tsx src/agent/serverRunToolExecutor.verify.ts && tsx src/agent/serverRunToolRecovery.verify.ts && tsx src/agent/useAgentHistoryActions.verify.ts && tsx src/components/chat/serverRunInspector.verify.ts",
+     "verify:background-fill": "tsx src/editor/backgroundFill.verify.ts && tsx --tsconfig tsconfig.app.json src/components/preview/previewTransform.verify.ts && tsx --tsconfig tsconfig.app.json src/components/inspector/background-fill-control.verify.tsx && tsx src/agent/tools/edit-item-background-fill.verify.ts && tsx src/export/fcpxml-background-fill.verify.ts",
+@@ -72,7 +73,8 @@
      "verify:i18n": "node scripts/check-i18n.mjs && tsx src/i18n/locale.verify.ts && tsx src/i18n/dict/it/settingsCoverage.verify.ts && tsx src/i18n/dict/it/mediaCoverage.verify.ts && tsx src/components/settings/transcription-language.verify.ts",
      "verify:editor": "tsx src/editor/keyframes.verify.ts && tsx src/editor/flexCrop.verify.ts && tsx src/editor/multiSelect.verify.ts && tsx src/editor/professionalTimeline.verify.ts && tsx src/editor/proposal.verify.ts && tsx src/editor/ripple-fade.verify.ts && tsx src/editor/ripple.verify.ts && tsx src/editor/split.verify.ts && tsx src/editor/transitionPreview.verify.ts && tsx src/editor/captionReferences.verify.ts && tsx src/editor/zoom.verify.ts && tsx src/editor/keyframes-check.verify.ts",
      "verify:captions": "tsx src/captions/captionCueMenu.verify.ts && tsx src/captions/captionIdentity.verify.ts && tsx src/captions/exportCaptions.verify.ts && tsx src/captions/presetStore.verify.ts && tsx src/captions/renderStyles.verify.ts && tsx src/captions/segmenter.verify.ts && tsx src/captions/styles.verify.ts && tsx src/transcript/edit.verify.ts && tsx src/transcript/transcribe-jobs.verify.ts && tsx src/transcript/variants.verify.ts && tsx src/audio/loudness.verify.ts && tsx src/audio/vad.verify.ts && tsx src/transcript/transcribe-jobs-check.verify.ts",
@@ -156,6 +168,874 @@ index 0000000..09260c5
 +++ b/public/mantur-cut.svg
 @@ -0,0 +1 @@
 +<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="16" fill="#0062ed"/><text x="32" y="45" text-anchor="middle" font-family="system-ui,sans-serif" font-size="48" fill="white">∞</text></svg>
+diff --git a/remotion/audio-finalization.d.mts b/remotion/audio-finalization.d.mts
+new file mode 100644
+index 0000000..35a0c45
+--- /dev/null
++++ b/remotion/audio-finalization.d.mts
+@@ -0,0 +1,25 @@
++import type { renderMedia } from '@remotion/renderer';
++
++/** Audio preparation and final mux stages reported to the export job. */
++export type AudioStage = 'preflight' | 'render' | 'encode';
++
++/** Failed stage with the result of removing private render and mux files. */
++export class AudioFinalizationError extends Error {
++  constructor(cause: Error, stage: AudioStage, cleanupStatus: 'succeeded' | 'failed');
++  stage: AudioStage;
++  cleanupStatus: 'succeeded' | 'failed';
++}
++
++type RenderOptions = Parameters<typeof renderMedia>[0];
++
++/** Whether ordinary H.264/AAC rendering requires final PCM-to-MP4 encoding. */
++export function usesPcmFinalization(options: Pick<RenderOptions, 'codec' | 'muted' | 'separateAudioTo' | 'audioCodec'>, directBinaries: string | null): boolean;
++
++/** Return the original render result only after final output publication and cleanup. */
++export function finalizeH264Audio<Result>(request: {
++  render: (options: RenderOptions) => Promise<Result>;
++  options: RenderOptions;
++  binaries: { ffmpeg: string; ffprobe: string };
++  signal?: AbortSignal;
++  onStage?: (stage: AudioStage) => void;
++}): Promise<Result>;
+diff --git a/remotion/audio-finalization.integration.verify.mjs b/remotion/audio-finalization.integration.verify.mjs
+new file mode 100644
+index 0000000..a49b5a9
+--- /dev/null
++++ b/remotion/audio-finalization.integration.verify.mjs
+@@ -0,0 +1,169 @@
++/** Real Remotion/FFmpeg regression; all fixtures and outputs belong to this process. */
++import assert from 'node:assert/strict';
++import { createRequire } from 'node:module';
++import { execFile } from 'node:child_process';
++import { promisify } from 'node:util';
++import { mkdtemp, mkdir, writeFile, readFile, readdir, rm, symlink } from 'node:fs/promises';
++import { copyFileSync, realpathSync } from 'node:fs';
++import path from 'node:path';
++import { fileURLToPath } from 'node:url';
++import { bundle } from '@remotion/bundler';
++import { selectComposition } from '@remotion/renderer';
++import { VERSION } from 'remotion/version';
++import { renderMediaOptimized } from './render.mjs';
++import { AudioFinalizationError } from './audio-finalization.mjs';
++
++const require = createRequire(import.meta.url);
++const editor = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
++const ffmpeg = require('ffmpeg-static');
++const ffprobe = require('@ffprobe-installer/ffprobe').path;
++const run = promisify(execFile);
++const root = await mkdtemp(path.join(editor, '.cc-check-audio-'));
++const browserExecutable = process.env.CC_BROWSER_EXECUTABLE;
++assert(browserExecutable, 'Set CC_BROWSER_EXECUTABLE to an existing browser; this test never downloads one');
++assert.equal(VERSION, '4.0.509', 'Re-evaluate audio presence semantics before upgrading Remotion');
++assert(!process.env.CC_REMOTION_BINARIES_DIR, 'Run this matrix with the ordinary Remotion engine');
++const observations = [];
++const times = [0.05, 0.55, 1.05, 1.45, 1.95];
++
++function wav(rate, pulseTimes) {
++  const frames = 2 * rate;
++  const buffer = Buffer.alloc(44 + frames * 4);
++  buffer.write('RIFF'); buffer.writeUInt32LE(buffer.length - 8, 4); buffer.write('WAVEfmt ', 8);
++  buffer.writeUInt32LE(16, 16); buffer.writeUInt16LE(1, 20); buffer.writeUInt16LE(2, 22);
++  buffer.writeUInt32LE(rate, 24); buffer.writeUInt32LE(rate * 4, 28);
++  buffer.writeUInt16LE(4, 32); buffer.writeUInt16LE(16, 34); buffer.write('data', 36);
++  buffer.writeUInt32LE(frames * 4, 40);
++  for (const time of pulseTimes) for (let channel = 0; channel < 2; channel++) {
++    buffer.writeInt16LE(16000, 44 + (Math.round(time * rate) * 2 + channel) * 2);
++  }
++  return buffer;
++}
++
++async function probe(file, packets = false) {
++  const { stdout } = await run(ffprobe, ['-v', 'error', ...(packets
++    ? ['-select_streams', 'v:0', '-show_packets', '-show_data_hash', 'sha256']
++    : ['-show_streams']), '-of', 'json', file], { maxBuffer: 4 * 1024 * 1024 });
++  return JSON.parse(stdout);
++}
++
++try {
++  await mkdir(path.join(root, 'public'));
++  await symlink(realpathSync(path.join(editor, 'node_modules')), path.join(root, 'node_modules'), 'dir');
++  for (const rate of [32000, 48000]) {
++    await writeFile(path.join(root, 'public', `pulse-${rate}.wav`), wav(rate, times));
++    await writeFile(path.join(root, 'public', `mix-${rate}.wav`), wav(rate, [0.8, 1.3]));
++    await writeFile(path.join(root, 'public', `silence-${rate}.wav`), wav(rate, []));
++  }
++  await writeFile(path.join(root, 'entry.jsx'), `import React from 'react';
++import {registerRoot,Composition,Audio,AbsoluteFill,staticFile,useCurrentFrame} from 'remotion';
++const Scene=({rate,kind})=>{const frame=useCurrentFrame();return <AbsoluteFill style={{background:frame%2?'#678':'#123'}}>
++{kind!=='none'&&<Audio src={staticFile((kind==='silence'?'silence':'pulse')+'-'+rate+'.wav')} volume={kind==='zero'?0:1}/>}
++{kind==='mix'&&<Audio src={staticFile('mix-'+rate+'.wav')} volume={0.5}/>}
++</AbsoluteFill>};
++registerRoot(()=> <Composition id="AudioTiming" component={Scene} width={128} height={128} fps={30} durationInFrames={60} defaultProps={{rate:48000,kind:'pulse'}}/>);
++`);
++  const serveUrl = await bundle({ entryPoint: path.join(root, 'entry.jsx'), rootDir: root,
++    outDir: path.join(root, 'bundle'), publicDir: path.join(root, 'public'), enableCaching: false });
++  const base = await selectComposition({ serveUrl, id: 'AudioTiming', browserExecutable });
++
++  async function verify(name, { rate = 48000, sourceRate = rate, fps = 30, kind = 'pulse', range, hardware = false, muted = false, failAudio = false } = {}) {
++    const output = path.join(root, `${name}.mp4`);
++    const before = path.join(root, `${name}-video.mp4`);
++    let renderedVideo;
++    let videoAttempts = 0;
++    const stages = [];
++    const profile = hardware ? { id: 'h264_videotoolbox', label: 'VideoToolbox', hardware: true, transport: 'server' } : undefined;
++    let audioFfmpeg = ffmpeg;
++    if (failAudio) {
++      audioFfmpeg = path.join(root, 'fail-audio');
++      await writeFile(audioFfmpeg, `#!${process.execPath}\nif(process.argv.includes('encoder=aac'))console.log('Encoder aac [AAC]');else{console.error('hardware encoder failed: audio sentinel');process.exitCode=17;}\n`, { mode: 0o700 });
++    }
++    const operation = renderMediaOptimized({ serveUrl, composition: { ...base, fps, durationInFrames: fps * 2, props: { rate: sourceRate, kind } },
++      inputProps: { rate: sourceRate, kind }, browserExecutable, codec: 'h264', outputLocation: output,
++      timeoutInMilliseconds: 60_000, sampleRate: rate, frameRange: range, muted,
++      h264Profile: profile, audioBinaries: { ffmpeg: audioFfmpeg, ffprobe }, logLevel: 'error',
++      ffmpegOverride: ({ type, args }) => {
++        if (type === 'stitcher') { renderedVideo = args.at(-1); videoAttempts++; }
++        return args;
++      },
++      onAudioStage: (stage) => {
++        stages.push(stage);
++        if (stage === 'encode') copyFileSync(renderedVideo, before);
++      },
++    });
++    if (failAudio) {
++      await assert.rejects(operation, (error) => error instanceof AudioFinalizationError
++        && error.stage === 'encode' && error.cleanupStatus === 'succeeded');
++      assert.equal(videoAttempts, 1, 'Final audio failure must not enter hardware video retry');
++      await assert.rejects(readFile(output), { code: 'ENOENT' });
++      observations.push({ name, rejected: 'encode', videoAttempts });
++      console.log(`audio matrix: ${name} passed`);
++      return;
++    }
++    const rendered = await operation;
++    if (hardware) assert.equal(rendered.encoder.id, 'h264_videotoolbox', 'Hardware case must actually use VideoToolbox');
++    const streams = (await probe(output)).streams;
++    const video = streams.find((stream) => stream.codec_type === 'video');
++    const audio = streams.find((stream) => stream.codec_type === 'audio');
++    const frameCount = range ? range[1] - range[0] + 1 : fps * 2;
++    assert.equal(Number(video.nb_frames), frameCount);
++    assert.equal(Boolean(audio), !muted, 'Preserve fixed 4.0.509 audio-track semantics');
++    if (muted) { assert.deepEqual(stages, []); observations.push({ name, audio: false }); }
++    else {
++      assert.deepEqual(stages, ['preflight', 'render', 'encode']);
++      const packets = (info) => info.packets.map(({ pts, dts, duration, size, flags, data_hash }) => ({ pts, dts, duration, size, flags, data_hash }));
++      assert.deepEqual(packets(await probe(output, true)), packets(await probe(before, true)), 'Video packets and timestamps must survive stream copy');
++      assert.equal(audio.codec_name, 'aac');
++      assert.equal(Number(audio.sample_rate), rate);
++      const expectedSamples = Math.round(frameCount * rate / fps);
++      const decoded = path.join(root, `${name}.pcm`);
++      await run(ffmpeg, ['-v', 'error', '-i', output, '-map', '0:a:0', '-ac', '1', '-f', 's16le', decoded]);
++      const bytes = await readFile(decoded);
++      const samples = new Int16Array(bytes.buffer, bytes.byteOffset, bytes.length / 2);
++      const offsets = [];
++      if (kind === 'none' || kind === 'silence' || kind === 'zero') {
++        assert(samples.every((value) => value === 0), `${name}: silent baseline changed`);
++      } else {
++        const start = (range?.[0] ?? 0) / fps;
++        const end = start + frameCount / fps;
++        const pulses = kind === 'mix' ? [...times, 0.8, 1.3] : times;
++        for (const time of pulses.filter((time) => time >= start && time < end)) {
++          const expected = Math.round((time - start) * rate);
++          let peak = Math.max(0, expected - Math.round(rate * 0.045));
++          for (let index = peak; index < Math.min(samples.length, expected + Math.round(rate * 0.045)); index++) {
++            if (Math.abs(samples[index]) > Math.abs(samples[peak])) peak = index;
++          }
++          assert(Math.abs(samples[peak]) > 500, `${name}: missing pulse at ${time}`);
++          offsets.push(peak - expected);
++          assert(Math.abs(peak - expected) <= 1, `${name}: pulse at ${time} shifted ${peak - expected} samples`);
++        }
++      }
++      assert(Math.abs(Number(audio.duration_ts) - expectedSamples) <= 1, `${name}: audio end differs from render range`);
++      observations.push({ name, fps, rate, sourceRate, frames: frameCount, offsets, audioSamples: Number(audio.duration_ts), encoder: rendered.encoder?.id ?? 'software' });
++    }
++    assert(!(await readdir(root)).some((name) => name.startsWith('.mantur-audio-')), 'Private export directory leaked');
++    console.log(`audio matrix: ${name} passed`);
++  }
++
++  for (const rate of [32000, 48000]) for (const fps of [24, 30]) {
++    await verify(`full-${rate}-${fps}`, { rate, fps });
++    await verify(`range-mix-${rate}-${fps}`, { rate, fps, range: [fps / 2, fps * 1.5 - 1], kind: 'mix' });
++  }
++  for (const kind of ['none', 'silence', 'zero']) {
++    await verify(`single-frame-${kind}`, { kind, range: [5, 5] });
++  }
++  await verify('explicit-muted', { muted: true });
++  await verify('resample-32k-to-48k', { sourceRate: 32000, rate: 48000, fps: 30, kind: 'mix' });
++  await verify('single-frame-32k-24', { rate: 32000, fps: 24, kind: 'none', range: [5, 5] });
++  await verify('single-frame-32k-30', { rate: 32000, fps: 30, kind: 'silence', range: [5, 5] });
++  if (process.platform === 'darwin') {
++    await verify('hardware-full', { hardware: true });
++    await verify('hardware-range-32k-24', { hardware: true, rate: 32000, fps: 24, range: [12, 35], kind: 'mix' });
++    await verify('hardware-resample-32k-to-48k', { hardware: true, sourceRate: 32000, rate: 48000, kind: 'mix' });
++    await verify('hardware-audio-failure', { hardware: true, failAudio: true });
++  } else console.log('VideoToolbox cases pending: macOS required');
++  const expected = JSON.parse(await readFile(new URL('./tests/expected/audio-finalization.json', import.meta.url), 'utf8'));
++  assert.deepEqual(observations, expected.filter(({ name }) => process.platform === 'darwin' || !name.startsWith('hardware-')));
++  console.log(JSON.stringify({ remotion: VERSION, platform: process.platform, observations }, null, 2));
++} finally { await rm(root, { recursive: true, force: true }); }
+diff --git a/remotion/audio-finalization.mjs b/remotion/audio-finalization.mjs
+new file mode 100644
+index 0000000..6227a0d
+--- /dev/null
++++ b/remotion/audio-finalization.mjs
+@@ -0,0 +1,130 @@
++/** Preserve PCM timing until the single AAC encode into the final MP4 container. */
++import { spawn } from 'node:child_process';
++import { mkdtemp, mkdir, open, rename, rm } from 'node:fs/promises';
++import path from 'node:path';
++import { VERSION } from 'remotion/version';
++
++/** Report the failed audio stage and whether its private files were removed. */
++export class AudioFinalizationError extends Error {
++  constructor(cause, stage, cleanupStatus) {
++    super(`H.264 audio ${stage} failed: ${cause.message}`, { cause });
++    this.name = 'AudioFinalizationError';
++    this.stage = stage;
++    this.cleanupStatus = cleanupStatus;
++  }
++}
++
++/** True only for the existing ordinary H.264/AAC path, excluding explicit mute. */
++export function usesPcmFinalization(options, directBinaries) {
++  return options.codec === 'h264' && !options.muted && !directBinaries
++    && !options.separateAudioTo && (!options.audioCodec || options.audioCodec === 'aac');
++}
++
++/** Await the owned process's exit on success, failure, timeout, and cancellation. */
++async function runMediaTool(command, args, signal, timeoutMs) {
++  signal?.throwIfAborted();
++  if (!command) throw new Error('The configured media executable is missing');
++  return new Promise((resolve, reject) => {
++    const env = Object.fromEntries(Object.entries(process.env)
++      .filter(([key]) => !/(?:KEY|SECRET|TOKEN|PASSWORD)/i.test(key)));
++    const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'], env });
++    let stdout = '';
++    let stderr = '';
++    let failure;
++    const stop = (error) => {
++      failure ??= error;
++      child.kill('SIGKILL');
++    };
++    const abort = () => stop(signal.reason instanceof Error ? signal.reason : new Error('Export cancelled'));
++    signal?.addEventListener('abort', abort, { once: true });
++    if (signal?.aborted) abort();
++    const timer = setTimeout(() => stop(new Error('Media process timed out')), timeoutMs);
++    child.stdout.on('data', (chunk) => {
++      stdout += chunk.toString();
++      if (stdout.length > 131_072) stop(new Error('Media process output exceeds 128 KiB'));
++    });
++    child.stderr.on('data', (chunk) => { stderr = `${stderr}${chunk}`.slice(-32_768); });
++    child.once('error', (error) => { failure ??= error; });
++    child.once('close', (code) => {
++      clearTimeout(timer);
++      signal?.removeEventListener('abort', abort);
++      if (failure) reject(failure);
++      else if (code !== 0) reject(new Error(`Media process exited ${code}: ${stderr}`));
++      else resolve({ stdout, stderr });
++    });
++  });
++}
++
++/**
++ * Render the video (including its existing retries), then finalize audio outside them.
++ * @param {object} request Render callback, resolved media binaries, options and cancellation.
++ * @returns {Promise<object>} The original render result after the final MP4 is published.
++ * @throws {AudioFinalizationError} Preflight, render, encode, or cleanup failure; never retries audio.
++ */
++export async function finalizeH264Audio({ render, options, binaries, signal, onStage }) {
++  let stage = 'preflight';
++  let directory;
++  let result;
++  let failure;
++  let cleanupStatus = 'succeeded';
++  try {
++    onStage?.(stage);
++    signal?.throwIfAborted();
++    if (VERSION !== '4.0.509') throw new Error(`Audio export requires verified Remotion 4.0.509; found ${VERSION}`);
++    if (!binaries?.ffmpeg || !binaries?.ffprobe) throw new Error('H.264 export requires resolved FFmpeg and FFprobe paths');
++    if (!options.outputLocation) throw new Error('H.264 audio finalization requires an output file');
++    const timeoutMs = options.timeoutInMilliseconds;
++    if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new Error('H.264 export requires a positive media timeout');
++    const tool = (command, args) => runMediaTool(command, args, signal, timeoutMs);
++    const encoder = await tool(binaries.ffmpeg, ['-hide_banner', '-h', 'encoder=aac']);
++    if (!/^Encoder aac\s/m.test(`${encoder.stdout}\n${encoder.stderr}`)) {
++      throw new Error('The configured FFmpeg does not provide the native AAC encoder');
++    }
++    await tool(binaries.ffprobe, ['-version']);
++    const destination = path.resolve(options.outputLocation);
++    await mkdir(path.dirname(destination), { recursive: true });
++    directory = await mkdtemp(path.join(path.dirname(destination), '.mantur-audio-'));
++    const video = path.join(directory, 'video.mp4');
++    const audio = path.join(directory, 'audio.wav');
++    const output = path.join(directory, 'final.mp4');
++    stage = 'render';
++    onStage?.(stage);
++    result = await render({ ...options, outputLocation: video, audioCodec: 'pcm-16', separateAudioTo: audio });
++    signal?.throwIfAborted();
++    stage = 'encode';
++    onStage?.(stage);
++    const probe = await tool(binaries.ffprobe, [
++      '-v', 'error', '-select_streams', 'a:0', '-show_entries', 'stream=codec_name,sample_rate', '-of', 'json', audio,
++    ]);
++    const stream = JSON.parse(probe.stdout).streams?.[0];
++    const sampleRate = Number(stream?.sample_rate);
++    if (stream?.codec_name !== 'pcm_s16le' || !Number.isSafeInteger(sampleRate) || sampleRate <= 0) {
++      throw new Error('Rendered audio must be PCM16 with a valid sample rate');
++    }
++    await tool(binaries.ffmpeg, [
++      '-hide_banner', '-y', '-i', video, '-i', audio,
++      '-map', '0:v:0', '-map', '1:a:0', '-c:v', 'copy', '-c:a', 'aac',
++      '-b:a', options.audioBitrate ?? '320k', '-movie_timescale', String(sampleRate),
++      '-movflags', '+faststart', output,
++    ]);
++    const file = await open(output, 'r');
++    try {
++      if ((await file.stat()).size === 0) throw new Error('Audio finalization produced an empty MP4');
++      await file.sync();
++    } finally { await file.close(); }
++    signal?.throwIfAborted();
++    await rename(output, destination);
++  } catch (error) {
++    failure = error;
++  } finally {
++    if (directory) {
++      try { await rm(directory, { recursive: true, force: true }); }
++      catch (error) {
++        cleanupStatus = 'failed';
++        failure = failure ? new AggregateError([failure, error], failure.message) : error;
++      }
++    }
++  }
++  if (failure) throw new AudioFinalizationError(failure, stage, cleanupStatus);
++  return result;
++}
+diff --git a/remotion/audio-finalization.verify.mjs b/remotion/audio-finalization.verify.mjs
+new file mode 100644
+index 0000000..17512a6
+--- /dev/null
++++ b/remotion/audio-finalization.verify.mjs
+@@ -0,0 +1,120 @@
++import assert from 'node:assert/strict';
++import { createRequire } from 'node:module';
++import { execFile } from 'node:child_process';
++import { promisify } from 'node:util';
++import { mkdtemp, mkdir, writeFile, readFile, readdir, copyFile, chmod, rm } from 'node:fs/promises';
++import { watch } from 'node:fs';
++import { tmpdir } from 'node:os';
++import path from 'node:path';
++import { finalizeH264Audio, usesPcmFinalization, AudioFinalizationError } from './audio-finalization.mjs';
++const require = createRequire(import.meta.url);
++const realFfmpeg = require('ffmpeg-static');
++const ffprobe = require('@ffprobe-installer/ffprobe').path;
++const run = promisify(execFile);
++if (process.platform === 'win32') {
++  console.log('audio process failure checks pending on Windows: fixtures require POSIX executables and permissions');
++  process.exit(0);
++}
++const root = await mkdtemp(path.join(tmpdir(), 'mantur-audio-unit-'));
++let passed = 0;
++try {
++  assert.equal(usesPcmFinalization({ codec: 'h264' }, null), true);
++  for (const options of [{ codec: 'vp8' }, { codec: 'h264', muted: true }, { codec: 'h264', audioCodec: 'mp3' }]) {
++    assert.equal(usesPcmFinalization(options, null), false);
++  }
++  assert.equal(usesPcmFinalization({ codec: 'h264' }, '/custom'), false);
++  passed++;
++  const inputVideo = path.join(root, 'input.mp4');
++  const inputAudio = path.join(root, 'input.wav');
++  await run(realFfmpeg, ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=black:s=64x64:r=30:d=0.1', '-c:v', 'libx264', inputVideo]);
++  await run(realFfmpeg, ['-v', 'error', '-f', 'lavfi', '-i', 'anullsrc=r=32000:cl=stereo', '-t', '0.1', '-c:a', 'pcm_s16le', inputAudio]);
++  async function test(name, mode, expectedStage, abort = false) {
++    const dir = path.join(root, name); await mkdir(dir);
++    const marker = path.join(dir, 'ready');
++    const binary = path.join(dir, 'ffmpeg');
++    await writeFile(binary, `#!${process.execPath}
++const fs = require('node:fs');
++const {spawnSync} = require('node:child_process');
++const args = process.argv.slice(2);
++const mode = ${JSON.stringify(mode)};
++if (args.includes('encoder=aac')) {
++ process.stdout.write(mode === 'missing' ? 'Codec not recognized' : 'Encoder aac [AAC]');
++} else if (mode === 'hang') {
++ fs.writeFileSync(${JSON.stringify(marker)} + '.tmp', String(process.pid));
++ fs.renameSync(${JSON.stringify(marker)} + '.tmp', ${JSON.stringify(marker)});
++ process.on('SIGTERM', () => {});
++ setInterval(() => {}, 1000);
++} else if (mode === 'encode-error') {
++ process.stderr.write('hardware encoder failed: audio sentinel'); process.exitCode = 17;
++} else {
++ const child = spawnSync(${JSON.stringify(realFfmpeg)}, args, {stdio:'inherit'});
++ process.exitCode = child.status;
++}
++`, { mode: 0o700 });
++    let calls = 0;
++    const stages = [];
++    const controller = new AbortController();
++    let observer;
++    if (abort) observer = watch(dir, () => {
++      readFile(marker).then(() => controller.abort(new Error('test cancellation')), (error) => {
++        if (error.code !== 'ENOENT') controller.abort(error);
++      });
++    });
++    const output = path.join(dir, 'result.mp4');
++    if (mode === 'rename-error') await mkdir(output);
++    let failure;
++    let privateDirectory;
++    try {
++      const result = await finalizeH264Audio({
++        binaries: { ffmpeg: binary, ffprobe }, signal: controller.signal,
++        options: { codec: 'h264', outputLocation: output, timeoutInMilliseconds: mode === 'hang' ? 1000 : 10_000 },
++        onStage: (stage) => stages.push(stage),
++        render: async (options) => {
++          calls++;
++          privateDirectory = path.dirname(options.outputLocation);
++          assert.equal(options.audioCodec, 'pcm-16');
++          if (mode === 'render-error') throw new Error('render sentinel');
++          await copyFile(inputVideo, options.outputLocation);
++          if (mode !== 'missing-wav') await copyFile(inputAudio, options.separateAudioTo);
++          if (mode === 'cleanup-error') await chmod(privateDirectory, 0o500);
++          return { encoder: 'original-video-encoder' };
++        },
++      });
++      assert.equal(expectedStage, null, 'expected operation to fail');
++      assert.deepEqual(result, { encoder: 'original-video-encoder' });
++      const { stdout } = await run(ffprobe, ['-v', 'error', '-show_streams', '-of', 'json', output]);
++      const audio = JSON.parse(stdout).streams.find((stream) => stream.codec_type === 'audio');
++      assert.equal(audio.sample_rate, '32000');
++    } catch (error) { failure = error; }
++    finally { observer?.close(); }
++    if (expectedStage) {
++      assert(failure instanceof AudioFinalizationError, String(failure));
++      assert.equal(failure.stage, expectedStage);
++      assert.equal(failure.cleanupStatus, mode === 'cleanup-error' ? 'failed' : 'succeeded');
++      if (mode === 'cleanup-error') {
++        assert(failure.cause instanceof AggregateError, 'Retain encode and cleanup errors');
++        await chmod(privateDirectory, 0o700);
++        await rm(privateDirectory, { recursive: true });
++      }
++      if (mode === 'hang') {
++        const pid = Number(await readFile(marker, 'utf8'));
++        assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
++      }
++      if (mode !== 'rename-error') await assert.rejects(readFile(output), { code: 'ENOENT' });
++    } else if (failure) throw failure;
++    assert.equal(calls, mode === 'missing' ? 0 : 1, 'audio failure must not replay video');
++    assert.equal((await readdir(dir)).some((name) => name.startsWith('.mantur-audio-')), false);
++    if (!expectedStage) assert.deepEqual(stages, ['preflight', 'render', 'encode']);
++    passed++;
++  }
++  await test('success-32k', 'success', null);
++  await test('missing-encoder', 'missing', 'preflight');
++  await test('render-error', 'render-error', 'render');
++  await test('encode-error', 'encode-error', 'encode');
++  await test('missing-wav', 'missing-wav', 'encode');
++  await test('cleanup-error', 'cleanup-error', 'encode');
++  await test('rename-error', 'rename-error', 'encode');
++  await test('cancel-child', 'hang', 'encode', true);
++  await test('timeout-child', 'hang', 'encode');
++  console.log(`audio-finalization: ${passed} behavior checks passed`);
++} finally { await rm(root, { recursive: true, force: true }); }
+diff --git a/remotion/render.mjs b/remotion/render.mjs
+index cb5e4d1..0357324 100644
+--- a/remotion/render.mjs
++++ b/remotion/render.mjs
+@@ -17,6 +17,7 @@ import {
+   withEncoderProfileFallback,
+ } from './performance.mjs';
+ import { renderDirectHardware } from './direct-hardware.mjs';
++import { finalizeH264Audio, usesPcmFinalization } from './audio-finalization.mjs';
+ import { assertMaterializedRenderSnapshot, normalizeH264Profile } from './render-contract.mjs';
+ import { resolveRenderTimeout } from './render-timeout.mjs';
+
+@@ -114,9 +115,13 @@ function directHardwareRenderer(directBinaries, abortSignal) {
+     : renderMedia(attempt);
+ }
+
+-/** Render with the selected probed engine, then make a truthful software retry. */
+-async function renderMediaOptimized(options) {
+-  const { abortSignal, h264Profile, vaapiDevice, ...renderOptions } = options;
++/**
++ * Render with the selected engine and existing video retry, then publish finalized audio.
++ * @param {object} options Remotion options plus resolved H.264 engine and audio executables.
++ * @returns {Promise<object>} Render result and encoder outcome after final publication.
++ */
++export async function renderMediaOptimized(options) {
++  const { abortSignal, h264Profile, vaapiDevice, audioBinaries, onAudioStage, ...renderOptions } = options;
+   const profile = normalizeH264Profile(renderOptions.codec, h264Profile);
+   const hardwareAcceleration = remotionHardwareAcceleration(renderOptions.codec, { encoder: profile?.id });
+   const customOverride = profile?.hardware && hardwareAcceleration === 'disable'
+@@ -141,26 +146,33 @@ async function renderMediaOptimized(options) {
+     ...(automaticBitrate ? { videoBitrate: automaticBitrate } : {}),
+   };
+   const render = directHardwareRenderer(directBinaries, abortSignal);
+-  if (!profile) return { result: await render(hardwareOptions), encoder: undefined };
+-  return withEncoderProfileFallback({
+-    render,
+-    hardwareOptions,
+-    softwareOptions: {
+-      ...hardwareOptions,
+-      hardwareAcceleration: 'disable',
+-      binariesDirectory: undefined,
+-      ffmpegOverride: undefined,
+-      ...(automaticBitrate ? { videoBitrate: null } : {}),
+-    },
+-    hardwareProfile: profile,
+-    cleanup: async () => {
+-      if (renderOptions.outputLocation) {
+-        await rm(renderOptions.outputLocation, { force: true }).catch(() => {});
+-      }
+-    },
+-    onFallback: () => {
+-      console.warn(`[render] ${profile.label} failed; retrying ${renderOptions.codec} with software encoding`);
+-    },
++  const renderVideo = async (attempt) => {
++    if (!profile) return { result: await render(attempt), encoder: undefined };
++    return withEncoderProfileFallback({
++      render,
++      hardwareOptions: attempt,
++      softwareOptions: {
++        ...attempt,
++        hardwareAcceleration: 'disable',
++        binariesDirectory: undefined,
++        ffmpegOverride: undefined,
++        ...(automaticBitrate ? { videoBitrate: null } : {}),
++      },
++      hardwareProfile: profile,
++      cleanup: async () => {
++        if (attempt.outputLocation) {
++          await rm(attempt.outputLocation, { force: true }).catch(() => {});
++        }
++      },
++      onFallback: () => {
++        console.warn(`[render] ${profile.label} failed; retrying ${renderOptions.codec} with software encoding`);
++      },
++    });
++  };
++  if (!usesPcmFinalization(hardwareOptions, directBinaries)) return renderVideo(hardwareOptions);
++  return finalizeH264Audio({
++    render: renderVideo, options: hardwareOptions, binaries: audioBinaries,
++    signal: abortSignal, onStage: onAudioStage,
+   });
+ }
+
+@@ -274,6 +286,8 @@ async function getServeUrl() {
+  * @param {number} [args.videoBitrate] video bitrate in bits per second
+  * @param {{id:string,label:string,hardware:boolean,transport:'server'}} [args.h264Profile]
+  * @param {string} [args.vaapiDevice]
++ * @param {{ffmpeg:string,ffprobe:string}} [args.audioBinaries] Required for ordinary H.264.
++ * @param {(stage:import('./audio-finalization.mjs').AudioStage)=>void} [args.onAudioStage]
+  * @param {(progress: number) => void} [args.onProgress]  0..1
+  * @param {AbortSignal} [args.signal]
+  */
+@@ -289,6 +303,8 @@ export async function renderTimeline({
+   videoBitrate,
+   h264Profile,
+   vaapiDevice,
++  audioBinaries,
++  onAudioStage,
+   signal,
+ }) {
+   if (!state || typeof state !== 'object' || !Array.isArray(state.items)) {
+@@ -325,6 +341,8 @@ export async function renderTimeline({
+       outputLocation,
+       h264Profile,
+       vaapiDevice,
++      audioBinaries,
++      onAudioStage,
+       scale: scale && Number.isFinite(scale) && scale > 0 ? scale : 1,
+       videoBitrate: codec === 'prores'
+         ? undefined
+@@ -360,6 +378,8 @@ export async function renderTimeline({
+  * @param {string} args.outputLocation
+  * @param {'prores'|'vp8'|'h264'} [args.codec]
+  * @param {boolean} [args.transparent]  render over transparency + carry alpha
++ * @param {{ffmpeg:string,ffprobe:string}} [args.audioBinaries] Required for ordinary H.264.
++ * @param {(stage:import('./audio-finalization.mjs').AudioStage)=>void} [args.onAudioStage]
+  */
+ export async function renderClip({
+   state,
+@@ -368,6 +388,8 @@ export async function renderClip({
+   transparent = true,
+   h264Profile,
+   vaapiDevice,
++  audioBinaries,
++  onAudioStage,
+   signal,
+ }) {
+   if (!state || !Array.isArray(state.items) || !state.items.length) {
+@@ -397,6 +419,8 @@ export async function renderClip({
+       outputLocation,
+       h264Profile,
+       vaapiDevice,
++      audioBinaries,
++      onAudioStage,
+       ...(transparent && codec === 'prores'
+         ? { proResProfile: '4444', imageFormat: 'png', pixelFormat: 'yuva444p10le' }
+         : {}),
+diff --git a/remotion/tests/expected/audio-finalization.json b/remotion/tests/expected/audio-finalization.json
+new file mode 100644
+index 0000000..cf5bc7c
+--- /dev/null
++++ b/remotion/tests/expected/audio-finalization.json
+@@ -0,0 +1,257 @@
++[
++  {
++    "name": "full-32000-24",
++    "fps": 24,
++    "rate": 32000,
++    "sourceRate": 32000,
++    "frames": 48,
++    "offsets": [
++      0,
++      0,
++      0,
++      0,
++      0
++    ],
++    "audioSamples": 64000,
++    "encoder": "libx264"
++  },
++  {
++    "name": "range-mix-32000-24",
++    "fps": 24,
++    "rate": 32000,
++    "sourceRate": 32000,
++    "frames": 24,
++    "offsets": [
++      0,
++      0,
++      0,
++      0,
++      0
++    ],
++    "audioSamples": 32000,
++    "encoder": "libx264"
++  },
++  {
++    "name": "full-32000-30",
++    "fps": 30,
++    "rate": 32000,
++    "sourceRate": 32000,
++    "frames": 60,
++    "offsets": [
++      0,
++      0,
++      0,
++      0,
++      0
++    ],
++    "audioSamples": 64000,
++    "encoder": "libx264"
++  },
++  {
++    "name": "range-mix-32000-30",
++    "fps": 30,
++    "rate": 32000,
++    "sourceRate": 32000,
++    "frames": 30,
++    "offsets": [
++      0,
++      0,
++      0,
++      0,
++      0
++    ],
++    "audioSamples": 32000,
++    "encoder": "libx264"
++  },
++  {
++    "name": "full-48000-24",
++    "fps": 24,
++    "rate": 48000,
++    "sourceRate": 48000,
++    "frames": 48,
++    "offsets": [
++      0,
++      0,
++      0,
++      0,
++      0
++    ],
++    "audioSamples": 96000,
++    "encoder": "libx264"
++  },
++  {
++    "name": "range-mix-48000-24",
++    "fps": 24,
++    "rate": 48000,
++    "sourceRate": 48000,
++    "frames": 24,
++    "offsets": [
++      0,
++      0,
++      0,
++      0,
++      0
++    ],
++    "audioSamples": 48000,
++    "encoder": "libx264"
++  },
++  {
++    "name": "full-48000-30",
++    "fps": 30,
++    "rate": 48000,
++    "sourceRate": 48000,
++    "frames": 60,
++    "offsets": [
++      0,
++      0,
++      0,
++      0,
++      0
++    ],
++    "audioSamples": 96000,
++    "encoder": "libx264"
++  },
++  {
++    "name": "range-mix-48000-30",
++    "fps": 30,
++    "rate": 48000,
++    "sourceRate": 48000,
++    "frames": 30,
++    "offsets": [
++      0,
++      0,
++      0,
++      0,
++      0
++    ],
++    "audioSamples": 48000,
++    "encoder": "libx264"
++  },
++  {
++    "name": "single-frame-none",
++    "fps": 30,
++    "rate": 48000,
++    "sourceRate": 48000,
++    "frames": 1,
++    "offsets": [],
++    "audioSamples": 1600,
++    "encoder": "libx264"
++  },
++  {
++    "name": "single-frame-silence",
++    "fps": 30,
++    "rate": 48000,
++    "sourceRate": 48000,
++    "frames": 1,
++    "offsets": [],
++    "audioSamples": 1600,
++    "encoder": "libx264"
++  },
++  {
++    "name": "single-frame-zero",
++    "fps": 30,
++    "rate": 48000,
++    "sourceRate": 48000,
++    "frames": 1,
++    "offsets": [],
++    "audioSamples": 1600,
++    "encoder": "libx264"
++  },
++  {
++    "name": "explicit-muted",
++    "audio": false
++  },
++  {
++    "name": "resample-32k-to-48k",
++    "fps": 30,
++    "rate": 48000,
++    "sourceRate": 32000,
++    "frames": 60,
++    "offsets": [
++      0,
++      0,
++      0,
++      0,
++      0,
++      0,
++      0
++    ],
++    "audioSamples": 96000,
++    "encoder": "libx264"
++  },
++  {
++    "name": "single-frame-32k-24",
++    "fps": 24,
++    "rate": 32000,
++    "sourceRate": 32000,
++    "frames": 1,
++    "offsets": [],
++    "audioSamples": 1333,
++    "encoder": "libx264"
++  },
++  {
++    "name": "single-frame-32k-30",
++    "fps": 30,
++    "rate": 32000,
++    "sourceRate": 32000,
++    "frames": 1,
++    "offsets": [],
++    "audioSamples": 1067,
++    "encoder": "libx264"
++  },
++  {
++    "name": "hardware-full",
++    "fps": 30,
++    "rate": 48000,
++    "sourceRate": 48000,
++    "frames": 60,
++    "offsets": [
++      0,
++      0,
++      0,
++      0,
++      0
++    ],
++    "audioSamples": 96000,
++    "encoder": "h264_videotoolbox"
++  },
++  {
++    "name": "hardware-range-32k-24",
++    "fps": 24,
++    "rate": 32000,
++    "sourceRate": 32000,
++    "frames": 24,
++    "offsets": [
++      0,
++      0,
++      0,
++      0,
++      0
++    ],
++    "audioSamples": 32000,
++    "encoder": "h264_videotoolbox"
++  },
++  {
++    "name": "hardware-resample-32k-to-48k",
++    "fps": 30,
++    "rate": 48000,
++    "sourceRate": 32000,
++    "frames": 60,
++    "offsets": [
++      0,
++      0,
++      0,
++      0,
++      0,
++      0,
++      0
++    ],
++    "audioSamples": 96000,
++    "encoder": "h264_videotoolbox"
++  },
++  {
++    "name": "hardware-audio-failure",
++    "rejected": "encode",
++    "videoAttempts": 1
++  }
++]
 diff --git a/server/media-references.ts b/server/media-references.ts
 index 1a9a605..4cd573d 100644
 --- a/server/media-references.ts
@@ -204,6 +1084,54 @@ index fe17421..8da34b8 100644
      name: 'openchatcut-export-destination',
      configureServer(server) {
        server.middlewares.use('/api/export-destinations', async (req, res) => {
+diff --git a/server/plugins/export-rendering.ts b/server/plugins/export-rendering.ts
+index 324a491..15c5877 100644
+--- a/server/plugins/export-rendering.ts
++++ b/server/plugins/export-rendering.ts
+@@ -5,7 +5,8 @@ import {
+   resolveH264TargetBitrate,
+   type H264EncoderOutcome,
+ } from '../media-acceleration.ts';
+-import { ffmpegBin } from '../media-binaries.ts';
++import { ffmpegBin, ffprobeBin } from '../media-binaries.ts';
++import { AudioFinalizationError, type AudioStage } from '../../remotion/audio-finalization.mjs';
+ import {
+   createExportFailure,
+   exportFailureFrom,
+@@ -48,7 +49,10 @@ export async function cleanupExportOutputs(paths: Array<string | null>): Promise
+
+ export async function h264RenderOptions(codec: string) {
+   return codec === 'h264'
+-    ? resolveH264RenderOptions(ffmpegBin(), remotionFfmpegPath())
++    ? {
++      ...await resolveH264RenderOptions(ffmpegBin(), remotionFfmpegPath()),
++      audioBinaries: { ffmpeg: ffmpegBin(), ffprobe: ffprobeBin() },
++    }
+     : {};
+ }
+
+@@ -76,6 +80,10 @@ export async function renderExportPlan(
+       scale: plan.scale,
+       videoBitrate: plan.videoBitrate,
+       ...await h264RenderOptions(plan.media.codec),
++      onAudioStage: (stage: AudioStage) => {
++        failureStage = stage;
++        if (stage === 'encode') update({ phase: 'finalizing', progress: 91 });
++      },
+       onProgress: createRenderProgress(update, plan.totalFrames, plan.retimeFps ? 84 : 90),
+       signal,
+     }) as Partial<H264EncoderOutcome>;
+@@ -101,7 +109,9 @@ export async function renderExportPlan(
+     update({ phase: 'finalizing', progress: 99, processedFrames: plan.totalFrames });
+     return outcome;
+   } catch (error) {
+-    const cleanupStatus = await cleanupExportOutputs([filepath, retimed]);
++    const outputCleanup = await cleanupExportOutputs([filepath, retimed]);
++    const cleanupStatus = error instanceof AudioFinalizationError && error.cleanupStatus === 'failed'
++      ? 'failed' : outputCleanup;
+     const existing = exportFailureFrom(error);
+     if (existing) {
+       throw new ExportFailureError({ ...existing, cleanupStatus, targetPath: filepath });
 diff --git a/server/plugins/index.ts b/server/plugins/index.ts
 index dd3ba09..a4ab905 100644
 --- a/server/plugins/index.ts

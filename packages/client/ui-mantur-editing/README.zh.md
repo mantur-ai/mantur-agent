@@ -61,14 +61,14 @@ Host Remote 解析 Agent，合并并发打开请求，并启动 `adapters/mantur
 
 工作台成功启动后，在所属 Agent 的作用域内挂载原生 MCP 工具和一个 `systemPrompt.section`。该说明涵盖草稿读取、审核与终态确认、应用后开启新草稿、重复修改前核对已保存内容，以及工程与源素材帧率的区别。下一次模型请求通过 `request/header` 记录这段说明。未打开工作台的 Agent 不接收剪辑说明；隐藏视图保留说明，释放 Agent 或 Host 则移除。说明本身不能修复断开的连接，也不能证明剪辑成功。
 
-受控的[编辑器补丁](adapters/mantur-cut.patch)采用下列固定来源。在干净的上游源码目录执行 `git apply --index`，构建前用 `git write-tree` 核对结果树。补丁包含本地导入写入草稿的修复及终态检查点持久化修复，没有额外编辑器修改。
+受控的[编辑器补丁](adapters/mantur-cut.patch)采用下列固定来源。在干净的上游源码目录执行 `git apply --index`，构建前用 `git write-tree` 核对结果树。补丁包含草稿导入、终态检查点持久化及普通 H.264 音频收尾。后者分离现有 PCM 混音，在视频渲染后直接将 AAC 编入 MP4，保留视频包及固定 Remotion 版本的音轨行为。失败处理、回归命令和升级限制见[音频时序决策](../../../.agents/notes/implemented/bug-fix/2026-09-07-mantur-cut-aac-timing.zh.md)。
 
 | 来源 | 固定值 |
 |---|---|
 | OpenChatCut 0.2.14 上游提交 | `19cba6e1a70a3e589545ce02de975f6494c918f6` |
-| 适配后的编辑器提交 | `d8f59016ea605fcb240798f0b5a73be48647dabc` |
-| 适配后的编辑器源码树 | `229a7d996c209b5f90a64d9ab92637bd55abbd34` |
-| 补丁 SHA-256 | `4b786eca9ab82479fc63d47f1adc382d89a6f25d8cef3ae3c9b4a7df3d458401` |
+| 适配后的编辑器提交 | `863354fba45960fafc9e7d0661b65f413d1baeee` |
+| 适配后的编辑器源码树 | `65d96973380a14050c19c0928a22d1fd59714af7` |
+| 补丁 SHA-256 | `6a292e61b74e4915723d389cc7c77f87fcbd91f71860f666223e2c6916479307` |
 
 </details>
 
