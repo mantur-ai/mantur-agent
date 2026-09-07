@@ -31,7 +31,7 @@ Each Session uses `<cwd>/剪辑/<session-id>/`: `工程/` contains project persi
 
 The Project media tab browses the current Agent directory and its subdirectories. Imports reference compatible originals in place; required compatibility conversions write separate files and never modify originals. The same endpoint backs `import_asset` and `import_folder`. Hidden directories, `node_modules`, and the project's `剪辑` tree are excluded. A refresh reads new files; missing sources stay offline until the user selects a replacement. Removing pool entries or reference records never deletes originals.
 
-Agent local-file imports retain one-shot confirmation in manual mode and add assets to the editing draft. Repeated imports deduplicate against that draft; review applies imported assets together with timeline edits. A concurrent live project change still rejects the draft as stale.
+Agent local-file imports retain one-shot confirmation in manual mode and add assets to the editing draft. Repeated imports deduplicate against that draft; review applies imported assets together with timeline edits. A concurrent live project change still rejects the draft as stale. Stale, cancelled and failed sessions retain their last saved checkpoint as read-only evidence, including the original revision, draft document and operations. Initial saves, later saves and terminal closure run in order. Reloading never resumes a terminal session or reconstructs missing historical content.
 
 The embedded editor follows Mantur's resolved light/dark theme, including system preference changes, without reloading its page. The OpenChatCut deployment must load [the theme adapter](adapters/openchatcut-theme.mjs) before its application renders and call `installManturTheme(window, parentOrigin)` with the exact trusted Mantur loopback origin. Import this module into the editor entry or inject an equivalent module script from its server; include the adapter in the editor's deployed assets. Standalone editor windows keep their own skin preference. The adapter changes UI tokens only, preserves media colors and project state, and never writes the standalone skin preference.
 
@@ -56,6 +56,15 @@ The compact host header and bounded conversation width leave more room for the e
 <summary>Implementation internals — click to expand</summary>
 
 The Host Remote resolves the Agent, coalesces concurrent opens, and launches `adapters/mantur-runtime.mjs`. It mounts the existing MCP client inside that Agent's scope. The MCP bearer remains in Host memory and the child environment. Disposal drains both connection and subprocess. The Client ignores startup responses from a Session that is no longer selected. No invariant companion is published: subprocess exit state belongs to the child handle; connection and tool-generation invariants belong to the MCP client.
+
+The controlled [editor patch](adapters/mantur-cut.patch) has these fixed sources. Apply it to a clean upstream checkout with `git apply --index`; `git write-tree` must match the result tree before building. It includes the local-import draft fix and terminal-checkpoint persistence fix, without additional editor changes.
+
+| Source | Fixed value |
+|---|---|
+| OpenChatCut 0.2.14 upstream commit | `19cba6e1a70a3e589545ce02de975f6494c918f6` |
+| Patched editor commit | `d8f59016ea605fcb240798f0b5a73be48647dabc` |
+| Patched editor tree | `229a7d996c209b5f90a64d9ab92637bd55abbd34` |
+| Patch SHA-256 | `4b786eca9ab82479fc63d47f1adc382d89a6f25d8cef3ae3c9b4a7df3d458401` |
 
 </details>
 

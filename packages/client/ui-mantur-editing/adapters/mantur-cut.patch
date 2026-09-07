@@ -1,5 +1,38 @@
+diff --git a/MANTUR-TERMINAL-DRAFT.md b/MANTUR-TERMINAL-DRAFT.md
+new file mode 100644
+index 0000000..99428b5
+--- /dev/null
++++ b/MANTUR-TERMINAL-DRAFT.md
+@@ -0,0 +1,27 @@
++# Mantur Cut terminal draft persistence
++
++## Behavior
++
++Draft checkpoints contain the original project revision, original document, full draft document, operations, session identity and timestamps. Stale, cancelled, failed, rejected and applied sessions retain their saved evidence while dropping the writable DraftEngine. A proposal retained on a terminal session is archival data; hydration does not publish it as an active proposal or acquire an editing run.
++
++The v1 reader accepts older checkpoints without an original document. It preserves that omission when archiving a stale checkpoint and rejects a supplied original document whose revision does not match the recorded base. It does not reconstruct missing historical operations or documents. Terminal records that older builds already reduced to counts remain incomplete.
++
++The initial checkpoint, later draft writes, review and terminal closure run in order within one bridge runtime. Cancellation waits for an in-flight initial checkpoint before persisting terminal status. A terminal transition archives the latest committed checkpoint. A tool result from an older in-memory draft cannot overwrite a newer or terminal session. Failure to save a terminal record leaves the previous durable checkpoint intact and returns an error. Once terminal persistence succeeds, the in-memory session closes before ledger finalization; a ledger write failure therefore cannot leave that session writable.
++
++This change does not bypass project revision checks, storage ownership, CAS or user approval. It does not replay unknown side effects, automatically rebase an expired draft, or recover missing content in an existing project. The persistence queue is process-local and does not replace server ownership checks.
++
++## Verification
++
++Run with Node 24 and the checkout's installed dependencies:
++
++```sh
++node --import tsx src/agent/external-draft-persistence.verify.ts
++node --import tsx server/plugins/mantur-terminal-draft.verify.ts
++node --import tsx src/agent/external-edit-session.verify.ts
++node --import tsx server/plugins/mantur-import-session.verify.ts
++node node_modules/typescript/bin/tsc -b
++```
++
++The terminal persistence regression launches separate writer and reader processes against the production JSON store and runtime parser. It covers changed-project stale closure, failed checkpoint writes, ledger failure after terminal persistence, stale hydration, terminal review rejection, inert force apply, cancelled/failed archival round trips and a held draft write racing with cancellation. The existing import regression uses synthetic files and real HTTP to verify approvals, concurrent changes, cancellation and unchanged source bytes.
++
++Before the fix, the stale-hydration assertion received an undefined checkpoint, and the held-write race ended with a cancelled session overwritten as drafting. The fix does not require altering a running editor or its existing files.
 diff --git a/README.md b/README.md
-index d5c8f50..dd6ccbc 100644
+index d5c8f50..c28bd44 100644
 --- a/README.md
 +++ b/README.md
 @@ -346,6 +346,9 @@ Codex app/CLI and Claude Code use the same session workflow:
@@ -12,6 +45,15 @@ index d5c8f50..dd6ccbc 100644
  Only draft-safe project read/edit tools are exposed in these sessions. Generation, export, project deletion, and other immediate side-effect tools stay unavailable because a rejected proposal could not roll them back.
 
  ### Codex
+@@ -375,6 +378,8 @@ approve it in OpenChatCut before reporting that the edit was applied.
+
+ External agents invoke the same internal editing tools and `EditorCore` commands as the editor itself. There are no separate project formats that can drift apart, and the live timeline is not changed while an external draft is being prepared.
+
++Mantur Cut retains an edit session's last saved draft, operations and original project revision when the session becomes stale, cancelled or failed. These records remain evidence after reload; they cannot resume, rebase or apply a terminal session. New checkpoints also include the original project document. Missing content in older records is not reconstructed. See [terminal draft persistence](MANTUR-TERMINAL-DRAFT.md) for failure ordering and verification.
++
+ ### Protecting MCP access
+
+ When exposing the MCP endpoint yourself, configure:
 diff --git a/README_ZH.md b/README_ZH.md
 index d8a6fac..9679ae8 100644
 --- a/README_ZH.md
@@ -579,6 +621,233 @@ index 0000000..94d9b17
 +  await server.close();
 +  await rm(directory, { recursive: true, force: true });
 +}
+diff --git a/server/plugins/mantur-terminal-draft.verify.ts b/server/plugins/mantur-terminal-draft.verify.ts
+new file mode 100644
+index 0000000..6a24847
+--- /dev/null
++++ b/server/plugins/mantur-terminal-draft.verify.ts
+@@ -0,0 +1,221 @@
++import assert from 'node:assert/strict';
++import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
++import { tmpdir } from 'node:os';
++import { join } from 'node:path';
++import { execFileSync } from 'node:child_process';
++import { fileURLToPath } from 'node:url';
++import type { StoredExternalProposal } from '../../src/persist/externalProposalStore';
++import type { ExternalBridgePersistence } from '../../src/agent/external-proposal-apply';
++
++// Separate processes exercise the production JSON store, parser and runtime hydration.
++const phase = process.argv[2];
++if (!phase) {
++  const directory = await mkdtemp(join(tmpdir(), 'mantur-terminal-draft-'));
++  try {
++    for (const stage of ['write', 'read']) {
++      execFileSync(process.execPath, ['--import', 'tsx', fileURLToPath(import.meta.url), stage], {
++        env: { ...process.env, OPENCHATCUT_DEV_PROFILE_ID: '7686bde7-e08e-47a1-90f9-53faf21662b4',
++          OPENCHATCUT_DATA_DIR: directory, OPENCHATCUT_SQLITE_STORE: '0' },
++        stdio: 'inherit', timeout: 30000,
++      });
++    }
++    console.log('PASS: terminal draft contents survive a process restart; stale review/apply stay closed.');
++  } finally {
++    await rm(directory, { recursive: true, force: true });
++  }
++} else {
++  const store = await import('./project-store');
++  const { configureSharedKvBackend } = await import('../../src/persist/sharedKv');
++  const { loadExternalProposal, saveExternalProposal } = await import('../../src/persist/externalProposalStore');
++  const { makeDraft } = await import('../../src/editor/store');
++  const { docFromTimeline } = await import('../../src/persist/projectStore');
++  const { INITIAL } = await import('../../src/editor/initial');
++  const { ExternalBridgeRuntime } = await import('../../src/agent/external-bridge-runtime');
++  const { DEFAULT_EXTERNAL_BRIDGE_PERSISTENCE } = await import('../../src/agent/external-bridge-persistence-defaults');
++  const { restoreExternalEditSession, finishExternalEditSession } = await import('../../src/agent/external-edit-session');
++  const { storedExternalSession } = await import('../../src/agent/external-bridge-session');
++  let failCheckpoint = false;
++  let failLedger = false;
++  let beforeCheckpoint: ((value: unknown) => Promise<void>) | undefined;
++  configureSharedKvBackend({
++    async get<T>(key: string): Promise<T | undefined> {
++      const entry = await store.getStoredEntry(key);
++      return entry.found ? entry.value as T : undefined;
++    },
++    async set(key, value) {
++      if (failCheckpoint && key.startsWith('external-proposal:')) throw new Error('checkpoint write failed');
++      if (key.startsWith('external-proposal:')) await beforeCheckpoint?.(value);
++      await store.setStoredEntry(key, value);
++    },
++    delete: store.deleteStoredEntry,
++    keys: async () => Object.keys((await store.readStore()).entries),
++    async writeAgentRuntime(input) {
++      if (failLedger) throw new Error('ledger write failed');
++      return store.writeAgentRuntime(input);
++    },
++    updateAgentRunLease: store.updateStoredAgentRunLease,
++  });
++  const projectId = 'terminal-draft';
++  const fixture = join(process.env.OPENCHATCUT_DATA_DIR!, 'expected.json');
++  const runtimeFor = (id: string, live: ReturnType<typeof makeDraft>, persistence?: ExternalBridgePersistence) => new ExternalBridgeRuntime(
++    id, 'test-editor', () => ({ commands: live.commands, getDoc: live.getDoc, getState: live.getState,
++      getCreativeMode: () => null, getProjectId: () => id, templates: [], audio: [] }), () => {}, persistence,
++  );
++  if (phase === 'write') {
++    const base = docFromTimeline({ ...INITIAL, items: [] });
++    const live = makeDraft(base);
++    const runtime = runtimeFor(projectId, live);
++    try {
++      const binding = runtime.binding();
++      const begun = await runtime.execute('begin_edit_session', { approvalMode: 'auto' }, binding) as { editSessionId: string };
++      await runtime.execute('set_aspect_ratio', { editSessionId: begun.editSessionId, ratio: '9:16' }, binding);
++      const drafting = await loadExternalProposal(projectId);
++      assert(drafting?.draftCheckpoint);
++      assert.deepEqual(drafting.draftCheckpoint.baseDoc, JSON.parse(JSON.stringify(base)));
++      live.commands.setAspect(720, 720, 'contain');
++      const changedDoc = live.getDoc();
++      await store.setStoredEntry(`project:${projectId}`, changedDoc);
++      failCheckpoint = true;
++      await assert.rejects(runtime.execute('read_project', { editSessionId: begun.editSessionId }, binding), /checkpoint write failed/);
++      failCheckpoint = false;
++      assert.deepEqual(await loadExternalProposal(projectId), drafting,
++        'failed terminal persistence leaves the durable checkpoint intact');
++      failLedger = true;
++      await assert.rejects(runtime.execute('read_project', { editSessionId: begun.editSessionId }, binding), /ledger write failed/);
++      failLedger = false;
++      const records = await runtime.execute('list_edit_sessions', {}, runtime.binding()) as Array<{ status: string }>;
++      assert.equal(records[0]?.status, 'stale', 'durable terminal status closes memory before ledger finalization');
++      const stale = await loadExternalProposal(projectId);
++      assert.equal(stale?.status, 'stale');
++      assert.deepEqual(stale?.draftCheckpoint, drafting.draftCheckpoint);
++      await assert.rejects(runtime.execute('review_edit_session', { editSessionId: begun.editSessionId }, runtime.binding()), /not drafting/);
++      assert.deepEqual(live.getDoc(), changedDoc);
++      await writeFile(fixture, JSON.stringify({ drafting, changedDoc }));
++      await saveExternalProposal(`${projectId}-hydrate`, drafting);
++      for (const status of ['cancelled', 'failed'] as const) {
++        const restored = restoreExternalEditSession({ ...stale!, status }, changedDoc);
++        const terminal = finishExternalEditSession(restored, status);
++        assert.equal(terminal.draft, null);
++        await saveExternalProposal(`${projectId}-${status}`, storedExternalSession(terminal));
++      }
++      const initialId = `${projectId}-initial`;
++      const initialEntered = Promise.withResolvers<StoredExternalProposal>();
++      const initialRelease = Promise.withResolvers<void>();
++      const writes: string[] = [];
++      const initialRuntime = runtimeFor(initialId, makeDraft(base), {
++        ...DEFAULT_EXTERNAL_BRIDGE_PERSISTENCE,
++        async saveExternalProposal(id, record) {
++          writes.push(`${record.status}:start`);
++          if (record.status === 'drafting') {
++            initialEntered.resolve(record);
++            await initialRelease.promise;
++          }
++          await saveExternalProposal(id, record);
++          writes.push(`${record.status}:saved`);
++        },
++      });
++      const beginning = initialRuntime.execute('begin_edit_session', {}, initialRuntime.binding());
++      const initialRecord = await initialEntered.promise;
++      const cancelling = initialRuntime.execute('discard_edit_session', {
++        editSessionId: initialRecord.sessionId,
++      }, initialRuntime.binding());
++      try {
++        // The cancellation's queued callback gets a microtask turn; no timer or filesystem timing is assumed.
++        await Promise.resolve();
++        assert.deepEqual(writes, ['drafting:start'], 'initial checkpoint owns the write queue until its save settles');
++        initialRelease.resolve();
++        await Promise.all([beginning, cancelling]);
++        assert.deepEqual(writes, ['drafting:start', 'drafting:saved', 'cancelled:start', 'cancelled:saved']);
++        assert.equal((await loadExternalProposal(initialId))?.status, 'cancelled');
++      } finally {
++        initialRelease.resolve();
++        await Promise.allSettled([beginning, cancelling]);
++        await initialRuntime.disconnect();
++      }
++      const lateId = `${projectId}-late`;
++      const lateLive = makeDraft(base);
++      const lateRuntime = runtimeFor(lateId, lateLive);
++      let release!: () => void;
++      let reached!: () => void;
++      const held = new Promise<void>(resolve => { release = resolve; });
++      const started = new Promise<void>(resolve => { reached = resolve; });
++      try {
++        const lateBinding = lateRuntime.binding();
++        const lateSession = await lateRuntime.execute('begin_edit_session', {}, lateBinding) as { editSessionId: string };
++        await lateRuntime.execute('set_aspect_ratio', { editSessionId: lateSession.editSessionId, ratio: '1:1' }, lateBinding);
++        beforeCheckpoint = async value => {
++          const record = value as StoredExternalProposal;
++          if (record.status === 'drafting' && record.operationCount === 2) { reached(); await held; }
++        };
++        const pending = lateRuntime.execute('set_aspect_ratio', { editSessionId: lateSession.editSessionId, ratio: '9:16' }, lateBinding);
++        await started;
++        const cancelled = lateRuntime.execute('discard_edit_session', { editSessionId: lateSession.editSessionId }, lateBinding);
++        // Let cancellation reach its first persistence await while the tool's write is held.
++        await new Promise<void>(resolve => setImmediate(resolve));
++        release();
++        await Promise.all([pending, cancelled]);
++        beforeCheckpoint = undefined;
++        const record = await loadExternalProposal(lateId);
++        assert.equal(record?.status, 'cancelled', 'a late drafting write cannot resurrect a terminal session');
++        assert.equal(record.draftCheckpoint?.operations.length, 2);
++        await writeFile(join(process.env.OPENCHATCUT_DATA_DIR!, 'late-expected.json'), JSON.stringify(record));
++        assert.deepEqual(lateLive.getDoc(), base);
++      } finally {
++        release();
++        beforeCheckpoint = undefined;
++        await lateRuntime.disconnect();
++      }
++    } finally {
++      failCheckpoint = false;
++      failLedger = false;
++      await runtime.disconnect();
++    }
++  } else if (phase === 'read') {
++    const { drafting, changedDoc } = JSON.parse(await readFile(fixture, 'utf8')) as {
++      drafting: StoredExternalProposal; changedDoc: Parameters<typeof makeDraft>[0];
++    };
++    for (const status of ['stale', 'cancelled', 'failed'] as const) {
++      const id = status === 'stale' ? projectId : `${projectId}-${status}`;
++      const record = await loadExternalProposal(id);
++      assert(record);
++      assert.equal(record.status, status);
++      assert.deepEqual(record.draftCheckpoint, drafting.draftCheckpoint);
++      const live = makeDraft(changedDoc);
++      const runtime = runtimeFor(id, live);
++      try {
++        await runtime.hydrate(record);
++        const recovered = await runtime.execute('recover_edit_session', {
++          editSessionId: record.sessionId, action: 'resume',
++        }, runtime.binding()) as { status: string };
++        assert.equal(recovered.status, status, 'reading terminal evidence never resumes or rebases it');
++        await assert.rejects(runtime.execute('review_edit_session', { editSessionId: record.sessionId }, runtime.binding()), /not drafting/);
++        await runtime.apply(new Set([0]), true);
++        assert.deepEqual(live.getDoc(), changedDoc, 'even force apply has no active terminal proposal');
++        const restored = restoreExternalEditSession(record, changedDoc);
++        assert.deepEqual(storedExternalSession(restored).draftCheckpoint, drafting.draftCheckpoint);
++      } finally {
++        await runtime.disconnect();
++      }
++    }
++    assert.deepEqual((await store.getStoredEntry(`project:${projectId}`)).value, changedDoc);
++    const initial = await loadExternalProposal(`${projectId}-initial`);
++    assert.equal(initial?.status, 'cancelled');
++    assert.deepEqual(initial?.draftCheckpoint?.baseDoc, drafting.draftCheckpoint?.baseDoc);
++    assert.deepEqual(initial?.draftCheckpoint?.draftDoc, drafting.draftCheckpoint?.baseDoc);
++    assert.deepEqual(initial?.draftCheckpoint?.operations, []);
++    assert.deepEqual(JSON.parse(JSON.stringify(await loadExternalProposal(`${projectId}-late`))),
++      JSON.parse(await readFile(join(process.env.OPENCHATCUT_DATA_DIR!, 'late-expected.json'), 'utf8')),
++      'cancelled late-write evidence survives a fresh process too');
++    const hydrateId = `${projectId}-hydrate`;
++    const hydrateRuntime = runtimeFor(hydrateId, makeDraft(changedDoc));
++    try {
++      await hydrateRuntime.hydrate(await loadExternalProposal(hydrateId));
++      const hydrated = await loadExternalProposal(hydrateId);
++      assert.equal(hydrated?.status, 'stale');
++      assert.deepEqual(hydrated?.draftCheckpoint, drafting.draftCheckpoint,
++        'restart on a newer live project archives the original draft without replaying onto that project');
++    } finally {
++      await hydrateRuntime.disconnect();
++    }
++  } else throw new Error(`Unknown phase ${phase}`);
++}
 diff --git a/server/runtime-profile.ts b/server/runtime-profile.ts
 index cd7b41a..828aa14 100644
 --- a/server/runtime-profile.ts
@@ -636,8 +905,29 @@ index 0052cf2..f5e9192 100644
    useUiScaleShortcuts();
    const { projects, refresh } = useProjects();
 
+diff --git a/src/agent/external-bridge-hydration.ts b/src/agent/external-bridge-hydration.ts
+index 5816c45..669babc 100644
+--- a/src/agent/external-bridge-hydration.ts
++++ b/src/agent/external-bridge-hydration.ts
+@@ -110,6 +110,7 @@ export async function hydrateStoredExternalBridge(input: ExternalBridgeHydration
+     appliedOperationCount: pending.appliedOperationCount,
+     operationCount: pending.operationCount,
+     proposal: pending.proposal,
++    draftCheckpoint: pending.draftCheckpoint,
+   }, input.currentDoc);
+   const runId = session.status === 'awaiting_review'
+     ? pending.agentRunId ?? session.proposal?.agentRunId
+@@ -123,7 +124,7 @@ export async function hydrateStoredExternalBridge(input: ExternalBridgeHydration
+   if (run) await prepareHydratedRun(run);
+   input.install({ session, run });
+   if (session.status !== 'awaiting_review') {
+-    input.publish({ proposal: null, stale: false });
++    input.publish({ proposal: null, stale: session.status === 'stale' });
+     return;
+   }
+   if (session.approvalMode === 'auto') {
 diff --git a/src/agent/external-bridge-runtime.ts b/src/agent/external-bridge-runtime.ts
-index d57948a..1acbbc8 100644
+index d57948a..ad731cd 100644
 --- a/src/agent/external-bridge-runtime.ts
 +++ b/src/agent/external-bridge-runtime.ts
 @@ -14,7 +14,7 @@ import {
@@ -649,7 +939,15 @@ index d57948a..1acbbc8 100644
  import { finalizeExternalSessionRun } from './external-run-terminal';
  import { validateExternalInvocation } from './external-tool-schemas';
  import { executeTool } from './tools';
-@@ -174,17 +174,17 @@ export class ExternalBridgeRuntime {
+@@ -40,6 +40,7 @@ export class ExternalBridgeRuntime {
+   private readonly persistence: ExternalBridgePersistence;
+   private readonly runs = new Map<string, ExternalSessionRunLedger>();
+   private readonly approvalGate = new ExternalApprovalGate();
++  private sessionWriteTail: Promise<void> = Promise.resolve();
+   onGuardRequest: ((request: ExternalGuardRequest) => void) | null = null;
+   constructor(
+     projectId: string, editorInstanceId: string, getContext: () => AgentContext,
+@@ -174,17 +175,17 @@ export class ExternalBridgeRuntime {
      const approved = await this.approvalGate.consume({
        sessionId: session.id, runId: run.runId, tool: name, args, operationId,
      });
@@ -675,7 +973,7 @@ index d57948a..1acbbc8 100644
        args,
        this.getContext(),
        signal,
-@@ -220,7 +220,9 @@ export class ExternalBridgeRuntime {
+@@ -220,7 +221,9 @@ export class ExternalBridgeRuntime {
        confirmationId: guard.guardId,
        tool,
        status: 'pending',
@@ -686,7 +984,51 @@ index d57948a..1acbbc8 100644
      };
    }
    async confirmRealTool(guardId: string, allow: boolean): Promise<void> {
-@@ -370,6 +372,7 @@ export class ExternalBridgeRuntime {
+@@ -315,8 +318,11 @@ export class ExternalBridgeRuntime {
+     const run = await ExternalSessionRunLedger.start(this.projectId, session.clientName, session.id, 'external-connected', executeTool);
+     this.runs.set(session.id, run);
+     this.sessions.set(session.id, session);
+-    await this.persistence.saveExternalProposal(this.projectId,
+-      storedExternalSession(session, 'drafting', undefined, run.runId));
++    await this.writeSession(async () => {
++      this.requireCurrentDraft(session);
++      await this.persistence.saveExternalProposal(this.projectId,
++        storedExternalSession(session, 'drafting', undefined, run.runId));
++    });
+     return this.info(session);
+   }
+
+@@ -326,8 +332,8 @@ export class ExternalBridgeRuntime {
+     signal?: AbortSignal,
+   ): Promise<unknown> {
+     throwIfExternalCallCancelled(signal);
+-    const run = this.requireRun(session.id);
+     const reviewResult = reviewExternalEditSession(session, summary);
++    const run = this.requireRun(session.id);
+     const reviewed = reviewResult.proposal
+       ? {
+         ...reviewResult,
+@@ -336,13 +342,16 @@ export class ExternalBridgeRuntime {
+       : reviewResult;
+     const proposalId = reviewed.proposal?.id;
+     if (proposalId) await run.proposal(proposalId, 'created');
+-    await this.persistence.saveExternalProposal(this.projectId, storedExternalSession(reviewed));
++    await this.writeSession(async () => {
++      this.requireCurrentDraft(session);
++      await this.persistence.saveExternalProposal(this.projectId, storedExternalSession(reviewed));
++      this.sessions.set(session.id, reviewed);
++      this.proposalSessionId = reviewed.id;
++    });
+     if (signal?.aborted) {
+       await this.markTerminal(reviewed, 'cancelled');
+       throwIfExternalCallCancelled(signal);
+     }
+-    this.sessions.set(session.id, reviewed);
+-    this.proposalSessionId = reviewed.id;
+     if (reviewed.approvalMode === 'auto') {
+       const count = reviewed.proposal?.options[0].operations.length ?? 0;
+       await this.apply(
+@@ -370,6 +379,7 @@ export class ExternalBridgeRuntime {
      name: string,
      args: Record<string, unknown>,
      signal?: AbortSignal,
@@ -694,14 +1036,223 @@ index d57948a..1acbbc8 100644
    ): Promise<unknown> {
      const run = this.requireRun(session.id);
      const executed = await run.executeDraftTool({
-@@ -379,6 +382,7 @@ export class ExternalBridgeRuntime {
+@@ -379,10 +389,14 @@ export class ExternalBridgeRuntime {
        context: this.getContext(),
        signal,
        markStale: () => this.markTerminal(session, 'stale'),
 +      approvedImport,
++    });
++    await this.writeSession(async () => {
++      this.requireCurrentDraft(session);
++      await this.persistence.saveExternalProposal(this.projectId,
++        storedExternalSession(executed.session, 'drafting', undefined, run.runId));
++      this.sessions.set(session.id, executed.session);
      });
-     await this.persistence.saveExternalProposal(this.projectId,
-       storedExternalSession(executed.session, 'drafting', undefined, run.runId));
+-    await this.persistence.saveExternalProposal(this.projectId,
+-      storedExternalSession(executed.session, 'drafting', undefined, run.runId));
+-    this.sessions.set(session.id, executed.session);
+     return executed.result;
+   }
+
+@@ -434,17 +448,36 @@ export class ExternalBridgeRuntime {
+     return this.proposalSessionId ? this.sessions.get(this.proposalSessionId) : undefined;
+   }
+
++  /** Serialize draft persistence with terminal closure, including their in-memory publication. */
++  private writeSession<T>(work: () => Promise<T>): Promise<T> {
++    const result = this.sessionWriteTail.then(work);
++    // A failed write reaches its caller; it must not prevent a later explicit retry.
++    this.sessionWriteTail = result.then(() => undefined, () => undefined);
++    return result;
++  }
++
++  private requireCurrentDraft(session: ExternalEditSession): void {
++    if (this.sessions.get(session.id) !== session || session.status !== 'drafting') {
++      throw new ExternalEditSessionOutcomeError('stale', 'The edit session changed before the draft could be saved.');
++    }
++  }
++
+   private async markTerminal(
+     session: ExternalEditSession,
+     status: ExternalEditSessionTerminalStatus,
+     appliedOperationCount?: number,
+   ): Promise<void> {
+-    const stored = storedExternalSession(
+-      session, status, appliedOperationCount, this.runs.get(session.id)?.runId,
+-    );
+-    await this.persistence.saveExternalProposal(this.projectId, stored);
+-    await this.recordRunTerminal(session, status);
+-    this.finishInMemory(session, status, appliedOperationCount);
++    await this.writeSession(async () => {
++      const current = this.requireSession(session.id);
++      if (!EXTERNAL_ACTIVE_STATUSES.has(current.status)) return;
++      const stored = storedExternalSession(
++        current, status, appliedOperationCount, this.runs.get(current.id)?.runId,
++      );
++      await this.persistence.saveExternalProposal(this.projectId, stored);
++      // Once the terminal record is durable, a ledger failure must not leave a writable session.
++      this.finishInMemory(current, status, appliedOperationCount);
++      await this.recordRunTerminal(current, status);
++    });
+   }
+
+   private async recordRunTerminal(
+diff --git a/src/agent/external-bridge-session.ts b/src/agent/external-bridge-session.ts
+index bfc2a4c..d0c6191 100644
+--- a/src/agent/external-bridge-session.ts
++++ b/src/agent/external-bridge-session.ts
+@@ -38,13 +38,10 @@ export function findActiveExternalSession(
+
+ export function storedExternalSession(
+   session: ExternalEditSession,
+-  status: StoredExternalProposal['status'] = session.status === 'drafting'
+-    ? 'drafting'
+-    : 'awaiting_review',
++  status: StoredExternalProposal['status'] = session.status,
+   appliedOperationCount?: number,
+   agentRunId?: string,
+ ): StoredExternalProposal {
+-  const drafting = status === 'drafting' && session.status === 'drafting';
+   return {
+     sessionId: session.id,
+     clientName: session.clientName,
+@@ -55,8 +52,8 @@ export function storedExternalSession(
+     operationCount: session.operationCount,
+     appliedOperationCount,
+     agentRunId: agentRunId ?? session.proposal?.agentRunId,
+-    draftCheckpoint: drafting ? checkpointExternalEditSession(session) : undefined,
+-    proposal: drafting ? null : session.proposal,
++    draftCheckpoint: session.draft ? checkpointExternalEditSession(session) : session.draftCheckpoint,
++    proposal: session.proposal,
+   };
+ }
+
+diff --git a/src/agent/external-draft-persistence.verify.ts b/src/agent/external-draft-persistence.verify.ts
+index 43100d2..d10778a 100644
+--- a/src/agent/external-draft-persistence.verify.ts
++++ b/src/agent/external-draft-persistence.verify.ts
+@@ -197,8 +197,26 @@ const staleRuntime = new ExternalBridgeRuntime(
+ );
+ await staleRuntime.hydrate(staleRecord);
+ assert.equal(staleRecords.at(-1)?.status, 'stale');
++assert.deepEqual(staleRecords.at(-1)?.draftCheckpoint, persistedDraft.draftCheckpoint,
++  'stale hydration must preserve the last durable draft, not just its operation count');
+ assert.equal(snapshots.at(-1)?.stale, true);
+
++const legacyDraft = structuredClone(persistedDraft);
++delete legacyDraft.draftCheckpoint!.baseDoc;
++await saveExternalProposal(`${projectId}-legacy-draft`, legacyDraft);
++const parsedLegacy = await loadExternalProposal(`${projectId}-legacy-draft`);
++assert.equal(parsedLegacy?.status, 'drafting');
++await staleRuntime.hydrate(parsedLegacy);
++assert.deepEqual(staleRecords.at(-1)?.draftCheckpoint, legacyDraft.draftCheckpoint,
++  'legacy evidence stays intact without guessing its missing original document');
++
++const wrongBase = structuredClone(persistedDraft);
++wrongBase.draftCheckpoint!.baseDoc = changed.getDoc();
++await saveExternalProposal(`${projectId}-wrong-base`, wrongBase);
++const parsedWrongBase = await loadExternalProposal(`${projectId}-wrong-base`);
++assert.equal(parsedWrongBase?.status, 'stale', 'a checkpoint cannot claim an unrelated base revision');
++assert.equal(parsedWrongBase?.draftCheckpoint, undefined);
++
+ const malformedProjectId = `${projectId}-malformed`;
+ await kvSet(`external-proposal:${malformedProjectId}`, {
+   ...persistedDraft,
+diff --git a/src/agent/external-edit-session-core.verify.ts b/src/agent/external-edit-session-core.verify.ts
+index 09a93d1..91966c2 100644
+--- a/src/agent/external-edit-session-core.verify.ts
++++ b/src/agent/external-edit-session-core.verify.ts
+@@ -107,7 +107,8 @@ const restored = restoreExternalEditSession({
+ }, base);
+ assert.equal(restored.status, 'rejected');
+ assert.equal(restored.approvalMode, 'auto');
+-assert.equal(restored.proposal, null);
++assert.equal(restored.proposal, reviewed.proposal, 'terminal proposals remain evidence, not active UI proposals');
++assert.equal(restored.draft, null);
+ const restoredLegacyDiscard = restoreExternalEditSession({
+   sessionId: session.id,
+   clientName: session.clientName,
+diff --git a/src/agent/external-edit-session.ts b/src/agent/external-edit-session.ts
+index 210fcb9..0b53cfb 100644
+--- a/src/agent/external-edit-session.ts
++++ b/src/agent/external-edit-session.ts
+@@ -25,6 +25,8 @@ export interface ExternalEditSession {
+   baseRevision: string;
+   baseDoc: ProjectDoc;
+   draft: DraftEngine | null;
++  /** Durable evidence retained after the editable draft is closed. */
++  draftCheckpoint?: ExternalDraftCheckpoint;
+   operations: Operation[];
+   operationCount: number;
+   proposal: Proposal | null;
+@@ -38,6 +40,8 @@ export interface ExternalDraftCheckpoint {
+   clientName: string;
+   approvalMode: ExternalApprovalMode;
+   baseRevision: string;
++  /** Older v1 checkpoints omit the original document; never infer it from a changed project. */
++  baseDoc?: ProjectDoc;
+   draftDoc: ProjectDoc;
+   operations: Operation[];
+   createdAt: number;
+@@ -125,6 +129,7 @@ export function checkpointExternalEditSession(
+     clientName: session.clientName,
+     approvalMode: session.approvalMode,
+     baseRevision: session.baseRevision,
++    baseDoc: session.baseDoc,
+     draftDoc: session.draft.getDoc(),
+     operations: session.operations,
+     createdAt: session.createdAt,
+@@ -142,7 +147,7 @@ export function restoreDraftingExternalEditSession(
+     approvalMode: normalizedApprovalMode(checkpoint.approvalMode),
+     status: 'drafting',
+     baseRevision: checkpoint.baseRevision,
+-    baseDoc,
++    baseDoc: checkpoint.baseDoc ?? baseDoc,
+     draft: makeDraft(checkpoint.draftDoc),
+     operations: checkpoint.operations,
+     operationCount: checkpoint.operations.length,
+@@ -206,6 +211,7 @@ export function reviewExternalEditSession(
+   return {
+     ...session,
+     status: 'awaiting_review',
++    draftCheckpoint: checkpointExternalEditSession(session),
+     draft: null,
+     proposal: { ...proposal, title: session.clientName },
+     updatedAt: Date.now(),
+@@ -222,6 +228,7 @@ export function restoreExternalEditSession(input: {
+   appliedOperationCount?: number;
+   operationCount: number;
+   proposal: Proposal | null;
++  draftCheckpoint?: ExternalDraftCheckpoint;
+ }, fallbackDoc: ProjectDoc): ExternalEditSession {
+   const status = input.status === 'discarded' ? 'cancelled' : input.status ?? 'awaiting_review';
+   return {
+@@ -230,11 +237,12 @@ export function restoreExternalEditSession(input: {
+     approvalMode: normalizedApprovalMode(input.approvalMode),
+     status,
+     baseRevision: input.baseRevision,
+-    baseDoc: input.proposal?.baseDoc ?? fallbackDoc,
++    baseDoc: input.draftCheckpoint?.baseDoc ?? input.proposal?.baseDoc ?? fallbackDoc,
++    draftCheckpoint: input.draftCheckpoint,
+     draft: null,
+-    operations: input.proposal?.options[0].operations ?? [],
++    operations: input.draftCheckpoint?.operations ?? input.proposal?.options[0].operations ?? [],
+     operationCount: input.operationCount,
+-    proposal: status === 'awaiting_review' ? input.proposal : null,
++    proposal: input.proposal,
+     createdAt: input.createdAt,
+     updatedAt: Date.now(),
+     appliedOperationCount: input.appliedOperationCount,
+@@ -249,8 +257,8 @@ export function finishExternalEditSession(
+   return {
+     ...session,
+     status,
++    draftCheckpoint: session.draft ? checkpointExternalEditSession(session) : session.draftCheckpoint,
+     draft: null,
+-    proposal: null,
+     updatedAt: Date.now(),
+     appliedOperationCount,
+   };
 diff --git a/src/agent/external-run-ledger.ts b/src/agent/external-run-ledger.ts
 index cc34d5c..14f8a75 100644
 --- a/src/agent/external-run-ledger.ts
@@ -1777,3 +2328,38 @@ index 0000000..915d78a
 +    || !Number.isSafeInteger(value.duplicateCount)) throw new Error('Invalid project media import result');
 +  return value;
 +}
+diff --git a/src/persist/externalProposalStore.ts b/src/persist/externalProposalStore.ts
+index dfb4024..4bd8c1c 100644
+--- a/src/persist/externalProposalStore.ts
++++ b/src/persist/externalProposalStore.ts
+@@ -6,6 +6,7 @@ import type {
+   ExternalDraftCheckpoint,
+   ExternalEditSessionTerminalStatus,
+ } from '../agent/external-edit-session';
++import { revisionOf } from '../agent/external-edit-session';
+ import type { Operation, Proposal } from '../agent/proposal';
+ import type { AnyAction } from '../editor/store';
+ import { parseProposal } from './proposalStore';
+@@ -73,9 +74,12 @@ function parseDraftCheckpoint(
+       || !checkpoint.operations.every(isOperation)) return null;
+   const draftDoc = migrateProjectDoc(checkpoint.draftDoc);
+   if (!draftDoc) return null;
++  const baseDoc = checkpoint.baseDoc === undefined ? undefined : migrateProjectDoc(checkpoint.baseDoc);
++  if (baseDoc === null || baseDoc && revisionOf(baseDoc) !== stored.baseRevision) return null;
+   return {
+     version: 1, sessionId: stored.sessionId, clientName: stored.clientName,
+     approvalMode: stored.approvalMode, baseRevision: stored.baseRevision,
++    ...(baseDoc ? { baseDoc } : {}),
+     draftDoc, operations: checkpoint.operations, createdAt: stored.createdAt,
+     updatedAt: checkpoint.updatedAt,
+   };
+@@ -113,8 +117,7 @@ function parseStoredExternalProposal(raw: unknown): StoredExternalProposal | nul
+     sessionId: value.sessionId, clientName: value.clientName, approvalMode,
+     baseRevision: value.baseRevision, createdAt: value.createdAt,
+   };
+-  const checkpoint = status === 'drafting'
+-    ? parseDraftCheckpoint(value.draftCheckpoint, common) : null;
++  const checkpoint = parseDraftCheckpoint(value.draftCheckpoint, common);
+   if (status === 'drafting' && (!checkpoint || typeof value.agentRunId !== 'string'
+       || !value.agentRunId || value.operationCount !== checkpoint.operations.length)) {
+     return malformedDraft(value, common);
