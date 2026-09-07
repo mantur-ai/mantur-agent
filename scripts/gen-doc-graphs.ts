@@ -486,8 +486,16 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Subprocess seam',
     mode: 'seam',
     implementations: ['subprocess-local', 'subprocess-e2b'],
-    consumers: ['bash-local', 'bash-sandbox', 'terminal-bash', 'lsp-stdio', 'subagent-acp', 'subagent-codex', 'subagent-claude-code'],
-    note: 'The bash executors, the PTY shell backend, the LSP host, and the out-of-process ACP, Codex, and Claude Code subagent backends spawn through ctx.subprocess; the service owns process coordinates, tree/session lifetime, stdio dispositions, terminal mechanics, and kill escalation.',
+    consumers: ['command-scopes', 'lsp-stdio', 'subagent-acp', 'subagent-codex', 'subagent-claude-code'],
+    note: 'Command scopes, the LSP host, and out-of-process subagents use ctx.subprocess; it owns process coordinates, tree/session lifetime, stdio dispositions, terminal mechanics, and kill escalation.',
+  },
+  {
+    key: 'commandScopes',
+    pkg: 'command-scopes',
+    title: 'Command identity and cleanup',
+    mode: 'core',
+    consumers: ['bash-local', 'pwsh-local', 'terminal-bash', 'authorization-manturhub'],
+    note: 'Prepares command identity before process allocation and retains it through complete process-tree or terminal cleanup and release acknowledgment.',
   },
   {
     key: 'shell',

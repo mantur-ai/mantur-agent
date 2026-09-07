@@ -85,6 +85,7 @@
       "@deepseek-ai/dsh-pwsh-local": ["./packages/shell/pwsh-local/src/index.ts"],
       "@deepseek-ai/dsh-tool-pwsh": ["./packages/shell/tool-pwsh/src/index.ts"],
       "@deepseek-ai/dsh-shell-env": ["./packages/shell/shell-env/src/index.ts"],
+      "@deepseek-ai/dsh-command-scopes": ["./packages/shell/command-scopes/src/index.ts"],
       "@deepseek-ai/dsh-cordis-host-runner": ["./packages/extensions/cordis-host-runner/src/index.ts"],
       "@deepseek-ai/dsh-cordis-host-runner/types": ["./packages/extensions/cordis-host-runner/src/types.ts"],
       "@deepseek-ai/dsh-goal/types": ["./packages/goal/goal/src/types.ts"],

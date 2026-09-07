@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This Host package owns the active ManturHub production or test deployment, registers one `ctx.authorization` device-code flow per configured origin, and routes every `manturAccount.request()` through the selected deployment. Each origin has a distinct Host credential record. The generated `manturAccount` Remote returns device instructions, account email, progress, and local sign-out; it never returns an API key or environment configuration.
+This Host package routes ManturHub requests to the selected production or test deployment. `standalone` identity owns per-origin credential records and device-code flows; `desktop-managed` identity delegates to Electron Main and never reads those records. The generated Remote exposes the identity mode and sanitized account status, never an API key or environment configuration.
 
 ## Table of Contents
 
@@ -26,9 +26,13 @@ This Host package owns the active ManturHub production or test deployment, regis
 
 `environment` defaults to `production`. `baseUrl` defaults to `https://hub.mantur.ai` and names the production origin; `testBaseUrl` names the optional test origin and is required before `test` can be selected. Both values must be HTTP(S) origins without credentials, paths, queries, or fragments, and the test origin must differ from production. Maintainers select the environment through the `mantur-account` row in a machine-local `cordis.patch.yml`; the account browser Remote cannot read or change it. Restarting the desktop application after a change clears its in-memory account and marketplace state.
 
-The public production origin retains the original credential key so an existing production login remains valid. Every other production or test origin uses an environment-and-origin-specific credential key. Changing a test URL therefore starts signed out instead of sending the previous test grant to a new server. Grants remain in the credential provider and never belong in the patch file.
+`identity` defaults to `standalone`. In this mode, the public production origin retains the original credential key; other origins use environment-and-origin-specific keys. Changing a test URL therefore starts signed out. Grants remain in the credential provider, never in the patch file.
 
-A verification URL on another origin is rejected. A session that omits `interval` or `expires_in` uses 5 seconds and 600 seconds. `slow_down` adds 5 seconds to the active polling interval; denial and expiry end the attempt without a credential.
+`desktop-managed` requires an Electron parent IPC channel and explicit `native` settings: `environmentLabel`, `requestTimeoutMs`, `maxResponseBytes`, `leaseMs` and `revocationRetryMs`. The Mantur desktop profile supplies these budgets. Main validates the selected origin before the provider becomes available. Authenticated GETs retain their broker scope through response EOF or cancellation. A command environment lease may be released only after the command consumer confirms whole-tree cleanup. Connection disposal aborts scopes and waits for those receipts. Missing Main or invalid managed identity fails without consulting standalone storage. Native account actions belong to the guarded preload bridge; legacy device-login Remotes reject them.
+
+The native provider registers with [command-scopes](../../shell/command-scopes/README.md). Bash, PowerShell and persistent terminal allocation prepare identity before spawning and acknowledge release only after whole-tree cleanup. A signed-out command receives explicit desktop-managed mode and an empty descriptor path, overriding stale caller environment.
+
+Standalone device login rejects a verification URL on another origin. A session that omits `interval` or `expires_in` uses 5 seconds and 600 seconds. `slow_down` adds 5 seconds to the active polling interval; denial and expiry end the attempt without a credential.
 
 ## Model Experience
 
@@ -50,8 +54,8 @@ Authorization does not alter model request prefixes or cache reuse.
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- Login attempts are process-local and are cancelled when the Host stops.
-- Sign-out removes the local grant; server-side revocation is outside this MVP.
+- Standalone login attempts are process-local; standalone sign-out removes only the local grant.
+- Native forms consume the explicit identity mode and guarded preload. Marketplace login routing, packaged CLI integration and native OS acceptance remain incomplete. Loopback command tests do not establish test-site readiness. See the [native account proposal](../../../.agents/notes/proposed/architecture/2026-09-07-desktop-native-account-identity.md).
 
 <a id="dev-note"></a>
 ### Dev Note

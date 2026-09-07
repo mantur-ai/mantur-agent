@@ -6,6 +6,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, vi } from 'vitest'
 import * as yaml from 'js-yaml'
 import { applyEntryPatches, entryListSchema, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
+import { interpolate } from '@deepseek-ai/cordis-plugin-loader'
 import SystemPrompt, { renderPrompt, type PromptAssembly } from '@deepseek-ai/dsh-system-prompt'
 import * as ManturApp from '../src/index.ts'
 
@@ -27,6 +28,18 @@ function composedRows() {
 }
 
 describe('dsh-mantur-app bundle', () => {
+  it.each([
+    [undefined, 'none', 'standalone'],
+    ['1', 'required', 'desktop-managed'],
+  ])('evaluates identity configuration with native account flag %s', (flag, commands, account) => {
+    const rows = composedRows()
+    const context = { process: { env: { DSH_MANTUR_NATIVE_ACCOUNT: flag } } }
+    expect(interpolate(context, rows.find(row => row.id === 'command-scopes')?.config))
+      .toEqual({ identity: commands })
+    expect(interpolate(context, rows.find(row => row.id === 'mantur-account')?.config))
+      .toMatchObject({ identity: account, native: flag === '1' ? { environmentLabel: 'ManturHub' } : undefined })
+  })
+
   it('replaces the Web product identity without changing model and permission controls', () => {
     const rows = composedRows()
     const row = (id: string) => rows.find(candidate => candidate.id === id)

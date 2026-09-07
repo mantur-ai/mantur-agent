@@ -9,6 +9,7 @@
  * writes CRLF on Windows, so exact text assertions normalize line endings.
  */
 
+import CommandScopes from '@deepseek-ai/dsh-command-scopes'
 import { mkdirSync, mkdtempSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -42,6 +43,7 @@ function samePath(actual: string, expected: string): boolean {
 async function setup(config: ConstructorParameters<typeof PwshLocalExecutor>[1] = {}) {
   const ctx = new Context()
   await ctx.plugin(LocalSubprocessRuntime)
+  await ctx.plugin(CommandScopes, { identity: 'none' })
   ;(ctx.subprocess as LocalSubprocessRuntime).internals = { spillDir }
   // A short kill grace via the REAL config path, so escalation tests stay fast.
   await ctx.plugin(PwshLocalExecutor, { graceMs: 200, ...config })
@@ -178,6 +180,7 @@ describe('spawn construction (pure, every platform)', () => {
   it('runs every command as ONE argv element under the UTF-8 encoding preamble', async () => {
     const ctx = new Context()
     const subprocess = new CapturingSubprocessRuntime(ctx)
+    await ctx.plugin(CommandScopes, { identity: 'none' })
     await ctx.plugin(PwshLocalExecutor)
     await ctx.shell.run(ctx.shell.resolve({ command: 'Write-Output 你好' }))
     expect(subprocess.specs).toHaveLength(1)
@@ -323,7 +326,7 @@ describe.skipIf(!hasPwsh)('PwshLocalExecutor.start (background process handles)'
     const before = Date.now()
     // The sleep outlasts any realistic spawn latency, so returning while the
     // child still sleeps proves start() does not wait for completion.
-    const proc = bash.start(bash.resolve({ command: 'Start-Sleep -Milliseconds 2000; Write-Output done' }))
+    const proc = await bash.start(bash.resolve({ command: 'Start-Sleep -Milliseconds 2000; Write-Output done' }))
     expect(Date.now() - before).toBeLessThan(1000)
     expect(proc.status).toBe('running')
     await proc.done
@@ -333,7 +336,7 @@ describe.skipIf(!hasPwsh)('PwshLocalExecutor.start (background process handles)'
 
   it('threads stdin and extra env into a background process', async () => {
     const { bash } = await setup()
-    const proc = bash.start(bash.resolve({
+    const proc = await bash.start(bash.resolve({
       command: '$s = ([Console]::In.ReadToEnd()).TrimEnd(); Write-Output $s; Write-Output "[$env:BG_VAR][$env:DSH_BG_VAR]"',
       stdin: 'bg-stdin\n',
       env: { BG_VAR: 'bg-env' },
@@ -348,7 +351,7 @@ describe.skipIf(!hasPwsh)('PwshLocalExecutor.start (background process handles)'
 
   it('readOutput is consuming: increments are never re-delivered, and reads stay valid after exit', async () => {
     const { bash } = await setup()
-    const proc = bash.start(bash.resolve({ command: 'Write-Output first; Start-Sleep -Seconds 1; Write-Output second' }))
+    const proc = await bash.start(bash.resolve({ command: 'Write-Output first; Start-Sleep -Seconds 1; Write-Output second' }))
     const first = await readUntil(proc, 'first\n')
     expect(lf(first)).toBe('first\n')
     await proc.done
@@ -361,28 +364,28 @@ describe.skipIf(!hasPwsh)('PwshLocalExecutor.start (background process handles)'
 
   it('readOutput marks stderr sections', async () => {
     const { bash } = await setup()
-    const proc = bash.start(bash.resolve({ command: 'Write-Output out; [Console]::Error.WriteLine("err")' }))
+    const proc = await bash.start(bash.resolve({ command: 'Write-Output out; [Console]::Error.WriteLine("err")' }))
     await proc.done
     expect(lf(proc.readOutput().delta)).toBe('out\n[stderr]\nerr\n')
   })
 
   it('readOutput reports stderr-only deltas without a leading newline', async () => {
     const { bash } = await setup()
-    const proc = bash.start(bash.resolve({ command: '[Console]::Error.WriteLine("err")' }))
+    const proc = await bash.start(bash.resolve({ command: '[Console]::Error.WriteLine("err")' }))
     await proc.done
     expect(lf(proc.readOutput().delta)).toBe('[stderr]\nerr\n')
   })
 
   it('readOutput adds a separator only when stdout lacks a trailing newline', async () => {
     const { bash } = await setup()
-    const proc = bash.start(bash.resolve({ command: '[Console]::Out.Write("out"); [Console]::Error.WriteLine("err")' }))
+    const proc = await bash.start(bash.resolve({ command: '[Console]::Out.Write("out"); [Console]::Error.WriteLine("err")' }))
     await proc.done
     expect(lf(proc.readOutput().delta)).toBe('out\n[stderr]\nerr\n')
   })
 
   it('readOutput flags lossy reads and reports stdout spill paths', async () => {
     const { bash } = await setup({ maxOutputBytes: 100 })
-    const proc = bash.start(bash.resolve({ command: '1..100 | ForEach-Object { "line-$_" }' }))
+    const proc = await bash.start(bash.resolve({ command: '1..100 | ForEach-Object { "line-$_" }' }))
     await proc.done
     const read = proc.readOutput()
     // Window slid past offset 0 → lossy, spill path points at the full stream.
@@ -392,7 +395,7 @@ describe.skipIf(!hasPwsh)('PwshLocalExecutor.start (background process handles)'
 
   it('readOutput reports stderr spill paths', async () => {
     const { bash } = await setup({ maxOutputBytes: 100 })
-    const proc = bash.start(bash.resolve({ command: '1..100 | ForEach-Object { [Console]::Error.WriteLine("line-$_") }' }))
+    const proc = await bash.start(bash.resolve({ command: '1..100 | ForEach-Object { [Console]::Error.WriteLine("line-$_") }' }))
     await proc.done
     const read = proc.readOutput()
     expect(read.lossy).toBe(true)
@@ -402,7 +405,7 @@ describe.skipIf(!hasPwsh)('PwshLocalExecutor.start (background process handles)'
 
   it('kill() terminates the process tree: true once, false after settlement', async () => {
     const { bash } = await setup()
-    const proc = bash.start(bash.resolve({ command: 'Start-Sleep -Seconds 60' }))
+    const proc = await bash.start(bash.resolve({ command: 'Start-Sleep -Seconds 60' }))
     expect(proc.kill()).toBe(true)
     await proc.done
     expect(proc.status).toBe('killed')
@@ -411,7 +414,7 @@ describe.skipIf(!hasPwsh)('PwshLocalExecutor.start (background process handles)'
 
   it('kill() returns false for a naturally completed process', async () => {
     const { bash } = await setup()
-    const proc = bash.start(bash.resolve({ command: 'Write-Output ok' }))
+    const proc = await bash.start(bash.resolve({ command: 'Write-Output ok' }))
     await proc.done
     expect(proc.status).toBe('completed')
     expect(proc.kill()).toBe(false)
@@ -420,7 +423,7 @@ describe.skipIf(!hasPwsh)('PwshLocalExecutor.start (background process handles)'
   it('a spec.signal abort settles the handle as killed, not completed', async () => {
     const { bash } = await setup()
     const controller = new AbortController()
-    const proc = bash.start(bash.resolve({ command: 'Start-Sleep -Seconds 60', signal: controller.signal }))
+    const proc = await bash.start(bash.resolve({ command: 'Start-Sleep -Seconds 60', signal: controller.signal }))
     controller.abort()
     await proc.done
     expect(proc.status).toBe('killed')
@@ -428,7 +431,7 @@ describe.skipIf(!hasPwsh)('PwshLocalExecutor.start (background process handles)'
 
   it.skipIf(process.platform === 'win32')('a self-signal exit settles the handle as killed, not completed (POSIX)', async () => {
     const { bash } = await setup()
-    const proc = bash.start(bash.resolve({ command: 'Stop-Process -Id $PID' }))
+    const proc = await bash.start(bash.resolve({ command: 'Stop-Process -Id $PID' }))
     await proc.done
     expect(proc.status).toBe('killed')
     expect(proc.exitCode).toBeNull()
@@ -438,7 +441,7 @@ describe.skipIf(!hasPwsh)('PwshLocalExecutor.start (background process handles)'
 
   it('a background spawn failure settles as killed with the error readable on stderr', async () => {
     const { bash } = await setup()
-    const proc = bash.start(bash.resolve({ command: 'Write-Output ok', workdir: '/nonexistent-dsh' }))
+    const proc = await bash.start(bash.resolve({ command: 'Write-Output ok', workdir: '/nonexistent-dsh' }))
     // done resolves (never rejects) even though the process never ran.
     await expect(proc.done).resolves.toBeUndefined()
     expect(proc.status).toBe('killed')
@@ -450,13 +453,14 @@ describe.skipIf(!hasPwsh)('process lifecycle ownership (the subprocess service, 
   it('a background process survives executor-fiber disposal and dies with the subprocess service', async () => {
     const ctx = new Context()
     const managerFiber = await ctx.plugin(LocalSubprocessRuntime)
+    await ctx.plugin(CommandScopes, { identity: 'none' })
     ;(ctx.subprocess as LocalSubprocessRuntime).internals = { spillDir }
     const executorFiber = await ctx.plugin(PwshLocalExecutor, { graceMs: 200 })
     const bash = ctx.shell as PwshLocalExecutor
 
     // The child prints its own pid so the test can probe liveness through the
     // public read surface alone.
-    const proc = bash.start(bash.resolve({ command: 'Write-Output $PID; Start-Sleep -Seconds 60' }))
+    const proc = await bash.start(bash.resolve({ command: 'Write-Output $PID; Start-Sleep -Seconds 60' }))
     const pid = Number((await readUntil(proc, '\n')).trim())
     expect(Number.isInteger(pid) && pid > 0).toBe(true)
 
@@ -482,14 +486,15 @@ describe.skipIf(!hasPwsh)('process lifecycle ownership (the subprocess service, 
   it('service disposal settles running handles and leaves settled ones untouched', async () => {
     const ctx = new Context()
     const managerFiber = await ctx.plugin(LocalSubprocessRuntime)
+    await ctx.plugin(CommandScopes, { identity: 'none' })
     ;(ctx.subprocess as LocalSubprocessRuntime).internals = { spillDir }
     await ctx.plugin(PwshLocalExecutor, { graceMs: 200 })
     const bash = ctx.shell as PwshLocalExecutor
 
-    const finished = bash.start(bash.resolve({ command: 'Write-Output done' }))
+    const finished = await bash.start(bash.resolve({ command: 'Write-Output done' }))
     await finished.done
     expect(finished.status).toBe('completed')
-    const running = bash.start(bash.resolve({ command: 'Start-Sleep -Seconds 60' }))
+    const running = await bash.start(bash.resolve({ command: 'Start-Sleep -Seconds 60' }))
 
     await managerFiber.dispose()
     // A settled process was untouched; the live one was terminated and joined.

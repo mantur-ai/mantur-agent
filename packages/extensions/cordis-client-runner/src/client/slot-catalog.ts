@@ -1871,6 +1871,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     slotInject: '',
     declaredBy: 'an entry in \'sidebar.settings\' (client-ui-settings-general), so it exists while that entry is mounted',
     occupants: [
+      'client-ui-mantur-account NativeAccountOnboarding id \'mantur-account\'',
       'client-ui-mantur-account AccountOnboarding id \'mantur-account\'',
       'client-ui-settings-models WelcomeNotice id \'welcome-notice\'',
       'client-ui-settings-models DeepSeekOnboardingDialog id \'deepseek-official\'',
@@ -2007,6 +2008,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     declaredBy: 'an entry in \'sidebar.settings\' (client-ui-settings-general), so it exists while that entry is mounted',
     occupants: [
       'client-ui-agent-preset AgentPresetSection id \'agent-presets\'',
+      'client-ui-mantur-account NativeAccountSection id \'mantur-account\'',
       'client-ui-mantur-account AccountSection id \'mantur-account\'',
       'client-ui-settings-general GeneralSection id \'general\'',
       'client-ui-settings-models ModelsSection id \'models\'',
@@ -2082,7 +2084,9 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     hookContext: '',
     slotInject: '',
     declaredBy: 'an entry in \'root\' (client-ui-layout), so it exists while that entry is mounted',
-    occupants: [],
+    occupants: [
+      'client-ui-mantur-account NativeAccountDialog id \'mantur-account\'',
+    ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'shell.overlay\', () => ctx.slots.register(\n      { name: \'shell.overlay\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
     source: 'packages/client/ui-layout/src/client/index.ts:101',

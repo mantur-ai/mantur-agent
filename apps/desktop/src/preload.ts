@@ -1,5 +1,14 @@
-/** Sandboxed preload: expose only named draft and updater capabilities. */
+/** Sandboxed preload: expose only named draft, updater and native-account capabilities. */
 import { contextBridge, ipcRenderer } from 'electron'
+
+contextBridge.exposeInMainWorld('manturAccount', {
+  invoke: (request: unknown) => ipcRenderer.invoke('mantur:account:invoke', request),
+  subscribe: (handler: (state: unknown) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, state: unknown): void => { handler(state) }
+    ipcRenderer.on('mantur:account:changed', listener)
+    return () => { ipcRenderer.removeListener('mantur:account:changed', listener) }
+  },
+})
 
 contextBridge.exposeInMainWorld('manturDrafts', {
   load: () => ipcRenderer.invoke('mantur:drafts:load'),

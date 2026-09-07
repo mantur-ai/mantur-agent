@@ -61,6 +61,7 @@ export const SERVICE_PAGE: Record<string, string> = {
   approval: 'approval.md',
   attachments: 'attachment.md',
   shell: 'shell.md',
+  commandScopes: 'shell.md',
   shellEnv: 'shell.md',
   clientModules: 'client-modules.md',
   codeRuntime: 'code-runtime.md',
@@ -234,6 +235,7 @@ export const EVENT_WALK_EXEMPTIONS: Record<string, string> = {
   'slots/changed': 'client-face slot invalidation signal — packages/client/ui-renderer/README.md owns the API',
   'theme/change': 'client-face theme switch signal — packages/client/ui-theme/README.md owns the API',
   'mantur/creation-mode-selected': 'client-face explicit mode selection — packages/client/ui-mantur-navigation/README.md owns the API',
+  'mantur/native-account-open': 'client-face requested account dialog — packages/client/ui-mantur-account/README.md owns the API',
 }
 
 /**
@@ -367,6 +369,8 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   ShellExecRequest: 'shell.md',
   ShellExecSpec: 'shell.md',
   ShellProcess: 'shell.md',
+  CommandIdentityProvider: 'shell.md',
+  CommandProcess: 'shell.md',
   ShellRunResult: 'shell.md',
   DshEnvironment: 'subprocess.md',
   SubprocessHandle: 'subprocess.md',
@@ -574,6 +578,7 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   AuthorizationSettlement: 'credentials.md',
   AuthorizationStatus: 'credentials.md',
   ManturAccountStatus: 'credentials.md',
+  ManturIdentityMode: 'credentials.md',
   ManturLoginAttemptId: 'credentials.md',
   ManturLoginProgress: 'credentials.md',
   ManturLoginStart: 'credentials.md',

@@ -18,6 +18,7 @@ import SandboxProvider from '@deepseek-ai/dsh-sandbox'
 import type { ConfinedArgv, SandboxPolicy } from '@deepseek-ai/dsh-sandbox'
 import SandboxPolicyService from '@deepseek-ai/dsh-sandbox-policy'
 import LocalSubprocessService from '@deepseek-ai/dsh-subprocess-local'
+import CommandScopes from '@deepseek-ai/dsh-command-scopes'
 import { resolvePwshPath } from '@deepseek-ai/dsh-pwsh-local/src/resolve.ts'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRegistry from '@deepseek-ai/dsh-tools'
@@ -87,6 +88,9 @@ describe.skipIf(!hasPwsh)('persistent pwsh through a real cordis.yml Loader comp
       '    mode: danger-full-access',
       `    workspaceRoot: ${JSON.stringify(root)}`,
       "- name: '@deepseek-ai/dsh-subprocess-local'",
+      "- name: '@deepseek-ai/dsh-command-scopes'",
+      '  config:',
+      '    identity: none',
       "- name: '@deepseek-ai/dsh-terminal-bash'",
       '  config:',
       '    shellDialect: pwsh',
@@ -116,6 +120,7 @@ describe.skipIf(!hasPwsh)('persistent pwsh through a real cordis.yml Loader comp
       ['@deepseek-ai/dsh-session-projection', SessionProjectionRegistry],
       ['@deepseek-ai/dsh-sandbox-policy', SandboxPolicyService],
       ['@deepseek-ai/dsh-subprocess-local', LocalSubprocessService],
+      ['@deepseek-ai/dsh-command-scopes', CommandScopes],
       ['@deepseek-ai/dsh-terminal-bash', TerminalBash],
       ['@deepseek-ai/dsh-tool-pwsh-persistent', ToolPwshPersistent],
     ])

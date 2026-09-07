@@ -1,13 +1,17 @@
 /** Thin native window over the shipped Mantur profile. */
 
 import { appendFile } from 'node:fs/promises'
+import { hostname } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, safeStorage, shell } from 'electron'
 import electronUpdater from 'electron-updater'
 import { DesktopDraftStorage } from './draft-storage.ts'
 import { installDraftBridge } from './draft-bridge.ts'
 import { installUpdateBridge } from './update-bridge.ts'
+import { NativeAccountHost } from './auth/host.ts'
+import type { NativeAccountController } from './auth/controller.ts'
+import { installNativeAccountBridge } from './auth/ipc.ts'
 import {
   canResetProjectionCache,
   desktopPaths,
@@ -30,6 +34,8 @@ let serviceUrl: string | undefined
 let quitting = false
 let updates: DesktopUpdateController | undefined
 let updateState: DesktopUpdateState = { kind: 'idle' }
+let accountHost: NativeAccountHost | undefined
+let nativeAccount: NativeAccountController | undefined
 
 app.setName(APP_NAME)
 app.setPath('userData', desktopUserDataPath(
@@ -37,6 +43,10 @@ app.setPath('userData', desktopUserDataPath(
   app.isPackaged ? 'release' : 'development',
 ))
 const paths = desktopPaths(app.getPath('userData'))
+const accountBridge = installNativeAccountBridge({ ipc: ipcMain, window: () => mainWindow,
+  origin: () => serviceUrl === undefined ? undefined : new URL(serviceUrl).origin,
+  controller: () => nativeAccount,
+})
 const drafts = installDraftBridge({ ipc: ipcMain, window: () => mainWindow,
   origin: () => serviceUrl === undefined ? undefined : new URL(serviceUrl).origin,
   storage: new DesktopDraftStorage(paths.userData),
@@ -167,9 +177,16 @@ async function launch(): Promise<void> {
         ...process.env,
         DSH_HOME: paths.dshHome,
         DSH_MANTUR_PROJECTS_ROOT: join(app.getPath('documents'), '漫途项目'),
+        DSH_MANTUR_NATIVE_ACCOUNT: '1',
       },
       logPath: paths.logPath,
       mirrorOutput: !app.isPackaged,
+    })
+    if (process.platform !== 'darwin' && process.platform !== 'win32') throw new Error('Native account requires macOS or Windows')
+    accountHost = new NativeAccountHost({ child: service.child, userData: paths.userData, cipher: safeStorage,
+      deviceName: `${APP_NAME} — ${hostname()}`, platform: process.platform === 'darwin' ? 'macos' : 'windows',
+      openBrowser: url => shell.openExternal(url), onController: (controller) => { nativeAccount = controller },
+      onSnapshot: () => { accountBridge.publish() },
     })
     service.child.once('exit', (code, signal) => {
       if (quitting || serviceUrl === undefined) return
@@ -189,6 +206,8 @@ async function launch(): Promise<void> {
       if (isQuitting()) return
       const action = await startupRecovery(error)
       if (action === 'reset-cache') {
+        await accountHost.close()
+        accountHost = undefined
         await resetProjectionCache(paths.dshHome)
         writeDesktopLog('desktop recovery: reset session projection cache after user approval')
         continue
@@ -203,6 +222,8 @@ async function launch(): Promise<void> {
 async function stopService(): Promise<void> {
   const active = service
   if (active === undefined) return
+  await accountHost?.close()
+  accountHost = undefined
   active.stop()
   await active.closed
   if (service === active) service = undefined

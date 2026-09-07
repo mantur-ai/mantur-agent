@@ -312,6 +312,7 @@ flowchart TD
   subgraph group_shell["packages/shell"]
     pkg_bash_local["bash-local"]
     pkg_bash_sandbox["bash-sandbox"]
+    pkg_command_scopes["command-scopes"]
     pkg_pwsh_local["pwsh-local"]
     pkg_pwsh_sandbox["pwsh-sandbox"]
     pkg_shell["shell"]
@@ -421,6 +422,7 @@ flowchart TD
   pkg_subprocess_e2b --> pkg_e2b
   pkg_subprocess_e2b --> pkg_subprocess
   pkg_subprocess_e2b --> pkg_timeout
+  pkg_command_scopes --> pkg_subprocess
   pkg_subprocess_local --> pkg_subprocess
   pkg_subprocess_local --> pkg_timeout
   pkg_skill_badge --> pkg_skill
@@ -435,6 +437,7 @@ flowchart TD
   pkg_code_runtime_worker_thread --> pkg_timeout
   pkg_authorization_manturhub --> pkg_authorization
   pkg_authorization_manturhub --> pkg_brand
+  pkg_authorization_manturhub --> pkg_command_scopes
   pkg_authorization_manturhub --> pkg_credentials
   pkg_authorization_manturhub --> pkg_typert_protocol
   pkg_persona --> pkg_system_prompt
@@ -612,10 +615,12 @@ flowchart TD
   pkg_session_title --> pkg_llm
   pkg_session_title --> pkg_session
   pkg_session_title --> pkg_session_projection
+  pkg_bash_local --> pkg_command_scopes
   pkg_bash_local --> pkg_settings
   pkg_bash_local --> pkg_shell
   pkg_bash_local --> pkg_subprocess
   pkg_bash_local --> pkg_timeout
+  pkg_pwsh_local --> pkg_command_scopes
   pkg_pwsh_local --> pkg_settings
   pkg_pwsh_local --> pkg_shell
   pkg_pwsh_local --> pkg_subprocess
@@ -687,14 +692,17 @@ flowchart TD
   pkg_session_title_llm --> pkg_session_title
   pkg_session_title_llm --> pkg_timeout
   pkg_bash_sandbox --> pkg_bash_local
+  pkg_bash_sandbox --> pkg_command_scopes
   pkg_bash_sandbox --> pkg_sandbox
   pkg_bash_sandbox --> pkg_sandbox_policy
   pkg_bash_sandbox --> pkg_shell
+  pkg_pwsh_sandbox --> pkg_command_scopes
   pkg_pwsh_sandbox --> pkg_pwsh_local
   pkg_pwsh_sandbox --> pkg_sandbox
   pkg_pwsh_sandbox --> pkg_sandbox_policy
   pkg_pwsh_sandbox --> pkg_shell
   pkg_terminal_bash --> pkg_agent
+  pkg_terminal_bash --> pkg_command_scopes
   pkg_terminal_bash --> pkg_sandbox
   pkg_terminal_bash --> pkg_sandbox_policy
   pkg_terminal_bash --> pkg_session
@@ -1280,12 +1288,13 @@ flowchart TD
 | [`authorization`](../packages/credentials/authorization) | `credentials` | [`credentials`](../packages/credentials/credentials), [`invariants`](../packages/runtime-diagnostics/invariants), [`llm`](../packages/llm/llm) |
 | [`credentials-local`](../packages/credentials/credentials-local) | `credentials` | [`atomic-write`](../packages/util/atomic-write), [`credentials`](../packages/credentials/credentials), [`home-paths`](../packages/util/home-paths), [`launch-environment`](../packages/util/launch-environment) |
 | [`subprocess-e2b`](../packages/e2b/subprocess-e2b) | `e2b` | [`e2b`](../packages/e2b/e2b), [`subprocess`](../packages/subprocess/subprocess), [`timeout`](../packages/util/timeout) |
+| [`command-scopes`](../packages/shell/command-scopes) | `shell` | [`subprocess`](../packages/subprocess/subprocess) |
 | [`subprocess-local`](../packages/subprocess/subprocess-local) | `subprocess` | [`subprocess`](../packages/subprocess/subprocess), [`timeout`](../packages/util/timeout) |
 | [`skill-badge`](../packages/skill/skill-badge) | `skill` | [`skill`](../packages/skill/skill) |
 | [`spill`](../packages/spill/spill) | `spill` | [`brand`](../packages/util/brand), [`llm`](../packages/llm/llm), [`session`](../packages/core/session) |
 | [`app-boot`](../packages/boot/app-boot) | `boot` | [`home-paths`](../packages/util/home-paths), [`launch-environment`](../packages/util/launch-environment), [`system-prompt`](../packages/core/system-prompt) |
 | [`code-runtime-worker-thread`](../packages/code-runtime/code-runtime-worker-thread) | `code-runtime` | [`code-runtime`](../packages/code-runtime/code-runtime), [`session`](../packages/core/session), [`timeout`](../packages/util/timeout) |
-| [`authorization-manturhub`](../packages/credentials/authorization-manturhub) | `credentials` | [`authorization`](../packages/credentials/authorization), [`brand`](../packages/util/brand), [`credentials`](../packages/credentials/credentials), [`typert-protocol`](../packages/typert/protocol) |
+| [`authorization-manturhub`](../packages/credentials/authorization-manturhub) | `credentials` | [`authorization`](../packages/credentials/authorization), [`brand`](../packages/util/brand), [`command-scopes`](../packages/shell/command-scopes), [`credentials`](../packages/credentials/credentials), [`typert-protocol`](../packages/typert/protocol) |
 | [`persona`](../packages/preset/persona) | `preset` | [`system-prompt`](../packages/core/system-prompt) |
 | [`sandbox`](../packages/sandbox/sandbox) | `sandbox` | [`llm`](../packages/llm/llm), [`session`](../packages/core/session) |
 | [`session-log-deepseek`](../packages/session/session-log-deepseek) | `session` | [`deepseek-llm-api-extensions`](../packages/llm/deepseek-llm-api-extensions), [`invariants`](../packages/runtime-diagnostics/invariants), [`session`](../packages/core/session) |
@@ -1330,8 +1339,8 @@ flowchart TD
 | [`sandbox-policy`](../packages/sandbox/sandbox-policy) | `sandbox` | [`agent`](../packages/core/agent), [`invariants`](../packages/runtime-diagnostics/invariants), [`sandbox`](../packages/sandbox/sandbox), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection), [`system-prompt`](../packages/core/system-prompt) |
 | [`session-telemetry`](../packages/session/session-telemetry) | `session` | [`agent`](../packages/core/agent), [`session`](../packages/core/session) |
 | [`session-title`](../packages/session/session-title) | `session` | [`agent`](../packages/core/agent), [`brand`](../packages/util/brand), [`invariants`](../packages/runtime-diagnostics/invariants), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection) |
-| [`bash-local`](../packages/shell/bash-local) | `shell` | [`settings`](../packages/settings/settings), [`shell`](../packages/shell/shell), [`subprocess`](../packages/subprocess/subprocess), [`timeout`](../packages/util/timeout) |
-| [`pwsh-local`](../packages/shell/pwsh-local) | `shell` | [`settings`](../packages/settings/settings), [`shell`](../packages/shell/shell), [`subprocess`](../packages/subprocess/subprocess), [`timeout`](../packages/util/timeout) |
+| [`bash-local`](../packages/shell/bash-local) | `shell` | [`command-scopes`](../packages/shell/command-scopes), [`settings`](../packages/settings/settings), [`shell`](../packages/shell/shell), [`subprocess`](../packages/subprocess/subprocess), [`timeout`](../packages/util/timeout) |
+| [`pwsh-local`](../packages/shell/pwsh-local) | `shell` | [`command-scopes`](../packages/shell/command-scopes), [`settings`](../packages/settings/settings), [`shell`](../packages/shell/shell), [`subprocess`](../packages/subprocess/subprocess), [`timeout`](../packages/util/timeout) |
 | [`terminal`](../packages/terminal/terminal) | `terminal` | [`agent`](../packages/core/agent), [`brand`](../packages/util/brand) |
 | [`loader-smoke`](../packages/test-support/loader-smoke) | `test-support` | [`agent`](../packages/core/agent), [`http-proxy`](../packages/util/http-proxy), [`llm`](../packages/llm/llm), [`session`](../packages/core/session) |
 | [`workflow`](../packages/workflow/workflow) | `workflow` | [`agent`](../packages/core/agent), [`brand`](../packages/util/brand), [`invariants`](../packages/runtime-diagnostics/invariants), [`llm`](../packages/llm/llm), [`session`](../packages/core/session) |
@@ -1346,9 +1355,9 @@ flowchart TD
 | [`permission-presets`](../packages/interaction/permission-presets) | `interaction` | [`commands`](../packages/interaction/commands), [`invariants`](../packages/runtime-diagnostics/invariants), [`sandbox`](../packages/sandbox/sandbox), [`sandbox-policy`](../packages/sandbox/sandbox-policy), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection), [`settings`](../packages/settings/settings), [`shell`](../packages/shell/shell), [`user-approval`](../packages/interaction/user-approval) |
 | [`jobs-local`](../packages/jobs/jobs-local) | `jobs` | [`agent`](../packages/core/agent), [`jobs`](../packages/jobs/jobs), [`scope`](../packages/core/scope), [`timeout`](../packages/util/timeout) |
 | [`session-title-llm`](../packages/session/session-title-llm) | `session` | [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-title`](../packages/session/session-title), [`timeout`](../packages/util/timeout) |
-| [`bash-sandbox`](../packages/shell/bash-sandbox) | `shell` | [`bash-local`](../packages/shell/bash-local), [`sandbox`](../packages/sandbox/sandbox), [`sandbox-policy`](../packages/sandbox/sandbox-policy), [`shell`](../packages/shell/shell) |
-| [`pwsh-sandbox`](../packages/shell/pwsh-sandbox) | `shell` | [`pwsh-local`](../packages/shell/pwsh-local), [`sandbox`](../packages/sandbox/sandbox), [`sandbox-policy`](../packages/sandbox/sandbox-policy), [`shell`](../packages/shell/shell) |
-| [`terminal-bash`](../packages/terminal/terminal-bash) | `terminal` | [`agent`](../packages/core/agent), [`sandbox`](../packages/sandbox/sandbox), [`sandbox-policy`](../packages/sandbox/sandbox-policy), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection), [`subprocess`](../packages/subprocess/subprocess), [`terminal`](../packages/terminal/terminal) |
+| [`bash-sandbox`](../packages/shell/bash-sandbox) | `shell` | [`bash-local`](../packages/shell/bash-local), [`command-scopes`](../packages/shell/command-scopes), [`sandbox`](../packages/sandbox/sandbox), [`sandbox-policy`](../packages/sandbox/sandbox-policy), [`shell`](../packages/shell/shell) |
+| [`pwsh-sandbox`](../packages/shell/pwsh-sandbox) | `shell` | [`command-scopes`](../packages/shell/command-scopes), [`pwsh-local`](../packages/shell/pwsh-local), [`sandbox`](../packages/sandbox/sandbox), [`sandbox-policy`](../packages/sandbox/sandbox-policy), [`shell`](../packages/shell/shell) |
+| [`terminal-bash`](../packages/terminal/terminal-bash) | `terminal` | [`agent`](../packages/core/agent), [`command-scopes`](../packages/shell/command-scopes), [`sandbox`](../packages/sandbox/sandbox), [`sandbox-policy`](../packages/sandbox/sandbox-policy), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection), [`subprocess`](../packages/subprocess/subprocess), [`terminal`](../packages/terminal/terminal) |
 | [`token-meter`](../packages/llm/token-meter) | `llm` | [`compaction`](../packages/compaction/compaction), [`llm`](../packages/llm/llm), [`llm-retry`](../packages/llm/llm-retry), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection) |
 | [`agent-loop`](../packages/core/agent-loop) | `core` | [`agent`](../packages/core/agent), [`invariants`](../packages/runtime-diagnostics/invariants), [`llm`](../packages/llm/llm), [`scope`](../packages/core/scope), [`session`](../packages/core/session), [`session-persistence`](../packages/session/session-persistence), [`session-projection`](../packages/session/session-projection), [`settings`](../packages/settings/settings), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools) |
 | [`agent-tool-presentation`](../packages/core/agent-tool-presentation) | `core` | [`tools`](../packages/core/tools) |

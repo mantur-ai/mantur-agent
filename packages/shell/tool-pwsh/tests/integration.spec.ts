@@ -9,6 +9,7 @@
  * gate.
  */
 
+import CommandScopes from '@deepseek-ai/dsh-command-scopes'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -63,6 +64,7 @@ describe.skipIf(!hasPwsh)('pwsh tool over the real pwsh executor', () => {
     await ctx.plugin(LocalJobRegistry)
     await ctx.plugin(ToolTasks)
     await ctx.plugin(LocalSubprocessRuntime)
+    await ctx.plugin(CommandScopes, { identity: 'none' })
     await ctx.plugin(BashEnvPlugin)
     await ctx.plugin(PwshLocalExecutor, { timeoutMs: 20_000, graceMs: 200 })
     await ctx.plugin(ToolPwsh)

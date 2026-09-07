@@ -49,16 +49,17 @@ declare module '@deepseek-ai/cordis' {
  * standard duplicate-service behavior).
  *
  * Implementations must honor these semantics:
- * - {@link run} rejects only for infrastructure failures. Nonzero exits,
- *   timeout kills, and abort kills resolve with a {@link ShellRunResult}.
- * - {@link start} returns immediately; no timeout applies to background
- *   processes. `done` settles at process close and never rejects; spawn
- *   failures settle as `killed` with the error on stderr.
+ * - {@link run} rejects before allocation or for infrastructure failures. Allocated
+ *   processes resolve nonzero exits and timeout or abort kills with a {@link ShellRunResult}.
+ * - {@link start} prepares command identity before returning a real process;
+ *   no timeout applies to background processes. `done` settles after process-tree
+ *   cleanup and identity release. Spawn failures settle as `killed` with the
+ *   error on stderr; unconfirmed cleanup rejects instead of claiming completion.
  * - {@link ShellProcess.readOutput} is incremental: consecutive reads never
  *   repeat output. Lossy reads report truncation and available spill files.
  * - A still-running background process is stopped and awaited when its
  *   owning composition tears down. With the subprocess seam that
- *   boundary is `ctx.subprocess` disposal, so a background process survives
+ *   boundary is `ctx.commandScopes` disposal, so a background process survives
  *   an executor-only reload.
  */
 export abstract class ShellExecutor extends Service {
@@ -92,11 +93,11 @@ export abstract class ShellExecutor extends Service {
   abstract run(spec: ShellExecSpec): Promise<ShellRunResult>
 
   /**
-   * Start a background process and return its handle immediately.
+   * Prepare command identity and start a background process.
    * @param spec - a resolved spec from {@link resolve}, never a raw request.
    * @returns the live process handle (reads, kill, quiescence promise).
    */
-  abstract start(spec: ShellExecSpec): ShellProcess
+  abstract start(spec: ShellExecSpec): Promise<ShellProcess>
 }
 
 export default ShellExecutor

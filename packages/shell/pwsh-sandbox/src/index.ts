@@ -50,7 +50,7 @@ export type Config = LocalConfig
  */
 /* jscpd:ignore-start -- deliberate call-for-call mirror of bash-sandbox's executor (pwsh-tool-and-executor Agent Note) */
 export class SandboxPwshExecutor extends PwshLocalExecutor {
-  static override inject = ['subprocess', 'sandbox', 'sandboxPolicy']
+  static override inject = ['commandScopes', 'sandbox', 'sandboxPolicy']
 
   // No own Config: the sandbox default (mode + workspaceRoot) moved to
   // ctx.sandboxPolicy, so this executor inherits PwshLocalExecutor's Config
@@ -121,32 +121,28 @@ export class SandboxPwshExecutor extends PwshLocalExecutor {
     return { ...result, sandbox: { mode, denied: classifyDenial(result, confined.denialSignatures), enforcement: confined.enforcement } }
   }
 
-  override start(spec: ShellExecSpec): ShellProcess {
+  override async start(spec: ShellExecSpec): Promise<ShellProcess> {
     const policy = spec.sandboxPolicy as SandboxExecutionPolicy
     const { mode } = policy
     if (mode === 'danger-full-access') return super.start(spec)
-    // Once startArgv returns, install facts synchronously; promise settlement
-    // cannot run before start() returns.
     const confined = this.confine(spec, { ...policy, mode })
-    let proc: ShellProcess
     try {
-      proc = this.startArgv(spec, confined.argv)
+      return await this.startArgv(spec, confined.argv, (proc) => {
+        this.processFacts.set(proc, {
+          mode,
+          enforcement: confined.enforcement,
+          denialSignatures: confined.denialSignatures,
+          runnerFailureRules: confined.runnerFailureRules,
+          runnerProgram: confined.argv[0],
+          workdir: spec.workdir,
+        })
+      })
     } catch (error) {
       if (isRunnerSpawnFailure(error, confined.argv[0], spec.workdir)) {
         throw new SandboxUnavailableError(mode, String(error))
       }
       throw error
     }
-    const { enforcement, denialSignatures, runnerFailureRules } = confined
-    this.processFacts.set(proc, {
-      mode,
-      enforcement,
-      denialSignatures,
-      runnerFailureRules,
-      runnerProgram: confined.argv[0],
-      workdir: spec.workdir,
-    })
-    return proc
   }
 
   /**

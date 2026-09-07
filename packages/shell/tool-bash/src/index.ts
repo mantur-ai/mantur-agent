@@ -22,7 +22,7 @@ import type { SandboxExecutionPolicy, SandboxMode } from '@deepseek-ai/dsh-sandb
 import { ESCALATION_TARGETS, approveEscalation, canonicalPath, validateEscalationArgs } from '@deepseek-ai/dsh-sandbox'
 import type { SandboxPolicyService } from '@deepseek-ai/dsh-sandbox-policy'
 import { DSH_ENV_PREFIX } from '@deepseek-ai/dsh-shell'
-import type { ShellRunResult } from '@deepseek-ai/dsh-shell'
+import type { ShellProcess, ShellRunResult } from '@deepseek-ai/dsh-shell'
 import { processOutcome } from './background.ts'
 import { parseExitStatus, renderProcessRead, renderResult } from './render.ts'
 
@@ -366,11 +366,21 @@ export function apply(ctx: Context, config: Config = {}): void {
           label: args.command,
           ...exec.agent ? { owner: exec.agent } : {},
           run: () => {
-            const proc = ctx.shell.start(ctx.shell.resolve(request))
+            const abort = new AbortController()
+            let proc: ShellProcess | undefined
+            const started = ctx.shell.start(ctx.shell.resolve({ ...request, signal: abort.signal }))
             return {
-              cancel: () => void proc.kill(),
-              done: proc.done.then(() => processOutcome(proc)),
-              readOutput: () => renderProcessRead(proc.readOutput(), proc.sandbox, escalationModes),
+              cancel: () => { abort.abort(); proc?.kill() },
+              done: started.then((process) => {
+                proc = process
+                return process.done.then(() => processOutcome(process), (error: unknown) => ({ status: 'failed' as const, detail: String(error) }))
+              }, (error: unknown) => {
+                if (abort.signal.aborted && error === abort.signal.reason) {
+                  return { status: 'killed' as const, detail: 'cancelled before command start' }
+                }
+                return { status: 'failed' as const, detail: String(error) }
+              }),
+              readOutput: () => proc === undefined ? '' : renderProcessRead(proc.readOutput(), proc.sandbox, escalationModes),
             }
           },
         })

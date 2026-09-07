@@ -7,6 +7,7 @@
  * writes, and the partial-enforcement/denial facts ride the settled result.
  */
 
+import CommandScopes from '@deepseek-ai/dsh-command-scopes'
 import { spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
@@ -50,6 +51,7 @@ describe.skipIf(!isWin32 || !pwshAvailable())('pwsh-sandbox real ACL confinement
     await ctx.plugin(LocalSandboxProvider, {})
     await ctx.plugin(SandboxPolicyService, { mode: 'workspace-write', workspaceRoot: writableDir })
     await ctx.plugin(LocalSubprocessRuntime)
+    await ctx.plugin(CommandScopes, { identity: 'none' })
     await ctx.plugin(SandboxPwshExecutor, {})
     executor = ctx.shell as SandboxPwshExecutor
   })

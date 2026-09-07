@@ -10,6 +10,7 @@ import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import { TerminalBackendCleanupError } from '@deepseek-ai/dsh-terminal'
 import type { TerminalBackend, TerminalBackendSpawnSpec, TerminalSendOperation } from '@deepseek-ai/dsh-terminal'
 import type { SubprocessTerminalHandle, SubprocessTerminalSpawnSpec } from '@deepseek-ai/dsh-subprocess'
+import type {} from '@deepseek-ai/dsh-command-scopes'
 import type { SandboxExecutionPolicy } from '@deepseek-ai/dsh-sandbox'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import type {} from '@deepseek-ai/dsh-session-projection'
@@ -24,7 +25,7 @@ export type { Config as TerminalLocalConfig } from './config.ts'
 /** Cordis plugin name. */
 export const name = 'terminal-bash'
 /** Required services: terminal registry, shared confinement policy, projection registry, and process substrate. */
-export const inject = ['terminals', 'sandboxPolicy', 'sessionProjections', 'subprocess']
+export const inject = ['terminals', 'sandboxPolicy', 'sessionProjections', 'commandScopes']
 
 interface SandboxModeFenceState {
   pty: Context['terminals']
@@ -179,7 +180,7 @@ export class BashTerminalBackend implements TerminalBackend {
     private readonly config: ResolvedConfig,
     private readonly spawnTerminal: (
       spec: SubprocessTerminalSpawnSpec,
-    ) => Promise<SubprocessTerminalHandle> = spec => ctx.subprocess.spawnTerminal(spec),
+    ) => Promise<SubprocessTerminalHandle> = spec => ctx.commandScopes.spawnTerminal(spec),
     private readonly createSession: (
       terminal: SubprocessTerminalHandle,
       config: ResolvedConfig,

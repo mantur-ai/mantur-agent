@@ -1,3 +1,4 @@
+import CommandScopes from '@deepseek-ai/dsh-command-scopes'
 import { spawnSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
@@ -45,6 +46,7 @@ async function sandboxedBash(workspace: string, mode: 'read-only' | 'workspace-w
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SandboxPolicyService, { mode, workspaceRoot: workspace })
   await ctx.plugin(LocalSubprocessRuntime)
+  await ctx.plugin(CommandScopes, { identity: 'none' })
   await ctx.plugin(SandboxBashExecutor, { cwd: workspace, timeoutMs: 30_000 })
   return ctx.shell as SandboxBashExecutor
 }
@@ -107,7 +109,7 @@ describe.skipIf(!seatbeltUsable)('bash-sandbox: real Seatbelt confinement throug
   it('classifies a background denial once the task settles', async () => {
     const workdir = await tempDir(homedir())
     const bash = await sandboxedBash(workdir, 'read-only')
-    const task = bash.start(bash.resolve({ command: `echo hi > ${workdir}/bg-denied.txt` }))
+    const task = await bash.start(bash.resolve({ command: `echo hi > ${workdir}/bg-denied.txt` }))
     await task.done
     expect(task.sandbox).toEqual({ mode: 'read-only', denied: true, enforcement: 'full' })
     expect(existsSync(join(workdir, 'bg-denied.txt'))).toBe(false)
