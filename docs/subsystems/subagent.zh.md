@@ -678,6 +678,15 @@ list(): string[]
  * @returns the published holder-owned run.
  */
 async start(name: string, request: SubagentStartRequest): Promise<SubagentRun>
+
+/**
+ * Freeze provider registration and delegation; join starts, runs, continuations, and lifecycle listeners.
+ * The Host must begin agent-loop shutdown first so child disposal preserves queued input.
+ * Reuses each provider's disposal; provider removal does not release this ownership.
+ * @returns one shared promise after all owned work settles.
+ * @throws an aggregate retaining provider, listener, and cleanup failures, including removed runs.
+ */
+stopForShutdown(): Promise<void>
 ```
 
 Types: [Agent](core.zh.md) · [ContentBlock](llm-streaming.zh.md) · [MessageId](llm-streaming.zh.md) · [SessionId](core.zh.md)

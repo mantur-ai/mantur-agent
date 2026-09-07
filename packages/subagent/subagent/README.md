@@ -89,14 +89,18 @@ This section explains how the service is built and where the observable behavior
 
 A request is validated against the provider's advertised capabilities, a durable descriptor is snapshotted, and the provider builds the child. Both in-process providers advertise `agentOptions`: child creation merges requested fields over the provider, model, and reasoning effort in the parent's latest logged request, falls back to creation options before the first request, and retains the configured token limit. A route change without an explicit effort clears the inherited route-owned effort so the selected model resolves its default. DSH SDK also advertises this capability and publishes immutable `agentRouteDefaults`, which supply its instance provider/model defaults before exact-route preflight; `start()` still owns direct callers and the output cap. ACP, Codex, and Claude Code reject agent-route overrides rather than silently ignoring them. On success the run is published and ownership transfers to the caller; on failure the provider rolls back every unpublished resource. The result carries the child's final output, an optional structured value, a stop reason, and an optional safe diagnostic.
 
+### Shutdown ownership
+
+`stopForShutdown()` freezes provider registration and delegation, cancels pending starts, and joins original provider disposals, continuation cleanup, and asynchronous lifecycle listeners. Completed results do not release run ownership; successful disposal does. Cleanup and listener failures remain recorded after their runs leave the registry. Completion notices and provider-removal notifications stay silent during shutdown, and continuable cancellation preserves pending inbox input. The Host must start agent-loop shutdown first, then join this service and the other resource owners before rechecking writer seals. Provider startup errors remain recorded even before shutdown. A start that rejects with anything other than the exact shutdown cancellation reason prevents successful shutdown; the service does not infer successful rollback from an error message. These service results alone do not authorize installation.
+
 ### Continuable flow
 
 The manager reserves a child identity, resolves the durable descriptor, creates (or cold-resumes) the child Agent, installs it in an Activation, and submits the prompt. Model-authored messages cross one parent/child edge through fixed Steer scheduling; host protocols retain an internal Queue adapter for distinct turns. An absent direct-child Activation cold-resumes from the persisted session. When a resident Activation settles, the manager tells the child's direct parent in the parent's own turn stream.
 
 ### Ownership and invariants
 
-- **Publication is the boundary** — before it the provider owns the setup and must roll back on failure; after it the caller owns the run and must dispose it.
-- **Registration is effect-scoped** — removing a provider blocks new starts but never revokes accepted runs.
+- **Publication is the boundary** — before it the provider owns setup and rollback; after it the caller must dispose the run. The service retains the same disposal until it settles, including after provider removal.
+- **Registration is effect-scoped** — ordinary provider removal blocks new starts without revoking accepted runs. Explicit shutdown closes retained runs through their original disposals.
 - **Agent-message authority is exact adjacency** — `sendMessage()` requires the exact live sender; every sender may target a direct continuable child, while only a sender with a resident continuable Activation may target its direct parent.
 - **The descriptor is log-only** — a session event absent from model history and retained across compaction; a continuable descriptor records the resolved child provider, model, and reasoning effort explicitly for cold resume.
 

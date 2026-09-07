@@ -166,7 +166,7 @@ function drivePublishedRun(
   const flags = { cancelled: false }
   const onAbort = (): void => {
     flags.cancelled = true
-    child.cancel({ kind: 'parent' })
+    child.cancel({ kind: 'parent' }, { keepInbox: !child.ctx.agents.acceptingWork })
   }
   signal.addEventListener('abort', onAbort, { once: true })
   // Agent creation detaches its creation-only listener before returning. The

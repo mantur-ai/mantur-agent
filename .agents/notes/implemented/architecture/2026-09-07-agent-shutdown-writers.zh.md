@@ -22,9 +22,13 @@ Host 停机必须先调用明确的所有者操作，才能授权安装。agent 
 
 工作流引擎冻结新运行，等待线程终止、待处理子任务创建和超过普通释放期限的子任务清理。子任务清理错误在子任务和运行记录被移除后仍保留。只有释放操作结束、线程退出、全部子任务创建及清理结束后，运行才离开引擎所有权集合；此后只保留失败信息。
 
+子代理运行时独立于委派工具和工作流 worker 跟踪原始启动与已发布的一次性运行回收。直接启动的 SDK 子进程使用独立启动器且没有本地 Agent，因此 agent 工厂和本地子进程注册表都不能证明它已经释放。停机也等待续跑子代理准备工作和生命周期监听器结束。父作用域已经销毁、writer 正在关闭时不再投递完成通知；停机抑制自动通知并保留排队输入。句柄和 Activation 离开映射后，清理失败仍被记录。
+
 ## 上游所有权
 
 现有观察钩子无法冻结直接收件箱修改、恢复驱动器内部持有的领取批次、封存直接 Session 追加，或在工厂释放 writer 后继续保留它。因此改动位于 `packages/core/agent/src/{index,inbox}.ts`、`packages/core/agent-loop/src/{index,agent}.ts`、`packages/core/session/src/index.ts` 和 `packages/subprocess/subprocess-local/src/index.ts`。终端注册表操作位于 `packages/terminal/terminal/src/index.ts`，因为外部钩子无法冻结发送或保留已移除分配的失败；受控晚到分配、等待关闭和失败保留测试用于验证上游升级。任务注册表改动位于 `packages/jobs/jobs-local/src/index.ts`；插件无法冻结直接 start 或恢复已丢弃的生产者 Promise。未取消的待处理工作、强制失败记录、晚到释放及完成监听器测试用于验证升级。 工作流改动位于 `packages/workflow/workflow-worker-thread/src/{index,host}.ts`，因为普通释放会在等待期限后放弃子任务，并吞掉清理失败。晚到子任务创建、超出期限的清理、历史失败及线程终止拒绝构成升级回归。 不修改 vendored Cordis 行为。工厂在自身生命周期结束前保留已关闭会话对象，以检测关闭后的写入；这是验证先前已关闭 writer 的保留成本。
+
+子代理改动位于 `packages/subagent/subagent/src/{index,lifecycle,continuation}.ts`：提供方移除和结果完成都不能证明资源释放，纯观察钩子无法冻结直接委派或找回已丢弃的清理异常。进程内驱动器也在 agent 准入冻结后取消时保留排队输入；中止监听器不能清空已经冻结的收件箱。该改动位于 `packages/subagent/subagent-in-process-driver/src/index.ts`。晚到启动回滚、已移除运行的失败、异步通知、尚未结束的续跑准备以及一次性和续跑子代理与 agent-loop 联合停机构成升级回归检查。
 
 ## 验证
 

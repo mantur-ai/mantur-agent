@@ -202,6 +202,60 @@ function observeCancel(agent: Agent, callback: () => void): void {
 }
 
 describe('SubagentRuntime.startContinuable', () => {
+  it('joins a shutdown during provider preparation before materialization starts', async () => {
+    const { ctx, parent } = await setup([])
+    const provider = ctx.subagents.getProvider('spawn')!
+    const prepare = provider.prepareContinuable!.bind(provider)
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const spy = vi.spyOn(provider, 'prepareContinuable').mockImplementation(async (request) => {
+      const prepared = await prepare(request)
+      entered.resolve(undefined)
+      await release.promise
+      return prepared
+    })
+    const creating = ctx.subagents.startContinuable(startSpec(parent)).catch((error: unknown) => error)
+    await entered.promise
+    const stopping = ctx.subagents.stopForShutdown()
+    let stopped = false
+    void stopping.then(() => { stopped = true })
+    try {
+      await expect(ctx.subagents.startContinuable(startSpec(parent))).rejects.toMatchObject({ code: 'CANCELLED' })
+      expect(spy.mock.calls[0]![0].signal.aborted).toBe(true)
+      expect(stopped).toBe(false)
+      release.resolve(undefined)
+      expect(await creating).toMatchObject({ code: 'CANCELLED' })
+    } finally {
+      release.resolve(undefined)
+      await creating
+      await stopping
+      spy.mockRestore()
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it.each(['continuable', 'one-shot'] as const)('joins a running %s child after agent admission freezes', async (mode) => {
+    const release = Promise.withResolvers<undefined>()
+    const adapter = new GatedAdapter([{ chunks: textResponse('answer'), gate: release.promise }])
+    const { ctx, parent } = await setupWith(adapter)
+    const childId = mode === 'continuable'
+      ? (await ctx.subagents.startContinuable(startSpec(parent))).childId
+      : (await ctx.subagents.start('spawn', { parent, signal: testSignal, prompt: message('child task') })).id
+    const writers = ctx.agentLoop.stopForShutdown()
+    const stopping = ctx.subagents.stopForShutdown()
+    try {
+      release.resolve(undefined)
+      await Promise.all([stopping, writers])
+      await ctx.agentLoop.verifyShutdown()
+      expect(ctx.agents.get(childId)).toBeUndefined()
+      expect(settlementNotices(parent)).toEqual([])
+    } finally {
+      release.resolve(undefined)
+      await Promise.all([stopping, writers])
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('returns both identities at inbox acceptance, without waiting for the turn or the log', async () => {
     const { ctx, parent, adapter } = await setup([textResponse('first answer')])
     const enqueued: { id: MessageId; loggedYet: boolean }[] = []
@@ -371,22 +425,39 @@ describe('SubagentRuntime.startContinuable', () => {
     })
   })
 
-  it('rolls an unpublished Activation back when lifecycle publication fails', async () => {
+  it.each([false, true])('rolls an unpublished Activation back when lifecycle publication fails (cleanup failure: %s)', async (cleanupFails) => {
     const { ctx, parent } = await setup([textResponse('unused')])
-    const ends: SubagentRunEndInfo[] = []
-    ctx.on('subagent/end', info => void ends.push(info))
-    ctx.on('internal/dispatch', (_mode, eventName) => {
-      if (eventName === 'subagent/start') throw new Error('start publication failed')
-    }, { global: true })
-
-    await expect(ctx.subagents.startContinuable(startSpec(parent)))
-      .rejects.toThrow(/start publication failed/)
-
-    await vi.waitFor(() => {
-      expect(ctx.agents.list().map(agent => agent.id)).toEqual([SessionId('parent')])
+    const failure = new Error('unpublished cleanup failed')
+    const create = ctx.agents.create.bind(ctx.agents)
+    const spy = vi.spyOn(ctx.agents, 'create').mockImplementation(async (...args) => {
+      const handle = await create(...args)
+      return {
+        ...handle,
+        dispose: async () => { await handle.dispose(); if (cleanupFails) throw failure },
+      }
     })
-    expect(ends).toEqual([])
-    await expect(drainManager(ctx)).resolves.toBeUndefined()
+    try {
+      const ends: SubagentRunEndInfo[] = []
+      ctx.on('subagent/end', info => void ends.push(info))
+      ctx.on('internal/dispatch', (_mode, eventName) => {
+        if (eventName === 'subagent/start') throw new Error('start publication failed')
+      }, { global: true })
+
+      await expect(ctx.subagents.startContinuable(startSpec(parent)))
+        .rejects.toThrow(/start publication failed/)
+
+      await vi.waitFor(() => {
+        expect(ctx.agents.list().map(agent => agent.id)).toEqual([SessionId('parent')])
+      })
+      expect(ends).toEqual([])
+      await expect(drainManager(ctx)).resolves.toBeUndefined()
+      if (cleanupFails) {
+        await expect(ctx.subagents.stopForShutdown()).rejects.toMatchObject({ errors: expect.arrayContaining([failure]) as unknown })
+      } else await expect(ctx.subagents.stopForShutdown()).resolves.toBeUndefined()
+    } finally {
+      spy.mockRestore()
+      await ctx.fiber.dispose()
+    }
   })
 
   it('rejects a continuable child that would exceed the configured depth cap', async () => {
@@ -1168,7 +1239,7 @@ describe('continuable durability and teardown', () => {
       [target.childId, target.childId, SessionId('never-materialized')],
     )
 
-    expect(cancel).toHaveBeenCalledWith({ kind: 'parent' })
+    expect(cancel).toHaveBeenCalledWith({ kind: 'parent' }, { keepInbox: false })
     expect(ctx.agents.get(sibling.childId)).toBe(siblingAgent)
     releaseTarget.resolve(undefined)
     releaseGrandchild.resolve(undefined)
@@ -1208,6 +1279,7 @@ describe('continuable durability and teardown', () => {
 
     await expect(drained).rejects.toMatchObject({ code: 'ACTIVATION_TEARDOWN_FAILED' })
     expect(ctx.agents.get(target.childId)).toBeUndefined()
+    await expect(ctx.subagents.stopForShutdown()).rejects.toThrow('subagent shutdown failed')
   })
 
   it('rejects selected-child teardown through another live parent', async () => {

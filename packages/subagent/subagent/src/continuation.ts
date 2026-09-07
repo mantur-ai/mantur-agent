@@ -22,7 +22,7 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import type { Context } from '@deepseek-ai/cordis'
+import { FiberState, type Context } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type {
   Agent,
@@ -178,6 +178,11 @@ interface ContinuationHost {
    * @returns the observer whose edges this epoch publishes.
    */
   observeActivation(provider: string, childId: SessionId, parent: Agent): ActivationObserver
+  /**
+   * Retain a failed release after the Activation leaves the live map.
+   * @param error - the original cleanup failure.
+   */
+  recordCleanupFailure(error: unknown): void
 }
 
 /**
@@ -397,6 +402,7 @@ export class SubagentContinuationManager {
    */
   private readonly closingScopes = new Map<Agent, Set<Agent>>()
   private draining = false
+  private stoppingForShutdown = false
 
   constructor(
     private readonly ctx: Context,
@@ -859,6 +865,15 @@ export class SubagentContinuationManager {
   }
 
   /**
+   * Stop continuations without delivering automatic completion notices to shutting-down parents.
+   * @returns completion of the owned Activation drain.
+   */
+  stopForShutdown(): Promise<void> {
+    this.stoppingForShutdown = true
+    return this.drain()
+  }
+
+  /**
    * Stop only the continuable descendants of exact live host-owned parents.
    * Admission stays closed for those parent trees until each exact parent
    * leaves the Agent registry; unrelated trees and manager-wide admission stay
@@ -1305,6 +1320,9 @@ export class SubagentContinuationManager {
     return (activation.disposal ??= (async () => {
       try {
         await activation.handle.dispose()
+      } catch (error: unknown) {
+        this.host.recordCleanupFailure(error)
+        throw error
       } finally {
         this.activations.delete(activation.childId)
         this.releaseOwnership(activation.childId)
@@ -1508,7 +1526,10 @@ export class SubagentContinuationManager {
     // Presence is the admission cutoff. Assign it before the async helper starts
     // because that helper cancels Agents and may synchronously re-enter callers.
     activation.disposal = completion.promise
-    void this.finishDisposal(activation).then(completion.resolve, completion.reject)
+    void this.finishDisposal(activation).then(completion.resolve, (error: unknown) => {
+      this.host.recordCleanupFailure(error)
+      completion.reject(error)
+    })
     return completion.promise
   }
 
@@ -1522,7 +1543,7 @@ export class SubagentContinuationManager {
     const { childId } = activation
     // Stop top-down before the first await. Slow descendant cleanup may delay
     // release, but it cannot let this ancestor continue model or tool work.
-    activation.handle.agent.cancel({ kind: 'parent' })
+    activation.handle.agent.cancel({ kind: 'parent' }, { keepInbox: this.stoppingForShutdown })
     const idle = activation.handle.agent.whenIdle()
     const children = [...activation.ownedChildren]
       .map(child => this.activations.get(child))
@@ -1621,10 +1642,10 @@ export class SubagentContinuationManager {
    * @param terminal - how this epoch ended, as the terminal edge will report it.
    */
   private notifySettlement(activation: Activation, terminal: ActivationTerminal): void {
-    if (!activation.announced) return
+    if (!activation.announced || this.stoppingForShutdown) return
     try {
       const parent = this.ctx.agents.get(activation.parentSession)
-      if (parent === undefined) return
+      if (parent === undefined || parent.ctx.fiber.state === FiberState.DISPOSED) return
       const summary = settlementSummary(activation.childId, terminal.stopReason)
       const message = createUserMessage({
         content: [
@@ -1664,6 +1685,7 @@ export class SubagentContinuationManager {
         else parent.steer(message)
       })
     } catch (error: unknown) {
+      this.host.recordCleanupFailure(error)
       this.ctx.logger.warn(
         `subagent "${activation.childId}" settlement notice was not delivered to its parent: `
         + errorChain(error),
@@ -1682,6 +1704,7 @@ export class SubagentContinuationManager {
     try {
       await child.ctx.sessions.flush(child.session)
     } catch (error: unknown) {
+      this.host.recordCleanupFailure(error)
       this.ctx.logger.warn(
         `subagent "${activation.childId}" best-effort final session flush failed; `
         + `the persisted state may be unavailable or stale on resume: ${errorChain(error)}`,
