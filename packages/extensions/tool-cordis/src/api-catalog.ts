@@ -1655,6 +1655,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [{ name: 'meta', description: 'the stored session header (identity witness).' }, { name: 'inheritedEventCount', description: 'exact inherited prefix length for projection initialization and identity.' }, { name: 'events', description: 'the session\'s complete log, in seq order.' }],
         returns: 'the projection cut at the log end.',
       },
+      {
+        signature: 'stopForShutdown(): Promise<void>',
+        description: 'Freeze checkpoint producers and join live-session writes and cold-read write-back. Derived-cache write failures retain their existing caller or warning behavior.',
+        parameters: [],
+        returns: 'completion after admitted writes settle; the storage owner closes the domain.',
+      },
     ],
   },
   {
