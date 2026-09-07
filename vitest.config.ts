@@ -162,13 +162,16 @@ const processBoundTests = [
   'packages/workflow/workflow-worker-thread/tests/session.spec.ts',
 ]
 
+const workflowDiagnostics = process.env.DSH_WORKFLOW_CASE_DIAGNOSTICS === undefined
+  ? [] : ['./scripts/workflow-case-setup.ts']
+
 // Vitest 4 does not forward CLI expect/hook options into inline projects.
 const coverageTimeouts = coverageTestTimeoutConfig(process.env[COVERAGE_TEST_TIMEOUT_ENV])
 
 export default defineConfig({
   plugins: [pathsPlugin(), standardDecoratorPlugin(), mockedAccountRemote],
   test: {
-    setupFiles: ['./scripts/test-proxy-environment.ts', './scripts/test-invariants.ts'],
+    setupFiles: ['./scripts/test-proxy-environment.ts', './scripts/test-invariants.ts', ...workflowDiagnostics],
     // .tsx: client component specs (jsdom via per-file @vitest-environment pragma).
     include: testIncludes,
     exclude: platformUnsupportedTests,
@@ -185,7 +188,7 @@ export default defineConfig({
           // MaybeLocal in cjs_lexer::Parse) from worker threads on macOS,
           // Linux, and Windows. Forked workers avoid that shared thread path.
           pool: 'forks',
-          setupFiles: ['./scripts/test-proxy-environment.ts', './scripts/test-invariants.ts'],
+          setupFiles: ['./scripts/test-proxy-environment.ts', './scripts/test-invariants.ts', ...workflowDiagnostics],
           include: testIncludes,
           exclude: [
             ...platformUnsupportedTests,
@@ -201,7 +204,7 @@ export default defineConfig({
           ...coverageTimeouts,
           execArgv: vitestExecArgv,
           pool: 'forks',
-          setupFiles: ['./scripts/test-proxy-environment.ts', './scripts/test-invariants.ts'],
+          setupFiles: ['./scripts/test-proxy-environment.ts', './scripts/test-invariants.ts', ...workflowDiagnostics],
           include: processBoundTests,
           exclude: [
             ...platformUnsupportedTests,
