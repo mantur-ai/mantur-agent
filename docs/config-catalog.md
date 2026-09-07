@@ -410,7 +410,7 @@ Source: [`packages/client/hmr/src/index.ts:31`](../packages/client/hmr/src/index
 
 ## `@deepseek-ai/dsh-client-ui-mantur-editing`
 
-Requires: `typert` · `webServer` · `tools`
+Requires: `typert` · `webServer` · `tools` · `systemPrompt`
 
 ```ts config-catalog
 /** Editing deployment configuration; no browser-visible credentials. */
@@ -431,7 +431,7 @@ export interface RuntimeConfig {
 }
 ```
 
-Source: [`packages/client/ui-mantur-editing/src/index.ts:22`](../packages/client/ui-mantur-editing/src/index.ts)
+Source: [`packages/client/ui-mantur-editing/src/index.ts:35`](../packages/client/ui-mantur-editing/src/index.ts)
 
 <a id="deepseek-aidsh-client-ui-mantur-navigation"></a>
 

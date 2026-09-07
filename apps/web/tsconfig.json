@@ -23,6 +23,7 @@
   // cannot see both sides of the cordis Context merges).
   "exclude": [
     "tests/scaffold.ts",
+    "tests/mantur-editing-workflow.snapshot.ts",
     "tests/desktop-drafts.e2e.ts",
     "tests/desktop-updates.e2e.ts",
     "tests/scaffold-hermetic.e2e.ts",

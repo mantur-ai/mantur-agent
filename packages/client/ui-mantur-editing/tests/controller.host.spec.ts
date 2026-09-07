@@ -2,21 +2,23 @@ import { Context } from '@deepseek-ai/cordis'
 import { createScope, scopeOf } from '@deepseek-ai/dsh-scope'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { SessionId } from '@deepseek-ai/dsh-session'
+import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import { afterEach, expect, it, vi } from 'vitest'
 import ManturEditing, { Config } from '../src/index.ts'
 
-const harness = vi.hoisted(() => ({ start: vi.fn(), scopes: [] as unknown[], stopped: [] as ReturnType<typeof vi.fn>[] }))
+const harness = vi.hoisted(() => ({ start: vi.fn(), connect: vi.fn(), scopes: [] as unknown[], stopped: [] as ReturnType<typeof vi.fn>[] }))
 vi.mock('../src/runtime.ts', () => ({ startEditor: harness.start }))
 vi.mock('@deepseek-ai/dsh-mcp-client', () => ({
   name: 'mcp-client', Config: undefined, inject: [],
   async apply(ctx: Context) {
     harness.scopes.push(scopeOf(ctx))
+    await harness.connect()
   },
 }))
 const contexts: Context[] = []
 afterEach(async () => {
   await Promise.all(contexts.splice(0).map(ctx => ctx.fiber.dispose()))
-  harness.start.mockReset(); harness.scopes.length = 0; harness.stopped.length = 0
+  harness.start.mockReset(); harness.connect.mockReset(); harness.scopes.length = 0; harness.stopped.length = 0
 })
 const config: Config = { editorRoot: '/editor', nodeExecutable: '/node', startupTimeoutMs: 1000, stopTimeoutMs: 1000, toolCallTimeoutMs: 1000 }
 
@@ -39,6 +41,7 @@ async function setup() {
   ctx.provide('typert', {} as never)
   ctx.provide('tools', {} as never)
   ctx.provide('webServer', { port: 5298 } as never)
+  await ctx.plugin(SystemPrompt, { includeHarnessIdentity: false })
   harness.start.mockImplementation(async (_config: Config, cwd: string, id: SessionId) => {
     const dispose = vi.fn(async () => {})
     harness.stopped.push(dispose)
@@ -47,8 +50,9 @@ async function setup() {
   const fiber = ctx.plugin(ManturEditing, config)
   await fiber.await()
   const makeAgent = (id: string) => {
-    const scope = createScope(ctx, {})
-    return { agent: { id: id as SessionId, ctx: scope.ctx, session: { header: { cwd: `/project-${id}` } } } as Agent, scope }
+    const key = {}
+    const scope = createScope(ctx, key)
+    return { agent: { id: id as SessionId, ctx: scope.ctx, session: { header: { cwd: `/project-${id}` } } } as Agent, scope, key }
   }
   return { ctx, fiber, makeAgent }
 }
@@ -84,8 +88,43 @@ it('rejects a different browser origin before creating directories or tools', as
 
 it('lets an explicit retry start again after failure', async () => {
   const { ctx, makeAgent } = await setup()
-  const { agent } = makeAgent('a')
+  const { agent, key } = makeAgent('a')
   harness.start.mockRejectedValueOnce(new Error('Disk is unavailable'))
   await expect(ctx.manturEditing.open(agent, 'http://127.0.0.1:5298')).rejects.toThrow('Disk is unavailable')
+  expect(await editingSections(ctx, key)).toEqual([])
   await expect(ctx.manturEditing.open(agent, 'http://127.0.0.1:5298')).resolves.toMatchObject({ directory: '/project-a/a' })
+})
+
+it('keeps workflow guidance with the opened Agent and removes it on owner disposal', async () => {
+  const { ctx, fiber, makeAgent } = await setup()
+  const a = makeAgent('a'); const b = makeAgent('b')
+  expect(await editingSections(ctx, a.key)).toEqual([])
+  await ctx.manturEditing.open(a.agent, 'http://127.0.0.1:5298')
+  await ctx.manturEditing.open(a.agent, 'http://127.0.0.1:5298')
+  expect((await editingSections(ctx, a.key)).map(section => section.name))
+    .toEqual(['mantur:editing-workflow'])
+  expect(await editingSections(ctx, b.key)).toEqual([])
+  expect(await editingSections(ctx)).toEqual([])
+  await ctx.manturEditing.open(b.agent, 'http://127.0.0.1:5298')
+  await a.scope.dispose()
+  expect(await editingSections(ctx, a.key)).toEqual([])
+  expect(await editingSections(ctx, b.key)).toHaveLength(1)
+  await fiber.dispose()
+  expect(await editingSections(ctx, b.key)).toEqual([])
+})
+
+async function editingSections(ctx: Context, scope?: object) {
+  const assembly = await ctx.systemPrompt.assemble(scope === undefined ? {} : { scope })
+  return assembly.sections.filter(section => section.name === 'mantur:editing-workflow')
+}
+
+it('does not publish guidance when native MCP startup fails', async () => {
+  const { ctx, makeAgent } = await setup()
+  const { agent, key } = makeAgent('a')
+  harness.connect.mockRejectedValueOnce(new Error('MCP unavailable'))
+  await expect(ctx.manturEditing.open(agent, 'http://127.0.0.1:5298')).rejects.toThrow('MCP unavailable')
+  expect(await editingSections(ctx, key)).toEqual([])
+  expect(harness.stopped[0]).toHaveBeenCalledOnce()
+  await ctx.manturEditing.open(agent, 'http://127.0.0.1:5298')
+  expect(await editingSections(ctx, key)).toHaveLength(1)
 })
