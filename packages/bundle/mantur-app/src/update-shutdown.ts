@@ -121,7 +121,13 @@ export function createHostUpdateShutdown(ctx: Context): { prepare(): Promise<rea
       return pending
     })]
   }
+  const assertEditingStopped = (services: readonly OwnedService[]): void => {
+    if (services.some(owner => owner.name === 'manturEditing' && !invoked.has(owner.value))) {
+      throw new Error('An editing owner appeared after the editing shutdown phase')
+    }
+  }
   const verify = async (): Promise<readonly UpdateSessionCheckpoint[]> => {
+    assertEditingStopped([...retained.values()])
     assertProgramHistory(ctx, [...retained.values()])
     const checkpoints = new Map<UpdateSessionCheckpoint['sessionId'], UpdateSessionCheckpoint>()
     for (const owner of retained.values()) {
@@ -135,7 +141,15 @@ export function createHostUpdateShutdown(ctx: Context): { prepare(): Promise<rea
     return [...checkpoints.values()]
   }
   const perform = async (): Promise<void> => {
+    for (;;) {
+      const editing = collect().filter(owner => owner.name === 'manturEditing' && !invoked.has(owner.value))
+      if (editing.length === 0) break
+      // Accepted editor work still needs its signals, callbacks, Agent context and writers.
+      await join(stopNamed(editing, new Set(['manturEditing'])))
+      if (failures.length) throw new AggregateError(failures, 'Host editing shutdown failed')
+    }
     const initial = collect()
+    assertSupported(ctx, initial, unsupportedHistory)
     const drivers = freeze(initial)
     const topology = [stopUserPatchWatches(ctx), ...stopNamed(initial, new Set(['agentPresets']))]
     // Native cancellation must start before awaiting a pending picker RPC.
@@ -151,6 +165,7 @@ export function createHostUpdateShutdown(ctx: Context): { prepare(): Promise<rea
         .map(owner => start(owner, () => (owner.value as NativeOwner).stopNativeForShutdown()))
       await join([...drivers, ...freeze(installed), ...requests, ...remainingRequests, ...stopPickers(installed), ...producers, ...native])
       const next = collect()
+      assertEditingStopped(next)
       if (next.length === installed.length) break
       installed = next
       await join(stopNamed(installed, new Set(['agentPresets'])))
@@ -158,6 +173,7 @@ export function createHostUpdateShutdown(ctx: Context): { prepare(): Promise<rea
       try { assertSupported(ctx, installed, unsupportedHistory) } catch (error: unknown) { failures.push(error) }
     }
     await join(stopNamed(installed, new Set(['settings'])))
+    assertEditingStopped(collect())
     await join(stopNamed(installed, new Set(['agentLoop'])))
     await join(stopNamed(installed, new Set(['sessionProjectionCache'])))
     await join(stopNamed(installed, new Set(['storageDomain'])))

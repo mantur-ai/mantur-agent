@@ -507,3 +507,120 @@ it('freezes an unused real dynamic runner in an explicitly managed test composit
     expect(() => runner.define({ sessionId: test.agent.id, plugin: { kind: 'new', idPrefix: 'new' }, name: 'late', purpose: 'late', code: { host: 'return { apply() {} }' } })).toThrow('stopping for shutdown')
   } finally { await test.close() }
 })
+
+it('keeps callbacks, agent admission and writers alive until the editing drain completes', async () => {
+  const test = await fixture()
+  const { ctx, agent } = test
+  const entered = Promise.withResolvers<undefined>()
+  const release = Promise.withResolvers<undefined>()
+  const order: string[] = []
+  const server = createServer((_request, response) => { response.end('callback accepted') })
+  await new Promise<void>((resolve) => { server.listen(0, '127.0.0.1', resolve) })
+  const address = server.address()
+  if (!address || typeof address === 'string') throw new Error('fixture needs a TCP listener')
+  const closeServer = async () => {
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => { if (error) reject(error); else resolve() })
+    })
+  }
+  const network = vi.fn(async () => { order.push('network'); await closeServer() })
+  ctx.provide('webServer', { stopForShutdown: network })
+  const quiesce = vi.spyOn(ctx.agentLoop, 'quiesceForShutdown')
+  const gateway = vi.spyOn(ctx.typertGateway, 'stopForShutdown')
+  const producers = vi.fn(async () => { order.push('producer') })
+  for (const name of ['terminals', 'workflowEngine', 'subprocess']) ctx.provide(name, { stopForShutdown: producers })
+  class EditingCallback extends TypertRemoteService {
+    constructor(ctx: Context) { super(ctx, 'editingCallback', { namespace: 'editingCallback' }) }
+    @Remote('save')
+    async save() {
+      agent.session.append('turn/start', { turn: 1 })
+      agent.session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+      return true
+    }
+  }
+  await ctx.plugin(EditingCallback)
+  ctx.effect(() => ctx.typert.register({
+    package: '@fixture/editing', face: 'host', schemas: [], model: { services: [], events: [], objects: [] },
+    invocations: [{ id: '@fixture/editing#save', service: 'editingCallback', namespace: 'editingCallback', method: 'save',
+      invocation: { kind: 'direct' }, parameters: [], result: { mode: 'strict', typeSymbol: '@fixture/editing#boolean', schema: z.boolean() } }],
+  }))
+  const editing = vi.fn(async () => {
+    entered.resolve(undefined)
+    await release.promise
+    expect(await (await fetch(`http://127.0.0.1:${address.port}`)).text()).toBe('callback accepted')
+    expect(await ctx.typertGateway.invoke({ namespace: 'editingCallback', method: 'save', args: {} })).toBe(true)
+    order.push('editing')
+  })
+  ctx.provide('manturEditing', { stopForShutdown: editing })
+  const shutdown = createHostUpdateShutdown(ctx)
+  const preparing = shutdown.prepare()
+  try {
+    await entered.promise
+    expect(quiesce).not.toHaveBeenCalled()
+    expect(gateway).not.toHaveBeenCalled()
+    expect(network).not.toHaveBeenCalled()
+    expect(producers).not.toHaveBeenCalled()
+    expect(ctx.agents.acceptingWork).toBe(true)
+    expect(ctx.agents.get(agent.id)).toBe(agent)
+    release.resolve(undefined)
+    expect(await preparing).toEqual([{ sessionId: agent.id, nextSeq: 2 }])
+    expect(order[0]).toBe('editing')
+    expect(quiesce).toHaveBeenCalledOnce()
+    expect(network).toHaveBeenCalledOnce()
+    expect(producers).toHaveBeenCalledTimes(3)
+    await shutdown.prepare()
+    expect(editing).toHaveBeenCalledOnce()
+    const reader = await ctx.sessionPersistence.open(agent.id, 'read')
+    try { expect((await reader.read()).map(event => event.type)).toEqual(['turn/start', 'turn/end']) } finally { await reader.close() }
+  } finally {
+    release.resolve(undefined)
+    await Promise.allSettled([preparing])
+    quiesce.mockRestore()
+    gateway.mockRestore()
+    if (server.listening) await closeServer()
+    await test.close()
+  }
+})
+
+it.each(['write failed', 'execution cancelled', 'remote completion unknown'])('preserves Host services and writers when editing reports %s', async (reason) => {
+  const test = await fixture()
+  const quiesce = vi.spyOn(test.ctx.agentLoop, 'quiesceForShutdown')
+  const gateway = vi.spyOn(test.ctx.typertGateway, 'stopForShutdown')
+  const editing = vi.fn(async () => { throw new Error(reason) })
+  test.ctx.provide('manturEditing', { stopForShutdown: editing })
+  const shutdown = createHostUpdateShutdown(test.ctx)
+  try {
+    await expect(shutdown.prepare()).rejects.toMatchObject({ errors: [expect.objectContaining({ message: reason })] })
+    await expect(shutdown.prepare()).rejects.toThrow('Host editing shutdown failed')
+    expect(editing).toHaveBeenCalledOnce()
+    expect(quiesce).not.toHaveBeenCalled()
+    expect(gateway).not.toHaveBeenCalled()
+    test.agent.session.append('turn/start', { turn: 1 })
+    test.agent.session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+    expect(test.ctx.agents.acceptingWork).toBe(true)
+  } finally { quiesce.mockRestore(); gateway.mockRestore(); await test.close() }
+})
+
+it('drains an editing owner added while an earlier retained owner is completing', async () => {
+  const test = await fixture()
+  const next = vi.fn(async () => {})
+  const first = vi.fn(async () => { test.ctx.isolate('manturEditing').provide('manturEditing', { stopForShutdown: next }) })
+  const fiber = test.ctx.plugin({ name: 'retired-editing', apply(ctx: Context) { ctx.provide('manturEditing', { stopForShutdown: first }) } })
+  await fiber
+  const shutdown = createHostUpdateShutdown(test.ctx)
+  await fiber.dispose()
+  try {
+    await shutdown.prepare()
+    expect(first).toHaveBeenCalledOnce()
+    expect(next).toHaveBeenCalledOnce()
+  } finally { await test.close() }
+})
+
+it.each(['jobs', 'settings'])('refuses an editing owner appearing during %s stop before sealing writers', async (name) => {
+  const test = await fixture()
+  test.ctx.provide(name, { async stopForShutdown() { test.ctx.provide('manturEditing', { async stopForShutdown() {} }) } })
+  try {
+    await expect(createHostUpdateShutdown(test.ctx).prepare()).rejects.toThrow('editing owner appeared')
+    test.agent.session.append('turn/start', { turn: 1 })
+  } finally { await test.close() }
+})
