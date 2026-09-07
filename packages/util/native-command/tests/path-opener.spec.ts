@@ -9,13 +9,14 @@ type ExecFileMock = (
   args: readonly string[],
   options: { encoding: string; signal: AbortSignal; windowsHide: boolean },
   callback: ExecFileCallback,
-) => void
+) => EventEmitter
 
 const { execFileMock } = vi.hoisted(() => ({ execFileMock: vi.fn<ExecFileMock>() }))
 
 vi.mock('node:child_process', () => ({ execFile: execFileMock }))
 
 import { release as osRelease } from 'node:os'
+import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 import { canOpenNativePath, openNativePath, openNativeTextFile, type PathOpenerRunner } from '../src/index.ts'
 
@@ -148,7 +149,10 @@ describe('native path opener', () => {
 
   it('runs the default command adapter without a shell and preserves command failures', async () => {
     execFileMock.mockImplementationOnce((_command, _args, _options, callback) => {
+      const child = new EventEmitter()
       callback(null, '', '')
+      queueMicrotask(() => child.emit('close'))
+      return child
     })
     await openNativePath('/tmp/default.txt', signal(), { platform: 'darwin' })
     const [command, args, options] = execFileMock.mock.calls[0]!
@@ -160,7 +164,10 @@ describe('native path opener', () => {
 
     const commandError = Object.assign(new Error('open failed'), { code: 1 })
     execFileMock.mockImplementationOnce((_command, _args, _options, callback) => {
+      const child = new EventEmitter()
       callback(commandError, 'partial output', 'failure details')
+      queueMicrotask(() => child.emit('close'))
+      return child
     })
     await expect(openNativePath('/tmp/missing.txt', signal(), { platform: 'darwin' })).rejects.toMatchObject({
       message: 'open failed', cause: commandError, code: 1,

@@ -13,14 +13,14 @@ afterEach(async () => {
 
 /** A backend serving exactly the capability one case is about. */
 class StubPicker extends DirectoryPicker {
-  static capabilityStub: DirectoryPickerCapability = { kind: 'native', pick: async () => null }
+  static capabilityStub: DirectoryPickerCapability = { kind: 'native', pick: async () => null, stopForShutdown: async () => {} }
 
   capability(): DirectoryPickerCapability {
     return StubPicker.capabilityStub
   }
 }
 
-const NATIVE_STUB: DirectoryPickerCapability = { kind: 'native', pick: async () => null }
+const NATIVE_STUB = { kind: 'native' as const, pick: async () => null, stopForShutdown: async () => {} }
 
 const BROWSE_STUB: DirectoryPickerCapability = {
   kind: 'browse',
@@ -69,7 +69,7 @@ async function refused(call: Promise<unknown>): Promise<{ code: string; message:
 
 describe('directoryPicker pick Remote', () => {
   it('answers the selected path or the operator\'s cancellation', async () => {
-    const selected = await harness({ kind: 'native', pick: async () => '/tmp/project' })
+    const selected = await harness({ ...NATIVE_STUB, pick: async () => '/tmp/project' })
     expect(await selected.pick(new AbortController().signal)).toBe('/tmp/project')
 
     const cancelled = await harness(NATIVE_STUB)
@@ -78,7 +78,7 @@ describe('directoryPicker pick Remote', () => {
 
   it('reports an aborted chooser as cancelled and any other failure as internal', async () => {
     const picker = await harness({
-      kind: 'native',
+      ...NATIVE_STUB,
       pick: signal => new Promise((_resolve, reject) => {
         signal.addEventListener('abort', () => { reject(new Error('aborted')) }, { once: true })
       }),
@@ -88,7 +88,7 @@ describe('directoryPicker pick Remote', () => {
     abort.abort()
     expect((await pending).code).toBe('gateway/cancelled')
 
-    const broken = await harness({ kind: 'native', pick: async () => { throw new Error('no chooser installed') } })
+    const broken = await harness({ ...NATIVE_STUB, pick: async () => { throw new Error('no chooser installed') } })
     const failure = await refused(broken.pick(new AbortController().signal))
     expect(failure.code).toBe('gateway/internal')
     expect(failure.message).toContain('no chooser installed')

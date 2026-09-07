@@ -10,7 +10,7 @@ web GUI 的「打开本地文件夹」流程被焊死在一种交互上：`host.
 
 ## 决策
 
-在 `packages/host/` 落一个三包能力 seam——`directory-picker`（Service Definition）、`directory-picker-native`、`directory-picker-browse`（后端）——唯一约定方法 `capability()` 返回**可辨识联合**：`{ kind: 'native', pick(signal) }` 或 `{ kind: 'browse', list(path?), createDirectory(path, name) }`。`dsh-api-workspace-controller` 中的 `DirectoryPickerController` 注入 `directoryPicker`，提供匹配的生成 Remote 方法，另一种 kind 的调用以 `directory-picker-unavailable` 应答。联合之所以可辨识，是因为后端差异在**交互形态**——压平成统一方法集会逼每个后端伪装另一方的形态。
+在 `packages/host/` 落一个三包能力 seam——`directory-picker`（Service Definition）、`directory-picker-native`、`directory-picker-browse`（后端）——唯一约定方法 `capability()` 返回**可辨识联合**：`{ kind: 'native', pick(signal), stopForShutdown() }` 或 `{ kind: 'browse', list(path?), createDirectory(path, name) }`。`dsh-api-workspace-controller` 中的 `DirectoryPickerController` 注入 `directoryPicker`，提供匹配的生成 Remote 方法，另一种 kind 的调用以 `directory-picker-unavailable` 应答。联合之所以可辨识，是因为后端差异在**交互形态**——压平成统一方法集会逼每个后端伪装另一方的形态。
 
 **client 侧靠 slot 组合，而非按广播分支。** ui-workspace 的两个触发表层各自声明一个 `single` 目录流洞（`conversation.hero.workspace.directoryFlow`／`sidebar.workspaces.directoryFlow`；之所以是两个 key，是因为一个洞只有一个声明它的 slot entry——owner 约定相同、占用者相同）。后端包是**双面包**：浏览器一侧把匹配的交互注册进两个洞——`-native` 是驱动 `directoryPicker/pick` 的无渲染占用者，`-browse` 是应用内的选择工作区目录对话框。洞的 owner 会话（`open`/`busy`/`onPicked`/`onCancel`/`onError`）承载整个交换：ui-workspace 保留触发（菜单入口仅在洞被占用时渲染）与接纳（`createWorkspace({path})`、可重试的错误对话框、重新选择），占用者持有从 `open` 到所选路径之间的一切。因此一行 `cordis.yml` 同时切换宿主能力与 client 流程；错配在构造上不可能，同时挂两个流程包会在 client 加载期失败（`single` 洞）。早先的 `host.describe.directoryPicker` 广播与客户端 kind 分支被删除——组合已经接好两侧后，供客户端分支用的 wire 事实不再有任何消费者。洞注册表（`ctx.slots.entries`）取而代之，成为每次打开菜单的占用读取。
 
@@ -26,6 +26,8 @@ web GUI 的「打开本地文件夹」流程被焊死在一种交互上：`host.
 - **列举层级有上限，且流式处理。** 单次 `list` 至多返回 `maxEntries` 行（配置项，默认 1000——GitHub 网页端目录列举的同一上限）。层级经 `opendir` 流入一个按名排序、容量 `maxEntries + 1` 的候选窗口，内存保持 O(maxEntries)，可进入性探测只触及窗口内候选；线上 `DirectoryListing` 携带必填的 `truncated` 标志，让客户端明示不完整而不是静默缺尾。窗口内的断链符号链接不从窗口外回填——发生过驱逐本身已把层级标记为截断。窗口插入使用二分查找、满窗尾部单次比较即拒绝（超大层级不能为每个 dirent 付出一次全窗扫描），且 `list(path, signal)` 透传载体的请求信号，滞塞网络目录的扫描不会在调用方断连后继续存活——扫描中的每个 await（打开、每次读取、每次符号链接探测）都与信号赛跑，中止路径放弃而非等待 close（Node 会把 close 排在在飞读取之后），被放弃的 settlement 全部吞掉，清理不会以未处理拒绝的形式冒出。无上限的层级对超大或恶意构造的目录就是内存／响应性漏洞。
 - **整个文件系统均可浏览，不做 roots 配置。** `workspace.create` 接受任意路径且 API 本就提供驱动 bash 的方法，浏览根只会是 UX 范围而非边界；没有消费方的可配置性过不了证据门槛。等到有部署需要再做。
 - **native 后端保留。** 插件化正是目的：多个提供方都能提供该 seam（Electron 壳可以经自己的对话框 API 提供 `native` 交互）。kind 命名：最初选了 `dialog` 后被放弃——browse 交互同样以对话框呈现（应用内弹窗），这个词起不到判别作用；`native` 命名的是选择器运行的位置。
+
+原生能力专有的停止方法遵循[子进程关闭所有权决策](../bug-fix/2026-09-07-native-picker-shutdown-join.zh.md)，不改变原生与浏览交互的拆分，也不增加 Remote 停止动词。
 
 ## 曾考虑的替代方案
 
