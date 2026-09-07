@@ -291,6 +291,8 @@ export class ManturHubAuthorization extends TypertRemoteService {
 
   private readonly config: ResolvedConfig
   private native: NativeAccountConnection | undefined
+  private stopNative: (() => Promise<void>) | undefined
+  private nativeShutdown: Promise<void> | undefined
   private currentAttempt: Attempt | undefined
   private lastAttempt: Attempt | undefined
 
@@ -314,7 +316,12 @@ export class ManturHubAuthorization extends TypertRemoteService {
             return stop
           }, 'authorization-manturhub: native command identity')
         })
-        return async () => { await stopCommands?.(); await commands.dispose(); await connection.close() }
+        this.stopNative = async () => {
+          const outcomes = await Promise.allSettled([stopCommands?.(), commands.dispose(), connection.close()])
+          const failures = outcomes.flatMap(outcome => outcome.status === 'rejected' ? [outcome.reason as unknown] : [])
+          if (failures.length > 0) throw new AggregateError(failures, 'Native account shutdown failed')
+        }
+        return () => this.stopNativeForShutdown()
       }, 'authorization-manturhub: native Main connection')
       return
     }
@@ -352,6 +359,18 @@ export class ManturHubAuthorization extends TypertRemoteService {
    */
   @Remote
   identityMode(): ManturIdentityMode { return this.config.native === undefined ? 'standalone' : 'desktop-managed' }
+
+  /**
+   * Freeze native command identity and brokered API admission, then join trees, leases and IPC cleanup.
+   * The parent must keep IPC connected until this operation completes.
+   * @returns the same completion on every call; retained cleanup failures reject.
+   * @throws when this provider has no initialized desktop-managed connection, including standalone mode.
+   */
+  stopNativeForShutdown(): Promise<void> {
+    if (this.stopNative === undefined) return Promise.reject(new Error('Native shutdown requires an initialized desktop-managed provider'))
+    this.nativeShutdown ??= this.stopNative()
+    return this.nativeShutdown
+  }
 
   private nativeConnection(): NativeAccountConnection {
     if (this.native === undefined) throw new Error('Native command preparation requires the configured Main connection')

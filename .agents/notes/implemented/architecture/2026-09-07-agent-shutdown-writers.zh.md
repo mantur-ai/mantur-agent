@@ -61,3 +61,5 @@ Gateway 的操作归属由 `packages/api/gateway/src/index.ts` 管理：关闭�
 预设准入停机归 `packages/preset/agent-presets/src/index.ts` 所有：冷会话读取的解析可能在 Host 首次读取所有者后分配常驻插件树。显式停止会冻结修改和挂载调用、等待已接收的操作，并保留已安装代次供后续 `livePresetMounts(rootFiber)` 清点。调用方可见的操作失败仍由原调用方接收；单独排空不证明插件清理成功。受控冷读取分配，以及停机后的组合和编写拒绝用于验证升级。
 
 Profile 补丁监听器停止归属于 `packages/boot/app-boot/src/index.ts`：监听器打开可能在接纳冻结后才完成，刷新回调仍可能重组根 include。根作用域内的所有权先等待打开，再关闭每个已注册监听器，并在重复停止时保留关闭失败。挂起的打开和清理、打开拒绝以及同步关闭失败用于验证升级。模块 HMR 和应用销毁仍由独立所有者负责。
+
+原生身份清理归属于 `packages/credentials/authorization-manturhub/src/index.ts`：私有连接拥有 broker 响应体和命令 lease。连接 effect 与显式 `stopNativeForShutdown()` 共享同一操作，撤销命令注册、排空其消费者，并在回执完成后关闭连接。命令清理失败不会跳过连接清理，重复调用方会收到保留的失败。Standalone 模式拒绝此原生专用操作。真实进程退出后挂起的命令回执，以及挂起的响应取消用于验证升级；Main 保持 IPC 直到这些回执完成。

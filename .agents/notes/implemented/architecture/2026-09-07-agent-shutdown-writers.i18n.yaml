@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-07-agent-shutdown-writers.md
-2026-09-07-agent-shutdown-writers.md: 83072921585442cec2b5c351801f3d452876dfae
-2026-09-07-agent-shutdown-writers.zh.md: 32ab822874787feaaf207413bfbd5d93f03c103e
+2026-09-07-agent-shutdown-writers.md: ba485492b8f2508175f6f34dbf91d654a458a461
+2026-09-07-agent-shutdown-writers.zh.md: 67f8a519eac50ef8c079dec3d9534b38363a0858

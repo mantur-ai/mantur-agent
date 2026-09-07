@@ -1292,6 +1292,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the configured identity mode.',
       },
       {
+        signature: 'stopNativeForShutdown(): Promise<void>',
+        description: 'Freeze native command identity and brokered API admission, then join trees, leases and IPC cleanup. The parent must keep IPC connected until this operation completes.',
+        parameters: [],
+        returns: 'the same completion on every call; retained cleanup failures reject.',
+        throws: ['when this provider has no initialized desktop-managed connection, including standalone mode.'],
+      },
+      {
         signature: 'async request(pathname: string, options: ManturHubRequestOptions): Promise<Response | undefined>',
         description: 'Send a Host-only GET to this account provider\'s configured deployment.\n\nThe method accepts only root-relative paths so a stored grant cannot be forwarded to another origin. It is intentionally not a browser Remote.',
         parameters: [{ name: 'pathname', description: 'root-relative ManturHub API path.' }, { name: 'options', description: 'authentication, headers, cancellation, and redirect policy.' }],

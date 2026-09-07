@@ -32,6 +32,8 @@ This Host package routes ManturHub requests to the selected production or test d
 
 The native provider registers with [command-scopes](../../shell/command-scopes/README.md). Bash, PowerShell and persistent terminal allocation prepare identity before spawning and acknowledge release only after whole-tree cleanup. A signed-out command receives explicit desktop-managed mode and an empty descriptor path, overriding stale caller environment.
 
+`stopNativeForShutdown()` is the explicit native-provider cleanup operation used by its connection effect. It withdraws command identity, stops the command registration, and closes brokered API admission while awaiting actual command/PTY cleanup, API body cancellation and lease receipts. Main must keep IPC connected until completion. Repeated calls return the same result, including cleanup failures; standalone or uninitialized providers reject this operation. It does not certify standalone authorization, caller-owned unauthenticated requests, session durability or the whole Host.
+
 Standalone device login rejects a verification URL on another origin. A session that omits `interval` or `expires_in` uses 5 seconds and 600 seconds. `slow_down` adds 5 seconds to the active polling interval; denial and expiry end the attempt without a credential.
 
 ## Model Experience
