@@ -81,6 +81,7 @@
     "@deepseek-ai/dsh-api-gateway": "workspace:^",
     "zod": "^4.4.3",
     "@deepseek-ai/dsh-typert-protocol": "workspace:^",
-    "@deepseek-ai/cordis-plugin-group": "workspace:^"
+    "@deepseek-ai/cordis-plugin-group": "workspace:^",
+    "@deepseek-ai/dsh-session-telemetry-otel": "workspace:^"
   }
 }

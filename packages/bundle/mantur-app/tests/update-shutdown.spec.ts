@@ -1,5 +1,6 @@
 /** Host update coordination keeps accepted RPC writes ahead of durable writer closure. */
-import { EventEmitter } from 'node:events'
+import { EventEmitter, once } from 'node:events'
+import { createServer } from 'node:http'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -9,6 +10,7 @@ import AgentPresets, { COMPOSITION_FILE } from '@deepseek-ai/dsh-agent-presets'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Llm from '@deepseek-ai/dsh-llm'
+import * as Telemetry from '@deepseek-ai/dsh-session-telemetry-otel'
 import Sessions, { SessionId } from '@deepseek-ai/dsh-session'
 import Projections from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
@@ -379,4 +381,51 @@ it.each(['jobs', 'storageDomain'])('rejects a new unmanaged owner observed durin
   test.ctx.provide(owner, { async stopForShutdown() { test.ctx.provide('codeRuntime', {}) } })
   try { await expect(createHostUpdateShutdown(test.ctx).prepare()).rejects.toThrow('Host update shutdown failed') }
   finally { await test.close() }
+})
+
+it('saves authoritative events before a failing telemetry upload and retains ordinary disposal', async () => {
+  const test = await fixture()
+  const previousHome = process.env.DSH_HOME
+  process.env.DSH_HOME = test.root
+  let uploads = 0
+  const server = createServer((request, response) => {
+    request.resume()
+    request.on('end', () => { uploads++; response.writeHead(503).end() })
+  })
+  const importModule = vi.spyOn(test.ctx.loader, 'import').mockResolvedValue(Telemetry)
+  try {
+    server.listen(0, '127.0.0.1')
+    await once(server, 'listening')
+    const address = server.address()
+    if (!address || typeof address === 'string') throw new Error('collector did not bind')
+    await test.ctx.loader.create({ name: '@deepseek-ai/dsh-session-telemetry-otel', config: {
+      mode: 'FULL', shutdownTimeoutMillis: 1000,
+      exporter: { url: `http://127.0.0.1:${address.port}/v1/logs`, timeoutMillis: 50 },
+      processor: { scheduledDelayMillis: 60_000, maxQueueSize: 128, maxExportBatchSize: 128, exportTimeoutMillis: 500 },
+    } })
+    importModule.mockRestore()
+    test.agent.session.append('turn/start', { turn: 1 })
+    test.agent.session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+    const shutdown = createHostUpdateShutdown(test.ctx)
+    expect(await shutdown.prepare()).toEqual([{ sessionId: 'held-write', nextSeq: 2 }])
+    expect(uploads).toBe(0)
+    await test.ctx.fiber.dispose()
+    expect(uploads).toBeGreaterThan(0)
+    expect(await shutdown.prepare()).toEqual([{ sessionId: 'held-write', nextSeq: 2 }])
+    const disk = new Context()
+    await disk.plugin(Persistence, { root: test.root, compression: 'none' })
+    try {
+      const reader = await disk.sessionPersistence.open(SessionId('held-write'), 'read')
+      try { expect((await reader.read()).map(event => event.type)).toEqual(['turn/start', 'turn/end']) }
+      finally { await reader.close() }
+    } finally { await disk.fiber.dispose() }
+  } finally {
+    importModule.mockRestore()
+    await test.close()
+    if (previousHome === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = previousHome
+    const closed = new Promise<void>((resolve, reject) => { server.close((error) => { if (error) reject(error); else resolve() }) })
+    server.closeAllConnections()
+    await closed
+  }
 })

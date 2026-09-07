@@ -40,6 +40,7 @@ it('saves the recorded session through dsh --profile web update IPC before norma
   // This scenario selects only managed owners from the shipped Web profile.
   await writeFile(join(profile, 'cordis.patch.yml'), JSON.stringify([...shipped.map(row => ({ id: row.id, disabled: true })), { insert: [
     ...rows,
+    { id: 'update-telemetry', name: '@deepseek-ai/dsh-session-telemetry-otel', config: { mode: 'DISABLED' } },
     { id: 'update-sessions', name: '@deepseek-ai/dsh-session-persistence-jsonl', config: { root: sessions, compression: 'none' } },
     { id: 'update-loop', name: '@deepseek-ai/dsh-agent-loop', config: { agents: [{ id: 'proof', sessionId }] } },
   ] }]))

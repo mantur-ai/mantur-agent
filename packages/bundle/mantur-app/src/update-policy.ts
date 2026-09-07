@@ -1,4 +1,4 @@
-/** Shipped modules whose work is joined by the Host update owners; other compositions fail closed. */
+/** Reviewed modules: authoritative writes join update owners; non-authoritative telemetry uses ordinary bounded disposal. */
 export const supportedUpdateModules: ReadonlySet<string> = new Set([
   '@deepseek-ai/cordis-plugin-hmr',
   '@deepseek-ai/cordis-plugin-timer',
@@ -107,6 +107,7 @@ export const supportedUpdateModules: ReadonlySet<string> = new Set([
   '@deepseek-ai/dsh-session-query-sqlite',
   '@deepseek-ai/dsh-session-reference',
   '@deepseek-ai/dsh-session-stats',
+  '@deepseek-ai/dsh-session-telemetry-otel',
   '@deepseek-ai/dsh-session-title',
   '@deepseek-ai/dsh-session-title-first-prompt-llm',
   '@deepseek-ai/dsh-session-title-llm',
