@@ -22,6 +22,8 @@ The [Team recovery fixture](../../../../packages/experimental/agent-team/tests/p
 
 Windows coverage loads a [fork diagnostic preload](../../../../scripts/vitest-fork-diagnostics.cjs) and preserves its JSONL file on failure. Records contain only lifecycle event, parent and worker PIDs, Node version, platform, exit code, and signal. The observer does not change child outcomes or record arguments, environment, test payloads, or raw crash reports. Exit facts narrow an unexplained worker death; collecting them is not a repair.
 
+The [native account Host fixture](../../../../apps/desktop/tests/native-account-host-support.ts) sends the active Vitest case budget to its real IPC child. Windows coverage grants 90 seconds per case, while descriptor ACL cases in [run 34089493592](https://github.com/mantur-ai/mantur-harness/actions/runs/34089493592/job/101639924686) took 27–51 seconds; the fixture's former 10-second parent-reply deadline expired before preparation completed. The handshake test observes the budget received from the child, not just the parent input. Production transport deadlines and the separate Bash command fixture remain unchanged. Fixture cleanup attempts Main shutdown even when the consumer receipt assertion fails, and retains both errors if both operations reject. Child close and temporary-directory cleanup remain awaited; this does not make a failed receipt successful or establish native Windows acceptance locally.
+
 ## Alternatives considered
 
 Longer per-fixture polling deadlines still measure storage latency instead of completed writes. Repeating a mailbox scenario does not ensure it takes the cold-receipt path. Ignoring cleanup errors leaves temporary data behind. None of these establishes the required result.
