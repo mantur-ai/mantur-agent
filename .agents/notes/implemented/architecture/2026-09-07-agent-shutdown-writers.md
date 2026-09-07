@@ -18,7 +18,7 @@ The local subprocess owner separately closes spawn admission and joins whole pro
 
 The terminal registry also provides explicit shutdown: it rejects new spawns and sends, joins pending backend allocation and rollback, and closes published terminals. It retains cleanup errors even after ordinary disposal or a successful retry removes their records.
 
-The background-job registry freezes new registrations and joins the original producer release promises and asynchronous completion listeners. It keeps failures after records leave the registry. It does not cancel work, including through subsequent owner disposal; separate execution owners stop local resources. A registry record forced into a failed state is not resource-release evidence.
+The background-job registry freezes new registrations and joins the original producer release promises and asynchronous completion listeners. It keeps failures after records leave the registry. It does not cancel work, including through subsequent owner disposal; separate execution owners stop local resources. A registry record forced into a failed state is not resource-release evidence. After shutdown begins, owner and service disposal join the associated completion notices before returning, so agent teardown cannot seal its writer ahead of an unfinished notice.
 
 The workflow engine freezes new runs and joins thread termination, pending child starts, and child cleanup beyond ordinary disposal grace. Child cleanup errors survive removal of child and run records. A run leaves engine ownership only after disposal settles, its thread exits, and every child start and cleanup finishes; only its failures remain retained.
 

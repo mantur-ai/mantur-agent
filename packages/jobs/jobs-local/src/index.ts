@@ -54,6 +54,8 @@ interface TrackedTask {
   reported: boolean
   /** Resolves once the terminal snapshot is recorded and listeners notified. */
   settled: Promise<void>
+  /** Asynchronous completion notices that must finish before shutdown releases this owner. */
+  notices: Set<Promise<void>>
   /** Resolver for {@link settled}, called by the first effective settlement. */
   markSettled: () => void
   /** Live waits; settlement with a waiter marks the job reported. */
@@ -193,6 +195,7 @@ export class LocalJobRegistry extends JobRegistry {
       finishedAt: undefined,
       reported: false,
       settled,
+      notices: new Set(),
       markSettled,
       waiters: 0,
       waitResolvers: new Set(),
@@ -464,10 +467,13 @@ export class LocalJobRegistry extends JobRegistry {
     for (const listener of this.listenersFor(job.owner)) {
       try {
         const returned = listener(snapshot, job.owner)
-        this.trackCompletion(Promise.resolve(returned).catch((error: unknown) => {
+        const notice = Promise.resolve(returned).catch((error: unknown) => {
           this.cleanupFailures.push(error)
           this.selfCtx.logger.warn(`jobs: onJobDone listener rejected for ${job.id}: ${String(error)}`)
-        }))
+        })
+        job.notices.add(notice)
+        void notice.then(() => { job.notices.delete(notice) })
+        this.trackCompletion(notice)
       } catch (error: unknown) {
         this.cleanupFailures.push(error)
         this.selfCtx.logger.warn(`jobs: onJobDone listener threw for ${job.id}: ${String(error)}`)
@@ -504,6 +510,7 @@ export class LocalJobRegistry extends JobRegistry {
     const owned = [...this.store.values()].filter(job => job.owner === owner)
     if (this.shutdown === undefined) this.cancelForTeardown(owned, 'owner disposed')
     await Promise.all(owned.map(job => job.settled))
+    if (this.shutdown !== undefined) await Promise.all(owned.flatMap(job => [...job.notices]))
     for (const job of owned) this.store.delete(job.id)
     // Removal is the one visible-set change no per-job record carries, so it
     // must be announced here or an observer keeps the dropped rows forever.
@@ -521,6 +528,7 @@ export class LocalJobRegistry extends JobRegistry {
     const all = [...this.store.values()]
     if (this.shutdown === undefined) this.cancelForTeardown(all, 'jobs service disposed')
     await Promise.all(all.map(job => job.settled))
+    if (this.shutdown !== undefined) await Promise.all(all.flatMap(job => [...job.notices]))
     // Distinct owners whose records just disappeared. A change observer files
     // into the layer of the context that registered it, so a consumer mounted
     // outside this service — the api-proxy carrier registers from the mux

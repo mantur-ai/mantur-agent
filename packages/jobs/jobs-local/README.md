@@ -11,7 +11,7 @@ English | [中文](README.zh.md)
 
 `dsh-jobs-local` runs background jobs inside the harness process: work keeps running while the agent moves on, and the owning agent can read, wait on, list, and cancel it, with completion delivered as an in-session notice when `dsh-tool-jobs` is also mounted. It implements the `dsh-jobs` contract with in-memory records handed out as fresh snapshots, never live state. A per-owner concurrency limit (default 10) bounds how many jobs one agent can have running or stopping at once; jobs die with the harness process and are not durable across restarts.
 
-`stopForShutdown()` freezes new jobs, suppresses unreported completion notices, and joins producer resource release and asynchronous completion listeners. It retains producer, listener, and teardown-cancellation failures after records leave the registry. It does not cancel work; local execution owners must stop their resources separately, and remote jobs are not cancelled through later scope disposal. The Host must retain remote job identities durably and prove all other producers have stopped before installation.
+`stopForShutdown()` freezes new jobs, suppresses unreported completion notices, and joins producer resource release and asynchronous completion listeners. During shutdown, owner and service disposal also await the associated completion listeners before releasing their records. It retains producer, listener, and teardown-cancellation failures after records leave the registry. It does not cancel work; local execution owners must stop their resources separately, and remote jobs are not cancelled through later scope disposal. The Host must retain remote job identities durably and prove all other producers have stopped before installation.
 
 ## Table of Contents
 

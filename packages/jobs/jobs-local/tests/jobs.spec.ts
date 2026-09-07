@@ -1269,3 +1269,30 @@ it('joins asynchronous completion notices and retains their rejected finalizatio
     await ctx.fiber.dispose()
   }
 })
+
+
+it.each(['owner', 'service'] as const)('keeps %s disposal behind pending shutdown completion notices', async (scope) => {
+  const ctx = await harness()
+  const registry = ctx.jobs as LocalJobRegistry
+  const owner = stubAgent(ctx, 'notice-owner')
+  ctx.agents.register(owner)
+  const entered = Promise.withResolvers<undefined>()
+  const gate = Promise.withResolvers<undefined>()
+  registry.onJobDone(async () => { entered.resolve(undefined); await gate.promise })
+  const p = producer({ owner })
+  registry.start(p.spec)
+  p.settle({ status: 'completed' })
+  await entered.promise
+  const shutdown = registry.stopForShutdown()
+  let disposed = false
+  const disposal = (scope === 'owner' ? disposeAgentScope(owner) : ctx.fiber.dispose()).then(() => { disposed = true })
+  try {
+    await tick()
+    expect(disposed).toBe(false)
+  } finally {
+    gate.resolve(undefined)
+    await shutdown
+    await disposal
+    await ctx.fiber.dispose()
+  }
+})
