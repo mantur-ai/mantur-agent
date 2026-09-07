@@ -514,9 +514,9 @@ describe('Desktop release workflow', () => {
           key: "mantur-cut-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('apps/desktop/mantur-cut/source.json', 'packages/client/ui-mantur-editing/adapters/mantur-cut.patch', 'packages/client/ui-mantur-editing/adapters/mantur-cut-packaged.patch') }}",
         },
       })
-      const whisperTools = job.steps.filter(isRecord).find(step => step.name === 'Require native Whisper build tools')
-      expect(whisperTools).toMatchObject({ run: 'cmake --version' })
-      if (file.endsWith('desktop-package.yml')) expect(whisperTools?.if).toBe("runner.os == 'macOS'")
+      const compiler = job.steps.filter(isRecord).find(step => step.name === 'Require native compiler')
+      expect(compiler).toMatchObject({ run: 'xcrun clang --version' })
+      if (file.endsWith('desktop-package.yml')) expect(compiler?.if).toBe("runner.os == 'macOS'")
     }
   })
 

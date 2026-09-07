@@ -63,9 +63,9 @@ jobs:
           path: .cache/mantur-cut
           key: mantur-cut-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('apps/desktop/mantur-cut/source.json', 'packages/client/ui-mantur-editing/adapters/mantur-cut.patch', 'packages/client/ui-mantur-editing/adapters/mantur-cut-packaged.patch') }}
 
-      - name: Require native Whisper build tools
+      - name: Require native compiler
         if: runner.os == 'macOS'
-        run: cmake --version
+        run: xcrun clang --version
 
       - name: Build native installer
         run: pnpm run ${{ matrix.script }}

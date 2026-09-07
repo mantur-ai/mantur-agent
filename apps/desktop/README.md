@@ -26,7 +26,7 @@ Development uses the `mantur-agent-dev` user-data directory, while installed bui
 
 ## Build an internal installer
 
-Install the immutable dependency graph and build every host and client artifact with the Mantur title before invoking the native packager. macOS builders also require CMake because the pinned whisper.cpp source has no upstream macOS release binary:
+Install the immutable dependency graph and build every host and client artifact with the Mantur title before invoking the native packager. macOS builders require the Xcode Command Line Tools compiler because the pinned whisper.cpp source has no upstream macOS release binary. The resource builder downloads the pinned official CMake archive into `.cache/mantur-cut/tools`, verifies its SHA-256 digest, and does not install it globally:
 
 ```sh
 pnpm install --frozen-lockfile
@@ -36,6 +36,8 @@ pnpm run desktop:smoke
 ```
 
 Each `desktop:dist:*` command first prepares the matching Mantur Cut resource tree from pinned OpenChatCut and whisper.cpp commits. It verifies both Mantur patch digests and resulting Git trees, package-lock integrities, downloaded archive hashes, and the requested native target. The package carries the embedded server, built editor, Remotion bundle and compositor, Chrome Headless Shell, FFmpeg, ffprobe, Whisper CLI and server, exact source records, retained license files, and a production dependency audit. No packaged runtime downloads a missing executable or falls back to a developer checkout.
+
+The macOS commands let electron-builder sign and produce the update ZIP, then create the DMG with Apple's `hdiutil`. A temporary unique volume name prevents collisions with an installed or mounted copy of the application; the finished image restores the `漫途Agent` volume name, adds an Applications shortcut, and receives a separate update blockmap.
 
 Run the x64 macOS command on an Intel Mac and the Windows command on x64 Windows. The manual `Desktop package` GitHub Actions workflow checks out one commit on three native runners, runs the packaged smoke, and retains these files for seven days:
 

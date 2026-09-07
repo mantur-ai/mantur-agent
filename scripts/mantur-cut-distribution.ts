@@ -1,9 +1,9 @@
 /** Build the pinned Mantur Cut runtime resource tree for one native desktop target. */
 
 import { createHash } from 'node:crypto'
-import { cp, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, writeFile } from 'node:fs/promises'
+import { chmod, cp, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { delimiter, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
@@ -50,6 +50,8 @@ interface SourceConfig {
   upstreamTree: string
   electronVersion: string
   embeddedNodeVersion: string
+  cmakeVersion: string
+  cmakeMacArchiveSha256: string
   whisperRepository: string
   whisperVersion: string
   whisperCommit: string
@@ -197,7 +199,7 @@ function targetSource(value: unknown, subject: string): TargetSource {
 /** Parse the committed source and target pins used by the distribution build. */
 export function parseSourceConfig(value: unknown): SourceConfig {
   const config = object(value, 'Mantur Cut source config')
-  exactKeys(config, ['electronVersion', 'embeddedNodeVersion', 'ffmpegStaticIntegrity', 'ffmpegStaticVersion', 'formatVersion', 'patches', 'remotionRendererIntegrity', 'remotionVersion', 'repository', 'targets', 'upstreamCommit', 'upstreamTree', 'version', 'whisperCommit', 'whisperRepository', 'whisperTree', 'whisperVersion'], 'Mantur Cut source config')
+  exactKeys(config, ['cmakeMacArchiveSha256', 'cmakeVersion', 'electronVersion', 'embeddedNodeVersion', 'ffmpegStaticIntegrity', 'ffmpegStaticVersion', 'formatVersion', 'patches', 'remotionRendererIntegrity', 'remotionVersion', 'repository', 'targets', 'upstreamCommit', 'upstreamTree', 'version', 'whisperCommit', 'whisperRepository', 'whisperTree', 'whisperVersion'], 'Mantur Cut source config')
   if (config.formatVersion !== 1) throw new Error('Mantur Cut source config formatVersion must be 1')
   if (!Array.isArray(config.patches) || config.patches.length !== 2) throw new Error('Mantur Cut source config must pin the base and runtime patches')
   const targetRows = object(config.targets, 'Mantur Cut source config targets')
@@ -210,6 +212,8 @@ export function parseSourceConfig(value: unknown): SourceConfig {
     upstreamTree: gitObject(config.upstreamTree, 'Mantur Cut source config upstreamTree'),
     electronVersion: string(config.electronVersion, 'Mantur Cut source config electronVersion'),
     embeddedNodeVersion: string(config.embeddedNodeVersion, 'Mantur Cut source config embeddedNodeVersion'),
+    cmakeVersion: string(config.cmakeVersion, 'Mantur Cut source config cmakeVersion'),
+    cmakeMacArchiveSha256: digest(config.cmakeMacArchiveSha256, 'Mantur Cut source config cmakeMacArchiveSha256'),
     whisperRepository: string(config.whisperRepository, 'Mantur Cut source config whisperRepository'),
     whisperVersion: string(config.whisperVersion, 'Mantur Cut source config whisperVersion'),
     whisperCommit: gitObject(config.whisperCommit, 'Mantur Cut source config whisperCommit'),
@@ -242,7 +246,11 @@ export async function fileSha256(path: string): Promise<string> {
 }
 
 /** Build an isolated environment for commands executed from the third-party source tree. */
-export function sourceBuildEnvironment(cacheDir: string, ambient: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+export function sourceBuildEnvironment(
+  cacheDir: string,
+  ambient: NodeJS.ProcessEnv = process.env,
+  toolDirectories: readonly string[] = [],
+): NodeJS.ProcessEnv {
   const environment = Object.fromEntries(Object.entries(ambient).filter(([name]) => (
     !(/(KEY|SECRET|TOKEN|PASSWORD)/i.test(name)
       || name === 'APPLE_ID'
@@ -253,6 +261,7 @@ export function sourceBuildEnvironment(cacheDir: string, ambient: NodeJS.Process
   environment.ELECTRON_SKIP_BINARY_DOWNLOAD = '1'
   environment.npm_config_cache = join(cacheDir, 'npm')
   environment.npm_config_registry = 'https://registry.npmjs.org/'
+  environment.PATH = [...toolDirectories, environment.PATH].filter((value): value is string => value !== undefined).join(delimiter)
   return environment
 }
 
@@ -275,12 +284,29 @@ async function download(url: string, destination: string, expected: string): Pro
   }
 }
 
+async function prepareCmake(cacheDir: string, config: SourceConfig): Promise<string> {
+  const archiveName = `cmake-${config.cmakeVersion}-macos-universal.tar.gz`
+  const archive = join(cacheDir, 'tools', archiveName)
+  await download(`https://github.com/Kitware/CMake/releases/download/v${config.cmakeVersion}/${archiveName}`, archive, config.cmakeMacArchiveSha256)
+  const directory = join(cacheDir, 'tools', `cmake-${config.cmakeVersion}-macos-universal`)
+  const executable = join(directory, 'CMake.app/Contents/bin/cmake')
+  try { await lstat(executable) }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    run('tar', ['-xzf', archive, '-C', join(cacheDir, 'tools')], root)
+  }
+  const version = capture(executable, ['--version'], root).split('\n', 1)[0]
+  if (version !== `cmake version ${config.cmakeVersion}`) throw new Error(`Mantur Cut CMake version does not match ${config.cmakeVersion}`)
+  return dirname(executable)
+}
+
 async function prepareWhisper(
   source: string,
   cacheDir: string,
   config: SourceConfig,
   targetKey: ManturCutTarget,
   target: TargetSource,
+  environment: NodeJS.ProcessEnv,
 ): Promise<void> {
   const mirror = join(cacheDir, 'whisper.cpp.git')
   try { await lstat(mirror) }
@@ -303,7 +329,31 @@ async function prepareWhisper(
     run('unzip', ['-q', archive, '-d', extracted], source)
     await cp(join(extracted, 'Release'), join(source, 'public/whisper-cli', targetKey), { recursive: true })
   } else {
-    capture('cmake', ['--version'], source)
+    const buildDirectory = join(source, '.cache/whisper-cli/build')
+    run('cmake', [
+      '-B', buildDirectory,
+      '-DCMAKE_BUILD_TYPE=Release',
+      '-DBUILD_SHARED_LIBS=OFF',
+      '-DGGML_METAL=ON',
+      '-DGGML_METAL_EMBED_LIBRARY=ON',
+      whisperSource,
+    ], source, environment)
+    run('cmake', ['--build', buildDirectory, '--config', 'Release', '-j', '--target', 'whisper-cli', 'whisper-server'], source, environment)
+    const targetDirectory = join(source, 'public/whisper-cli', targetKey)
+    await mkdir(targetDirectory, { recursive: true })
+    for (const executable of ['whisper-cli', 'whisper-server']) {
+      const destination = join(targetDirectory, executable)
+      await cp(join(buildDirectory, 'bin', executable), destination)
+      await chmod(destination, 0o755)
+    }
+  }
+}
+
+function verifyWhisperExecutables(source: string, targetKey: ManturCutTarget, target: TargetSource, environment: NodeJS.ProcessEnv): void {
+  const directory = join(source, 'public/whisper-cli', targetKey)
+  const suffix = target.platform === 'win32' ? '.exe' : ''
+  for (const executable of [`whisper-cli${suffix}`, `whisper-server${suffix}`]) {
+    run(join(directory, executable), ['--help'], directory, environment)
   }
 }
 
@@ -313,8 +363,8 @@ function run(command: string, args: readonly string[], cwd: string, environment:
   if (result.status !== 0) throw new Error(`${command} ${args.join(' ')} exited with ${String(result.status ?? result.signal)}`)
 }
 
-function capture(command: string, args: readonly string[], cwd: string): string {
-  const result = spawnSync(command, args, { cwd, encoding: 'utf8' })
+function capture(command: string, args: readonly string[], cwd: string, environment: NodeJS.ProcessEnv = process.env): string {
+  const result = spawnSync(command, args, { cwd, env: environment, encoding: 'utf8' })
   if (result.error !== undefined) throw result.error
   if (result.status !== 0) throw new Error(`${command} ${args.join(' ')} exited with ${String(result.status ?? result.signal)}: ${result.stderr.trim()}`)
   return result.stdout.trim()
@@ -385,7 +435,7 @@ async function copyProductionProgram(source: string, staging: string, auditRepor
   const whisperExecutable = target.platform === 'win32' ? 'whisper-cli.exe' : 'whisper-cli'
   const whisperServer = target.platform === 'win32' ? 'whisper-server.exe' : 'whisper-server'
   const paths: ProgramManifest['paths'] = {
-    server: 'server/embedded-server.mjs',
+    server: 'runtime/server/embedded-server.mjs',
     web: 'dist',
     remotionBundle: 'remotion-bundle',
     browserExecutable: target.browserExecutable,
@@ -395,14 +445,15 @@ async function copyProductionProgram(source: string, staging: string, auditRepor
     whisperCli: `whisper-cli/${targetKey}/${whisperExecutable}`,
     whisperServer: `whisper-cli/${targetKey}/${whisperServer}`,
   }
-  await mkdir(join(staging, 'server'), { recursive: true })
+  await mkdir(dirname(join(staging, paths.server)), { recursive: true })
   await cp(join(source, 'desktop-dist/mantur-embedded-server.mjs'), join(staging, paths.server))
   await cp(join(source, 'dist'), join(staging, paths.web), { recursive: true })
   await cp(join(source, 'desktop-dist/remotion-bundle'), join(staging, paths.remotionBundle), { recursive: true })
   await cp(join(source, 'desktop-dist/chrome-headless-shell'), join(staging, 'chrome-headless-shell'), { recursive: true })
   await cp(join(source, 'public/whisper-cli', targetKey), join(staging, 'whisper-cli', targetKey), { recursive: true })
   await cp(join(source, '.cache/whisper-cli/whisper.cpp/LICENSE'), join(staging, 'whisper-cli/LICENSE.whisper.cpp'))
-  await cp(join(source, 'node_modules'), join(staging, 'node_modules'), { recursive: true })
+  await cp(join(source, 'node_modules'), join(staging, 'runtime/node_modules'), { recursive: true })
+  await removePackageBinLinks(join(staging, 'runtime/node_modules'))
   await cp(join(source, 'package.json'), join(staging, 'package.json'))
   await cp(join(source, 'package-lock.json'), join(staging, 'package-lock.json'))
   await cp(join(source, 'LICENSE'), join(staging, 'LICENSE'))
@@ -414,6 +465,15 @@ async function copyProductionProgram(source: string, staging: string, auditRepor
   await mkdir(join(staging, 'SECURITY'), { recursive: true })
   await cp(auditReport, join(staging, 'SECURITY/npm-audit.json'))
   return paths
+}
+
+async function removePackageBinLinks(directory: string): Promise<void> {
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue
+    const child = join(directory, entry.name)
+    if (entry.name === '.bin') await rm(child, { recursive: true, force: true })
+    else await removePackageBinLinks(child)
+  }
 }
 
 async function writeDependencyInventory(resourceRoot: string): Promise<void> {
@@ -441,7 +501,7 @@ async function writeDependencyInventory(resourceRoot: string): Promise<void> {
       }
     }
   }
-  await visit(join(resourceRoot, 'node_modules'))
+  await visit(join(resourceRoot, 'runtime/node_modules'))
   packages.sort((a, b) => a.path.localeCompare(b.path))
   await writeFile(join(resourceRoot, 'THIRD_PARTY_PACKAGES.json'), `${JSON.stringify({ formatVersion: 1, packages }, null, 2)}\n`)
 }
@@ -460,13 +520,29 @@ async function directorySha256(directory: string): Promise<string> {
   return createHash('sha256').update(records.join('\n')).digest('hex')
 }
 
-async function writeBuildInformation(resourceRoot: string, config: SourceConfig, targetKey: ManturCutTarget, target: TargetSource, paths: ProgramManifest['paths']): Promise<void> {
+async function writeBuildInformation(
+  resourceRoot: string,
+  config: SourceConfig,
+  targetKey: ManturCutTarget,
+  target: TargetSource,
+  paths: ProgramManifest['paths'],
+  environment: NodeJS.ProcessEnv,
+): Promise<void> {
   const harnessCommit = capture('git', ['rev-parse', 'HEAD'], root)
   const information = {
     formatVersion: 1,
     target: targetKey,
     harnessCommit,
     distributionId: await fileSha256(sourceConfigPath),
+    buildHost: {
+      platform: process.platform,
+      arch: process.arch,
+      nodeExecutable: process.execPath,
+      nodeVersion: process.versions.node,
+      npmVersion: capture('npm', ['--version'], root, environment),
+      cmakeVersion: target.platform === 'darwin' ? capture('cmake', ['--version'], root, environment).split('\n', 1)[0] : null,
+      compiler: target.platform === 'darwin' ? capture('xcrun', ['clang', '--version'], root, environment).split('\n', 1)[0] : null,
+    },
     editor: {
       repository: config.repository,
       version: config.version,
@@ -561,11 +637,13 @@ async function prepare(targetKey: ManturCutTarget, cacheDir: string, outputDir: 
       if (capture('git', ['write-tree'], source) !== patch.resultTree) throw new Error(`Mantur Cut patched tree does not match after ${patch.file}`)
     }
     await verifyRuntimePins(source, config, target)
-    const environment = sourceBuildEnvironment(cacheDir)
+    const cmakeDirectory = target.platform === 'darwin' ? await prepareCmake(cacheDir, config) : null
+    const environment = sourceBuildEnvironment(cacheDir, process.env, cmakeDirectory === null ? [] : [cmakeDirectory])
     run('npm', ['ci'], source, environment)
     const auditReport = await auditProductionDependencies(source, targetKey, environment)
-    await prepareWhisper(source, cacheDir, config, targetKey, target)
+    await prepareWhisper(source, cacheDir, config, targetKey, target, environment)
     run('npm', ['run', 'build'], source, environment)
+    verifyWhisperExecutables(source, targetKey, target, environment)
     run('npm', ['run', 'desktop:build:main'], source, environment)
     run('npm', ['run', 'desktop:prebundle'], source, environment)
     const chromeArchive = `chrome-headless-shell-${target.chromePlatform}-${target.chromeVersion}.zip`
@@ -593,7 +671,7 @@ async function prepare(targetKey: ManturCutTarget, cacheDir: string, outputDir: 
     }
     await verifyProgramManifest(staging, manifest)
     await writeDependencyInventory(staging)
-    await writeBuildInformation(staging, config, targetKey, target, paths)
+    await writeBuildInformation(staging, config, targetKey, target, paths, environment)
     await writeFile(join(staging, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
     await replaceDirectory(staging, outputDir)
   } finally {

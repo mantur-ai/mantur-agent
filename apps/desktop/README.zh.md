@@ -26,7 +26,7 @@ pnpm run desktop:dev
 
 ## 构建内部安装包
 
-调用原生打包器之前，先安装不可变依赖图，再使用漫途标题构建全部 host 与 client 产物。macOS 构建机还必须安装 CMake，因为固定的 whisper.cpp 源码没有上游 macOS 发布二进制：
+调用原生打包器之前，先安装不可变依赖图，再使用漫途标题构建全部 host 与 client 产物。macOS 构建机必须提供 Xcode Command Line Tools 编译器，因为固定的 whisper.cpp 源码没有上游 macOS 发布二进制。资源构建器会把固定的 CMake 官方归档下载到 `.cache/mantur-cut/tools`，校验其 SHA-256 摘要，且不会进行全局安装：
 
 ```sh
 pnpm install --frozen-lockfile
@@ -36,6 +36,8 @@ pnpm run desktop:smoke
 ```
 
 每条 `desktop:dist:*` 命令都会先从固定的 OpenChatCut 与 whisper.cpp commit 准备对应的 Mantur Cut 资源树。该步骤会校验两层漫途补丁的摘要与结果 Git tree、package-lock integrity、下载归档哈希以及请求的原生目标。安装包会携带内嵌服务端、已构建编辑器、Remotion bundle 与 compositor、Chrome Headless Shell、FFmpeg、ffprobe、Whisper CLI 与 server、精确源码记录、保留的许可证文件和生产依赖审计。打包运行时不会下载缺失可执行文件，也不会回退到开发检出。
+
+macOS 命令先由 electron-builder 完成签名并生成更新 ZIP，再用 Apple 的 `hdiutil` 创建 DMG。构建阶段使用临时唯一卷名，避免与已安装或已挂载的同名应用冲突；最终镜像会恢复 `漫途Agent` 卷名、加入 Applications 快捷方式，并生成独立的更新 blockmap。
 
 macOS x64 命令必须在 Intel Mac 上运行，Windows 命令必须在 x64 Windows 上运行。手动触发的 `Desktop package` GitHub Actions 工作流会在三个原生 runner 上检出同一个 commit、运行打包 smoke，并将以下文件保留七天：
 

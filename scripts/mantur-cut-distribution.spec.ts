@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { delimiter, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   fileSha256,
@@ -37,6 +37,7 @@ function sourceConfig(): unknown {
   return {
     formatVersion: 1, repository: 'https://example.invalid/source.git', version: '1.0.0',
     upstreamCommit: tree, upstreamTree: tree, electronVersion: '43.4.0', embeddedNodeVersion: '24.18.1',
+    cmakeVersion: '4.3.3', cmakeMacArchiveSha256: digest,
     whisperRepository: 'https://example.invalid/whisper.git', whisperVersion: 'v1', whisperCommit: tree, whisperTree: tree,
     remotionVersion: '4.0.509', remotionRendererIntegrity: 'sha512-fixed',
     ffmpegStaticVersion: '5.3.0', ffmpegStaticIntegrity: 'sha512-fixed',
@@ -100,13 +101,13 @@ describe('Mantur Cut distribution', () => {
     const environment = sourceBuildEnvironment('/tmp/mantur-cache', {
       PATH: '/bin', API_KEY: 'secret', GITHUB_TOKEN: 'secret', CSC_LINK: 'certificate',
       APPLE_ID: 'person@example.com', APPLE_TEAM_ID: 'team', OPENCHATCUT_WHISPER_CLI: '/tmp/unpinned',
-    })
+    }, ['/tmp/mantur-cmake'])
     expect(environment).toMatchObject({
-      PATH: '/bin',
       ELECTRON_SKIP_BINARY_DOWNLOAD: '1',
       npm_config_cache: join('/tmp/mantur-cache', 'npm'),
       npm_config_registry: 'https://registry.npmjs.org/',
     })
+    expect(environment.PATH).toBe(['/tmp/mantur-cmake', '/bin'].join(delimiter))
     for (const name of ['API_KEY', 'GITHUB_TOKEN', 'CSC_LINK', 'APPLE_ID', 'APPLE_TEAM_ID', 'OPENCHATCUT_WHISPER_CLI']) {
       expect(environment[name]).toBeUndefined()
     }
