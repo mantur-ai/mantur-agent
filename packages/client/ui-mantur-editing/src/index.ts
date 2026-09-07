@@ -8,6 +8,7 @@ import type {} from '@deepseek-ai/dsh-system-prompt'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { apply as applyMcpClient, Config as McpClientConfig, inject as mcpClientInject, name as mcpClientName } from '@deepseek-ai/dsh-mcp-client'
 import { startEditor, type EditorRuntime, type RuntimeConfig } from './runtime.ts'
+import { resolvePackagedResources } from '@deepseek-ai/dsh-client-ui-mantur-editing/packaged-resources'
 import type { EditingWorkspace } from './types.ts'
 
 const McpClient = { apply: applyMcpClient, Config: McpClientConfig, inject: mcpClientInject, name: mcpClientName }
@@ -35,6 +36,7 @@ declare module '@deepseek-ai/cordis' {
 export type Config = RuntimeConfig
 /** Required paths and bounded subprocess/tool waits supplied by the profile. */
 export const Config: z<Config> = z.object({
+  runtimeMode: z.union(['development', 'packaged']).required(),
   editorRoot: z.string().required(), nodeExecutable: z.string().required(),
   startupTimeoutMs: z.number().step(1).min(1).max(2147483647).required(),
   stopTimeoutMs: z.number().step(1).min(1).max(2147483647).required(),
@@ -53,6 +55,7 @@ export class ManturEditing extends TypertRemoteService {
   constructor(ctx: Context, private readonly config: Config) {
     super(ctx, 'manturEditing', { namespace: 'manturEditing' })
     if (!isAbsolute(config.editorRoot) || !isAbsolute(config.nodeExecutable)) throw new Error('Editing runtime paths must be absolute')
+    if (config.runtimeMode === 'packaged') resolvePackagedResources(config.editorRoot)
     ctx.effect(() => async () => {
       this.closing = true
       await Promise.allSettled(this.opening.values())

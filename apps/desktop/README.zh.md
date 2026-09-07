@@ -67,6 +67,8 @@ smoke 会从解包应用自己的依赖目录启动 `dsh`，把打印出的进�
 
 安装包携带既有运行时依赖闭包和已构建 Web 前端。Loader profile、插件 manifest、原生模块与 subprocess helper 都需要普通文件，因此 `asar` 保持禁用。关闭或重启应用时，Electron 会等待子进程终止后再退出。Electron 父进程通过 Node IPC 通道连接子进程；各功能模块负责校验自己的消息。
 
+打包后的 Main 将 `resources/mantur-cut` 和自身可执行文件提供给漫途剪辑 profile。首次打开工作台才以 Electron 的 Node 模式启动编辑器，不创建第二个 Electron 窗口。安装包必须包含清单声明的生产服务、静态前端与目标平台渲染二进制；不完整的编辑器包会明确报错。开发模式不继承这一打包选择。会话可写目录和待完成的分发检查见[剪辑运行服务](../../packages/client/ui-mantur-editing/README.zh.md)。
+
 Main 持有操作系统加密的原生账号存储，并校验来自当前本地主 frame 的账号操作。桌面启动显式选择漫途 provider 的 `desktop-managed` 身份。Host API 响应通过逐请求 loopback broker 流式传输，仅 Main 向上游发送设备 bearer。命令描述文件保持私有，直至 consumer 确认整棵进程树清理完成。退出登录会取消已接受的流与命令，但保留加密的远端清理记录，直到 HTTP 204 或原始到期时间。
 
 永久应用标识为 `ai.mantur.agent`。Electron 就绪前，载体会在操作系统的应用数据根目录下设置稳定的 `mantur-agent` 用户数据目录。其 `harness` 子目录是已安装应用使用的唯一 `DSH_HOME`，因此 `~/.dsh` 中的 CLI 或开发数据不会影响桌面启动。子进程从应用自有的中性目录启动，并把 stdout、stderr、恢复与 updater 诊断追加到同一用户数据根下的 `logs/harness.log`。

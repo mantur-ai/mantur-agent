@@ -7,12 +7,15 @@ import { isAbsolute, join } from 'node:path'
 import { createRequire } from 'node:module'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { EditingWorkspace } from './types.ts'
+import { resolvePackagedResources } from '@deepseek-ai/dsh-client-ui-mantur-editing/packaged-resources'
 
 /** Deployment settings for the pinned editor source and Node runtime. */
 export interface RuntimeConfig {
-  /** Absolute path to the patched OpenChatCut checkout with dependencies installed. */
+  /** Explicit development checkout or packaged production server selection. */
+  runtimeMode: 'development' | 'packaged'
+  /** Absolute development checkout or installed editor resource directory. */
   editorRoot: string
-  /** Absolute Node executable compatible with the editor. */
+  /** Absolute Node executable for development, or packaged Electron executable. */
   nodeExecutable: string
   /** Maximum wait for the editor's ready handshake. */
   startupTimeoutMs: number
@@ -71,16 +74,22 @@ export async function editingDirectories(
 export async function startEditor(
   config: RuntimeConfig, cwd: string | undefined, sessionId: SessionId, parentOrigin: string,
 ): Promise<EditorRuntime> {
+  if (config.runtimeMode === 'packaged') resolvePackagedResources(config.editorRoot)
   const paths = await editingDirectories(cwd, sessionId)
   // An empty private keystore prevents the upstream dev config from importing checkout credentials.
   try { await writeFile(join(paths.engine, 'settings.env'), '', { flag: 'wx', mode: 0o600 }) }
   catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error }
   const token = randomBytes(32).toString('hex')
-  const launcher = createRequire(import.meta.url).resolve('@deepseek-ai/dsh-client-ui-mantur-editing/package.json').replace(/package\.json$/, 'adapters/mantur-runtime.mjs')
+  const adapter = config.runtimeMode === 'packaged' ? 'mantur-production-runtime.mjs' : 'mantur-runtime.mjs'
+  const launcher = createRequire(import.meta.url).resolve('@deepseek-ai/dsh-client-ui-mantur-editing/package.json').replace(/package\.json$/, `adapters/${adapter}`)
   const child = spawn(config.nodeExecutable, [launcher], {
-    cwd: config.editorRoot,
+    cwd: config.runtimeMode === 'packaged' ? paths.engine : config.editorRoot,
     env: {
       PATH: process.env.PATH, HOME: process.env.HOME, TMPDIR: process.env.TMPDIR,
+      ...(config.runtimeMode === 'packaged' ? {
+        ELECTRON_RUN_AS_NODE: '1', SystemRoot: process.env.SystemRoot,
+        MANTUR_CUT_RESOURCES: config.editorRoot,
+      } : {}),
       OPENCHATCUT_DEV_PROFILE_ID: randomUUID(), OPENCHATCUT_DATA_DIR: paths.engine,
       OPENCHATCUT_MCP_TOKEN: token, MANTUR_CUT_MEDIA_DIR: paths.media, MANTUR_CUT_EXPORT_DIR: paths.exports,
       MANTUR_CUT_PROJECT_DIR: paths.project,
@@ -90,28 +99,41 @@ export async function startEditor(
   })
   let failure: Error | undefined
   let exited = false
+  let cleanExit = false
   let diagnostic = ''
   // Node's spawn overload does not preserve the pipe type when an IPC descriptor is present.
   const stderr = child.stderr as Readable
   stderr.on('data', (chunk: Buffer) => { diagnostic = (diagnostic + chunk.toString()).slice(-8192) })
-  const done = new Promise<void>((resolve) => {
-    child.once('error', (error) => { failure = error; exited = true; resolve() })
-    child.once('exit', (code, signal) => {
-      failure = new Error(`Editing runtime exited (${signal ?? String(code)}): ${diagnostic.replaceAll(token, '[redacted]')}`)
+  const done = new Promise<Error>((resolve) => {
+    child.once('error', (error) => { failure = error })
+    child.once('close', (code, signal) => {
+      cleanExit = code === 0 && signal === null
+      failure ??= new Error(`Editing runtime exited (${signal ?? String(code)}): ${diagnostic.replaceAll(token, '[redacted]')}`)
       exited = true
-      resolve()
+      resolve(failure)
     })
   })
   let disposal: Promise<void> | undefined
   const dispose = () => disposal ??= (async () => {
     if (exited) return
-    child.kill('SIGTERM')
-    const timer = setTimeout(() => child.kill('SIGKILL'), config.stopTimeoutMs)
-    try { await done } finally { clearTimeout(timer) }
+    let stopError: Error | undefined
+    if (config.runtimeMode === 'packaged' && child.connected) child.send({ type: 'mantur-cut:stop' }, (error) => {
+      if (error && !exited) { stopError = error; child.kill('SIGKILL') }
+    })
+    else child.kill('SIGTERM')
+    const timer = setTimeout(() => {
+      stopError = new Error('Editing runtime did not complete shutdown before its deadline')
+      child.kill('SIGKILL')
+    }, config.stopTimeoutMs)
+    const exitFailure = await done.finally(() => { clearTimeout(timer) })
+    if (config.runtimeMode === 'packaged') {
+      if (stopError) throw stopError
+      if (!cleanExit) throw exitFailure
+    }
   })()
   try {
     const editorUrl = await new Promise<string>((resolve, reject) => {
-      const timer = setTimeout(() =>{  reject(new Error('Editing runtime startup timed out')) }, config.startupTimeoutMs)
+      const timer = setTimeout(() => { reject(new Error('Editing runtime startup timed out')) }, config.startupTimeoutMs)
       const finish = (error?: Error, url?: string) => {
         clearTimeout(timer)
         child.off('message', receive)
@@ -125,10 +147,14 @@ export async function startEditor(
         finish(undefined, `http://127.0.0.1:${port}/`)
       }
       child.on('message', receive)
-      void done.then(() =>{  finish(failure) })
+      void done.then((error) => { finish(error) })
     })
     return { workspace: { editorUrl, directory: paths.directory }, token, dispose,
       assertRunning() { if (exited) throw failure ?? new Error('Editing runtime stopped') },
     }
-  } catch (error) { await dispose(); throw error }
+  } catch (error) {
+    try { await dispose() }
+    catch (cleanupError) { throw new AggregateError([error, cleanupError], 'Editing startup and shutdown both failed') }
+    throw error
+  }
 }

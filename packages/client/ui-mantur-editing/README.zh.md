@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-漫途 bundle 包含默认禁用的配置行。在 profile 补丁中启用 `ui-mantur-editing` 并提供下表运行参数。选择剪辑通过已认证的 Remote 网关打开当前会话的编辑器。会话顶部也提供剪辑入口，便于收起工作台或刷新页面后重新打开已有会话的工程。没有选择会话或工作目录时显示明确提示。收起工作台保留当前会话的编辑器页面和原生 Agent 绑定，再次展开可继续同一编辑草稿。卸载 Agent 或 Host 会释放运行实例。
+安装包中的桌面客户端使用包内资源目录和 Electron 可执行文件启用 `ui-mantur-editing`。开发 profile 显式选择 `runtimeMode: development` 并提供下表运行参数。选择剪辑通过已认证的 Remote 网关打开当前会话的编辑器。会话顶部也提供剪辑入口，便于收起工作台或刷新页面后重新打开已有会话的工程。没有选择会话或工作目录时显示明确提示。收起工作台保留当前会话的编辑器页面和原生 Agent 绑定，再次展开可继续同一编辑草稿。卸载 Agent 或 Host 会释放运行实例。
 
 每个会话使用 `<cwd>/剪辑/<session-id>/`：`工程/` 保存工程和运行状态，`素材/` 保存导入媒体，`导出/` 是默认成片目录。Host 从已解析 Agent 的 Session header 读取 `cwd`，浏览器不能指定其他目录。会话目录拒绝路径穿越和符号链接，重新打开保留已有文件。同一项目内的不同会话也使用独立编辑进程和工具作用域。
 
@@ -39,11 +39,14 @@ kind: "package-reference"
 
 | 字段 | 默认值 | 含义 |
 |---|---|---|
-| `editorRoot` | 必填 | 已安装依赖并应用补丁的编辑器源码绝对路径 |
-| `nodeExecutable` | 必填 | 兼容编辑器的 Node 可执行文件绝对路径 |
+| `runtimeMode` | 必填 | `development` 使用 Vite 源码；`packaged` 使用构建后的生产服务 |
+| `editorRoot` | 必填 | 已准备源码或包内资源目录的绝对路径 |
+| `nodeExecutable` | 必填 | 开发模式使用 Node 绝对路径；打包模式使用已安装 Electron 可执行文件 |
 | `startupTimeoutMs` | 必填 | 编辑器启动最长等待时间 |
 | `stopTimeoutMs` | 必填 | 强制停止前的退出宽限时间 |
 | `toolCallTimeoutMs` | 必填 | 单次剪辑工具调用最长时间 |
+
+打包模式在打开会话前校验目标平台的 `manifest.json`；`./packaged-resources` 导出供安装包冒烟复用相同资源检查。缺少资源、不支持的目标或越出安装目录的路径会报错；运行时不会下载替代资源或启动 Vite。生产入口只将需要写入的 Remotion bundle 和 compositor 复制到会话私有目录，并将临时文件置于其中。正常退出在 HTTP 关闭后删除该目录，Host 随后等待子进程结束。强制终止可能保留私有运行文件。持久工程、素材和导出目录保留。资源字段及尚未完成的分发检查见[打包运行提案](../../../.agents/notes/proposed/architecture/2026-09-07-mantur-packaged-editing-runtime.zh.md)。
 
 “项目素材”浏览当前 Agent 目录及子目录。兼容素材直接引用原文件；必要的兼容性转换另存文件，不修改原片。`import_asset` 与 `import_folder` 使用同一接口。隐藏目录、`node_modules` 及项目的 `剪辑` 目录不参与浏览和批量导入。刷新可读取新增文件；丢失的源文件保留离线状态，直到用户选择替代文件。移除素材池条目或引用记录不删除原文件。
 

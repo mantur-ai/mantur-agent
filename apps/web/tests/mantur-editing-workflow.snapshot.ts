@@ -44,7 +44,7 @@ export async function createServer() {
 `)
     const overlay = join(root, 'editing.patch.yml')
     await writeFile(overlay, `${await readFile(manturOverlay, 'utf8')}\n- id: ui-mantur-editing\n  disabled: false\n  config: ${JSON.stringify({
-      editorRoot, nodeExecutable: process.execPath, startupTimeoutMs: 10000, stopTimeoutMs: 2000, toolCallTimeoutMs: 5000,
+      runtimeMode: 'development', editorRoot, nodeExecutable: process.execPath, startupTimeoutMs: 10000, stopTimeoutMs: 2000, toolCallTimeoutMs: 5000,
     })}\n`)
     scaffold = await launchWebScaffold({ extraOverlayPath: overlay, extraInstallAnchors: [anchor], replayFixture: fixture })
     const handle = await scaffold.ctx.agents.create({

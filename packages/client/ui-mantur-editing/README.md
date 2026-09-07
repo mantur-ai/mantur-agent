@@ -25,7 +25,7 @@ Open the local editor beside the Mantur conversation by selecting Editing on the
 <a id="use-this-package"></a>
 ## Use this package
 
-The Mantur bundle contains a disabled row. Enable `ui-mantur-editing` in a profile patch and provide the runtime fields below. Selecting Editing opens the current Session through the authenticated Remote gateway. The conversation header also offers Editing to reopen a saved Session after closing the view or refreshing the page. Without a selected Session and working directory, the workbench shows a diagnostic. Hiding the workbench retains the current Session’s editor page and native Agent binding. Reopening that view continues the same editing draft. Disposing the Agent or Host releases the runtime.
+The packaged desktop enables `ui-mantur-editing` with its installed resource directory and Electron executable. A development profile explicitly selects `runtimeMode: development` and supplies the runtime fields below. Selecting Editing opens the current Session through the authenticated Remote gateway. The conversation header also offers Editing to reopen a saved Session after closing the view or refreshing the page. Without a selected Session and working directory, the workbench shows a diagnostic. Hiding the workbench retains the current Session’s editor page and native Agent binding. Reopening that view continues the same editing draft. Disposing the Agent or Host releases the runtime.
 
 Each Session uses `<cwd>/剪辑/<session-id>/`: `工程/` contains project persistence and runtime state, `素材/` contains imported media, and `导出/` is the default export destination. The Host reads `cwd` from the resolved Agent's Session header; the browser cannot select another path. Session directory components reject traversal and symbolic links. Reopening preserves files. Different Sessions use separate runtimes and tool scopes even within one project.
 
@@ -43,11 +43,14 @@ The compact host header and bounded conversation width leave more room for the e
 
 | Field | Default | Meaning |
 |---|---|---|
-| `editorRoot` | required | Absolute patched editor checkout path with dependencies installed |
-| `nodeExecutable` | required | Absolute compatible Node executable |
+| `runtimeMode` | required | `development` for a Vite checkout; `packaged` for the built production server |
+| `editorRoot` | required | Absolute prepared checkout or packaged resource directory |
+| `nodeExecutable` | required | Absolute Node executable for development; installed Electron executable for packaged mode |
 | `startupTimeoutMs` | required | Maximum editor startup wait |
 | `stopTimeoutMs` | required | Shutdown grace before forced termination |
 | `toolCallTimeoutMs` | required | Maximum duration of one editing tool call |
+
+Packaged mode validates the platform-specific `manifest.json` before opening a Session. The `./packaged-resources` export exposes the same resource check for installer smokes. Missing assets, unsupported targets and paths outside the installation fail; the runtime does not download replacements or start Vite. The production entry copies only the writable Remotion bundle and compositor into a private Session directory and places temporary files there. Normal shutdown removes that directory after HTTP closure; the Host then waits for child close. Forced termination can retain private runtime files. Persistent project, media and export directories remain. Resource fields and unresolved distribution checks are recorded in the [packaged runtime proposal](../../../.agents/notes/proposed/architecture/2026-09-07-mantur-packaged-editing-runtime.md).
 
 -----
 

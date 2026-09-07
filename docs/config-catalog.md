@@ -418,9 +418,11 @@ export type Config = RuntimeConfig
 
 /** Deployment settings for the pinned editor source and Node runtime. */
 export interface RuntimeConfig {
-  /** Absolute path to the patched OpenChatCut checkout with dependencies installed. */
+  /** Explicit development checkout or packaged production server selection. */
+  runtimeMode: 'development' | 'packaged'
+  /** Absolute development checkout or installed editor resource directory. */
   editorRoot: string
-  /** Absolute Node executable compatible with the editor. */
+  /** Absolute Node executable for development, or packaged Electron executable. */
   nodeExecutable: string
   /** Maximum wait for the editor's ready handshake. */
   startupTimeoutMs: number
@@ -431,7 +433,7 @@ export interface RuntimeConfig {
 }
 ```
 
-Source: [`packages/client/ui-mantur-editing/src/index.ts:35`](../packages/client/ui-mantur-editing/src/index.ts)
+Source: [`packages/client/ui-mantur-editing/src/index.ts:36`](../packages/client/ui-mantur-editing/src/index.ts)
 
 <a id="deepseek-aidsh-client-ui-mantur-navigation"></a>
 

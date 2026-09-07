@@ -10,7 +10,7 @@ Status: implemented
 
 ## Decision
 
-在 `ui-layout` 中新增通用根插槽 `main.workbench` 和临时打开/关闭动作，保持对话在组件树中的位置稳定。可选的 `ui-mantur-editing` 插件管理编辑器视图、本地化控件、认证 Remote 和会话进程。漫途 bundle 包含默认禁用的配置行，显式指定编辑器源码和 Node。不修改 agent-loop，也不复制编辑器实现。
+在 `ui-layout` 中新增通用根插槽 `main.workbench` 和临时打开/关闭动作，保持对话在组件树中的位置稳定。可选的 `ui-mantur-editing` 插件管理编辑器视图、本地化控件、认证 Remote 和会话进程。开发 profile 显式指定编辑器源码和 Node；[打包运行提案](../../proposed/architecture/2026-09-07-mantur-packaged-editing-runtime.zh.md) 管理分发专用配置。不修改 agent-loop，也不复制编辑器实现。
 
 导航仅在设置接受用户明确选择后发出类型化的 `mantur/creation-mode-selected` 事件。重复选择仍通知；设置恢复和保存失败不通知。剪辑模式打开工作台，其他模式关闭工作台；卸载插件会释放监听和内嵌页面。模式按钮按对话栏宽度适配。素材、工程保存、提案审核和导出仍由上游编辑器负责。
 
@@ -60,4 +60,4 @@ Host 测试覆盖会话目录隔离、保留文件、拒绝穿越和链接、启
 
 ## Consequences
 
-集成需要准备好的本地编辑器源码和兼容的 Node。依赖及原生二进制的分发仍需另行处理。收起页面保留后台任务，卸载 Agent 或 Host 停止进程但不删除文件。
+开发需要准备好的本地编辑器源码和兼容的 Node。生产资源闭包及原生安装包验收仍属分发工作。收起页面保留后台任务，卸载 Agent 或 Host 停止进程但不删除持久工程文件。

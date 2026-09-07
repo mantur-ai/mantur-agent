@@ -20,10 +20,11 @@ afterEach(async () => {
   await Promise.all(contexts.splice(0).map(ctx => ctx.fiber.dispose()))
   harness.start.mockReset(); harness.connect.mockReset(); harness.scopes.length = 0; harness.stopped.length = 0
 })
-const config: Config = { editorRoot: '/editor', nodeExecutable: '/node', startupTimeoutMs: 1000, stopTimeoutMs: 1000, toolCallTimeoutMs: 1000 }
+const config: Config = { runtimeMode: 'development', editorRoot: '/editor', nodeExecutable: '/node', startupTimeoutMs: 1000, stopTimeoutMs: 1000, toolCallTimeoutMs: 1000 }
 
 it('requires explicit runtime paths and positive operation budgets', () => {
   expect(() => Config({} as Config)).toThrow()
+  expect(() => Config({ ...config, runtimeMode: undefined } as unknown as Config)).toThrow()
   for (const key of ['startupTimeoutMs', 'stopTimeoutMs', 'toolCallTimeoutMs'] as const) {
     expect(() => Config({ ...config, [key]: 0 })).toThrow()
   }

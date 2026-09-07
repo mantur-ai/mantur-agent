@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile, mkdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { editingDirectories, startEditor, type EditorRuntime, type RuntimeConfig } from '../src/runtime.ts'
 
@@ -59,7 +59,7 @@ export async function createServer() {
     await writeFile('closed.txt', 'drained');
   } };
 }`.replace("import { createServer } from 'node:http'", "import { createServer as createHttpServer } from 'node:http'"))
-  return { editorRoot, nodeExecutable: process.execPath, startupTimeoutMs: 5000, stopTimeoutMs: 1000, toolCallTimeoutMs: 1000 }
+  return { runtimeMode: 'development', editorRoot, nodeExecutable: process.execPath, startupTimeoutMs: 5000, stopTimeoutMs: 1000, toolCallTimeoutMs: 1000 }
 }
 
 describe('owned editor process', () => {
@@ -77,8 +77,17 @@ describe('owned editor process', () => {
   })
 
   it('drains a child that never sends ready and reports timeout', async () => {
-    const config = await fixture('await new Promise(() => {});')
-    await expect(startEditor({ ...config, startupTimeoutMs: 1000 }, await temp(), 'session' as SessionId, 'http://127.0.0.1:5298')).rejects.toThrow('timed out')
+    const config = await fixture("await writeFile('listen-started.txt', 'waiting'); await new Promise(() => {});")
+    const project = await temp()
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const failure = expect(startEditor({ ...config, startupTimeoutMs: 60_000 }, project, 'session' as SessionId, 'http://127.0.0.1:5298')).rejects.toThrow('timed out')
+    try {
+      await vi.waitFor(async () => { expect(await readFile(join(config.editorRoot, 'listen-started.txt'), 'utf8')).toBe('waiting') }, { timeout: 5000 })
+    } finally {
+      vi.advanceTimersToNextTimer()
+      vi.useRealTimers()
+      await failure
+    }
     expect(await readFile(join(config.editorRoot, 'closed.txt'), 'utf8')).toBe('drained')
   })
 

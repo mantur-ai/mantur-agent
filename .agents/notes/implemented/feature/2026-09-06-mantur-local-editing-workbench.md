@@ -10,7 +10,7 @@ Selecting Editing on the Mantur home screen needs to open a complete timeline ed
 
 ## Decision
 
-Add the generic root `main.workbench` seat and transient open/close actions to `ui-layout`. Keep the conversation at a stable tree position. The optional `ui-mantur-editing` plugin owns the editor view, localized controls, authenticated Remote, and Session runtime. The Mantur bundle contains a disabled row with explicit editor checkout and Node configuration. No agent-loop change or second editor implementation is required.
+Add the generic root `main.workbench` seat and transient open/close actions to `ui-layout`. Keep the conversation at a stable tree position. The optional `ui-mantur-editing` plugin owns the editor view, localized controls, authenticated Remote, and Session runtime. Development profiles supply an explicit editor checkout and Node configuration; the [packaged runtime proposal](../../proposed/architecture/2026-09-07-mantur-packaged-editing-runtime.md) owns distribution-specific configuration. No agent-loop change or second editor implementation is required.
 
 Navigation emits the typed `mantur/creation-mode-selected` event only after settings accept an explicit choice. Repeated choices emit again; hydration and failed writes do not. Editing opens the workbench, another mode closes it, and plugin disposal releases its listener and embedded page. Mode buttons adapt to the conversation column width. The upstream editor retains responsibility for media, project saving, proposal review, and export.
 
@@ -60,4 +60,4 @@ After upstream changes, reapply the patch and rerun editing/layout tests, the Ho
 
 ## Consequences
 
-The integration requires a prepared local editor checkout and compatible Node executable. Shipping those dependencies and native binaries remains distribution work. Closing a view preserves background jobs; disposing its Agent or Host stops the runtime without deleting files.
+Development requires a prepared local editor checkout and compatible Node executable. Production resource closure and native package acceptance remain distribution work. Closing a view preserves background jobs; disposing its Agent or Host stops the runtime without deleting persistent project files.

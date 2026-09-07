@@ -178,6 +178,10 @@ async function launch(): Promise<void> {
         DSH_HOME: paths.dshHome,
         DSH_MANTUR_PROJECTS_ROOT: join(app.getPath('documents'), '漫途项目'),
         DSH_MANTUR_NATIVE_ACCOUNT: '1',
+        ...(app.isPackaged ? {
+          DSH_MANTUR_EDITOR_ROOT: join(process.resourcesPath, 'mantur-cut'),
+          DSH_MANTUR_EDITOR_NODE: process.execPath,
+        } : {}),
       },
       logPath: paths.logPath,
       mirrorOutput: !app.isPackaged,

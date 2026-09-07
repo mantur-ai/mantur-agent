@@ -68,8 +68,15 @@
     - id: ui-mantur-account
       name: '@deepseek-ai/dsh-client-ui-mantur-account'
 
-# Enabled only by a profile that supplies the editor checkout, Node executable and runtime budgets.
+# Packaged Desktop supplies its resource root and Electron-as-Node executable.
 - insert:
     - id: ui-mantur-editing
       name: '@deepseek-ai/dsh-client-ui-mantur-editing'
-      disabled: true
+      disabled: !!js process.env.DSH_MANTUR_EDITOR_ROOT === undefined
+      config:
+        runtimeMode: packaged
+        editorRoot: !!js process.env.DSH_MANTUR_EDITOR_ROOT
+        nodeExecutable: !!js process.env.DSH_MANTUR_EDITOR_NODE
+        startupTimeoutMs: 90000
+        stopTimeoutMs: 5000
+        toolCallTimeoutMs: 30000
