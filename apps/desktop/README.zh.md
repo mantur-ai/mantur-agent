@@ -41,13 +41,13 @@ macOS x64 命令必须在 Intel Mac 上运行，Windows 命令必须在 x64 Wind
 |---|---|---|
 | macOS arm64 | `pnpm run desktop:dist:mac:arm64` | `Mantur-Agent-macOS-arm64.dmg`、`Mantur-Agent-macOS-arm64.zip` |
 | macOS x64 | `pnpm run desktop:dist:mac:x64` | `Mantur-Agent-macOS-x64.dmg`、`Mantur-Agent-macOS-x64.zip` |
-| Windows x64 | `pnpm run desktop:dist:win:x64` | `Mantur-Agent-Windows-x64.exe` |
+| Windows x64 | `pnpm run desktop:dist:win:x64` | `Mantur-Agent-Windows-x64.exe`、对应 blockmap、`latest.yml` |
 
 smoke 会从解包应用自己的依赖目录启动 `dsh`，把打印出的进程 token 换成会话 cookie，并要求带品牌标题的 Web 页面返回 HTTP 200。它还要求包内存在 updater 依赖与 GitHub release 配置。它使用空的临时 Harness home，避免开发者数据影响包检查结果。
 
-## 发布已签名的 macOS release
+## 发布已签名的桌面端 release
 
-手动触发的 `Desktop release` GitHub Actions 工作流会在原生 macOS runner 上分别构建 arm64 与 x64。两个任务都会使用 Developer ID Application 身份签名应用、提交 Apple notarization，并验证签名、Gatekeeper 评估与 stapled ticket；它们还会在产物进入组装步骤前运行 packaged smoke。
+手动触发的 `Desktop release` GitHub Actions 工作流会在原生 hosted runner 上分别构建 macOS arm64、macOS x64 与 Windows x64。macOS 任务使用 Developer ID Application 身份签名、提交 Apple notarization，并验证签名、Gatekeeper 评估与 stapled ticket。Windows 任务会签名解包应用与 NSIS 安装器，并要求两者具有来自指定证书指纹的有效 Authenticode 签名与时间戳。每个目标都必须在组装前通过 packaged smoke。
 
 对外发布前，先在仓库设置中启用 Release Immutability。然后在 GitHub 的 `macos-release` 环境中配置一个变量和四个加密 secret：
 
@@ -59,7 +59,23 @@ smoke 会从解包应用自己的依赖目录启动 `dsh`，把打印出的进�
 | Secret | `APPLE_ID` | 用于 notarization 的 Apple ID |
 | Secret | `APPLE_APP_SPECIFIC_PASSWORD` | 该 Apple ID 的 App 专用密码 |
 
-工作流会把两份原生 `latest-mac.yml` 合并为一份可区分架构的更新通道，并把完整候选产物与 `SHA256SUMS` 保留七天。必须从精确匹配 `v<apps/desktop 版本>` 的 tag 运行；electron-updater 可以从 GitHub feed 中选择这种兼容 semver 的预发布 tag。`publish=false` 会在组装候选产物后停止；`publish=true` 会创建 GitHub release，并同时上传 DMG、更新 ZIP、blockmap、更新元数据与哈希。工作流会拒绝使用已有 release 的 tag，不会替换已发布文件；仓库级 Release Immutability 则会继续阻止之后修改 tag 或产物。
+在 GitHub 的 `windows-release` 环境中配置一个变量和两个加密 secret。该工作流要求一份包含私钥且可以导出的代码签名 PFX，不支持不可导出的 USB token、HSM 或 Azure Trusted Signing 配置。如果仓库所有者确认使用其中一种方式，必须再选择并实现对应的 electron-builder 签名后端。工作流不会申请证书，也不会绕过 Windows 信任检查。
+
+| 类型 | 名称 | 值 |
+|---|---|---|
+| 变量 | `WINDOWS_CERTIFICATE_THUMBPRINT` | 签名证书的预期 SHA-1 指纹 |
+| Secret | `WINDOWS_CERTIFICATE` | 代码签名 `.pfx` 的 Base64 内容 |
+| Secret | `WINDOWS_CERTIFICATE_PASSWORD` | `.pfx` 密码 |
+
+工作流会把两份原生 `latest-mac.yml` 合并为一份可区分架构的 macOS 通道，加入 Windows NSIS 通道文件，并把完整候选产物与 `SHA256SUMS` 保留七天。必须从精确匹配 `v<apps/desktop 版本>` 的 tag 运行；electron-updater 可以从 GitHub feed 中选择这种兼容 semver 的预发布 tag。`publish=false` 会在组装候选产物后停止；`publish=true` 会创建一份包含三个原生目标及其更新元数据的 GitHub release。工作流会拒绝使用已有 release 的 tag，不会替换已发布文件；仓库级 Release Immutability 则会继续阻止之后修改 tag 和产物。
+
+## 验收发布候选
+
+分别记录每个目标的固定源码 commit、版本、原生 runner、安装包名称与 SHA-256。macOS Apple Silicon、macOS Intel 与 Windows x64 必须分别通过安装包签名检查、全新安装、应用启动、从上一公开版本升级以及该目标的 packaged smoke，才可验收。
+
+升级测试必须使用隔离的应用数据目录。升级前创建一份带附件的未发送草稿，并保留一条既有会话。重启后核对草稿文字、附件、会话历史、登录状态、登出行为、Agent 流程、Skill 广场与配方广场。记录 OS 版本和架构、旧版和新版应用版本、安装包摘要与日志位置，不得把凭据复制到验收证据中。
+
+如果打包代码依赖开发机的 `editorRoot`、绝对 `nodeExecutable` 或其他外部源码 checkout，则不得验收。实验性编辑器集成只有在运行时文件与第三方分发义务获得独立批准并纳入安装包后，才属于已安装功能；未经批准不得捆绑外部源码或商业字体。
 
 ## 运行时设计
 
@@ -87,7 +103,7 @@ macOS Intel、macOS Apple Silicon 与 Windows 使用同一个更新控制器。m
 
 ## 已知限制
 
-- `Desktop package` 产物仍是未签名的内部安装包。macOS Gatekeeper 与 Windows SmartScreen 可能对这些文件显示警告；对外分发 macOS 客户端时只能使用 `Desktop release` 产物。
+- `Desktop package` 产物仍是未签名的内部安装包。macOS Gatekeeper 与 Windows SmartScreen 可能对这些文件显示警告；对外分发时只能使用已验证的 `Desktop release` 产物。
 - 原生图标源文件是带白色圆角底和透明外角的 1024 px PNG，Web 客户端单独使用透明 Logo。macOS 和 Windows 包会在原生构建时生成各自的平台图标格式；当前没有矢量源文件。
-- 已签名的 release 工作流只发布 macOS。Windows 在具备代码签名身份与受保护的发布路径之前不支持外部更新。
+- 在仓库所有者为受保护的 `windows-release` 环境配置代码签名身份之前，已签名的 Windows 任务会失败。
 - 每个目标只在其原生 runner 同时完成打包和 smoke 后有效。一个架构上的构建不能作为另一目标的证据。

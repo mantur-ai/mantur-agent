@@ -504,12 +504,14 @@ describe('Desktop release workflow', () => {
     const dispatch = workflowEvent(workflow, 'workflow_dispatch')
     const validate = workflowJob(workflow, 'validate')
     const macos = workflowJob(workflow, 'macos')
+    const windows = workflowJob(workflow, 'windows')
     const assemble = workflowJob(workflow, 'assemble')
     const publish = workflowJob(workflow, 'publish')
     if (!isRecord(dispatch.inputs)
       || !isRecord(dispatch.inputs.publish)
       || !Array.isArray(validate.steps)
       || !Array.isArray(macos.steps)
+      || !Array.isArray(windows.steps)
       || !Array.isArray(assemble.steps)
       || !Array.isArray(publish.steps)) {
       throw new TypeError('Desktop release workflow must define publish input and release steps')
@@ -598,6 +600,24 @@ releaseDate: '2026-09-03T00:00:00.000Z'
     expect(macosSteps).toContain('codesign --verify --deep --strict')
     expect(macosSteps).toContain('spctl --assess --type execute')
     expect(macosSteps).toContain('xcrun stapler validate')
+    expect(windows).toMatchObject({
+      environment: 'windows-release',
+      'runs-on': 'windows-2025',
+      env: {
+        DSH_TELEMETRY_DISABLED: '1',
+        WIN_CSC_KEY_PASSWORD: '${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}',
+        WIN_CSC_LINK: '${{ secrets.WINDOWS_CERTIFICATE }}',
+        WINDOWS_CERTIFICATE_THUMBPRINT: '${{ vars.WINDOWS_CERTIFICATE_THUMBPRINT }}',
+      },
+    })
+    const windowsSteps = JSON.stringify(windows.steps)
+    expect(windowsSteps).toContain('Get-AuthenticodeSignature')
+    expect(windowsSteps).toContain("$signature.Status -ne 'Valid'")
+    expect(windowsSteps).toContain('WINDOWS_CERTIFICATE_THUMBPRINT')
+    expect(windowsSteps).toContain('TimeStamperCertificate')
+    expect(windowsSteps).toContain('Mantur-Agent-Windows-x64.exe.blockmap')
+    expect(windowsSteps).toContain('latest.yml')
+    expect(assemble.needs).toEqual(['validate', 'macos', 'windows'])
     const assembleSteps = assemble.steps.filter(isRecord)
     const mergeArtifacts = assembleSteps.find(step => step.name === 'Merge native artifacts and update metadata')
     if (typeof mergeArtifacts?.run !== 'string') {
@@ -612,6 +632,9 @@ releaseDate: '2026-09-03T00:00:00.000Z'
       'release-input/desktop-macos-x64/Mantur-Agent-macOS-x64.dmg.blockmap',
       'release-input/desktop-macos-x64/Mantur-Agent-macOS-x64.zip',
       'release-input/desktop-macos-x64/Mantur-Agent-macOS-x64.zip.blockmap',
+      'release-input/desktop-windows-x64/Mantur-Agent-Windows-x64.exe',
+      'release-input/desktop-windows-x64/Mantur-Agent-Windows-x64.exe.blockmap',
+      'release-input/desktop-windows-x64/latest.yml',
     ]
     const artifactBlock = mergeArtifacts.run.match(/required_artifacts=\(\n([\s\S]*?)\n\s*\)/)
     if (artifactBlock?.[1] === undefined) {

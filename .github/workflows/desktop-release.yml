@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       publish:
-        description: Publish the signed and notarized macOS build to GitHub Releases. Must run from the matching v* tag.
+        description: Publish the signed native builds to GitHub Releases. Must run from the matching v* tag.
         required: true
         type: boolean
         default: false
@@ -128,9 +128,93 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  windows:
+    name: Signed Windows / x64
+    needs: validate
+    runs-on: windows-2025
+    timeout-minutes: 90
+    environment: windows-release
+    env:
+      DSH_TELEMETRY_DISABLED: '1'
+      WIN_CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+      WIN_CSC_LINK: ${{ secrets.WINDOWS_CERTIFICATE }}
+      WINDOWS_CERTIFICATE_THUMBPRINT: ${{ vars.WINDOWS_CERTIFICATE_THUMBPRINT }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Require Windows signing credentials
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($name in 'WIN_CSC_KEY_PASSWORD', 'WIN_CSC_LINK', 'WINDOWS_CERTIFICATE_THUMBPRINT') {
+            if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
+              throw "$name is not configured in the windows-release environment."
+            }
+          }
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install immutable dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Mantur client and desktop carrier
+        run: pnpm run build:mantur
+
+      - name: Test desktop launch contract
+        run: pnpm exec vitest run apps/desktop/tests/runtime.spec.ts scripts/client-build-environment.client.spec.ts
+
+      - name: Build and sign native installer
+        run: pnpm run desktop:dist:win:x64
+
+      - name: Verify Authenticode signatures and timestamps
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $expected = $env:WINDOWS_CERTIFICATE_THUMBPRINT.Replace(' ', '').ToUpperInvariant()
+          $signedFiles = @(
+            'apps/desktop/dist/win-unpacked/漫途Agent.exe',
+            'apps/desktop/dist/Mantur-Agent-Windows-x64.exe'
+          )
+          foreach ($path in $signedFiles) {
+            if (-not (Test-Path -LiteralPath $path)) {
+              throw "Required signed Windows file is missing: $path"
+            }
+            $signature = Get-AuthenticodeSignature -LiteralPath $path
+            if ($signature.Status -ne 'Valid') {
+              throw "Authenticode signature is not valid for ${path}: $($signature.StatusMessage)"
+            }
+            $actual = $signature.SignerCertificate.Thumbprint.Replace(' ', '').ToUpperInvariant()
+            if ($actual -ne $expected) {
+              throw "Authenticode signer thumbprint does not match WINDOWS_CERTIFICATE_THUMBPRINT for $path."
+            }
+            if ($null -eq $signature.TimeStamperCertificate) {
+              throw "Authenticode signature has no timestamp for $path."
+            }
+          }
+
+      - name: Smoke packaged dependency closure
+        run: pnpm run desktop:smoke
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: desktop-windows-x64
+          path: |
+            apps/desktop/dist/Mantur-Agent-Windows-x64.exe
+            apps/desktop/dist/Mantur-Agent-Windows-x64.exe.blockmap
+            apps/desktop/dist/latest.yml
+          if-no-files-found: error
+          retention-days: 7
+
   assemble:
-    name: Assemble macOS release
-    needs: [validate, macos]
+    name: Assemble desktop release
+    needs: [validate, macos, windows]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -150,7 +234,7 @@ jobs:
 
       - uses: actions/download-artifact@v8
         with:
-          pattern: desktop-macos-*
+          pattern: desktop-*
           path: release-input
 
       - name: Merge native artifacts and update metadata
@@ -166,6 +250,9 @@ jobs:
             release-input/desktop-macos-x64/Mantur-Agent-macOS-x64.dmg.blockmap
             release-input/desktop-macos-x64/Mantur-Agent-macOS-x64.zip
             release-input/desktop-macos-x64/Mantur-Agent-macOS-x64.zip.blockmap
+            release-input/desktop-windows-x64/Mantur-Agent-Windows-x64.exe
+            release-input/desktop-windows-x64/Mantur-Agent-Windows-x64.exe.blockmap
+            release-input/desktop-windows-x64/latest.yml
           )
           for artifact in "${required_artifacts[@]}"; do
             [ -f "$artifact" ] || {

@@ -41,13 +41,13 @@ Run the x64 macOS command on an Intel Mac and the Windows command on x64 Windows
 |---|---|---|
 | macOS arm64 | `pnpm run desktop:dist:mac:arm64` | `Mantur-Agent-macOS-arm64.dmg`, `Mantur-Agent-macOS-arm64.zip` |
 | macOS x64 | `pnpm run desktop:dist:mac:x64` | `Mantur-Agent-macOS-x64.dmg`, `Mantur-Agent-macOS-x64.zip` |
-| Windows x64 | `pnpm run desktop:dist:win:x64` | `Mantur-Agent-Windows-x64.exe` |
+| Windows x64 | `pnpm run desktop:dist:win:x64` | `Mantur-Agent-Windows-x64.exe`, its blockmap, `latest.yml` |
 
 The smoke starts `dsh` from the unpacked application's own dependency directory, exchanges the printed process token for a session cookie, and requires the branded Web page to return HTTP 200. It also requires the packaged updater dependency and GitHub release configuration. It uses an empty temporary Harness home so developer data cannot make the package check pass or fail.
 
-## Publish a signed macOS release
+## Publish a signed desktop release
 
-The manual `Desktop release` GitHub Actions workflow builds arm64 and x64 on native macOS runners. Both jobs sign the application with a Developer ID Application identity, submit it to Apple's notarization service, validate the signature, Gatekeeper assessment, and stapled ticket, and run the packaged smoke before their artifacts can be assembled.
+The manual `Desktop release` GitHub Actions workflow builds macOS arm64, macOS x64, and Windows x64 on native hosted runners. The macOS jobs sign with a Developer ID Application identity, submit to Apple's notarization service, and validate the signature, Gatekeeper assessment, and stapled ticket. The Windows job signs the unpacked application and NSIS installer, then requires valid Authenticode signatures from the configured certificate thumbprint with timestamps. Every target runs the packaged smoke before assembly.
 
 Before public distribution, enable Release Immutability in the repository settings. Configure the `macos-release` GitHub environment with one variable and four encrypted secrets:
 
@@ -59,7 +59,23 @@ Before public distribution, enable Release Immutability in the repository settin
 | Secret | `APPLE_ID` | Apple ID used for notarization |
 | Secret | `APPLE_APP_SPECIFIC_PASSWORD` | App-specific password for that Apple ID |
 
-The workflow combines both native `latest-mac.yml` files into one architecture-aware update channel and retains the complete candidate plus `SHA256SUMS` for seven days. Run it from the exact `v<apps/desktop version>` tag; this semver-compatible tag lets electron-updater select prereleases from the GitHub feed. `publish=false` stops after assembling the candidate; `publish=true` creates a GitHub release with the DMGs, update ZIPs, blockmaps, update metadata, and hashes. The workflow refuses a tag that already owns a release instead of replacing published files; repository-level Release Immutability then prevents later tag or asset changes.
+Configure the `windows-release` GitHub environment with one variable and two encrypted secrets. This workflow requires an exportable code-signing PFX that contains its private key; it does not support a non-exportable USB token, HSM, or Azure Trusted Signing configuration. Select and implement the matching electron-builder signing backend after the repository owner identifies one of those alternatives. The workflow does not obtain a certificate or bypass Windows trust checks.
+
+| Kind | Name | Value |
+|---|---|---|
+| Variable | `WINDOWS_CERTIFICATE_THUMBPRINT` | Expected SHA-1 thumbprint of the signing certificate |
+| Secret | `WINDOWS_CERTIFICATE` | Base64-encoded code-signing `.pfx` |
+| Secret | `WINDOWS_CERTIFICATE_PASSWORD` | Password for the `.pfx` |
+
+The workflow combines both native `latest-mac.yml` files into one architecture-aware macOS channel, includes the Windows NSIS channel files, and retains the complete candidate plus `SHA256SUMS` for seven days. Run it from the exact `v<apps/desktop version>` tag; this semver-compatible tag lets electron-updater select prereleases from the GitHub feed. `publish=false` stops after assembling the candidate; `publish=true` creates one GitHub release with all three native targets and their update metadata. The workflow refuses a tag that already owns a release instead of replacing published files; repository-level Release Immutability then prevents later tag or asset changes.
+
+## Accept a release candidate
+
+Record the fixed source commit, version, native runner, installer name, and SHA-256 for each target. Accept macOS Apple Silicon, macOS Intel, and Windows x64 separately only after the installer signature checks, a clean install, application launch, an upgrade from the previous public version, and the packaged smoke pass on that target.
+
+Use an isolated application-data directory for upgrade tests. Before upgrading, create an unsent draft with an attachment and retain an existing session. After restart, verify the draft text, attachment, session history, login state, logout behavior, Agent flow, Skill marketplace, and Recipe marketplace. Record the OS version and architecture, old and new application versions, package digest, and log location without copying credentials into the evidence.
+
+Do not accept a release when packaged code depends on a developer-machine `editorRoot`, absolute `nodeExecutable`, or another external source checkout. An experimental editor integration is not an installed feature until its runtime files and third-party distribution obligations are independently approved and included; do not bundle external source or commercial fonts without that approval.
 
 ## Runtime design
 
@@ -87,7 +103,7 @@ The carrier passes `app.getPath('documents')` with a `漫途项目` child to the
 
 ## Known limitations
 
-- The `Desktop package` artifacts remain unsigned internal installers. macOS Gatekeeper and Windows SmartScreen can warn for those files; use only the `Desktop release` artifacts for external macOS distribution.
+- The `Desktop package` artifacts remain unsigned internal installers. macOS Gatekeeper and Windows SmartScreen can warn for those files; use only verified `Desktop release` artifacts for external distribution.
 - The native icon source is a 1024 px PNG with a white rounded tile and transparent outer corners. The Web client uses the transparent logo separately. macOS and Windows packages derive their platform icon formats during the native build; a vector source remains unavailable.
-- The signed release workflow publishes macOS only. Windows external updates remain unsupported until a Windows code-signing identity and protected publication path exist.
+- The signed Windows job fails until the repository owner configures a code-signing identity in the protected `windows-release` environment.
 - Each target is valid only after its native runner completes both packaging and the smoke. A build on one architecture is not evidence for another target.
