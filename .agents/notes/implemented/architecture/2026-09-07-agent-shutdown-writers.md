@@ -49,3 +49,5 @@ Global flush misses writers that have already left the live registry. Replaying 
 A failed checkpoint leaves installation blocked. No driver or queued work is automatically restarted. The complete Host coordinator and native installation remain pending; the owner primitives do not authorize either operation alone.
 
 Gateway ownership belongs in `packages/api/gateway/src/index.ts`: closing a socket or cancelling a response does not settle the original business promise or iterator read. The Gateway freezes admission, joins original operations, and retains iterator cleanup failures. Held unary results, cancelled reads, interrupted stream opening, and failed iterator return are the upgrade regressions. It does not own background work detached by a business service.
+
+Storage domain ownership belongs in `packages/storage/storage-domain/src/index.ts`: a snapshot of live domains omits pending backend opens. The facility freezes admission, closes existing domains to new writes immediately, joins pending allocation and unit cleanup, and retains failed allocation rollback. Delayed allocation and close, failed rollback, and reusable ordinary close are the upgrade checks.

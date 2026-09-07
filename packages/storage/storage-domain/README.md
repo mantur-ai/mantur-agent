@@ -11,6 +11,8 @@ English | [中文](README.zh.md)
 
 `dsh-storage-domain` is the typed way to use the storage family: an owning package declares a domain once — its name, format version, and zod record schemas — and host consumers open it over a routed backend and read and write records through `ctx.storageDomain`. Reads are synchronous from authoritative in-memory state; every write is durable before it resolves and emits a `domain/changed` event, so reads never diverge from the stored medium. It is the only consumer of the backend contract — product packages never touch backends directly. The layer is host-side only: it registers no tools, injects no prompts, and appends no session events, so the model and the agent loop never see it.
 
+`stopForShutdown()` permanently freezes new opens, immediately closes existing domains to new writes, and joins admitted opens and all unit cleanup. Allocation rollback failures remain recorded and reject shutdown. Plugin disposal uses this operation; `closeAll()` closes the current domains while allowing later reopening.
+
 ## Table of Contents
 
 - [Use this package](#use-this-package)

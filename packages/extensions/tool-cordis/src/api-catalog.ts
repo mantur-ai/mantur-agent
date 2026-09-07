@@ -2259,6 +2259,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [],
         returns: 'resolution after every unit is released.',
       },
+      {
+        signature: 'stopForShutdown(): Promise<void>',
+        description: 'Freeze domain opens and join admitted allocation, writes, and unit cleanup.',
+        parameters: [],
+        returns: 'completion after all owned domains close; cleanup failures reject.',
+      },
     ],
   },
   {
