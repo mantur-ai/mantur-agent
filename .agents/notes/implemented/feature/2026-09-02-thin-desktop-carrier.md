@@ -34,6 +34,8 @@ DMG image files remain under the build output directory, but the `hdiutil` mount
 
 The macOS release workflow uses protected GitHub environment secrets to sign and notarize native arm64 and x64 builds. It validates the Developer ID signature, Gatekeeper assessment, stapled ticket, and packaged smoke before it combines the two architecture-specific channel files. An explicit publication run from the exact `v<version>` tag creates one GitHub release containing both DMGs, both update ZIPs, their blockmaps, combined update metadata, and SHA-256 hashes. The semver-compatible tag lets electron-updater select alpha, beta, and RC releases from the GitHub feed. The workflow rejects an existing release; repository-level Release Immutability must also be enabled before publication so later tag and asset changes are blocked. Windows remains outside the external update channel until it has an independent signing identity and publication path.
 
+The unpacked application contains more files than the macOS runner's open-file limit permits `@electron/osx-sign` to inspect concurrently. The workspace pins a dependency patch that preserves its depth-first signing order while reading one directory child at a time. A dependency upgrade must retain this bound or prove the complete unpacked application can be signed on the release runner before removing the patch.
+
 ## Alternatives considered
 
 **Embed Harness Host and replace HTTP with Electron IPC.** Rejected because it creates a desktop-specific application assembly and transport, duplicates existing Web authentication and lifecycle behavior, and requires a larger upstream divergence before one-click installation proves demand for those changes.
@@ -50,6 +52,10 @@ The macOS release workflow uses protected GitHub environment secrets to sign and
 
 **Expose desktop updater state through the Web application.** Rejected because the renderer intentionally has no Electron preload bridge, Node integration, or desktop-specific HTTP API. A native menu presents an application-lifecycle function without adding desktop transport to the Harness profile or Web client.
 
+**Raise the release runner's open-file limit without bounding traversal.** Rejected because the macOS runner's hard limit remains below the unpacked application's concurrent file count. It only moves the failure to a later file and leaves signing dependent on host limits.
+
+**Enable ASAR only to reduce signing traversal.** Rejected because the carrier and embedded Mantur Cut runtime intentionally use ordinary filesystem paths for Loader resolution, native modules, subprocess executables, and generated media resources. Repackaging that closure requires separate runtime evidence and is not a signing defect fix.
+
 ## Consequences
 
 - Desktop users get ordinary installers while the Web profile remains the only interactive Harness application implementation.
@@ -58,4 +64,5 @@ The macOS release workflow uses protected GitHub environment secrets to sign and
 - Update checks are automatic and manually reachable, but downloading and restart installation remain user decisions. Stable users do not receive prereleases. Only the signed macOS release artifacts constitute the external update channel; Windows public updates still require signing credentials and a protected publication path.
 - Desktop changes run through one watched development command without generating installers; development data and installed data remain separate.
 - The full runtime dependency closure and unpacked files make the installer larger than a dedicated client; this cost avoids a second application runtime and keeps Loader and native-module paths ordinary.
+- macOS signing inspects the unpacked closure sequentially, trading traversal speed for a deterministic file-descriptor bound on hosted release runners.
 - Signing and notarization credentials remain protected deployment inputs. The internal packaging workflow cannot access them or publish a release.
