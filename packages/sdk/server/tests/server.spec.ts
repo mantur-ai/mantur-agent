@@ -636,7 +636,7 @@ describe('HarnessSdkJsonRpcServer', () => {
         agentOptions: { model: 'deepseek-official' },
       })
       const newChild = await newParent.agent.ctx.agents.create({
-        sessionId: SessionId('reused-child'),
+        sessionId: SessionId('replacement-child'),
         meta: { cwd: storageDir, parentSession: SessionId('new-parent') },
         agentOptions: { model: 'deepseek-official' },
       })

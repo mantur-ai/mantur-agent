@@ -108,7 +108,7 @@
 .railEdge::after { content: ''; position: absolute; pointer-events: none; width: 12px; height: 100%; }
 .railEdge[data-side='left'][data-active='true']::after { left: 100%; background: linear-gradient(to right, var(--dsw-alias-bg-base), transparent); }
 .railEdge[data-side='right'][data-active='true']::after { right: 100%; background: linear-gradient(to left, var(--dsw-alias-bg-base), transparent); }
-.railEdge button { display: grid; place-items: center; width: 26px; height: 36px; padding: 0; border: 1px solid var(--dsw-alias-border-l1); border-radius: 10px; background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); cursor: pointer; }
+.railEdge button { display: grid; place-items: center; width: 26px; height: 36px; padding: 0; border: 0.5px solid var(--dsw-alias-border-l1); border-radius: 10px; background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); cursor: pointer; }
 
 .shortcuts > * { flex: none; }
 .shortcuts .empty { flex: 1 0 100%; max-width: 34ch; white-space: normal; overflow-wrap: anywhere; }
