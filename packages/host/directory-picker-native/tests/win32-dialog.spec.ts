@@ -167,6 +167,7 @@ describe('pickWin32Directory', () => {
     worker.post({ kind: 'done', path: 'C:\\once' })
     worker.emit('close')
     await expect(picked).resolves.toBe('C:\\once')
+    worker.emit('message', { kind: 'done', path: 'C:\\late' })
   })
 
   it('throws immediately on an already-aborted signal without spawning', async () => {

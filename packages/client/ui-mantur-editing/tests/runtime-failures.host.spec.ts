@@ -144,14 +144,15 @@ it('launches the packaged adapter from the private engine directory', async () =
   })
   harness.spawn.mockReturnValue(value)
   const runtimeConfig = { ...await config(), runtimeMode: 'packaged' as const }
-  const pending = startEditor(runtimeConfig, await temp(), 'packaged' as SessionId, 'http://127.0.0.1:5298')
+  const project = await temp()
+  const pending = startEditor(runtimeConfig, project, 'packaged' as SessionId, 'http://127.0.0.1:5298')
   await spawned(pending)
   const runtime = await ready(value, pending)
   const [executable, args, options] = harness.spawn.mock.calls[0]!
   expect(harness.packaged).toHaveBeenCalledWith(runtimeConfig.editorRoot)
   expect(executable).toBe(process.execPath)
   expect(args[0]).toContain('mantur-production-runtime.mjs')
-  expect(options.cwd).toContain('/工程')
+  expect(options.cwd).toBe(join(runtime.workspace.directory, '工程'))
   expect(options.env).toMatchObject({ ELECTRON_RUN_AS_NODE: '1', MANTUR_CUT_RESOURCES: runtimeConfig.editorRoot })
   await runtime.dispose()
 })

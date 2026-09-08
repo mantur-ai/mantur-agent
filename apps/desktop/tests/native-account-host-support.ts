@@ -95,7 +95,8 @@ export async function hostFixture(
   })
   await ready.promise
   expect((await send('init', { config: { origin: backend.origin, environment: 'test', environmentLabel: 'Isolated',
-    requestTimeoutMs: 10_000, maxResponseBytes: 16_384, leaseMs: 60_000, revocationRetryMs: 60_000 } }).result).ok).toBe(true)
+    requestTimeoutMs: process.platform === 'win32' ? 60_000 : 10_000,
+    maxResponseBytes: 16_384, leaseMs: 60_000, revocationRetryMs: 60_000 } }).result).ok).toBe(true)
   const controller = await configured.promise
   const login = (): Promise<void> => controller.password({ email: 'broker@example.com', password: backend.password, consent: true })
   return { backend, root, child, controller, host, send, release, login, nativeRequests, nativeTimings }

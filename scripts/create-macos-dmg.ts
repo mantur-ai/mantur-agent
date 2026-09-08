@@ -2,7 +2,7 @@
 
 import { createRequire } from 'node:module'
 import { mkdtemp, rename, rm, rmdir, symlink } from 'node:fs/promises'
-import { dirname, isAbsolute, join, resolve } from 'node:path'
+import { dirname, join, posix, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { spawnSync } from 'node:child_process'
 
@@ -29,7 +29,7 @@ export function parseMacArchitecture(arguments_: string[]): MacArchitecture {
  * @returns Absolute application path.
  */
 export function macApplicationPath(root: string, architecture: MacArchitecture): string {
-  return join(root, 'dist', architecture === 'arm64' ? 'mac-arm64' : 'mac', '漫途Agent.app')
+  return posix.join(root, 'dist', architecture === 'arm64' ? 'mac-arm64' : 'mac', '漫途Agent.app')
 }
 
 /**
@@ -39,10 +39,10 @@ export function macApplicationPath(root: string, architecture: MacArchitecture):
 export async function createMacMountPoint(): Promise<string> {
   const result = spawnSync('getconf', ['DARWIN_USER_TEMP_DIR'], { encoding: 'utf8' })
   if (result.error !== undefined) throw result.error
-  if (result.status !== 0 || !isAbsolute(result.stdout.trim())) {
+  if (result.status !== 0 || !posix.isAbsolute(result.stdout.trim())) {
     throw new Error(`Could not resolve macOS user temporary directory: ${result.stderr.trim()}`)
   }
-  return mkdtemp(join(result.stdout.trim(), 'mantur-dmg-mount-'))
+  return mkdtemp(posix.join(result.stdout.trim(), 'mantur-dmg-mount-'))
 }
 
 function run(command: string, arguments_: string[]): void {
