@@ -107,7 +107,7 @@
     "adapters/mantur-packaged-resources.d.mts",
     "adapters/mantur-cut-packaged.patch",
     "adapters/mantur-cut-shutdown.patch",
-    "lib/types/**/*.js",
+    "lib/types/types.js",
     "lib/types/**/*.d.ts",
     "lib/typert.host.js",
     "lib/typert.host.d.ts",
