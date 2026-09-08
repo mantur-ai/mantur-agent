@@ -302,6 +302,22 @@ async function prepareCmake(cacheDir: string, config: SourceConfig): Promise<str
   return dirname(executable)
 }
 
+async function preparePinnedMirror(
+  cacheDir: string,
+  directoryName: string,
+  repository: string,
+  commit: string,
+): Promise<string> {
+  const mirror = join(cacheDir, directoryName)
+  try { await lstat(mirror) }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    run('git', ['init', '--bare', mirror], root)
+  }
+  run('git', ['--git-dir', mirror, 'fetch', '--force', '--depth', '1', repository, `${commit}:refs/heads/mantur-cut-pinned`], root)
+  return mirror
+}
+
 async function prepareWhisper(
   source: string,
   cacheDir: string,
@@ -310,13 +326,7 @@ async function prepareWhisper(
   target: TargetSource,
   environment: NodeJS.ProcessEnv,
 ): Promise<void> {
-  const mirror = join(cacheDir, 'whisper.cpp.git')
-  try { await lstat(mirror) }
-  catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
-    run('git', ['init', '--bare', mirror], root)
-  }
-  run('git', ['--git-dir', mirror, 'fetch', '--force', '--depth', '1', config.whisperRepository, `${config.whisperCommit}:refs/heads/mantur-cut-pinned`], root)
+  const mirror = await preparePinnedMirror(cacheDir, 'whisper.cpp.git', config.whisperRepository, config.whisperCommit)
   const whisperSource = join(source, '.cache/whisper-cli/whisper.cpp')
   await mkdir(dirname(whisperSource), { recursive: true })
   run('git', ['clone', '--no-checkout', mirror, whisperSource], root)
@@ -616,13 +626,7 @@ async function prepare(targetKey: ManturCutTarget, cacheDir: string, outputDir: 
   if (devDependencies.electron !== config.electronVersion) throw new Error('Mantur Cut Electron pin must match apps/desktop')
 
   await mkdir(cacheDir, { recursive: true })
-  const mirror = join(cacheDir, 'openchatcut.git')
-  try { await lstat(mirror) }
-  catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
-    run('git', ['init', '--bare', mirror], root)
-  }
-  run('git', ['--git-dir', mirror, 'fetch', '--force', '--depth', '1', config.repository, `${config.upstreamCommit}:refs/heads/mantur-cut-pinned`], root)
+  const mirror = await preparePinnedMirror(cacheDir, 'openchatcut.git', config.repository, config.upstreamCommit)
   const temporary = await mkdtemp(join(tmpdir(), 'mantur-cut-distribution-'))
   const source = join(temporary, 'source')
   await mkdir(dirname(outputDir), { recursive: true })
