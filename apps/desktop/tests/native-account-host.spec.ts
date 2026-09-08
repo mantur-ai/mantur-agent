@@ -1,10 +1,26 @@
-/** Real Main/Node IPC and streaming transport; only the OS cipher and remote API server are test-owned substitutes. */
+/** Real Main/Node IPC and streaming transport; OS services and the remote API server are test-owned substitutes. */
 import { access, readdir, rename } from 'node:fs/promises'
 import { join } from 'node:path'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { z } from 'zod'
 import { NativeAccountStore } from '../src/auth/store.ts'
 import { hostFixture } from './native-account-host-support.ts'
+
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:child_process')>()
+  if (process.platform !== 'win32') return actual
+  const { EventEmitter } = await import('node:events')
+  return { ...actual, execFile: ((...args: Parameters<typeof actual.execFile>) => {
+    const callback = args.at(-1)
+    if (typeof callback !== 'function') throw new Error('Expected Windows ACL completion callback')
+    const child = Object.assign(new EventEmitter(), { kill: vi.fn(() => true) })
+    queueMicrotask(() => {
+      callback(null, '', '')
+      child.emit('close', 0, null)
+    })
+    return child
+  }) as unknown as typeof actual.execFile }
+})
 
 describe('native account Main and dsh IPC', () => {
   it('reports blocked authority to the dsh child when saving logout fails', async () => {
