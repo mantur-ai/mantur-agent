@@ -618,7 +618,26 @@ releaseDate: '2026-09-03T00:00:00.000Z'
     })
     const macosSteps = JSON.stringify(macos.steps)
     const signingStep = macos.steps.filter(isRecord).find(step => step.name === 'Build, sign, and notarize native installer')
-    expect(signingStep).toMatchObject({ run: expect.stringContaining('ulimit -n "$(ulimit -Hn)"') })
+    if (typeof signingStep?.run !== 'string') {
+      throw new TypeError('Desktop release workflow must define the signing command')
+    }
+    expect(signingStep.run).toContain('ulimit -n "$(ulimit -Hn)"')
+    const workspace: unknown = yaml.load(readFileSync(resolve(root, 'pnpm-workspace.yaml'), 'utf8'))
+    if (!isRecord(workspace) || !isRecord(workspace.patchedDependencies)) {
+      throw new TypeError('pnpm workspace must define patched dependencies')
+    }
+    expect(workspace.patchedDependencies['@electron/osx-sign@1.3.3']).toBe(
+      'patches/@electron__osx-sign@1.3.3.patch',
+    )
+    const requireFromElectronBuilder = createRequire(resolve(root, 'apps/desktop/node_modules/electron-builder/package.json'))
+    const appBuilderLibPackage = requireFromElectronBuilder.resolve('app-builder-lib/package.json')
+    const requireFromAppBuilderLib = createRequire(appBuilderLibPackage)
+    const osxSignWalk = readFileSync(
+      requireFromAppBuilderLib.resolve('@electron/osx-sign/dist/cjs/util.js'),
+      'utf8',
+    )
+    expect(osxSignWalk).toContain('for (const child of children)')
+    expect(osxSignWalk).not.toContain('Promise.all(children.map')
     expect(macosSteps).toContain('codesign --verify --deep --strict')
     expect(macosSteps).toContain('spctl --assess --type execute')
     expect(macosSteps).toContain('xcrun stapler validate')
