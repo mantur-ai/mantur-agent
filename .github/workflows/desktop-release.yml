@@ -115,7 +115,7 @@ jobs:
 
       - name: Build, sign, and notarize native installer
         run: |
-          ulimit -n 65536
+          ulimit -n "$(ulimit -Hn)"
           pnpm run ${{ matrix.script }}
 
       - name: Verify Developer ID signature and notarization ticket
