@@ -158,7 +158,7 @@ const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
     'adapters/mantur-runtime-shutdown.mjs',
     'adapters/mantur-production-runtime.mjs', 'adapters/mantur-packaged-resources.mjs',
     'adapters/mantur-packaged-resources.d.mts', 'adapters/mantur-cut-packaged.patch',
-    'adapters/mantur-cut-shutdown.patch',
+    'adapters/mantur-cut-shutdown.patch', 'lib/types/**/*.css',
   ],
   // The CPython side ships as source .py files, published as-is rather than built.
   '@deepseek-ai/dsh-experimental-code-runtime-python': ['py/**/*.py'],
