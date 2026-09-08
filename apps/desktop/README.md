@@ -39,7 +39,7 @@ Each `desktop:dist:*` command first prepares the matching Mantur Cut resource tr
 
 Chrome for Testing download URLs place the version in the directory and use `chrome-headless-shell-<platform>.zip` as the archive name. Local cache filenames additionally contain the pinned version.
 
-The macOS commands let electron-builder sign and produce the update ZIP, then create the DMG with Apple's `hdiutil`. A temporary unique volume name prevents collisions with an installed or mounted copy of the application; the finished image restores the `漫途Agent` volume name, adds an Applications shortcut, and receives a separate update blockmap.
+The macOS commands let electron-builder sign and produce the update ZIP, then create the DMG with Apple's `hdiutil`. A temporary unique volume name prevents collisions with an installed or mounted copy of the application; the finished image restores the `漫途Agent` volume name, adds an Applications shortcut, and receives a separate update blockmap. The mountpoint uses a unique directory under macOS `getconf DARWIN_USER_TEMP_DIR`, while image files stay under the build output directory; failure to resolve or create the mountpoint stops packaging.
 
 Run the x64 macOS command on an Intel Mac and the Windows command on x64 Windows. The manual `Desktop package` GitHub Actions workflow checks out one commit on three native runners, runs the packaged smoke, and retains these files for seven days:
 

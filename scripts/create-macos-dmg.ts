@@ -1,8 +1,8 @@
 /** Create a macOS disk image with the system image tool and an external block map. */
 
 import { createRequire } from 'node:module'
-import { mkdir, mkdtemp, rename, rm, symlink } from 'node:fs/promises'
-import { dirname, join, resolve } from 'node:path'
+import { mkdtemp, rename, rm, rmdir, symlink } from 'node:fs/promises'
+import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { spawnSync } from 'node:child_process'
 
@@ -32,6 +32,19 @@ export function macApplicationPath(root: string, architecture: MacArchitecture):
   return join(root, 'dist', architecture === 'arm64' ? 'mac-arm64' : 'mac', '漫途Agent.app')
 }
 
+/**
+ * Create a mountpoint in the macOS user temporary directory, independent of build output and TMPDIR.
+ * @returns A unique empty directory owned by this invocation.
+ */
+export async function createMacMountPoint(): Promise<string> {
+  const result = spawnSync('getconf', ['DARWIN_USER_TEMP_DIR'], { encoding: 'utf8' })
+  if (result.error !== undefined) throw result.error
+  if (result.status !== 0 || !isAbsolute(result.stdout.trim())) {
+    throw new Error(`Could not resolve macOS user temporary directory: ${result.stderr.trim()}`)
+  }
+  return mkdtemp(join(result.stdout.trim(), 'mantur-dmg-mount-'))
+}
+
 function run(command: string, arguments_: string[]): void {
   const result = spawnSync(command, arguments_, { encoding: 'utf8', stdio: 'inherit' })
   if (result.error !== undefined) throw result.error
@@ -56,7 +69,7 @@ async function main(): Promise<void> {
   const output = join(desktopRoot, 'dist', `Mantur-Agent-macOS-${architecture}.dmg`)
   const blockMapOutput = `${output}.blockmap`
   const temporaryDirectory = await mkdtemp(join(desktopRoot, 'dist', '.mantur-dmg-'))
-  const mountPoint = join(temporaryDirectory, 'mount')
+  let mountPoint: string | undefined
   const writableImage = join(temporaryDirectory, 'writable.dmg')
   const compressedImage = join(temporaryDirectory, `Mantur-Agent-macOS-${architecture}.dmg`)
   const temporaryBlockMap = `${compressedImage}.blockmap`
@@ -64,7 +77,7 @@ async function main(): Promise<void> {
   try {
     const buildVolumeName = `ManturAgentBuild-${String(process.pid)}`
     run('hdiutil', ['create', '-volname', buildVolumeName, '-srcfolder', application, '-format', 'UDRW', writableImage])
-    await mkdir(mountPoint)
+    mountPoint = await createMacMountPoint()
     run('hdiutil', ['attach', '-nobrowse', '-noverify', '-noautoopen', '-mountpoint', mountPoint, writableImage])
     mounted = true
     await symlink('/Applications', join(mountPoint, 'Applications'))
@@ -77,7 +90,8 @@ async function main(): Promise<void> {
     await rename(compressedImage, output)
     await rename(temporaryBlockMap, blockMapOutput)
   } finally {
-    if (mounted) spawnSync('hdiutil', ['detach', mountPoint], { stdio: 'ignore' })
+    if (mounted && mountPoint !== undefined) spawnSync('hdiutil', ['detach', mountPoint], { stdio: 'ignore' })
+    if (mountPoint !== undefined) await rmdir(mountPoint)
     await rm(temporaryDirectory, { recursive: true, force: true })
   }
 }
