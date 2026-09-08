@@ -19,6 +19,10 @@ linkWorkspacePackages: true
 overrides:
   '@deepseek-ai/cosmokit': 'link:vendor/cosmokit'
   '@deepseek-ai/schemastery': 'link:vendor/schemastery'
+  # Patched versions for the vulnerable dependencies shipped by the desktop profile.
+  'js-yaml@4.2.0': '4.3.1'
+  'ajv@8.20.0>fast-uri': '3.1.6'
+  'express-rate-limit@8.5.2>ip-address': '10.3.1'
 
 peerDependencyRules:
   allowedVersions:

@@ -102,6 +102,7 @@ macOS Intel、macOS Apple Silicon 与 Windows 使用同一个更新控制器。m
 
 ## 已知限制
 
+- 主应用依赖固定版本及其验证范围见[桌面依赖安全决策](../../.agents/notes/implemented/bug-fix/2026-09-08-mantur-main-app-security.zh.md)。
 - 将 Whisper 可执行文件打入安装包并启动，只能证明其原生文件及相邻动态库能在目标平台加载，不能让内嵌工作台直接具备本地转写能力。Mantur iframe 尚未安装 OpenChatCut 的桌面推理 preload，因此编辑器的原生 ASR adapter 当前会返回不可用。
 - 构建出内部安装包不等于获得分发批准。OpenChatCut 的 AGPL 源码交付义务、Remotion 的实体与用途条款、FFmpeg 与 ffprobe 的 GPL/LGPL 义务、需保留的 notice、二进制再分发条款及全部生产依赖审计发现，都必须针对精确补丁 tree 完成审核后才能公开发布。
 - 原生账号 Main、preload、provider、表单与 Bash、PowerShell、PTY 消费方已在源码中连接。表单提供注册、浏览器授权、持久跳过和精确到期状态，不发布设备 bearer。广场登录路由、打包 CLI 调用和原生操作系统验收仍未完成。Loopback IPC、模拟 preload 浏览器测试和固定 CLI 测试不能证明完整原生登录已可用；[接入提案](../../.agents/notes/proposed/architecture/2026-09-07-desktop-native-account-identity.zh.md)记录剩余验收条件。

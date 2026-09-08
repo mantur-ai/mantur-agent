@@ -102,6 +102,7 @@ The carrier passes `app.getPath('documents')` with a `漫途项目` child to the
 
 ## Known limitations
 
+- Main-application dependency pins and their verification scope are recorded in the [desktop dependency security decision](../../.agents/notes/implemented/bug-fix/2026-09-08-mantur-main-app-security.md).
 - Packaging and starting the Whisper executables proves that their native files and adjacent libraries load on the target; it does not make local transcription available in the embedded workbench. The Mantur iframe does not yet install OpenChatCut's desktop inference preload, so the editor's native-ASR adapter currently returns unavailable.
 - A built internal installer is not distribution approval. OpenChatCut's AGPL source-delivery obligations, Remotion's entity and use terms, FFmpeg and ffprobe GPL/LGPL obligations, retained notices, binary redistribution terms, and every production audit finding require review for the exact patched tree before public release.
 - Native account Main, preload, provider, forms and Bash/PowerShell/PTY consumers are connected in source. Forms expose registration, browser authorization, persisted Skip and exact expiry without publishing the device bearer. Marketplace login routing, packaged CLI invocation and native OS acceptance remain incomplete. Loopback IPC, simulated-preload browser and fixed-CLI tests do not establish complete native login availability; the [integration proposal](../../.agents/notes/proposed/architecture/2026-09-07-desktop-native-account-identity.md) owns the remaining acceptance conditions.
