@@ -617,6 +617,8 @@ releaseDate: '2026-09-03T00:00:00.000Z'
       },
     })
     const macosSteps = JSON.stringify(macos.steps)
+    const signingStep = macos.steps.filter(isRecord).find(step => step.name === 'Build, sign, and notarize native installer')
+    expect(signingStep).toMatchObject({ run: expect.stringContaining('ulimit -n 65536') })
     expect(macosSteps).toContain('codesign --verify --deep --strict')
     expect(macosSteps).toContain('spctl --assess --type execute')
     expect(macosSteps).toContain('xcrun stapler validate')
