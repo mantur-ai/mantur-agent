@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -7,6 +7,7 @@ import {
   hostTarget,
   parseProgramManifest,
   parseSourceConfig,
+  removePackageRuntimeResidue,
   sourceBuildEnvironment,
   verifyProgramManifest,
 } from './mantur-cut-distribution.ts'
@@ -77,6 +78,22 @@ describe('Mantur Cut distribution', () => {
     const path = join(directory, 'input')
     await writeFile(path, 'mantur-cut')
     expect(await fileSha256(path)).toBe('15089876af45b37089bbdef895cc3dbb56abc3f25e16266f6c8da956865cad21')
+  })
+
+  it('removes package-manager executables and build caches from the staged runtime', async () => {
+    const directory = await temporaryDirectory('mantur-cut-runtime-')
+    const packageDirectory = join(directory, 'package')
+    await mkdir(join(directory, '.bin'), { recursive: true })
+    await mkdir(join(directory, '.cache', 'webpack'), { recursive: true })
+    await mkdir(join(packageDirectory, '.cache', 'nested'), { recursive: true })
+    await writeFile(join(packageDirectory, 'package.json'), '{}')
+
+    await removePackageRuntimeResidue(directory)
+
+    await expect(access(join(directory, '.bin'))).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(access(join(directory, '.cache'))).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(access(join(packageDirectory, '.cache'))).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(access(join(packageDirectory, 'package.json'))).resolves.toBeUndefined()
   })
 
   it('requires every declared program resource inside its root', async () => {

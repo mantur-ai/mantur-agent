@@ -36,6 +36,8 @@ macOS release 工作流通过受保护的 GitHub 环境 secret 为原生 arm64 �
 
 解包应用所含文件数量超过 macOS runner 的打开文件上限，`@electron/osx-sign` 无法并发检查全部文件。workspace 固定一项依赖补丁，在保留深度优先签名顺序的同时，每次只读取一个目录子项。依赖升级必须保留该限制；只有证明完整解包应用能在 release runner 上完成签名后，才可移除补丁。
 
+内嵌 Mantur Cut 的生产依赖树会在上游构建完成后复制。打包会在依赖清单生成和签名前，从暂存依赖树中移除包管理器可执行目录与构建缓存目录。这些文件不是运行时输入；保留它们会扩大签名范围，并可能带入已有签名不符合发布 timestamp 策略的缓存二进制文件。
+
 ## Alternatives considered
 
 **内嵌 Harness Host，并用 Electron IPC 替代 HTTP。** 否决。这样会创建桌面专用应用组装与 transport，重复既有 Web 认证和生命周期行为，并在一键安装证明需求之前造成更大的上游差异。
