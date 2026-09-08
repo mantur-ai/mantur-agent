@@ -19,6 +19,17 @@ async function profile() {
   return root
 }
 
+it('copies CLI modules from an explicit resource root that the packager does not discard', async () => {
+  const manifest = z.object({ build: z.object({ extraResources: z.array(z.object({ from: z.string(), to: z.string() })) }) })
+    .parse(JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')) as unknown)
+  expect(manifest.build.extraResources).toContainEqual({
+    from: '.generated/mantur-cli/source.json', to: 'mantur-cli/source.json',
+  })
+  expect(manifest.build.extraResources).toContainEqual({
+    from: '.generated/mantur-cli/node_modules', to: 'mantur-cli/node_modules',
+  })
+})
+
 it('requires prepared resources and never chooses a global CLI when they are absent', async () => {
   const root = await profile()
   await expect(prepareEmbeddedCli({ resourceRoot: join(root, 'missing'), userData: root,

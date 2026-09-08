@@ -55,6 +55,8 @@ The smoke starts `dsh` from the unpacked application's own dependency directory,
 
 The smoke also checks the embedded CLI's pinned source manifest, package versions, licenses and dependency entry, creates the real profile-local launcher, and requires `manturhub --version` to report `0.11.0` using the packaged Electron executable. The launcher disables CLI and skill update checks. Missing resources fail without searching for a global CLI. This check does not open an account attempt or verify browser authorization, Main's operating-system storage, or Windows behavior on macOS.
 
+Packaging copies the CLI source record and its `node_modules` directory as separate resource inputs. Electron Builder excludes a top-level `node_modules` child when copying a directory; selecting the module directory itself preserves the embedded CLI and its dependency.
+
 ## Publish a signed macOS release
 
 The manual `Desktop release` GitHub Actions workflow builds arm64 and x64 on native macOS runners. Both jobs sign the application with a Developer ID Application identity, submit it to Apple's notarization service, validate the signature, Gatekeeper assessment, and stapled ticket, and run the packaged smoke before their artifacts can be assembled.

@@ -69,8 +69,12 @@
         "to": "mantur-cut"
       },
       {
-        "from": ".generated/mantur-cli",
-        "to": "mantur-cli"
+        "from": ".generated/mantur-cli/source.json",
+        "to": "mantur-cli/source.json"
+      },
+      {
+        "from": ".generated/mantur-cli/node_modules",
+        "to": "mantur-cli/node_modules"
       }
     ],
     "publish": [
