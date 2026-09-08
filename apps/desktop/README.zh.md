@@ -72,6 +72,8 @@ smoke 会从解包应用自己的依赖目录启动 `dsh`，把打印出的进�
 
 ## 运行时设计
 
+目录选择使用无参数的 `manturDirectoryPicker.pick()` preload 能力。Main 只接受当前本地主 frame，并将 Electron 单目录对话框的父窗口设为当前应用窗口。取消返回 `null`；失败直接报错，不调用 Host 选择器。对话框尚未结束时，重复请求会被拒绝，更新准备也会被阻止，直到原生调用结束。更新准备或退出期间，Main 拒绝新请求；主 frame 导航、窗口关闭或退出后，迟到的结果会失效。
+
 主进程通过 `ELECTRON_RUN_AS_NODE=1` 复用 Electron 作为 Node 可执行文件，并以 `--profile mantur --host 127.0.0.1 --port 0 --no-open` 启动已构建的 `@deepseek-ai/dsh` 入口。就绪解析器只接受带 token 的 `127.0.0.1` URL。renderer 禁用 Node integration、启用 context isolation 与 sandbox，并把离开本地 origin 的导航交给操作系统浏览器。
 
 安装包携带既有运行时依赖闭包和已构建 Web 前端。Loader profile、插件 manifest、原生模块与 subprocess helper 都需要普通文件，因此 `asar` 保持禁用。关闭或重启应用时，Electron 会等待子进程终止后再退出。Electron 父进程通过 Node IPC 通道连接子进程；各功能模块负责校验自己的消息。

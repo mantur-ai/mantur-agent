@@ -25,6 +25,8 @@ The workspace manager must upsert the returned workspace before the selection ca
 
 ## Host boundary
 
+This Host implementation serves ordinary local browsers. The [Electron carrier](2026-09-02-thin-desktop-carrier.md) owns its window-parented native dialog through a fixed preload capability; both carriers retain the same Workspace adoption flow.
+
 The native dialog RPC is accepted only from a loopback socket with same-origin browser metadata. The RPC does not use the default 30-second request timeout because a system dialog may remain open indefinitely; caller and connection aborts still propagate to the platform process.
 
 Platform adapters open the dialog without a shell — spawned native tools on POSIX, an in-process COM conversation on Windows:

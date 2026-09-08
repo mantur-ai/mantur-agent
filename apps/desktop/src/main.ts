@@ -11,6 +11,7 @@ import { prepareDesktopUpdate } from './prepare-update.ts'
 import { DesktopDraftStorage } from './draft-storage.ts'
 import { installDraftBridge } from './draft-bridge.ts'
 import { installUpdateBridge } from './update-bridge.ts'
+import { installDirectoryPickerBridge } from './directory-picker-bridge.ts'
 import { NativeAccountHost } from './auth/host.ts'
 import type { NativeAccountController } from './auth/controller.ts'
 import { installNativeAccountBridge } from './auth/ipc.ts'
@@ -55,6 +56,12 @@ const drafts = installDraftBridge({ ipc: ipcMain, window: () => mainWindow,
 const updateBridge = installUpdateBridge({ ipc: ipcMain, window: () => mainWindow,
   origin: () => serviceUrl === undefined ? undefined : new URL(serviceUrl).origin,
   controller: () => updates, version: app.getVersion(),
+})
+
+const directoryPicker = installDirectoryPickerBridge({ ipc: ipcMain, window: () => mainWindow,
+  origin: () => serviceUrl === undefined ? undefined : new URL(serviceUrl).origin,
+  showOpenDialog: (window, options) => dialog.showOpenDialog(window, options),
+  unavailable: () => preparingUpdate || quitting, copy: () => desktopCopy(app.getLocale()),
 })
 
 function writeDesktopLog(message: string): void {
@@ -134,10 +141,10 @@ function createWindow(target = STARTUP_PAGE): BrowserWindow {
     openExternal(target)
   })
   window.webContents.on('did-start-navigation', (_event, _url, _isInPlace, isMainFrame) => {
-    if (isMainFrame) drafts.release()
+    if (isMainFrame) { drafts.release(); directoryPicker.invalidate() }
   })
   window.once('ready-to-show', () => { window.show() })
-  window.on('closed', () => { drafts.release(); mainWindow = undefined })
+  window.on('closed', () => { drafts.release(); directoryPicker.invalidate(); mainWindow = undefined })
   if (target === STARTUP_PAGE) void window.loadFile(target)
   else void window.loadURL(target)
   mainWindow = window
@@ -249,6 +256,7 @@ function startUpdates(): void {
       showUpdateFeedback(state)
     },
     beforeInstall: async () => {
+      if (directoryPicker.isPending()) throw new Error(copy.updateDirectoryPickerPending)
       const active = service
       if (active === undefined) throw new Error(copy.updateShutdownUnavailable)
       preparingUpdate = true
@@ -322,6 +330,7 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', (event) => {
   quitting = true
+  directoryPicker.invalidate()
   updates?.dispose()
   updates = undefined
   if (service === undefined) return

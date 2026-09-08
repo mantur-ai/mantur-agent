@@ -1,6 +1,12 @@
 /** Native desktop copy selected from the operating-system locale. */
 
 const zh = {
+  directoryPickerTitle: '选择目录',
+  directoryPickerBusy: '目录选择窗口已打开，请先完成或取消当前选择。',
+  directoryPickerUnavailable: '正在准备更新或退出，暂时无法选择目录。',
+  directoryPickerInvalidated: '窗口已关闭或页面已更换，本次目录选择已失效。',
+  directoryPickerInvalidResult: '系统目录选择窗口未返回一个有效的绝对目录路径。',
+  updateDirectoryPickerPending: '请先完成或取消目录选择，再重启并更新。',
   updateShutdownUnavailable: '草稿已保存，但尚无法确认本地任务最终记录已安全保存。本次未执行安装，也未停止任务。',
   startupFailedTitle: '漫途Agent 启动失败',
   startupFailedMessage: '无法启动本地 Agent 服务。',
@@ -40,6 +46,12 @@ type DesktopCopy = {
 }
 
 const en = {
+  directoryPickerTitle: 'Choose a directory',
+  directoryPickerBusy: 'A directory chooser is already open. Complete or cancel that selection first.',
+  directoryPickerUnavailable: 'Directories cannot be selected while preparing an update or quitting.',
+  directoryPickerInvalidated: 'The window closed or the page changed. This directory selection is no longer valid.',
+  directoryPickerInvalidResult: 'The system directory chooser did not return one valid absolute directory path.',
+  updateDirectoryPickerPending: 'Complete or cancel the directory selection before restarting to update.',
   updateShutdownUnavailable: 'Drafts were saved, but a verified final task checkpoint is unavailable. Installation was not started and tasks were not stopped.',
   startupFailedTitle: 'Mantur Agent failed to start',
   startupFailedMessage: 'The local agent service could not start.',

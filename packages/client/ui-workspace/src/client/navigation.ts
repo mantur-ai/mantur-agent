@@ -13,6 +13,31 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { Config } from '../navigation-settings.ts'
 
+declare global {
+  interface Window {
+    /** Parent-window directory chooser exposed only by the desktop preload. */
+    manturDirectoryPicker?: { pick(): Promise<string | null> }
+  }
+}
+
+/**
+ * Select the desktop chooser or the browser's Host-native picker at composition time.
+ * @param remote - Host directory-picking namespace for browser deployments.
+ * @param desktop - Desktop preload capability, absent in ordinary browsers.
+ * @returns the selected operation; native failures never invoke the other picker.
+ */
+export function resolveDirectoryPicker(
+  remote: ClientRemote['directoryPicker'],
+  desktop: Window['manturDirectoryPicker'],
+): () => Promise<string | null> {
+  if (desktop !== undefined) return () => desktop.pick()
+  return async () => {
+    const result = await remote.pick()
+    if (!result.ok) throw new Error(`directory picker failed: ${result.error.message}`)
+    return result.value
+  }
+}
+
 /** Workspace archive and directory operations consumed by Client UI domains. */
 export interface UiWorkspace {
   /**
@@ -32,7 +57,7 @@ export interface UiWorkspace {
    */
   archiveSession(sessionId: SessionId): Promise<void>
   /**
-   * Open the Host-native directory picker.
+   * Open the native directory picker selected by the application composition.
    * @returns the selected directory, or null when cancelled.
    */
   pickDirectory(): Promise<string | null>
@@ -79,6 +104,7 @@ class UiWorkspaceService extends Service implements UiWorkspace {
    * @param workspaces - pure Workspace Controller.
    * @param sessions - pure Session Controller.
    * @param navigation - resolved selection policy; undefined while Host settings load.
+   * @param chooseDirectory - native chooser selected by the application composition.
    */
   constructor(
     ctx: Context,
@@ -86,6 +112,7 @@ class UiWorkspaceService extends Service implements UiWorkspace {
     private readonly workspaces: IWorkspaces,
     private readonly sessions: ISessions,
     private readonly navigation: ObservableSnapshot<Config['newSessionWorkspace'] | undefined>,
+    private readonly chooseDirectory: () => Promise<string | null>,
   ) {
     super(ctx, 'uiWorkspace')
     ctx.effect(() => this.watchNavigation(), 'ui-workspace: Workspace navigation policy')
@@ -141,9 +168,7 @@ class UiWorkspaceService extends Service implements UiWorkspace {
   }
 
   async pickDirectory(): Promise<string | null> {
-    const result = await this.directoryPicker.pick()
-    if (!result.ok) throw new Error(`directory picker failed: ${result.error.message}`)
-    return result.value
+    return this.chooseDirectory()
   }
 
   async listDirectory(path?: string, signal?: AbortSignal): Promise<DirectoryListing> {

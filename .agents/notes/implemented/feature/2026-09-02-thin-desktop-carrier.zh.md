@@ -24,6 +24,8 @@ client 构建 profile `mantur` 会把 `DSH_CLIENT_TITLE` 固定为 `漫途Agent`
 
 根目录的 `desktop:dev` 命令负责本地编辑循环，不会调用 electron-builder。监听器会重新运行桌面端 TypeScript 增量项目、bundle Electron 入口，并直接启动 Electron。源码或资源改动会终止活动 Electron 进程；Electron 先等待其 dsh 子进程关闭，再开始下一轮。开发 dsh 输出会同步显示在终端，同时保留在持久日志中。开发模式选用 `mantur-agent-dev` 用户数据目录，不会触及已安装应用的 `mantur-agent` 状态；`app.isPackaged` 会保持 updater 不活动。
 
+Main 负责目录对话框，因为只有 Electron 载体能将其父窗口设为当前活动窗口。无参数、仅限当前主 frame 的 preload 能力返回一个绝对目录或 `null`；共享 Workspace 插件在组合时选择此回调，接纳仍由 Host 负责。普通浏览器保留 [Host 选择器](2026-07-27-native-workspace-directory-picker.zh.md)。原生错误不会启动第二种实现。Main 在 Electron 调用结束前持续保留对话框待完成状态，期间拒绝重复请求和更新准备，并在导航、关闭或退出后使结果失效。结果失效不表示 OS 对话框已取消。无密钥的桥接与 Main 接线测试覆盖这些规则；原生可见性需要操作系统 GUI 验证。
+
 ## Packaging and verification
 
 原生矩阵会从同一个检出 commit 运行 macOS arm64、macOS x64 与 Windows x64。每个 runner 都会执行完整漫途构建，对启动语法和品牌构建环境运行单元测试，只创建自己的原生安装包，再从解包应用的依赖目录启动 DSH。smoke 会执行进程 token 交换、请求已认证页面，并要求 HTTP 200、Web boot payload、`漫途Agent` 文档标题、包内 updater 依赖与预期的 release feed 配置同时存在。
@@ -35,6 +37,8 @@ DMG 镜像文件保留在构建输出目录，但 `hdiutil` 挂载点使用 macO
 macOS release 工作流通过受保护的 GitHub 环境 secret 为原生 arm64 与 x64 构建执行签名和 notarization。它会先验证 Developer ID 签名、Gatekeeper 评估、stapled ticket 与 packaged smoke，再合并两份架构专属通道文件。只有从精确 `v<version>` tag 发起的显式发布任务才会创建 GitHub release，其中包含两份 DMG、两份更新 ZIP、对应 blockmap、合并后的更新元数据与 SHA-256 哈希。electron-updater 可以从 GitHub feed 中选择这种兼容 semver 的 alpha、beta 与 RC release。工作流会拒绝已存在的 release；发布前还必须启用仓库级 Release Immutability，以阻止之后修改 tag 和产物。在 Windows 具备独立签名身份与发布路径之前，它不会进入外部更新通道。
 
 ## Alternatives considered
+
+**由后台 Host helper 打开桌面文件夹选择器。** 否决。该进程不拥有 Electron 窗口，无法为选择器指定应用父窗口。窄范围 Main 能力保留既有 Workspace 流程，不把工作区存储移入 Electron，也不把结果失效当成原生对话框取消。
 
 **内嵌 Harness Host，并用 Electron IPC 替代 HTTP。** 否决。这样会创建桌面专用应用组装与 transport，重复既有 Web 认证和生命周期行为，并在一键安装证明需求之前造成更大的上游差异。
 

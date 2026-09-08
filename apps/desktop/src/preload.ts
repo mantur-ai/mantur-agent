@@ -1,5 +1,9 @@
-/** Sandboxed preload: expose only named draft, updater and native-account capabilities. */
+/** Sandboxed preload: expose only named draft, updater, directory-picker and native-account capabilities. */
 import { contextBridge, ipcRenderer } from 'electron'
+
+contextBridge.exposeInMainWorld('manturDirectoryPicker', {
+  pick: () => ipcRenderer.invoke('mantur:directory-picker:pick'),
+})
 
 contextBridge.exposeInMainWorld('manturAccount', {
   invoke: (request: unknown) => ipcRenderer.invoke('mantur:account:invoke', request),

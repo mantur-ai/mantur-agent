@@ -72,6 +72,8 @@ The workflow combines both native `latest-mac.yml` files into one architecture-a
 
 ## Runtime design
 
+Directory selection uses the parameterless `manturDirectoryPicker.pick()` preload capability. Main accepts only the current local main frame and parents Electron's single-directory dialog to the current application window. Cancellation returns `null`; failures remain errors without invoking the Host picker. A pending dialog rejects duplicate requests and blocks update preparation until the native call settles. Main rejects new requests during update preparation or quitting and invalidates late results after main-frame navigation, window close, or quitting.
+
 The main process reuses Electron as the Node executable with `ELECTRON_RUN_AS_NODE=1` and launches the built `@deepseek-ai/dsh` entry with `--profile mantur --host 127.0.0.1 --port 0 --no-open`. The readiness parser accepts only a tokenized `127.0.0.1` URL. The renderer keeps Node integration disabled, enables context isolation and sandboxing, and sends navigation outside the local origin to the operating-system browser.
 
 The installer carries the existing runtime dependency closure and built Web frontend. `asar` remains disabled because Loader profiles, plugin manifests, native modules, and subprocess helpers require ordinary files. Closing or restarting the application waits for the child process to terminate before Electron exits. A Node IPC channel connects the Electron parent and its child; feature owners validate their own messages.

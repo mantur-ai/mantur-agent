@@ -25,7 +25,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import { WORKSPACE_SETTINGS_NAMESPACE, type Config } from '../navigation-settings.ts'
 import type { WorkspaceBrowserInjected, WorkspacePickerInjected } from './contract/slots.ts'
-import { UiWorkspaceService } from './navigation.ts'
+import { resolveDirectoryPicker, UiWorkspaceService } from './navigation.ts'
 import { createWorkspaceViewStore } from './stores.ts'
 import { WorkspaceBrowser } from './rows/WorkspaceBrowser.tsx'
 import { WorkspacePicker } from './WorkspacePicker.tsx'
@@ -75,11 +75,13 @@ export function apply(ctx: Context): void {
   const sessions = ctx.get('sessions') as ISessions
   const workspaces = ctx.get('workspaces') as IWorkspaces
   const navigation = ctx.settingsScope.bind<Config>({ namespace: WORKSPACE_SETTINGS_NAMESPACE })
+  const chooseDirectory = resolveDirectoryPicker(ctx.remote.directoryPicker,
+    typeof window === 'undefined' ? undefined : window.manturDirectoryPicker)
   const uiWorkspace = new UiWorkspaceService(
     ctx, ctx.remote.directoryPicker, workspaces, sessions, {
       getSnapshot: () => navigation.getSnapshot().value?.newSessionWorkspace,
       subscribe: listener => navigation.subscribe(listener),
-    })
+    }, chooseDirectory)
   ctx.slots.provideRoot({ hooks: { workspaces: workspaces.list } })
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-workspace: dictionaries')
 

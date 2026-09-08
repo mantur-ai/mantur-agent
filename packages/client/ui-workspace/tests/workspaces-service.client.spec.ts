@@ -10,7 +10,7 @@ import type { ClientRemote, DirectoryListing } from '@deepseek-ai/dsh-api-remote
 import { RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
 import type { RemoteResult } from '@deepseek-ai/dsh-api-remotes/client'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
-import { DirectoryBrowseError, UiWorkspaceService } from '../src/client/navigation.ts'
+import { DirectoryBrowseError, resolveDirectoryPicker, UiWorkspaceService } from '../src/client/navigation.ts'
 
 const sid = (id: string): SessionId => SessionId(id)
 const wid = (id: string): WorkspaceId => id as WorkspaceId
@@ -201,6 +201,7 @@ function bench(options: BenchOptions = {}) {
     workspaces,
     sessions as unknown as ISessions,
     navigation,
+    resolveDirectoryPicker(directoryPicker.remote, undefined),
   )
   return { ctx, directoryPicker, sessions, uiWorkspace, workspaces, navigation }
 }

@@ -102,6 +102,27 @@ describe('ui-workspace apply', () => {
     ])
   })
 
+  it('uses the desktop directory capability without retrying through the Host picker', async () => {
+    const b = await bench()
+    const pick = vi.fn<() => Promise<string | null>>().mockResolvedValue('/desktop/project')
+    vi.stubGlobal('window', { manturDirectoryPicker: { pick } })
+    const fiber = b.ctx.plugin({ inject: [...inject], apply })
+    try {
+      await fiber.await()
+      await expect(b.ctx.uiWorkspace.pickDirectory()).resolves.toBe('/desktop/project')
+      pick.mockResolvedValueOnce(null)
+      await expect(b.ctx.uiWorkspace.pickDirectory()).resolves.toBeNull()
+      const failure = new Error('native chooser unavailable')
+      pick.mockRejectedValueOnce(failure)
+      await expect(b.ctx.uiWorkspace.pickDirectory()).rejects.toBe(failure)
+      expect(pick).toHaveBeenCalledTimes(3)
+      expect(b.pickDirectory).not.toHaveBeenCalled()
+    } finally {
+      await fiber.dispose()
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('registers browser and pickers for declarations arriving before or after apply', async () => {
     const before = await bench()
     declare(before.slots, 'sidebar.workspaces')
@@ -126,6 +147,8 @@ describe('ui-workspace apply', () => {
     declare(b.slots, 'sidebar.workspaces', 'conversation.hero.workspace')
     await b.ctx.plugin({ inject: [...inject], apply }).await()
     const startSession = vi.spyOn(b.ctx.uiWorkspace, 'startSession').mockImplementation(() => undefined)
+    await expect(b.ctx.uiWorkspace.pickDirectory()).resolves.toBe('/projects/picked')
+    expect(b.pickDirectory).toHaveBeenCalledOnce()
 
     const browser = (b.slots.entries('sidebar.workspaces')[0]!.inject as () => WorkspaceBrowserInjected)()
     // Both arms delegate to the shared Session navigation action.
