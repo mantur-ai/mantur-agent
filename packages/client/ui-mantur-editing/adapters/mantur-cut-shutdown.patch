@@ -23,7 +23,7 @@ index 7f373b1..3813420 100644
    app.use('/media/uploads', uploadsMiddleware());
    if (mantur) {
 diff --git a/package.json b/package.json
-index 69a1f6b..7c415c7 100644
+index 69a1f6b..4c8093d 100644
 --- a/package.json
 +++ b/package.json
 @@ -33,7 +33,7 @@
@@ -41,7 +41,7 @@ index 69a1f6b..7c415c7 100644
      "verify:sqlite-migration": "tsx server/storage/sqlite-store.verify.ts && tsx server/storage/sqlite-migration-http.verify.ts && tsx server/plugins/project-store-export-recovery-sqlite.verify.ts && tsx src/export/serverExportRecovery.verify.ts",
 -    "verify:extract-audio": "tsx server/plugins/extract-audio.verify.ts"
 +    "verify:extract-audio": "tsx server/plugins/extract-audio.verify.ts",
-+    "verify:mantur-shutdown": "node --import tsx server/plugins/generation-shutdown.verify.ts && node --import tsx server/plugins/project-shutdown.verify.ts && node --import tsx server/external-agent/broker-shutdown.verify.ts && node --import tsx server/plugins/mantur-shutdown.verify.ts && node --import tsx src/agent/external-shutdown.verify.ts && node remotion/render-shutdown.verify.mjs"
++    "verify:mantur-shutdown": "node --import tsx server/plugins/generation-shutdown.verify.ts && node --import tsx server/plugins/project-shutdown.verify.ts && node --import tsx server/external-agent/broker-shutdown.verify.ts && node --import tsx server/plugins/mantur-shutdown.verify.ts && node --import tsx src/agent/external-shutdown.verify.ts && node remotion/render-shutdown.verify.mjs && node --import tsx src/media/semantic-search/vectorCapability.verify.ts"
    },
    "dependencies": {
      "@ai-sdk/alibaba": "^2.0.16",
@@ -1100,10 +1100,10 @@ index a4ab905..24a6670 100644
  }
 diff --git a/server/plugins/mantur-shutdown.ts b/server/plugins/mantur-shutdown.ts
 new file mode 100644
-index 0000000..52c5d5f
+index 0000000..49d99c8
 --- /dev/null
 +++ b/server/plugins/mantur-shutdown.ts
-@@ -0,0 +1,145 @@
+@@ -0,0 +1,152 @@
 +import type { IncomingMessage, ServerResponse } from 'node:http';
 +import { Server } from 'node:http';
 +import type { Connect, Plugin, ViteDevServer } from 'vite';
@@ -1143,6 +1143,13 @@ index 0000000..52c5d5f
 +  if (pathname.startsWith('/api/project-store/')) return true;
 +  if (pathname === '/api/external-mcp/mcp') return req.method === 'DELETE' || req.method === 'GET';
 +  return ['/poll', '/cancellation', '/result', '/unregister'].some((path) => pathname === `/api/external-agent${path}`);
++}
++
++function ownedCatalogRequest(name: string, pathname: string, req: IncomingMessage): boolean {
++  return req.method === 'GET' && (
++    name === 'openchatcut-extension-store' && (pathname === '/api/plugins' || pathname === '/api/plugins/')
++    || name === 'openchatcut-model-packs' && pathname === '/api/model-packs'
++  );
 +}
 +
 +function refuse(res: ServerResponse): void {
@@ -1238,7 +1245,7 @@ index 0000000..52c5d5f
 +        // Connect types handlers as returning void; feature routes may return their actual async work.
 +        const completion: unknown = handler(req, res, (error) => { delegated = true; next(error); });
 +        if (!delegated) {
-+          if (!OWNED_PLUGINS.has(name)) recordUnconfirmedEditorProducer(`${name} ${mount || '/'}`);
++          if (!OWNED_PLUGINS.has(name) && !ownedCatalogRequest(name, pathname, req)) recordUnconfirmedEditorProducer(`${name} ${mount || '/'}`);
 +          if (completion === undefined && !res.writableEnded) recordUnconfirmedEditorProducer(`${name}: asynchronous handler without completion`);
 +        }
 +        await completion;
@@ -1251,10 +1258,10 @@ index 0000000..52c5d5f
 +}
 diff --git a/server/plugins/mantur-shutdown.verify.ts b/server/plugins/mantur-shutdown.verify.ts
 new file mode 100644
-index 0000000..39d0985
+index 0000000..776f92b
 --- /dev/null
 +++ b/server/plugins/mantur-shutdown.verify.ts
-@@ -0,0 +1,118 @@
+@@ -0,0 +1,127 @@
 +import assert from 'node:assert/strict';
 +import { spawn } from 'node:child_process';
 +import { createServer } from 'node:http';
@@ -1267,14 +1274,14 @@ index 0000000..39d0985
 +
 +const scenario = process.argv[2];
 +if (!scenario) {
-+  for (const name of ['accepted', 'callback-failure', 'unknown-producer']) {
++  for (const name of ['accepted', 'callback-failure', 'unknown-producer', 'catalog-read', 'catalog-mutation']) {
 +    await new Promise<void>((resolve, reject) => {
 +      const child = spawn(process.execPath, ['--import', 'tsx', fileURLToPath(import.meta.url), name], { stdio: 'inherit' });
 +      child.once('error', reject);
 +      child.once('close', (code, signal) => code === 0 && signal === null ? resolve() : reject(new Error(`${name}: ${code}/${signal}`)));
 +    });
 +  }
-+  console.log('editor shutdown: 3 HTTP admission, callback completion and unknown-producer cases passed');
++  console.log('editor shutdown: 5 HTTP admission, callback completion, catalog and unknown-producer cases passed');
 +} else {
 +  const root = await mkdtemp(join(tmpdir(), 'mantur-editor-shutdown-'));
 +  process.env.OPENCHATCUT_DATA_DIR = root;
@@ -1318,11 +1325,20 @@ index 0000000..39d0985
 +    await mount(owner.ownPlugin({ name: 'unowned-renderer', configureServer(s) {
 +      s.middlewares.use('/api/unknown', (_req, res) => { res.end('used'); });
 +    } }));
++    for (const [name, path] of [['openchatcut-extension-store', '/api/plugins'], ['openchatcut-model-packs', '/api/model-packs']]) {
++      await mount(owner.ownPlugin({ name, configureServer(s) {
++        s.middlewares.use(path, async (_req, res) => { await Promise.resolve(); res.end('catalog fixture'); });
++      } }));
++    }
 +    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
 +    const address = server.address();
 +    assert(address && typeof address !== 'string');
 +    const url = `http://127.0.0.1:${address.port}`;
 +    const post = (path: string) => fetch(`${url}${path}`, { method: 'POST' });
++    if (scenario === 'catalog-read') {
++      for (const path of ['/api/plugins', '/api/model-packs']) assert.equal((await fetch(`${url}${path}`)).status, 200);
++    }
++    if (scenario === 'catalog-mutation') assert.equal((await post('/api/model-packs')).status, 200);
 +    if (scenario === 'unknown-producer') assert.equal((await post('/assemblyai')).status, 200);
 +    const capability = broker.registerEditor('project', 'editor', 'revision', []);
 +    const poll = () => broker.nextEditorCall('project', 'editor', 'revision', AbortSignal.timeout(3000), capability);
@@ -1361,9 +1377,9 @@ index 0000000..39d0985
 +    await tick(); assert.equal(finished, false, 'final callback completion stays owned after browser unregister');
 +    callbackRelease.resolve();
 +    const result = await observed;
-+    assert.equal(result.ok, scenario === 'accepted');
++    assert.equal(result.ok, scenario === 'accepted' || scenario === 'catalog-read');
 +    assert.equal(routeErrors.length, scenario === 'callback-failure' ? 1 : 0);
-+    if (!result.ok) assert.match(String(result.error), scenario === 'callback-failure' ? /callbacks failed/ : /unconfirmed producers: AssemblyAI proxy remote work/);
++    if (!result.ok) assert.match(String(result.error), scenario === 'callback-failure' ? /callbacks failed/ : scenario === 'catalog-mutation' ? /unconfirmed producers: openchatcut-model-packs/ : /unconfirmed producers: AssemblyAI proxy remote work/);
 +    assert.equal((await post('/api/export/work')).status, 503);
 +    assert.equal((await post('/assemblyai')).status, 503);
 +    assert.equal((await fetch(`${url}/api/external-mcp/mcp`, { method: 'DELETE' })).status, 200, 'native close remains available after editor acknowledgement');
@@ -1439,7 +1455,7 @@ index f520864..b494809 100644
      },
    };
 diff --git a/server/plugins/model-packs.ts b/server/plugins/model-packs.ts
-index 9a8d46f..f4c8f70 100644
+index 9a8d46f..237ae2b 100644
 --- a/server/plugins/model-packs.ts
 +++ b/server/plugins/model-packs.ts
 @@ -1,3 +1,4 @@
@@ -1456,6 +1472,15 @@ index 9a8d46f..f4c8f70 100644
          server.config.logger.error(`[model-packs] recovery failed: ${errorMessage(error)}`);
        });
        server.middlewares.use((req, res, next) => {
+@@ -457,7 +458,7 @@ export function modelPacksPlugin(): Plugin {
+           next();
+           return;
+         }
+-        void handleModelPackRequest(req, res, pathname)
++        return handleModelPackRequest(req, res, pathname)
+           .catch((error) => sendJson(res, 400, { error: errorMessage(error) }));
+       });
+     },
 diff --git a/server/plugins/project-shutdown.verify.ts b/server/plugins/project-shutdown.verify.ts
 new file mode 100644
 index 0000000..c0765f6
@@ -1510,6 +1535,26 @@ index 0000000..c0765f6
 +    }
 +  } finally { await rm(root, { recursive: true, force: true }); }
 +}
+diff --git a/server/plugins/project-store-plugin.ts b/server/plugins/project-store-plugin.ts
+index 2332d59..c7b5b91 100644
+--- a/server/plugins/project-store-plugin.ts
++++ b/server/plugins/project-store-plugin.ts
+@@ -25,6 +25,7 @@ import {
+ import { handleProjectStoreRequest, sendProjectStoreJson } from '../project-store-http.ts';
+ import {
+   clearSemanticVectors,
++  semanticVectorsAvailable,
+   pruneSemanticVectors,
+   searchSemanticVectors,
+   upsertSemanticVectors,
+@@ -52,6 +53,7 @@ import {
+ } from './project-store.ts';
+
+ const HTTP_OPERATIONS = {
++  semanticVectorsAvailable,
+   writeAgentRuntime,
+   writeProjectDocument,
+   deleteEntry: deleteStoredEntry,
 diff --git a/server/plugins/project-store.ts b/server/plugins/project-store.ts
 index 818e5fe..4071baa 100644
 --- a/server/plugins/project-store.ts
@@ -1583,6 +1628,50 @@ index 818e5fe..4071baa 100644
    await ensureStoreReady();
    if (!sqliteStoreEnabled()) return updateLegacyExportRecovery(input);
    return sqliteImmediateTransaction((store) => (
+diff --git a/server/project-store-http-routes.ts b/server/project-store-http-routes.ts
+index e618bfe..b3b9f44 100644
+--- a/server/project-store-http-routes.ts
++++ b/server/project-store-http-routes.ts
+@@ -14,6 +14,7 @@ import type {
+ const MAX_BODY_BYTES = 64 * 1024 * 1024;
+
+ export interface ProjectStoreHttpOperations {
++  semanticVectorsAvailable(): boolean;
+   writeAgentRuntime(
+     input: Extract<ProjectStoreRequest, { operation: 'agent-runtime-write' }>,
+   ): Promise<ProjectStoreMutationResponse>;
+@@ -81,6 +82,10 @@ async function handleGet(
+   operations: ProjectStoreHttpOperations,
+ ): Promise<boolean> {
+   if (req.method !== 'GET') return false;
++  if (req.url === '/semantic-vectors/status') {
++    sendProjectStoreJson(res, 200, { semanticVectorsAvailable: operations.semanticVectorsAvailable() });
++    return true;
++  }
+   if (req.url === '/' || req.url === '') {
+     sendProjectStoreJson(res, 200, await operations.readSnapshot());
+     return true;
+diff --git a/server/project-store-transport.ts b/server/project-store-transport.ts
+index cd50ad1..c8b7fb2 100644
+--- a/server/project-store-transport.ts
++++ b/server/project-store-transport.ts
+@@ -5,6 +5,7 @@ import type {
+ import { isProjectStoreRequest } from '../shared/project-store-validation.ts';
+ import {
+   clearSemanticVectors,
++  semanticVectorsAvailable,
+   pruneSemanticVectors,
+   searchSemanticVectors,
+   upsertSemanticVectors,
+@@ -62,6 +63,8 @@ export async function executeProjectStoreRequest(
+     case 'purge-project':
+       await deleteStoredEntry(`project:${request.projectId}`);
+       return { ok: true };
++    case 'semantic-vectors-status':
++      return { semanticVectorsAvailable: semanticVectorsAvailable() };
+     case 'semantic-vectors-upsert':
+       return { semanticVectors: upsertSemanticVectors(request.scopeId, request.assetId, request.samples) };
+     case 'semantic-vectors-search':
 diff --git a/server/shutdown-runtime.ts b/server/shutdown-runtime.ts
 new file mode 100644
 index 0000000..dd19356
@@ -1643,6 +1732,38 @@ index 0000000..317fe3b
 +/** Internal control carried by the existing editor broker; never published as an MCP tool. */
 +export const EDITOR_SHUTDOWN_CALL = 'mantur_shutdown';
 +export type EditorShutdownPhase = 'freeze' | 'flush';
+diff --git a/shared/project-store-transport.ts b/shared/project-store-transport.ts
+index 6793bf2..d5e3913 100644
+--- a/shared/project-store-transport.ts
++++ b/shared/project-store-transport.ts
+@@ -35,6 +35,7 @@ export interface ProjectDocumentMutationResponse extends ProjectStoreMutationRes
+
+ export type ProjectStoreRequest =
+   | { operation: 'snapshot' }
++  | { operation: 'semantic-vectors-status' }
+   | { operation: 'entry'; key: string }
+   | { operation: 'merge'; entries: Record<string, unknown> }
+   | { operation: 'set'; key: string; value: unknown }
+@@ -121,4 +122,5 @@ export type ProjectStoreResponse =
+   | { found: boolean; value?: unknown }
+   | { ok: true }
+   | ProjectStoreMutationResponse
+-  | { semanticVectors: unknown };
++  | { semanticVectors: unknown }
++  | { semanticVectorsAvailable: boolean };
+diff --git a/shared/project-store-validation.ts b/shared/project-store-validation.ts
+index da3275e..55e4511 100644
+--- a/shared/project-store-validation.ts
++++ b/shared/project-store-validation.ts
+@@ -333,7 +333,7 @@ function isExportRecoveryLeaseRequest(value: Record<string, unknown>): boolean {
+
+ export function isProjectStoreRequest(value: unknown): value is ProjectStoreRequest {
+   if (!isProjectStoreRecord(value) || typeof value.operation !== 'string') return false;
+-  if (value.operation === 'snapshot') return Object.keys(value).length === 1;
++  if (value.operation === 'snapshot' || value.operation === 'semantic-vectors-status') return Object.keys(value).length === 1;
+   if (value.operation === 'entry') {
+     return Object.keys(value).length === 2 && isProjectStoreKey(value.key);
+   }
 diff --git a/shared/shutdown-work.ts b/shared/shutdown-work.ts
 new file mode 100644
 index 0000000..7b6431d
@@ -2596,6 +2717,214 @@ index 7b971ee..9325983 100644
      finally { if (alive.current) setBusy(false); }
    };
    const offline = assets.filter(asset => offlineAssetIds.has(asset.id));
+diff --git a/src/media/semantic-search/vectorCapability.verify.ts b/src/media/semantic-search/vectorCapability.verify.ts
+new file mode 100644
+index 0000000..048e052
+--- /dev/null
++++ b/src/media/semantic-search/vectorCapability.verify.ts
+@@ -0,0 +1,94 @@
++import assert from 'node:assert/strict';
++import { createServer } from 'node:http';
++import { mkdtemp, rm } from 'node:fs/promises';
++import { tmpdir } from 'node:os';
++import { join } from 'node:path';
++import { setImmediate as tick } from 'node:timers/promises';
++import { stopEditorBackgroundForShutdown } from '../../editor/mantur-shutdown';
++import type { ViteDevServer } from 'vite';
++import { pruneSemanticVectors, searchSemanticVectorsRemote } from './vectorStore';
++
++const globals = globalThis as unknown as { window?: unknown; location?: unknown };
++const originalWindow = globals.window;
++const originalLocation = globals.location;
++const originalFetch = globalThis.fetch;
++const root = await mkdtemp(join(tmpdir(), 'mantur-vector-capability-'));
++process.env.OPENCHATCUT_DATA_DIR = root;
++delete process.env.OPENCHATCUT_SQLITE_STORE;
++const { createMiniConnect } = await import('../../../desktop/mini-connect.ts');
++const { projectStorePlugin } = await import('../../../server/plugins/project-store-plugin.ts');
++const { ManturEditorShutdown } = await import('../../../server/plugins/mantur-shutdown.ts');
++const { editorCallbacks } = await import('../../../server/shutdown-runtime.ts');
++const { executeProjectStoreRequest } = await import('../../../server/project-store-transport.ts');
++const { isProjectStoreRequest } = await import('../../../shared/project-store-validation.ts');
++const app = createMiniConnect(error => { throw error; });
++const server = createServer((req, res) => app.handle(req, res));
++try {
++  const plugin = new ManturEditorShutdown().ownPlugin(projectStorePlugin());
++  const hook = plugin.configureServer!;
++  const configure = typeof hook === 'function' ? hook : hook.handler;
++  await configure.call({} as never, { middlewares: app, httpServer: server, config: { logger: { error() {} } } } as unknown as ViteDevServer);
++  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
++  const address = server.address(); assert(address && typeof address !== 'string');
++  const origin = `http://127.0.0.1:${address.port}`;
++  const requests: string[] = [];
++  globals.window = {};
++  globals.location = { protocol: 'http:' };
++  globalThis.fetch = (input, init) => {
++    const url = new URL(String(input), origin);
++    requests.push(url.pathname);
++    return originalFetch(url, { ...init, headers: { ...init?.headers, Origin: origin, 'Sec-Fetch-Site': 'same-origin' } });
++  };
++  assert.equal(isProjectStoreRequest({ operation: 'semantic-vectors-status' }), true);
++  assert.equal(isProjectStoreRequest({ operation: 'semantic-vectors-status', scopeId: 'extra' }), false);
++  await assert.rejects(executeProjectStoreRequest({ operation: 'semantic-vectors-status', scopeId: 'extra' }), /invalid project store request/);
++  assert.deepEqual(await executeProjectStoreRequest({ operation: 'semantic-vectors-status' }), { semanticVectorsAvailable: false });
++  await pruneSemanticVectors('fresh-project', new Set());
++  assert.deepEqual(requests, ['/api/project-store/semantic-vectors/status'], 'new JSON project must not send an unsupported remote prune');
++  assert.equal(await searchSemanticVectorsRemote('fresh-project', new Float32Array(512)), null);
++  assert.equal(requests.length, 2, 'each operation resolves current capability instead of permanently caching absence');
++  let mutationCalls = 0;
++  let availability: unknown = false;
++  globals.window = { openChatCutDesktop: { projectStore: async (request: { operation: string }) => {
++    if (request.operation === 'semantic-vectors-status') return { semanticVectorsAvailable: availability };
++    mutationCalls += 1;
++    return { semanticVectors: [] };
++  } } };
++  await pruneSemanticVectors('fresh-project', new Set());
++  assert.equal(mutationCalls, 0);
++  availability = true;
++  await pruneSemanticVectors('fresh-project', new Set());
++  assert.equal(mutationCalls, 1, 'an explicitly available index still receives the original operation');
++  availability = 'unknown';
++  await assert.rejects(pruneSemanticVectors('fresh-project', new Set()), /Invalid semantic-vector capability response/);
++  assert.equal(mutationCalls, 1);
++  globals.window = { openChatCutDesktop: { projectStore: async () => { throw new Error('capability request failed'); } } };
++  await assert.rejects(pruneSemanticVectors('fresh-project', new Set()), /capability request failed/);
++  assert.equal(mutationCalls, 1, 'a failed probe must not be treated as unavailable success');
++  const invalidPrune = await globalThis.fetch('/api/project-store/semantic-vectors/prune', {
++    method: 'POST', headers: { 'Content-Type': 'application/json' },
++    body: JSON.stringify({ operation: 'semantic-vectors-prune', scopeId: 'fresh-project', validAssetIds: [] }),
++  });
++  assert.equal(invalidPrune.status, 400, 'the server still rejects a real unsupported operation');
++  await assert.rejects(editorCallbacks.stop(), /callbacks failed; shutdown is unconfirmed/);
++  const probeEntered = Promise.withResolvers<void>();
++  const probeRelease = Promise.withResolvers<void>();
++  globals.window = { openChatCutDesktop: { projectStore: async () => {
++    probeEntered.resolve(); await probeRelease.promise; return { semanticVectorsAvailable: false };
++  } } };
++  const pendingPrune = pruneSemanticVectors('late-probe', new Set());
++  await probeEntered.promise;
++  const draining = stopEditorBackgroundForShutdown();
++  const rejected = assert.rejects(draining, /Browser editor background work failed/);
++  let finished = false;
++  void rejected.then(() => { finished = true; });
++  await tick(); assert.equal(finished, false, 'the earlier failures do not discard the accepted pending capability operation');
++  probeRelease.resolve(); await pendingPrune; await rejected;
++  console.log('vector capability: JSON HTTP/IPC, enabled routing, invalid/failed probe, pending drain and retained HTTP400 passed');
++} finally {
++  globalThis.fetch = originalFetch;
++  if (originalWindow === undefined) delete globals.window; else globals.window = originalWindow;
++  if (originalLocation === undefined) delete globals.location; else globals.location = originalLocation;
++  await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
++  await rm(root, { recursive: true, force: true });
++}
+diff --git a/src/media/semantic-search/vectorStore.ts b/src/media/semantic-search/vectorStore.ts
+index 3328ea2..384d2b3 100644
+--- a/src/media/semantic-search/vectorStore.ts
++++ b/src/media/semantic-search/vectorStore.ts
+@@ -5,6 +5,7 @@ import {
+   requestProjectStore,
+ } from '../../persist/projectStoreTransport';
+ import { readSamplingConfig } from './samplingConfig';
++import { trackEditorBackground } from '../../editor/mantur-shutdown';
+
+ const DATABASE_NAME = 'openchatcut-semantic-index';
+ const STORE_NAME = 'vectors';
+@@ -28,9 +29,9 @@ function serializeScopeMutation<T>(scopeId: string, operation: () => Promise<T>)
+   const previous = mutationQueues.get(scopeId) ?? Promise.resolve();
+   const current = previous.catch(() => undefined).then(operation);
+   mutationQueues.set(scopeId, current);
+-  return current.finally(() => {
++  return trackEditorBackground(current.finally(() => {
+     if (mutationQueues.get(scopeId) === current) mutationQueues.delete(scopeId);
+-  });
++  }));
+ }
+
+ interface StoredVector {
+@@ -83,8 +84,14 @@ async function withStore<T>(
+   return promise;
+ }
+
+-function remoteSemanticAvailable(): boolean {
+-  return !remoteSemanticFailed && projectStoreRemoteAvailable() && projectStoreWriteCredential();
++async function remoteSemanticAvailable(): Promise<boolean> {
++  if (remoteSemanticFailed || !projectStoreRemoteAvailable() || !projectStoreWriteCredential()) return false;
++  const status = await requestProjectStore({ operation: 'semantic-vectors-status' });
++  if (!status || typeof status !== 'object' || !('semanticVectorsAvailable' in status)
++    || typeof status.semanticVectorsAvailable !== 'boolean') {
++    throw new Error('Invalid semantic-vector capability response');
++  }
++  return status.semanticVectorsAvailable;
+ }
+
+ function toWireVector(vector: ArrayLike<number>): number[] {
+@@ -97,8 +104,7 @@ export async function hybridSearchRemote(
+   query: string,
+   queryVector: ArrayLike<number>,
+ ): Promise<{ visual: SemanticMatch[]; text: HybridTextHit[] } | null> {
+-  if (remoteSemanticFailed) return null;
+-  if (!projectStoreRemoteAvailable()) return null;
++  if (!await remoteSemanticAvailable()) return null;
+   try {
+     const response = await fetch('/api/project-store/hybrid-search', {
+       method: 'POST',
+@@ -153,8 +159,7 @@ export async function searchSemanticVectorsRemote(
+   queryVector: ArrayLike<number>,
+   limit?: number,
+ ): Promise<SemanticMatch[] | null> {
+-  if (remoteSemanticFailed) return null;
+-  if (!projectStoreRemoteAvailable()) return null;
++  if (!await remoteSemanticAvailable()) return null;
+   const config = readSamplingConfig();
+   try {
+     const response = await requestProjectStore({
+@@ -213,7 +218,7 @@ export function replaceAssetVectors(
+   records: SemanticVectorRecord[],
+ ): Promise<void> {
+   return serializeScopeMutation(scopeId, async () => {
+-    if (remoteSemanticAvailable()) {
++    if (await remoteSemanticAvailable()) {
+       try {
+         await requestProjectStore({
+           operation: 'semantic-vectors-upsert',
+@@ -258,7 +263,7 @@ export async function pruneSemanticVectors(
+   validSourceRevisions?: ReadonlyMap<string, string>,
+ ): Promise<PruneSemanticResult> {
+   return serializeScopeMutation(scopeId, async () => {
+-    if (remoteSemanticAvailable()) {
++    if (await remoteSemanticAvailable()) {
+       try {
+         await requestProjectStore({
+           operation: 'semantic-vectors-prune',
+@@ -305,7 +310,7 @@ export function shouldPruneVector(
+
+ export async function clearSemanticVectors(scopeId: string): Promise<void> {
+   return serializeScopeMutation(scopeId, async () => {
+-    if (remoteSemanticAvailable()) {
++    if (await remoteSemanticAvailable()) {
+       try {
+         await requestProjectStore({ operation: 'semantic-vectors-clear', scopeId });
+       } catch {
+diff --git a/src/media/semantic-search/vectorStore.verify.ts b/src/media/semantic-search/vectorStore.verify.ts
+index 284efd9..35cabfe 100644
+--- a/src/media/semantic-search/vectorStore.verify.ts
++++ b/src/media/semantic-search/vectorStore.verify.ts
+@@ -18,6 +18,7 @@ function installTransport(): void {
+   (globalThis as Record<string, unknown>).window = {
+     openChatCutDesktop: {
+       projectStore: async (request: unknown) => {
++        if ((request as { operation: string }).operation === 'semantic-vectors-status') return { semanticVectorsAvailable: true };
+         requests.push({ request });
+         return { ok: true };
+       },
+@@ -66,6 +67,7 @@ async function main(): Promise<void> {
+   (globalThis as Record<string, unknown>).window = {
+     openChatCutDesktop: {
+       projectStore: async (request: unknown) => {
++        if ((request as { operation: string }).operation === 'semantic-vectors-status') return { semanticVectorsAvailable: true };
+         requests.push({ request });
+         const search = request as { operation: string };
+         if (search.operation === 'semantic-vectors-search') {
 diff --git a/src/persist/agentRuntimeStore.ts b/src/persist/agentRuntimeStore.ts
 index 8cc2d47..ac97d62 100644
 --- a/src/persist/agentRuntimeStore.ts
@@ -2677,3 +3006,17 @@ index ee0d693..6807f47 100644
        }
        if (onlyProvisionalMisses && pending.size && Date.now() < deadline) {
          await new Promise((resolvePromise) => setTimeout(resolvePromise, 250));
+diff --git a/src/persist/projectStoreTransport.ts b/src/persist/projectStoreTransport.ts
+index 2df2c2b..bb03e27 100644
+--- a/src/persist/projectStoreTransport.ts
++++ b/src/persist/projectStoreTransport.ts
+@@ -166,6 +166,9 @@ async function requestHttp(request: ProjectStoreRequest): Promise<ProjectStoreRe
+       path = '/project/purge';
+       init = postJson(init, headers, request);
+       break;
++    case 'semantic-vectors-status':
++      path = '/semantic-vectors/status';
++      break;
+     case 'semantic-vectors-upsert':
+       path = '/semantic-vectors/upsert';
+       init = postJson(init, headers, request);

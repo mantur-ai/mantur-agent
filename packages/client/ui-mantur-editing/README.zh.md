@@ -64,11 +64,13 @@ Agent 导入本地文件在手动模式下保留单次确认，素材先加入�
 
 应用[打包补丁](adapters/mantur-cut-packaged.patch)得到编辑器树 `2a5be55239826a9e74bde5a5a5484a0f033d4da0` 后，再应用[退出补丁](adapters/mantur-cut-shutdown.patch)。退出补丁不增加公开 MCP 工具，也不修改固定的音频收尾流程。受管理的渲染路径传播 `browser.close()` 失败，但 Remotion 4.0.509 没有提供受支持的子进程及管道完整关闭确认；实际取得渲染浏览器的实例因此拒绝退出确认。使用过尚未接入排空的工作来源，或保留有保存及任务错误时，也拒绝确认。该增量不代表完整安装许可；[退出决策](../../../.agents/notes/implemented/bug-fix/2026-09-08-mantur-editing-owned-shutdown.zh.md)记录验证限制。
 
+编辑器通过工程存储通道确认实际语义向量可用性后才执行索引操作；检查失败或响应无效仍然报错。已接受的修改纳入浏览器退出等待。扩展与模型目录的指定 GET 请求保留原始完成 Promise；下载及安装请求仍须具备自己的退出管理。
+
 | 退出补丁层 | 固定值 |
 |---|---|
-| 编辑器提交 | `62b063a423afdfa7343d3ee75b777053308dc3d7` |
-| 结果树 | `538363abfa8d3b2fa668a784072445c22ee722aa` |
-| 补丁 SHA-256 | `6a1a28ee51dddc2cbae5ae531dbb3f5f1bfed62fac508c296f55304a2d2af75f` |
+| 编辑器提交 | `08950ed125145b67c0835777a958992baeb377d9` |
+| 结果树 | `078f8d3f343cafd003276ac10ea57fcb1ed7d47a` |
+| 补丁 SHA-256 | `78ca03afd9a2afee5525af43c11d9713e87b7ff3e812b314755fd7d9226441df` |
 
 Host Remote 解析 Agent，合并并发打开请求，并启动 `adapters/mantur-runtime.mjs`。既有 MCP 客户端挂载于该 Agent 作用域。所有挂载的 MCP 客户端解析到同一 peer 实例，保留 Agent 作用域内的服务器名称预留。MCP bearer 只存在于 Host 内存和子进程环境。卸载等待连接与子进程退出。Client 忽略已切走会话的启动结果。本包不发布 invariant companion：退出状态由子进程句柄直接持有，连接和工具版本约束由 MCP 客户端负责。
 

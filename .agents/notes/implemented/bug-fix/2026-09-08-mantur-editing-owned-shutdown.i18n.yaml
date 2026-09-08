@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-08-mantur-editing-owned-shutdown.md
-2026-09-08-mantur-editing-owned-shutdown.md: 3dd5e52c71092cd1c39eb22167e9f75a03f3f88a
-2026-09-08-mantur-editing-owned-shutdown.zh.md: a2b2cacf3cf310c43a06df7aa01642a512b929a2
+2026-09-08-mantur-editing-owned-shutdown.md: 6dd71f631b42ba07baa070ad7199cda318ed2ef4
+2026-09-08-mantur-editing-owned-shutdown.zh.md: 9c2fdf0503023595ae3b07d24c310c5a5e48545d
