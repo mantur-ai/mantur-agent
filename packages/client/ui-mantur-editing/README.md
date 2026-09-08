@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Open the local editor beside the Mantur conversation by selecting Editing on the home screen. The editor owns its media pool, preview, timeline, and project saving. This optional plugin starts a separate editor for each Session in that Session's working directory.
+Open the local editor with the chevron at the right edge of the Mantur conversation. Creation mode selection does not open or close the workbench. The editor owns its media pool, preview, timeline, and project saving. This optional plugin starts a separate editor for each Session in that Session's working directory.
 
 ## Table of Contents
 
@@ -25,7 +25,7 @@ Open the local editor beside the Mantur conversation by selecting Editing on the
 <a id="use-this-package"></a>
 ## Use this package
 
-The packaged desktop enables `ui-mantur-editing` with its installed resource directory and Electron executable. A development profile explicitly selects `runtimeMode: development` and supplies the runtime fields below. Selecting Editing opens the current Session through the authenticated Remote gateway. The conversation header also offers Editing to reopen a saved Session after closing the view or refreshing the page. Without a selected Session and working directory, the workbench shows a diagnostic. Hiding the workbench retains the current Session’s editor page and native Agent binding. Reopening that view continues the same editing draft. Agent or Host disposal requests the same checked runtime shutdown; an unconfirmed drain retains its owner.
+The packaged desktop enables `ui-mantur-editing` with its installed resource directory and Electron executable. A development profile explicitly selects `runtimeMode: development` and supplies the runtime fields below. The resident edge chevron opens the current Session through the authenticated Remote gateway and collapses the workbench when expanded. Its localized accessible label and `aria-expanded` describe the current action and state. Without a selected Session and working directory, the workbench shows a diagnostic. Hiding the workbench retains the current Session’s editor page and native Agent binding. Reopening that view continues the same editing draft. The header's Refresh action recreates the editor page for the same Session; it does not delete saved project files. Agent or Host disposal requests the same checked runtime shutdown; an unconfirmed drain retains its owner.
 
 Each Session uses `<cwd>/剪辑/<session-id>/`: `工程/` contains project persistence and runtime state, `素材/` contains imported media, and `导出/` is the default export destination. The Host reads `cwd` from the resolved Agent's Session header; the browser cannot select another path. Session directory components reject traversal and symbolic links. Reopening preserves files. Different Sessions use separate runtimes and tool scopes even within one project.
 

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
-import { EditingAction, Workbench } from '../src/client/Workbench.tsx'
+import { WorkbenchToggle, Workbench } from '../src/client/Workbench.tsx'
 import { localEditorUrl } from '../src/settings.ts'
 import { en, zh } from '../src/client/locales.ts'
 import type { ComponentProps } from 'react'
@@ -29,11 +29,22 @@ async function mount(dictionary = en) {
 }
 
 describe('Session editor workbench', () => {
-  it.each([en, zh])('reopens editing from an existing conversation header', (dictionary) => {
+  it.each([en, zh])('localizes the boundary toggle and exposes its current visibility', (dictionary) => {
+    const props = propsFor(dictionary)
     const openWorkbench = vi.fn()
-    const view = render(<EditingAction openWorkbench={openWorkbench} t={propsFor(dictionary).t} />)
-    fireEvent.click(view.getByRole('button', { name: dictionary.open }))
+    const view = render(<WorkbenchToggle {...props} expanded={false} openWorkbench={openWorkbench} />)
+    const button = view.getByRole('button', { name: dictionary.expand })
+    expect(button.getAttribute('aria-expanded')).toBe('false')
+    expect(button.tabIndex).toBe(0)
+    button.focus()
+    fireEvent.click(button)
     expect(openWorkbench).toHaveBeenCalledOnce()
+    view.rerender(<WorkbenchToggle {...props} expanded openWorkbench={openWorkbench} />)
+    expect(view.getByRole('button', { name: dictionary.collapse })).toBe(button)
+    expect(button.getAttribute('aria-expanded')).toBe('true')
+    expect(document.activeElement).toBe(button)
+    fireEvent.click(button)
+    expect(props.closeWorkbench).toHaveBeenCalledOnce()
     expect(view.container.innerHTML).toMatchSnapshot()
   })
   it.each([['en', en], ['zh', zh]] as const)('records the %s workspace and controls', async (_language, dictionary) => {
@@ -41,15 +52,17 @@ describe('Session editor workbench', () => {
     expect(getByRole('region').outerHTML).toMatchSnapshot()
   })
 
-  it('opens the selected Session and gives close and reload explicit controls', async () => {
+  it('refreshes the same Session without offering a second collapse control', async () => {
     const { getByTitle, findByTitle, getByRole, props } = await mount()
     expect(props.openWorkspace).toHaveBeenCalledWith('session-a')
     const frame = getByTitle(en.title)
     expect(frame.getAttribute('src')).toBe('http://127.0.0.1:5299/?manturTheme=light&manturLocale=en')
     fireEvent.click(getByRole('button', { name: en.reload }))
     expect(await findByTitle(en.title)).not.toBe(frame)
-    fireEvent.click(getByRole('button', { name: en.close }))
-    expect(props.closeWorkbench).toHaveBeenCalledOnce()
+    expect(props.openWorkspace).toHaveBeenCalledTimes(2)
+    expect(props.openWorkspace).toHaveBeenLastCalledWith('session-a')
+    expect(getByRole('button').textContent).toBe('Refresh')
+    expect(props.closeWorkbench).not.toHaveBeenCalled()
   })
 
   it('does not start an editor before a Session is selected', () => {

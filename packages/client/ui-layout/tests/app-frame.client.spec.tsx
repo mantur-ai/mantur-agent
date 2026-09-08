@@ -11,7 +11,7 @@
  * resizes are driven through the ResizeObserver stub.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { useSyncExternalStore } from 'react'
 import { AppFrame } from '@deepseek-ai/dsh-client-ui-layout/src/client/AppFrame.tsx'
 import type { AppFrameProps } from '@deepseek-ai/dsh-client-ui-layout/src/client/AppFrame.tsx'
@@ -63,6 +63,11 @@ function mountFrame() {
     if (key === 'sidebar') return <div data-testid="sidebar-content" />
     if (key === 'conversation') return <div data-testid="center-content" />
     if (key === 'main.workbench') return <div data-testid="workbench-content" />
+    if (key === 'main.workbench.toggle') {
+      const toggle = owner as { expanded: boolean; openWorkbench: () => void; closeWorkbench: () => void }
+      return <button type="button" data-testid="workbench-toggle" aria-expanded={toggle.expanded}
+        onClick={toggle.expanded ? toggle.closeWorkbench : toggle.openWorkbench} />
+    }
     if (key === 'details') return <div data-testid="details-content" />
     if (key === 'main.page') return <div data-testid="main-page-content">marketplace</div>
     if (key === 'conversation.empty') return <div data-testid="empty-content" />
@@ -298,6 +303,27 @@ describe('AppFrame', () => {
     expect(workbench.parentElement).toMatchSnapshot()
     unmount()
     expect(workbench.isConnected).toBe(false)
+  })
+
+  it('retains the conversation and workbench when the resident boundary control hides and restores it', () => {
+    const { getByTestId, queryByTestId } = mountFrame()
+    const toggle = getByTestId('workbench-toggle')
+    const conversation = getByTestId('center-content')
+    expect(queryByTestId('workbench-content')).toBeNull()
+    toggle.focus()
+    fireEvent.click(toggle)
+    const workbench = getByTestId('workbench-content')
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    fireEvent.click(toggle)
+    expect(workbench.parentElement?.hidden).toBe(true)
+    expect(document.activeElement).toBe(toggle)
+    expect(toggle.closest('[hidden]')).toBeNull()
+    fireEvent.click(toggle)
+    expect(getByTestId('workbench-content')).toBe(workbench)
+    expect(workbench.parentElement?.hidden).toBe(false)
+    expect(getByTestId('center-content')).toBe(conversation)
+    expect(conversation.parentElement?.nextElementSibling).toBe(toggle.parentElement)
+    expect(toggle.parentElement?.nextElementSibling).toBe(workbench.parentElement)
   })
 
   it('remembers workbench visibility separately for each session and the home screen', () => {

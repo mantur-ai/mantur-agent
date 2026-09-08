@@ -14,6 +14,8 @@ The [layout owner](../../../../packages/client/ui-layout/src/client/AppFrame.tsx
 
 The generic layout requires this change because it owns the conditional that removes the entire editing plugin subtree; a child plugin cannot prevent that removal. The affected upstream files are AppFrame, its stylesheet, and the layout slot/service documentation. The [editing integration](../feature/2026-09-06-mantur-local-editing-workbench.md) retains its existing Host and MCP ownership. No transport, identity check, tool replay, or project format changes.
 
+The resident `main.workbench.toggle` slot remains outside the hidden subtree at the conversation edge. The editing plugin supplies a native chevron button with localized action labels and expanded state. Creation mode events do not change workbench visibility. The header retains Refresh but no duplicate collapse action.
+
 ## Alternatives considered
 
 **Reconnect or rebind after hiding.** This changes connection recovery and draft ownership instead of preserving the editor during a display-only action. Native stale-binding protection remains intact.

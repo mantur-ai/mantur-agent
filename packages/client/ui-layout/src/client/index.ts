@@ -1,7 +1,7 @@
 /**
  * Layout plugin, browser half: one register() call contributes AppFrame into
  * the runtime's built-in 'root' slot and, in the same breath, declares the
- * five child slots (declaration = exclusive render authority), seats the
+ * child slots (declaration = exclusive render authority), seats the
  * layout store (panel geometry), and wires the panel-action service face.
  * ctx.layout is the cross-plugin panel-action contract; root-page navigation
  * state lives in the layout store. A second effect seats the theme
@@ -38,7 +38,7 @@ declare module '@deepseek-ai/cordis' {
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
     // The 'root' entry itself is the runtime's built-in slot (declared
-    // there); these five are the frame's children, declared by the same
+    // there); these are the frame's children, declared by the same
     // register() call that contributes AppFrame. Session owners never pass
     // sessionId: the framework injects it as a standard prop.
     /**
@@ -82,6 +82,16 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * Registering replaces the single workbench occupant, independent of session details.
      */
     'main.workbench': { kind: 'single'; scope: 'root'; owner: { closeWorkbench: () => void } }
+    /** Optional workbench visibility control on the conversation's right boundary. */
+    'main.workbench.toggle': {
+      kind: 'single'
+      scope: 'root'
+      owner: {
+        expanded: boolean
+        openWorkbench: () => void
+        closeWorkbench: () => void
+      }
+    }
     /**
      * Root-level page replacing the center conversation surface while active.
      * The layout keeps the conversation mounted but hidden, and the transient
@@ -133,7 +143,7 @@ export const inject = ['slots', 'theme', 'locale']
 
 /**
  * Client plugin body: provide ctx.layout, then one register() call — AppFrame
- * into 'root' with the five child-slot declarations, the layout store seat,
+ * into 'root' with the child-slot declarations, the layout store seat,
  * and the inject hook that hands the store's bound actions to the service.
  * @param ctx - client root context.
  */
@@ -149,6 +159,7 @@ export function apply(ctx: ClientContext): void {
         'conversation': { kind: 'single', scope: 'session-maybe' },
         'details': { kind: 'single', scope: 'session' },
         'main.workbench': { kind: 'single', scope: 'root' },
+        'main.workbench.toggle': { kind: 'single', scope: 'root' },
         'main.page': { kind: 'single', scope: 'root' },
         'shell.overlay': { kind: 'list', scope: 'root' },
       },

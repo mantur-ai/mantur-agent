@@ -3,12 +3,23 @@
 .header strong { margin-right: auto; }
 .header button { color: inherit; background: var(--dsw-alias-bg-base); border: 0.5px solid var(--dsw-alias-border-l3); border-radius: 6px; padding: 4px 8px; font-size: 12px; cursor: pointer; }
 .editor { flex: 1; width: 100%; min-height: 0; border: 0; }
-.openAction {
+.edgeToggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 24px;
+  min-height: 44px;
+  margin: 0 4px;
   border: 0.5px solid var(--dsw-alias-border-l3);
   border-radius: 6px;
-  padding: 4px 10px;
-  background: transparent;
+  padding: 0;
+  background: var(--dsw-alias-button-floating-fill);
   color: inherit;
-  font: inherit;
   cursor: pointer;
 }
+.edgeToggle:hover,
+.header button:hover { background: var(--dsw-alias-button-floating-hover); }
+.edgeToggle:active { border-color: currentColor; }
+.edgeToggle:focus-visible,
+.header button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }

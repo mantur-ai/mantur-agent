@@ -23,7 +23,7 @@ import css from './AppFrame.module.css'
 /** Full composed props: runtime share + child-slot render share + store share. */
 export type AppFrameProps =
   & PropsRuntime<'root'>
-  & PropsRenderSlots<'sidebar' | 'conversation' | 'details' | 'main.page' | 'main.workbench' | 'shell.overlay'>
+  & PropsRenderSlots<'sidebar' | 'conversation' | 'details' | 'main.page' | 'main.workbench' | 'main.workbench.toggle' | 'shell.overlay'>
   & PropsStore<ReturnType<typeof createLayoutStore>>
   & PropsLocale<'common'>
 
@@ -229,6 +229,13 @@ export function AppFrame({
         <CenterColumn>
           <div className={css.conversationSurface} hidden={mainPageOpen} data-workbench-open={workbenchOpen || undefined}>
             <div className={css.conversationPane}>{renderSlot('conversation', {})}</div>
+            <div className={css.workbenchEdge}>
+              {renderSlot('main.workbench.toggle', {
+                expanded: sessionWorkbenchOpen,
+                openWorkbench: actions.openWorkbench,
+                closeWorkbench: actions.closeWorkbench,
+              })}
+            </div>
             <WorkbenchColumn key={workbenchSession} open={sessionWorkbenchOpen}>
               {renderSlot('main.workbench', { closeWorkbench: actions.closeWorkbench })}
             </WorkbenchColumn>

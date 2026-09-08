@@ -1,8 +1,7 @@
-/** Opt-in editor presentation driven by explicit Mantur mode selections. */
+/** Optional editor presentation with a resident conversation-boundary toggle. */
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
-import type {} from '@deepseek-ai/dsh-client-ui-mantur-navigation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-theme/client'
 import type {} from '@deepseek-ai/dsh-api-gateway/client'
@@ -11,7 +10,7 @@ import editingRemote from '@deepseek-ai/dsh-client-ui-mantur-editing/remote'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { EditingWorkspace } from '../types.ts'
 import { en, zh, type EditingKey } from './locales.ts'
-import { EditingAction, Workbench } from './Workbench.tsx'
+import { WorkbenchToggle, Workbench } from './Workbench.tsx'
 
 /** Host workspace command and Mantur appearance subscriptions. */
 export interface WorkbenchInjection {
@@ -38,7 +37,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 export const inject = ['slots', 'locale', 'layout', 'theme', 'remote']
 
 /**
- * Register the editor and release its mode listener with the plugin.
+ * Register the editor and its independent visibility control.
  * @param ctx - plugin context.
  */
 export async function apply(ctx: Context): Promise<void> {
@@ -49,10 +48,9 @@ export async function apply(ctx: Context): Promise<void> {
 
 function installWorkbench(ctx: Context): void {
   ctx.effect(() => ctx.locale.register('editing.mantur', { en, zh }), 'editing: dictionaries')
-  ctx.slots.inject('conversation.session.header.actions', () => ctx.slots.register({
-    name: 'conversation.session.header.actions', id: 'mantur-editing', order: 30, locale: 'editing.mantur',
-    inject: () => ({ openWorkbench: () => { ctx.layout.openWorkbench() } }),
-  }, EditingAction))
+  ctx.slots.inject('main.workbench.toggle', () => ctx.slots.register({
+    name: 'main.workbench.toggle', locale: 'editing.mantur',
+  }, WorkbenchToggle))
   ctx.slots.inject('main.workbench', () => ctx.slots.register({
     name: 'main.workbench', locale: 'editing.mantur',
     inject: (): WorkbenchInjection => ({
@@ -67,9 +65,5 @@ function installWorkbench(ctx: Context): void {
       subscribeTheme: notify => ctx.on('theme/change', notify),
     }),
   }, Workbench))
-  ctx.on('mantur/creation-mode-selected', (mode) => {
-    if (mode === 'editing') ctx.layout.openWorkbench()
-    else ctx.layout.closeWorkbench()
-  })
   ctx.effect(() => () => { ctx.layout.closeWorkbench() }, 'editing: close on unload')
 }

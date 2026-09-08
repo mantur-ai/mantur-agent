@@ -6,15 +6,21 @@ import type { WorkbenchInjection } from './index.ts'
 import { localEditorUrl } from '../settings.ts'
 import type { EditingWorkspace } from '../types.ts'
 import css from './Workbench.module.css'
-import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 
 /**
- * Reopen editing for the selected conversation after a reload or explicit close.
- * @param props - Localized label and layout action.
- * @returns Session header action.
+ * Toggle the workbench without changing the selected creation mode or Session.
+ * @param props - Localized labels and the layout's current visibility controls.
+ * @returns Keyboard-accessible control at the conversation boundary.
  */
-export function EditingAction({ openWorkbench, t }: PropsLocale<'editing.mantur'> & { openWorkbench: () => void }) {
-  return <button type="button" className={css.openAction} onClick={openWorkbench}>{t('open')}</button>
+export function WorkbenchToggle({ expanded, openWorkbench, closeWorkbench, t }: PropsRuntime<'main.workbench.toggle'> & PropsLocale<'editing.mantur'>) {
+  const label = t(expanded ? 'collapse' : 'expand')
+  return <button type="button" className={css.edgeToggle} aria-label={label} title={label}
+    aria-expanded={expanded} onClick={expanded ? closeWorkbench : openWorkbench}>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+      <polyline points={expanded ? '9 6 15 12 9 18' : '15 6 9 12 15 18'} />
+    </svg>
+  </button>
 }
 
 type Props = PropsRuntime<'main.workbench'> & PropsLocale<'editing.mantur'> & InjectFace<WorkbenchInjection>
@@ -25,7 +31,7 @@ type Props = PropsRuntime<'main.workbench'> & PropsLocale<'editing.mantur'> & In
  * @returns embedded editor or a configuration diagnostic.
  */
 export function Workbench({
-  useSessions, openWorkspace, closeWorkbench, getColorScheme, subscribeTheme, getLocale, subscribeLocale, t,
+  useSessions, openWorkspace, getColorScheme, subscribeTheme, getLocale, subscribeLocale, t,
 }: Props) {
   const sessionId = useSessions(s => s.current)
   const [revision, setRevision] = useState(0)
@@ -44,8 +50,7 @@ export function Workbench({
   return <section className={css.workbench} aria-label={t('title')}>
     <header className={css.header}>
       <strong title={workspace?.directory ?? t('help')}>{t('title')}</strong>
-      <button type="button" onClick={() => { setRevision(value => value + 1) }}>{t('reload')}</button>
-      <button type="button" onClick={closeWorkbench}>{t('close')}</button>
+      <button type="button" title={t('reload')} onClick={() => { setRevision(value => value + 1) }}>{t('reload')}</button>
     </header>
     {error !== undefined ? <p role="alert">{t('failed')}: {error}</p> : workspace !== undefined
       ? <ThemedEditor key={`${sessionId}:${revision}`} url={workspace.editorUrl} title={t('title')} getColorScheme={getColorScheme} subscribeTheme={subscribeTheme} getLocale={getLocale} subscribeLocale={subscribeLocale} />
