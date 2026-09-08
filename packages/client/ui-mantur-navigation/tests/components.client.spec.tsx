@@ -85,12 +85,41 @@ function marketplaceProps(
 }
 
 describe('Mantur marketplace navigation', () => {
+  it.each([false, true])('returns focus to the same detail action after login with signedIn=%s', (signedIn) => {
+    const detail = { slug: 'kept', name: '保留详情', description: '', category: '', version: '1', triggers: [], installed: false, usesOperators: [] }
+    const state = { ...emptyReady, detail }
+    const p = marketplaceProps(state)
+    const page = (next: ManturMarketplaceState) => <MarketplacePage {...globalProps} {...p}
+      useMarketplace={marketplaceProps(next).useMarketplace} activePage={MANTUR_MARKET_PAGES.skills} closePage={vi.fn()} t={t} />
+    const view = render(page(state))
+    fireEvent.click(screen.getByRole('button', { name: '登录后安装' }))
+    view.rerender(page({ ...state, loginPhase: 'starting' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    view.rerender(page({ ...state, catalog: { ...state.catalog, signedIn } }))
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: signedIn ? '安装技能' : '登录后安装' }))
+    expect(p.controllerMocks.install).not.toHaveBeenCalled()
+  })
+
+  it('does not move focus when a different detail replaces the login source', () => {
+    const detail = { slug: 'old', name: '旧详情', description: '', category: '', version: '1', triggers: [], installed: false, usesOperators: [] }
+    const state = { ...emptyReady, detail }
+    const page = (next: ManturMarketplaceState) => <MarketplacePage {...globalProps} {...marketplaceProps(next)}
+      activePage={MANTUR_MARKET_PAGES.skills} closePage={vi.fn()} t={t} />
+    const view = render(page(state))
+    fireEvent.click(screen.getByRole('button', { name: '登录后安装' }))
+    view.rerender(page({ ...state, loginPhase: 'starting' }))
+    const before = document.activeElement
+    view.rerender(page({ ...state, detail: { ...detail, slug: 'new', name: '新详情' } }))
+    expect(document.activeElement).toBe(before)
+  })
+
   it('renders Features before the two fixed entries and opens the selected page', () => {
+    const beforeOpenPage = vi.fn()
     const openPage = vi.fn()
     const { rerender } = render(
       <MarketplaceNavigation
         {...globalProps}
-        wide activePage={undefined} openPage={openPage} closePage={vi.fn()} t={t}
+        wide activePage={undefined} openPage={openPage} beforeOpenPage={beforeOpenPage} closePage={vi.fn()} t={t}
       />,
     )
     expect(screen.getByRole('navigation', { name: '功能' })).toBeTruthy()
@@ -99,11 +128,12 @@ describe('Mantur marketplace navigation', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '技能广场' }))
     expect(openPage).toHaveBeenCalledWith(MANTUR_MARKET_PAGES.skills)
+    expect(beforeOpenPage.mock.invocationCallOrder[0]).toBeLessThan(openPage.mock.invocationCallOrder[0]!)
 
     rerender(
       <MarketplaceNavigation
         {...globalProps}
-        wide activePage={MANTUR_MARKET_PAGES.skills} openPage={openPage} closePage={vi.fn()} t={t}
+        wide activePage={MANTUR_MARKET_PAGES.skills} openPage={openPage} beforeOpenPage={beforeOpenPage} closePage={vi.fn()} t={t}
       />,
     )
     expect(screen.getByRole('button', { name: '技能广场' }).getAttribute('aria-current')).toBe('page')
@@ -336,6 +366,7 @@ describe('Mantur marketplace navigation', () => {
         wide={false}
         activePage={MANTUR_MARKET_PAGES.recipes}
         openPage={openPage}
+        beforeOpenPage={vi.fn()}
         closePage={vi.fn()}
         t={t}
       />,
@@ -450,7 +481,7 @@ describe('Mantur marketplace navigation', () => {
         {...globalProps} {...preparingProps} activePage={MANTUR_MARKET_PAGES.skills} closePage={closePage} t={t}
       />,
     )
-    expect(screen.getByRole('button', { name: '正在准备登录…' }).hasAttribute('disabled')).toBe(true)
+    expect(screen.queryByRole('dialog')).toBeNull()
 
     const installed = { ...listed, installed: true }
     const installedProps = marketplaceProps({
@@ -597,6 +628,11 @@ describe('Mantur marketplace navigation', () => {
     )
     expect(screen.getByText('技能安装失败，原有文件没有被覆盖。请稍后重试。')).toBeTruthy()
     expect(screen.getByText('ManturHub 登录没有完成，请重试。')).toBeTruthy()
+    const unavailableProps = marketplaceProps({ ...base, detail: { ...story, usesOperators: [] }, loginPhase: 'unavailable' })
+    view.rerender(
+      <MarketplacePage {...globalProps} {...unavailableProps} activePage={MANTUR_MARKET_PAGES.skills} closePage={vi.fn()} t={t} />,
+    )
+    expect(screen.getByRole('alert').textContent).toBe('账号登录界面暂不可用，请关闭其他弹窗或重新连接客户端后重试。')
 
     const loginProps = marketplaceProps({
       ...base,

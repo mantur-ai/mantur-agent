@@ -133,6 +133,23 @@ class FeedService extends Service {
     throw new RemoteError('fixture/broken', 'fixture emitted invalid details', { count: 1n })
   }
 
+  readonly heldRead = Promise.withResolvers<IteratorResult<string>>()
+  readonly readEntered = Promise.withResolvers<undefined>()
+  cleanupFailure: Error | undefined
+
+  @Remote({ mode: 'stream' })
+  held(): AsyncIterableIterator<string> {
+    return {
+      [Symbol.asyncIterator]() { return this },
+      next: () => { this.readEntered.resolve(undefined); return this.heldRead.promise },
+      return: async () => {
+        this.returns += 1
+        if (this.cleanupFailure !== undefined) throw this.cleanupFailure
+        return { done: true, value: undefined }
+      },
+    }
+  }
+
   unary(label: string): string {
     return label
   }
@@ -217,6 +234,61 @@ afterEach(async () => {
 })
 
 describe('Typert Remote streams', () => {
+  it('joins an event source without return and closes an unconsumed wire stream', async () => {
+    const { ctx } = await setup(false)
+    const read = Promise.withResolvers<IteratorResult<TypertRemoteEventDispatch>>()
+    ctx.typertGateway.registerRemoteEvents(() => ({
+      [Symbol.asyncIterator]() { return { next: () => read.promise } },
+    }), REMOTE_HOST)
+    const stream = await ctx.typertGateway.wireStream.open('$events', { args: {} }, new AbortController().signal)
+    const iterator = stream[Symbol.asyncIterator]()
+    const stopping = ctx.typertGateway.stopForShutdown()
+    await iterator.return?.()
+    await expect(iterator.next()).resolves.toEqual({ done: true, value: undefined })
+    read.resolve({ done: true, value: undefined })
+    await stopping
+  })
+
+  it('cancels an admitted stream opening before invoking its method when shutdown interrupts resolution', async () => {
+    const { ctx, service } = await setup(false)
+    const method = vi.spyOn(service, 'held')
+    const opening = ctx.typertGateway.stream({ namespace: 'feed', method: 'held', args: {} })
+    const outcome = expect(opening).rejects.toMatchObject({ code: 'gateway/cancelled' })
+    await ctx.typertGateway.stopForShutdown()
+    await outcome
+    expect(method).not.toHaveBeenCalled()
+  })
+
+  it.each([false, true])('joins original stream reads after cancellation and return (cleanup failure: %s)', async (fails) => {
+    const { ctx, service } = await setup(false)
+    const failure = new Error('stream return failed')
+    if (fails) service.cleanupFailure = failure
+    const stream = await ctx.typertGateway.stream({ namespace: 'feed', method: 'held', args: {} })
+    const next = stream[Symbol.asyncIterator]().next().catch((error: unknown) => error)
+    await service.readEntered.promise
+    let stopped = false
+    const stopping = ctx.typertGateway.stopForShutdown().then(
+      () => { stopped = true; return undefined },
+      (error: unknown) => { stopped = true; return error },
+    )
+    try {
+      if (fails) expect(await next).toBe(failure)
+      else expect(await next).toMatchObject({ code: 'gateway/cancelled' })
+      expect(service.returns).toBe(1)
+      await new Promise<void>(resolve => setImmediate(resolve))
+      expect(stopped).toBe(false)
+      await expect(ctx.typertGateway.stream({ namespace: 'feed', method: 'held', args: {} })).rejects.toThrow('admission is closed')
+      await expect(ctx.typertGateway.invoke({ namespace: 'feed', method: 'unary', args: { label: 'late' } })).rejects.toThrow('admission is closed')
+      expect(() => ctx.typertGateway.registerRemoteEvents(() => ({ async *[Symbol.asyncIterator]() {} }), REMOTE_HOST)).toThrow('admission is closed')
+      service.heldRead.resolve({ done: true, value: undefined })
+      if (fails) expect(await stopping).toMatchObject({ errors: [failure] })
+      else expect(await stopping).toBeUndefined()
+    } finally {
+      service.heldRead.resolve({ done: true, value: undefined })
+      await Promise.all([next, stopping])
+    }
+  })
+
   it('validates the WebSocket heartbeat timer range', () => {
     expect(TypertGatewayService.Config({})).toEqual({ websocketHeartbeatIntervalMs: 2_000 })
     expect(TypertGatewayService.Config({ websocketHeartbeatIntervalMs: MAX_TIMER_DELAY_MS }))
@@ -251,7 +323,9 @@ describe('Typert Remote streams', () => {
     const pending = iterator.next()
     abort.abort(new Error('fixture cancellation'))
     await expect(pending).rejects.toThrow('Remote invocation "feed/follow" was aborted')
-    expect(service.signals).toEqual([abort.signal])
+    expect(service.signals).toHaveLength(1)
+    expect(service.signals[0]?.aborted).toBe(true)
+    expect(service.signals[0]?.reason).toBe(abort.signal.reason)
     expect(service.returns).toBe(1)
 
     await expect(collect(await ctx.typertGateway.stream({
@@ -1039,6 +1113,7 @@ function descriptors(): InvocationDescriptor[] {
   return [
     { ...stream('follow', [label], z.string()), cancellation: { parameter: 'signal' } },
     stream('sync', [label], z.string()),
+    stream('held', [], z.string()),
     stream('invalid', [], z.string()),
     stream('nonJson', [], z.unknown()),
     stream('missing', [], z.string()),

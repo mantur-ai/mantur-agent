@@ -57,6 +57,8 @@ The tool executes `bash -c <command>` and returns the combined output. Commands 
 
 Passing `run_in_background: true` returns a job id immediately and no timeout applies; the command keeps running while the agent works on something else. The agent reads its output with `job_output` (non-blocking unless `wait: true`), lists jobs with `job_list`, and stops it with `job_kill`; a finished job notifies the owning agent in-session. Background support needs the generic job runtime (`dsh-jobs-local`) and its control tools (`dsh-tool-jobs`) mounted.
 
+Background hooks own asynchronous command preparation before a process exists. Cancellation during preparation reports `killed` only after the executor confirms cleanup; preparation or cleanup failures report `failed`. A failed command scope remains recorded, so a terminal job status does not prove successful shutdown.
+
 ### Sandboxed execution and escalation
 
 When the mounted executor confines commands (for example `dsh-bash-sandbox`), a blocked file operation is reported as `[sandbox: file access denied under <mode> mode]` — a policy denial, not a command failure. The model may then retry the exact same command once in the same turn with `sandbox_permissions` (the narrowest wider mode that suffices) and a one-sentence `justification`; the approval prompt raised by that retry is how the user consents. Escalation is never speculative: a request with no real prior denial, or one that is not strictly wider than the current mode, fails closed without running anything, and a rejected escalation is final for that command.

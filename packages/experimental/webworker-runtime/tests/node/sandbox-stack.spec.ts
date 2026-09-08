@@ -6,6 +6,7 @@ import LocalSandboxProvider from '@deepseek-ai/dsh-sandbox-local'
 import { SandboxPolicyService } from '@deepseek-ai/dsh-sandbox-policy'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
+import CommandScopes from '@deepseek-ai/dsh-command-scopes'
 import { MemoryVfs } from '../../src/storage/memory.ts'
 import { setActiveVfs } from '../../src/storage/active.ts'
 import { processAlive, signalProcess } from '../../src/node/process-table.ts'
@@ -48,6 +49,7 @@ async function setup(mode: 'read-only' | 'workspace-write' | 'danger-full-access
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SandboxPolicyService, { mode, workspaceRoot: WORKSPACE })
   await ctx.plugin(LocalSubprocessRuntime)
+  await ctx.plugin(CommandScopes, { identity: 'none' })
   await ctx.plugin(SandboxBashExecutor, { cwd: WORKSPACE })
   return ctx.shell as SandboxBashExecutor
 }

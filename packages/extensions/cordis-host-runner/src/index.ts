@@ -120,6 +120,17 @@ interface ActivationPlan {
   mode: CordisDynamicRunMode
 }
 
+const executionRoots = new WeakSet<Context>()
+
+/**
+ * Read monotonic execution history even after every provider has been removed.
+ * @param ctx - any context under the Host root being checked.
+ * @returns whether that root has admitted a dynamic activation; another root has independent history.
+ */
+export function hasStartedDynamicPrograms(ctx: Context): boolean {
+  return executionRoots.has(ctx.root)
+}
+
 /** Dynamic Plugin registry and Host-half lifecycle. */
 export class DynamicCordisRunnerService extends TypertRemoteService {
   static inject = ['tools']
@@ -134,13 +145,51 @@ export class DynamicCordisRunnerService extends TypertRemoteService {
   private readonly starting = new Map<CordisDynamicPluginId, Promise<DynamicCordisHostHalfResult>>()
   private readonly resolved: ResolvedConfig
   private group: Fiber | undefined
+  private readonly executionRoot: Context
+  private readonly invocations = new Set<Promise<void>>()
+  private readonly retractions = new Set<Promise<void>>()
+  private readonly cleanupFailures: unknown[] = []
+  private closing = false
+  private shutdown: Promise<void> | undefined
 
   /** Create the service under the Host composition. */
   constructor(ctx: Context, config: Config) {
     super(ctx, 'dynamicCordisRunner')
+    this.executionRoot = ctx.root
     this.rootCtx = ctx
     this.resolved = config as ResolvedConfig
     this.inspectRegistry = new CordisInspectRegistryService(ctx)
+    ctx.effect(() => () => this.stopForShutdown(), 'dynamic runner teardown')
+  }
+
+  /** Whether this Host root has admitted an activation, across scoped and replaced runners. Stop and undefine never clear it. */
+  get hasStartedPrograms(): boolean {
+    return executionRoots.has(this.executionRoot)
+  }
+
+  /**
+   * Close activation and invocation admission, cancel pending approvals, and join admitted calls and normal plugin retraction.
+   * Arbitrary background work and operating-system descendants remain unverified after any activation.
+   * @returns completion of managed work; retained retraction failures reject every call.
+   */
+  stopForShutdown(): Promise<void> {
+    if (this.shutdown !== undefined) return this.shutdown
+    this.closing = true
+    const completion = Promise.withResolvers<void>()
+    this.shutdown = completion.promise
+    void (async () => {
+      for (const plugin of this.registry.all()) this.cancelPending(plugin.pluginId, 'dynamic runner is stopping for shutdown')
+      const starts = await Promise.allSettled(this.starting.values())
+      for (const start of starts) if (start.status === 'rejected') this.cleanupFailures.push(start.reason as unknown)
+      await Promise.all(this.invocations)
+      await Promise.allSettled([...this.retractions, ...this.registry.all().map(plugin => this.retract(plugin))])
+      if (this.cleanupFailures.length) throw new AggregateError(this.cleanupFailures, 'Dynamic runner shutdown failed')
+    })().then(completion.resolve, completion.reject)
+    return this.shutdown
+  }
+
+  private assertAdmission(): void {
+    if (this.closing) throw new Error('dynamic runner is stopping for shutdown')
   }
 
   /**
@@ -149,6 +198,7 @@ export class DynamicCordisRunnerService extends TypertRemoteService {
    * @returns Host-minted Plugin and Package identities with declared-half metadata.
    */
   define(request: DynamicCordisDefineRequest): DynamicCordisDefineReceipt {
+    this.assertAdmission()
     const name = request.name.trim()
     const purpose = request.purpose.trim()
     if (name.length === 0) throw new Error('cordis_define needs a non-empty `name`')
@@ -252,6 +302,7 @@ export class DynamicCordisRunnerService extends TypertRemoteService {
     mode: CordisDynamicRunMode,
     signal?: AbortSignal,
   ): Promise<DynamicCordisRunResponse> {
+    this.assertAdmission()
     const plan = this.resolvePlan(agent, pluginId, packageId, mode)
     if (!plan.ok) return plan.response
     if (signal?.aborted === true) {
@@ -330,6 +381,7 @@ export class DynamicCordisRunnerService extends TypertRemoteService {
     requestId: ApprovalRequestId | null,
     approveFutureVersions: boolean,
   ): Promise<DynamicCordisHostHalfResult> {
+    this.assertAdmission()
     const plan = this.resolvePlan(agent, pluginId, packageId, mode, requestId === null)
     if (!plan.ok) return { ok: false, message: plan.response.message }
     let attempt: DynamicCordisRunAttempt
@@ -386,6 +438,7 @@ export class DynamicCordisRunnerService extends TypertRemoteService {
     pluginId: CordisDynamicPluginId,
     pluginRunId: CordisDynamicPluginRunId,
   ): DynamicCordisClientSource {
+    this.assertAdmission()
     const plugin = this.owned(agent, pluginId)
     if (plugin === undefined) throw new Error(missingPluginMessage(pluginId))
     const run = plugin.run
@@ -744,6 +797,7 @@ export class DynamicCordisRunnerService extends TypertRemoteService {
     method: string,
     args: JsonValue,
   ): Promise<DynamicCordisInvokeResult> {
+    this.assertAdmission()
     const plugin = this.registry.get(pluginId)
     if (plugin === undefined || plugin.run === undefined) {
       return { ok: false, code: 'plugin-not-running', message: `dynamic plugin "${pluginId}" is not running` }
@@ -756,12 +810,17 @@ export class DynamicCordisRunnerService extends TypertRemoteService {
     if (handler === undefined) {
       return { ok: false, code: 'method-not-found', message: `dynamic plugin "${pluginId}" registered no Host method "${method}"` }
     }
+    const completion = Promise.withResolvers<void>()
+    this.invocations.add(completion.promise)
     try {
       return { ok: true, value: await handler(args) as JsonValue }
     } catch (error) {
       const failure = errorDetails(error)
       this.steerHostHandlerFailure(plugin, run, method, failure)
       return { ok: false, code: 'handler-error', ...failure }
+    } finally {
+      this.invocations.delete(completion.promise)
+      completion.resolve()
     }
   }
 
@@ -813,6 +872,8 @@ export class DynamicCordisRunnerService extends TypertRemoteService {
     allowActiveAttach: boolean,
     attempt: DynamicCordisRunAttempt,
   ): Promise<DynamicCordisHostHalfResult> {
+    this.assertAdmission()
+    executionRoots.add(this.executionRoot)
     const inFlight = this.starting.get(plan.plugin.pluginId)
     if (inFlight !== undefined) return inFlight
     const starting = this.startFresh(plan, requestId, allowActiveAttach, attempt)
@@ -1216,7 +1277,16 @@ export class DynamicCordisRunnerService extends TypertRemoteService {
     }
   }
 
-  private async retract(plugin: DynamicCordisPlugin): Promise<void> {
+  private retract(plugin: DynamicCordisPlugin): Promise<void> {
+    const pending = this.retractRun(plugin).catch((error: unknown) => {
+      this.cleanupFailures.push(error)
+      throw error
+    })
+    this.retractions.add(pending)
+    return pending.finally(() => { this.retractions.delete(pending) })
+  }
+
+  private async retractRun(plugin: DynamicCordisPlugin): Promise<void> {
     const run = plugin.run
     if (run === undefined) return
     delete plugin.run

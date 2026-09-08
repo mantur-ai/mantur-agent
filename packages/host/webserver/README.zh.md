@@ -68,7 +68,7 @@ index 启动输入分两层。`collectIndexInjections()` 收集一张全新的�
 
 ### 匹配与生命周期
 
-`match(pathname)` 先查精确表，再遍历前缀表取最长匹配，最后走回退。激活（`[Service.init]`）即开始监听；资源释放会启动 `close()` 与 `closeAllConnections()`，销毁所有受跟踪的升级 socket，并仅在服务器与这些 socket 均已关闭后返回。Node 的 `closeAllConnections()` 不包含升级 socket，因此服务显式跟踪它们。
+`match(pathname)` 先查精确表，再遍历前缀表取最长匹配，最后走回退。激活（`[Service.init]`）即开始监听。`stopForShutdown()` 冻结注册和派发，启动 `close()` 与 `closeAllConnections()`，销毁受跟踪的升级 socket，并在 socket 关闭后等待原始 HTTP 和升级 handler Promise。资源释放使用同一操作。监听器关闭和请求错误观察器的失败在重复关闭调用中仍可见。此操作覆盖 handler 完成；超出升级 handler 生命周期的协议工作需要由单独的协议所有者排空。Node 的 `closeAllConnections()` 不包含升级 socket，因此服务显式跟踪它们。
 
 ### 源码地图
 

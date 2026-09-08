@@ -16,9 +16,11 @@ import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ReferenceInsert } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { GUIDE_NAMESPACE, type CreationMode, type GuideSettings } from '../guide-settings.ts'
 import { CreationGuide, CreationModes, type GuidePreferencesInjected } from './CreationGuide.tsx'
 import { ManturComposerLayout } from './ManturComposerLayout.tsx'
+import { ProjectPathSettings, type ProjectPathSettingsInjected } from './ProjectPathSettings.tsx'
 import { AutomaticProjectController } from './automatic-project.ts'
 import { en as projectEn, zh as projectZh, type ProjectKey } from './project-locales.ts'
 import { en as guideEn, zh as guideZh, type GuideKey } from './guide-locales.ts'
@@ -88,7 +90,15 @@ export async function apply(ctx: Context): Promise<void> {
     scope.effect(() => () => { projects.dispose() }, 'ui-mantur-navigation: project controller')
     scope.effect(() => scope.conversationDrafts.register(projects), 'ui-mantur-navigation: first-send project policy')
     void projects.load()
+    const projectSettings: ProjectPathSettingsInjected = {
+      hooks: { automaticProject: projects.store }, chooseRoot: () => projects.chooseRoot(), reloadRoot: () => projects.load(),
+    }
+    scope.slots.inject('settings.general.item', () => scope.slots.register({
+      name: 'settings.general.item', id: 'mantur.project-path', order: 40, locale: 'projects.mantur',
+      inject: () => projectSettings,
+    }, ProjectPathSettings))
     const controller = new ManturMarketplaceStore(scope)
+    const guideNavigation = createSnapshotStore(0)
     scope.effect(() => () => { controller.dispose() }, 'ui-mantur-navigation: marketplace controller')
     const preferences = scope.settingsScope.bind<GuideSettings>({ namespace: GUIDE_NAMESPACE })
     const guidePreferences: GuidePreferencesInjected = {
@@ -109,14 +119,16 @@ export async function apply(ctx: Context): Promise<void> {
     }, CreationModes))
     scope.slots.inject('conversation.composer.layout', () => scope.slots.register({
       name: 'conversation.composer.layout', locale: 'projects.mantur',
+      children: { 'conversation.composer.layout.permissions': { kind: 'single', scope: 'session-maybe' } },
       inject: () => ({
-        hooks: { automaticProject: projects.store }, chooseRoot: () => projects.chooseRoot(), reloadRoot: () => projects.load(),
+        hooks: projectSettings.hooks, reloadRoot: projectSettings.reloadRoot,
       }),
     }, ManturComposerLayout))
     scope.slots.inject('conversation.composer.guide', () => scope.slots.register({
       name: 'conversation.composer.guide', locale: 'guide.mantur',
       inject: (sessionId: SessionId | undefined) => ({
         ...guidePreferences,
+        navigationVersion: () => guideNavigation.getSnapshot(),
         appendReference: (reference: ReferenceInsert) => {
           if (sessionId === undefined) return scope.conversationDrafts.input.appendReference(reference)
           const binding = scope.sessions.binding(sessionId)
@@ -124,7 +136,7 @@ export async function apply(ctx: Context): Promise<void> {
           return scope.conversation.input.for(binding.ctx).appendReference(reference)
         },
         hooks: {
-          preferences, marketplace: controller.store,
+          preferences, marketplace: controller.store, guideNavigation,
           guideInput: sessionId === undefined ? scope.conversationDrafts.input.state : (() => {
             const binding = scope.sessions.binding(sessionId)
             return binding === undefined ? ABSENT_GUIDE_INPUT : scope.conversation.input.for(binding.ctx).state
@@ -147,7 +159,9 @@ export async function apply(ctx: Context): Promise<void> {
     scope.slots.inject('sidebar.navigation', () =>
       scope.slots.inject('sidebar.workspaces.heading', () =>
         scope.slots.inject('main.page', function* () {
-          yield scope.slots.register({ name: 'sidebar.navigation', locale: NS }, MarketplaceNavigation)
+          yield scope.slots.register({ name: 'sidebar.navigation', locale: NS,
+            inject: () => ({ beforeOpenPage: () => { guideNavigation.set(guideNavigation.getSnapshot() + 1) } }),
+          }, MarketplaceNavigation)
           yield scope.slots.register({ name: 'sidebar.workspaces.heading', locale: NS }, ProjectsHeading)
           yield scope.slots.register({
             name: 'main.page', locale: NS,

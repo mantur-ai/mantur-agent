@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-shell` 定义运行 shell 命令的执行器服务（`ctx.shell`）：前台命令在结束时以有界输出 resolve，后台进程则立即返回句柄。仓库中的每个 shell 执行器——本地 Bash、沙箱 Bash、本地 PowerShell、沙箱 PowerShell——都实现这同一个约定，因此面向模型的 `bash` 与 `pwsh` 工具在任何一个之上都能不加改动地工作。调用方先提交请求，再在任何命令运行前拿到一份默认值与上限都已显式填好的 spec。该服务本身从不向模型渲染任何内容；所有模型可见的输出与沙箱指引都归 shell 工具所有。
+`dsh-shell` 定义运行 shell 命令的执行器服务（`ctx.shell`）：前台命令在结束时以有界输出 resolve，后台进程则在异步身份准备后返回真实句柄。仓库中的每个 shell 执行器——本地 Bash、沙箱 Bash、本地 PowerShell、沙箱 PowerShell——都实现这同一个约定，因此面向模型的 `bash` 与 `pwsh` 工具在任何一个之上都能不加改动地工作。调用方先提交请求，再在任何命令运行前拿到一份默认值与上限都已显式填好的 spec。该服务本身从不向模型渲染任何内容；所有模型可见的输出与沙箱指引都归 shell 工具所有。
 
 ## 目录
 
@@ -29,7 +29,7 @@ kind: "package-reference"
 
 ### 前台命令
 
-用已解析的 spec 调用 `run` 即可在前台执行命令。promise 在命令结束时 resolve：非零退出、执行器超时终止或调用方中止终止都是结果，绝不是 rejection。`run` 只在基础设施失败时 reject，例如工作目录不可用或缺少 shell。结果携带退出码或信号、是超时还是中止截断了运行，以及收集到的 stdout/stderr；流超出预算时还附带 spill 文件路径。
+用已解析的 spec 调用 `run` 即可在前台执行命令。进程分配后，非零退出、执行器超时终止或调用方中止终止都会 resolve 为结果。身份准备失败或分配前取消会 reject，不发布进程结果；基础设施与清理失败同样 reject。结果携带退出码或信号、是超时还是中止截断了运行，以及收集到的 stdout/stderr；流超出预算时还附带 spill 文件路径。
 
 ```text
 const result = await ctx.shell.run(ctx.shell.resolve({ command: 'ls -la' }))
@@ -38,7 +38,7 @@ console.log(result.exitCode, result.stdout.text)
 
 ### 后台进程
 
-用已解析的 spec 调用 `start` 即可启动后台进程；它会立即返回句柄，且不应用任何超时。用 `readOutput()` 增量读取输出——连续读取绝不会重复交付，有损读取会指向完整流的 spill 文件。用 `kill()` 终止进程组（进程结束后返回 `false`），并等待 `done` 结算。job id、所有权、轮询与通知属于通用 `ctx.jobs` 运行时，工具层会把句柄注册进去。
+用已解析的 spec 调用 `start` 即可启动后台进程；它会在异步身份准备后返回真实句柄，且不应用任何超时。用 `readOutput()` 增量读取输出——连续读取绝不会重复交付，有损读取会指向完整流的 spill 文件。用 `kill()` 终止进程组（进程结束后返回 `false`），并等待 `done` 结算。job id、所有权、轮询与通知属于通用 `ctx.jobs` 运行时，工具层会把句柄注册进去。
 
 ### 请求与已解析 spec
 
@@ -46,7 +46,7 @@ console.log(result.exitCode, result.stdout.text)
 
 ### 选择并组合一个执行器
 
-seam 本身不是执行器：每个组合只挂载一个提供方，工具即可不加改动地工作。在 POSIX 上，`dsh-bash-local` 以全新的 `bash -c` 进程运行命令，`dsh-bash-sandbox` 则通过沙箱能力限制每条命令；在 Windows 上，对应实现是 `dsh-pwsh-local` 与 `dsh-pwsh-sandbox`。`bash` 与 `pwsh` 工具只在挂载沙箱执行器时公布升权字段。最小的组合只需执行器本身：
+seam 本身不是执行器：每个组合只挂载一个提供方，工具即可不加改动地工作。在 POSIX 上，`dsh-bash-local` 以全新的 `bash -c` 进程运行命令，`dsh-bash-sandbox` 则通过沙箱能力限制每条命令；在 Windows 上，对应实现是 `dsh-pwsh-local` 与 `dsh-pwsh-sandbox`。`bash` 与 `pwsh` 工具只在挂载沙箱执行器时公布升权字段。组合还需要 subprocess 提供方和 [command-scopes](../command-scopes/README.zh.md)：
 
 ```yaml
 - id: bash
@@ -91,7 +91,7 @@ seam 本身不是执行器：每个组合只挂载一个提供方，工具即可
 
 ### 后台生命周期与归属
 
-后台进程属于 subprocess 服务而非执行器：它能在仅重载执行器后存活，并在组合拆解时被终止并 join。实现必须遵守 seam 的语义——`run` 只在基础设施失败时 reject；`start` 立即返回且不设超时，其 `done` 绝不 reject（spawn 失败以 `killed` 结算，错误进入 stderr）；`readOutput` 是消费式的，有损读取会报告 spill 文件。
+后台进程属于 commandScopes 服务而非执行器：它能在仅重载执行器后存活，并在组合拆解时被终止并 join。实现必须遵守 seam 的语义——`run` 在分配前或基础设施失败时 reject；`start` 异步准备身份后返回且不设运行超时，其 `done` 等待完整进程树退出和身份释放；清理失败会 reject，单独的 spawn 失败以 `killed` 结算并通过 stderr 呈现；`readOutput` 是消费式的，有损读取会报告 spill 文件。
 
 </details>
 

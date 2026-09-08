@@ -1,6 +1,7 @@
 /** Browser state for the ManturHub marketplaces. */
 
 import type { Context } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/dsh-client-ui-mantur-account/client'
 import type { ManturLoginAttemptId, ManturLoginStart } from '@deepseek-ai/dsh-authorization-manturhub/types'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {
@@ -25,7 +26,7 @@ export type ManturMarketplaceState =
     readonly using?: string | undefined
     readonly useError?: 'no-workspace' | 'failed' | undefined
     readonly login?: ManturLoginStart | undefined
-    readonly loginPhase?: 'starting' | 'authorizing' | 'failed' | undefined
+    readonly loginPhase?: 'starting' | 'authorizing' | 'failed' | 'unavailable' | undefined
   }
 
 /** Client-visible Recipe catalog, detail, and launch state. */
@@ -340,22 +341,43 @@ export class ManturMarketplaceStore {
     }
   }
 
-  /** Begin ManturHub device login from the installation gate. */
+  /** Open the Host-selected account flow; login never repeats installation or changes the current project. */
   async startLogin(): Promise<void> {
     const current = this.store.getSnapshot()
     if (current.phase !== 'ready' || current.loginPhase === 'starting' || current.loginPhase === 'authorizing') return
     const generation = ++this.loginGeneration
     this.clearLoginTimer()
     this.store.set({ ...current, installError: undefined, loginPhase: 'starting', login: undefined })
-    const result = await this.ctx.remote.manturAccount.startLogin()
-    const latest = this.store.getSnapshot()
-    if (generation !== this.loginGeneration || latest.phase !== 'ready') return
-    if (!result.ok) {
-      this.store.set({ ...latest, loginPhase: 'failed' })
-      return
+    let failurePhase: 'failed' | 'unavailable' = 'unavailable'
+    try {
+      const identity = await this.ctx.remote.manturAccount.identityMode()
+      const selected = this.store.getSnapshot()
+      if (generation !== this.loginGeneration || selected.phase !== 'ready') return
+      if (!identity.ok) throw new Error('Mantur account identity mode is unavailable')
+      if (identity.value === 'desktop-managed') {
+        const request = this.ctx.bail('mantur/native-account-open')
+        if (request === undefined) throw new Error('Native account dialog is unavailable')
+        const outcome = await request
+        const latest = this.store.getSnapshot()
+        if (generation !== this.loginGeneration || latest.phase !== 'ready') return
+        this.store.set({ ...latest, loginPhase: undefined,
+          catalog: { ...latest.catalog, signedIn: outcome === 'authenticated' || latest.catalog.signedIn } })
+        return
+      }
+      failurePhase = 'failed'
+      const result = await this.ctx.remote.manturAccount.startLogin()
+      const latest = this.store.getSnapshot()
+      if (generation !== this.loginGeneration || latest.phase !== 'ready') return
+      if (!result.ok) {
+        this.store.set({ ...latest, loginPhase: 'failed' })
+        return
+      }
+      this.store.set({ ...latest, login: result.value, loginPhase: 'authorizing' })
+      this.scheduleLoginPoll(result.value.attemptId, generation)
+    } catch {
+      const latest = this.store.getSnapshot()
+      if (generation === this.loginGeneration && latest.phase === 'ready') this.store.set({ ...latest, loginPhase: failurePhase })
     }
-    this.store.set({ ...latest, login: result.value, loginPhase: 'authorizing' })
-    this.scheduleLoginPoll(result.value.attemptId, generation)
   }
 
   /** Cancel the login attempt started from this marketplace. */

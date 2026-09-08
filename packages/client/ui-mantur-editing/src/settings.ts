@@ -1,11 +1,4 @@
-/** Local editor address shared by the host configuration and workbench view. */
-import z from '@deepseek-ai/schemastery'
-
-/** Configured address; never contains the host-only MCP bearer token. */
-export interface EditingSettings {
-  /** Absolute loopback HTTP address of the running OpenChatCut editor. */
-  editorUrl: string
-}
+/** Validate the Host-provided editor address before embedding it. */
 
 /**
  * Reject external origins and credentials before creating an embedded editor.
@@ -20,6 +13,3 @@ export function localEditorUrl(value: string): string {
   }
   return url.href
 }
-
-/** Durable configuration schema; the profile supplies the editor address. */
-export const EditingSettingsSchema: z<EditingSettings> = z.object({ editorUrl: z.string().required() })

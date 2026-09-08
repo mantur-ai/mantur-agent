@@ -39,6 +39,7 @@ export class LocalSubprocessRuntime extends SubprocessRuntime {
   private live = new Set<LocalSubprocessHandle>()
   /** Live terminals retained through normal quiescence or host-exit finalization. */
   private terminals = new Set<LocalTerminalHandle>()
+  private shutdown: Promise<void> | undefined
   /** Test hook: spill and platform knobs forwarded to spawnSubprocess. */
   internals: SpawnInternals = {}
   /** Test hook for platform process inspection; production resolves lazily on terminal spawn. */
@@ -76,27 +77,50 @@ export class LocalSubprocessRuntime extends SubprocessRuntime {
     }
   }
 
-  private async disposeManagedProcesses(): Promise<void> {
+  /**
+   * Permanently reject new spawns, then stop and join every owned local tree and PTY.
+   * Failed targets remain owned, and repeated calls observe the same failure.
+   * This does not stop remote jobs or prove that session records are durable.
+   * @returns completion after every target settles; rejects with all stop failures.
+   */
+  stopForShutdown(): Promise<void> {
+    if (this.shutdown !== undefined) return this.shutdown
+    const completion = Promise.withResolvers<void>()
+    this.shutdown = completion.promise
+    this.disposeManagedProcesses('shutdown').then(completion.resolve, completion.reject)
+    return completion.promise
+  }
+
+  private async disposeManagedProcesses(mode: 'dispose' | 'shutdown' = 'dispose'): Promise<void> {
     // Terminate (escalating), then await WHOLE-TREE exit — not just the
     // direct child's settlement — so even a TERM-trapping descendant cannot
     // outlive the fiber. Keep both sets authoritative while these waits are
     // pending so a shorter process-level exit bound can still force-kill them.
     const pending: Promise<unknown>[] = []
     for (const handle of this.live) {
-      handle.terminate()
-      // Spawn-failure rejections already settled and left the live set.
-      pending.push(handle.done.catch(() => {}).then(() => handle.waitForExit()))
+      pending.push((async () => {
+        handle.terminate()
+        // A failed spawn owns no running child; tree exit remains the stop proof.
+        await handle.done.catch(() => {})
+        await handle.waitForExit()
+        this.live.delete(handle)
+      })())
     }
     for (const terminal of this.terminals) {
-      pending.push(terminal.terminate())
+      pending.push((async () => {
+        await terminal.terminate()
+        this.terminals.delete(terminal)
+      })())
     }
     const outcomes = await Promise.allSettled(pending)
     const failures = outcomes.flatMap<unknown>(outcome => outcome.status === 'rejected'
       ? [outcome.reason as unknown]
       : [])
-    if (failures.length > 0) this.terminateForHostExit()
-    this.live.clear()
-    this.terminals.clear()
+    if (mode === 'dispose') {
+      if (failures.length > 0) this.terminateForHostExit()
+      this.live.clear()
+      this.terminals.clear()
+    }
     if (failures.length === 1) throw failures[0]
     if (failures.length > 1) throw new AggregateError(failures, 'local subprocess teardown failed')
   }
@@ -144,6 +168,7 @@ export class LocalSubprocessRuntime extends SubprocessRuntime {
   }
 
   spawn(spec: SubprocessSpawnSpec): SubprocessHandle {
+    if (this.shutdown !== undefined) throw new Error('local subprocess admission is closed for shutdown')
     const handle = spawnSubprocess(spec, this.internals)
     this.live.add(handle)
     // Release ownership only once the whole TREE is gone, not at direct-child
@@ -159,6 +184,7 @@ export class LocalSubprocessRuntime extends SubprocessRuntime {
   // Local PTY allocation is synchronous, but the provider contract permits remote asynchronous allocation.
   // oxlint-disable-next-line typescript/require-await -- Preserve promise rejection semantics at the async provider contract.
   async spawnTerminal(spec: SubprocessTerminalSpawnSpec): Promise<SubprocessTerminalHandle> {
+    if (this.shutdown !== undefined) throw new Error('local subprocess admission is closed for shutdown')
     const file = spec.argv[0]
     if (file === undefined || file.length === 0) {
       throw new Error('subprocess-local: terminal argv must contain a program')

@@ -898,6 +898,7 @@ async function assertReplaySession(
   const manifest = parseSnapshotManifest(await readFile(manifestPath, 'utf8'), manifestPath)
   if (manifest.header?.pin !== true) return
   const normalizePrompt = (value: string): string => value
+    .split(sessionCwd).join('{{cwd}}')
     .split(REPO_ROOT).join('{{sourceRoot}}')
     .split(webUrl).join('{{webUrl}}')
   const prompts = normalizedSystemPrompts(actual, actualContext).map(normalizePrompt)

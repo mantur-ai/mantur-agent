@@ -1,0 +1,57 @@
+{
+  "extends": "../../../tsconfig.base.client.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types",
+    "tsBuildInfoFile": "lib/tsconfig.client.tsbuildinfo"
+  },
+  "references": [
+    {
+      "path": "../../../vendor/cordis"
+    },
+    {
+      "path": "../../../vendor/schemastery"
+    },
+    {
+      "path": "../../settings/settings"
+    },
+    {
+      "path": "../ui-slots"
+    },
+    {
+      "path": "../locale"
+    },
+    {
+      "path": "../ui-layout"
+    },
+    {
+      "path": "../ui-mantur-navigation"
+    },
+    {
+      "path": "../ui-renderer"
+    },
+    {
+      "path": "../ui-theme"
+    },
+    {
+      "path": "../../api/gateway/tsconfig.client.json"
+    },
+    {
+      "path": "../../core/session"
+    },
+    {
+      "path": "../ui-session"
+    },
+    {
+      "path": "../ui-conversation"
+    }
+  ],
+  "files": [
+    "src/client/index.ts",
+    "src/client/Workbench.tsx",
+    "src/client/locales.ts",
+    "src/types.ts",
+    "src/settings.ts",
+    "src/css-modules.d.ts"
+  ]
+}

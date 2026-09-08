@@ -51,6 +51,45 @@ function appendRoute(session: ReturnType<Context['sessions']['create']>, reason:
 }
 
 describe('SessionTitleService Provider lifecycle', () => {
+  it('joins an ignored cancellation and freezes title mutations before Host writer closure', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(SessionTitleService, CONFIG)
+    const session = ctx.sessions.create(SessionId('host-shutdown-title'))
+    const message = appendHumanPrompt(session, 'Preserved prompt')
+    const entered = deferred<AbortSignal>()
+    const pending = deferred<SessionTitleProviderResult>()
+    const provider: SessionTitleProvider = {
+      id: SessionTitleProviderId('shutdown-provider'), automatic: 'first-prompt',
+      generate: (request) => { entered.resolve(request.signal); return pending.promise },
+    }
+    ctx.sessionTitle.register(provider)
+    const refreshing = ctx.sessionTitle.refresh(session).catch((error: unknown) => error)
+    const signal = await entered.promise
+    const stopping = ctx.sessionTitle.stopForShutdown()
+    expect(ctx.sessionTitle.stopForShutdown()).toBe(stopping)
+    expect(signal.aborted).toBe(true)
+    let stopped = false
+    void stopping.then(() => { stopped = true })
+    try {
+      await settle()
+      expect(stopped).toBe(false)
+      expect(() => ctx.sessionTitle.rename(session, 'Late rename')).toThrow('disposed')
+      expect(() => ctx.sessionTitle.register(provider)).toThrow('disposed')
+      await expect(ctx.sessionTitle.refresh(session)).rejects.toThrow('disposed')
+      const events = session.snapshotEvents()
+      pending.resolve({ title: 'Late provider result', messageSeqs: [message.seq] })
+      await refreshing
+      await stopping
+      expect(session.snapshotEvents()).toEqual(events)
+    } finally {
+      pending.resolve({ title: 'Late provider result', messageSeqs: [message.seq] })
+      await Promise.all([refreshing, stopping])
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('inherits title events across forks, skips first-prompt retitling, and lets all-messages update later', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)

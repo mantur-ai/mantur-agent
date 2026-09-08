@@ -39,6 +39,8 @@ const { stdout, stderr } = await runNativeCommand('osascript', ['-e', script], s
 
 退出码为 0 时，调用解析为捕获到的 stdout 与 stderr。任何失败都会以错误拒绝，错误附带退出 `code` 与两路已捕获输出，因此调用方无需重跑命令即可区分工具缺失（`ENOENT`）、取消（`ABORT_ERR`）与真实的命令失败。
 
+成功和失败都会等待子进程的 `close` 事件，包括标准输入输出关闭。取消只是请求终止，并不证明进程已退出；子进程若忽略终止请求，调用就保持待定。原生集成用 `NativeCommandCleanupError` 区分终止尝试失败和普通命令失败。
+
 ### 注入命令边界
 
 `NativeCommandRunner` 类型是宿主集成的可注入命令边界：在集成需要一个可测试接缝的位置传入该函数（或其包装层），测试即可替换为假运行器。

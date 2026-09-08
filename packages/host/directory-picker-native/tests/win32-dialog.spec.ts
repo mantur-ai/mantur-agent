@@ -8,13 +8,16 @@
 
 import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
+import { NativeCommandCleanupError } from '@deepseek-ai/dsh-native-command'
 import { pickWin32Directory, type Win32DialogInternals, type Win32DialogWorkerLike } from '../src/win32-dialog.ts'
 import type { Win32DialogWorkerMessage } from '../src/win32-dialog-worker.ts'
 
 class FakeWorker extends EventEmitter implements Win32DialogWorkerLike {
-  kill = vi.fn(() => true)
+  kill = vi.fn(() => { queueMicrotask(() => this.emit('close')); return true })
+  unref = vi.fn()
   post(message: Win32DialogWorkerMessage): void {
     this.emit('message', message)
+    if (message.kind !== 'showing') this.emit('close')
   }
 }
 
@@ -42,6 +45,90 @@ function harness(overrides: Partial<Win32DialogInternals> = {}): Harness {
 const live = (): AbortSignal => new AbortController().signal
 
 describe('pickWin32Directory', () => {
+  it.each(['done', 'error', 'process-error'] as const)('waits for close, not %s or exit, before completing', async (kind) => {
+    const { worker, internals } = harness()
+    let finished = false
+    const picked = pickWin32Directory(live(), internals)
+      .then(value => ({ value }), (error: unknown) => ({ error }))
+      .finally(() => { finished = true })
+    try {
+      if (kind === 'done') worker.emit('message', { kind: 'done', path: 'C:\\selected' })
+      else if (kind === 'error') worker.emit('message', { kind: 'error', message: 'dialog failed' })
+      else worker.emit('error', new Error('process failed'))
+      worker.emit('exit', 0)
+      await new Promise<void>((resolve) => { setImmediate(resolve) })
+      expect(finished).toBe(false)
+      expect(worker.unref).not.toHaveBeenCalled()
+    } finally {
+      worker.emit('close')
+      await picked
+    }
+    const result = await picked
+    expect(finished).toBe(true)
+    expect(worker.unref).toHaveBeenCalledOnce()
+    if (kind === 'done') expect(result).toEqual({ value: 'C:\\selected' })
+    else expect(result).toHaveProperty('error')
+  })
+
+  it('joins in-flight close-window calls after child close', async () => {
+    const closeCall = Promise.withResolvers<undefined>()
+    const { worker, internals } = harness({ closeThreadWindows: () => closeCall.promise })
+    const controller = new AbortController()
+    let finished = false
+    const picked = pickWin32Directory(controller.signal, internals)
+      .catch((error: unknown) => error).finally(() => { finished = true })
+    try {
+      worker.post({ kind: 'showing', threadId: 7 })
+      controller.abort()
+      worker.post({ kind: 'done', path: null })
+      await Promise.resolve()
+      expect(finished).toBe(false)
+    } finally {
+      worker.emit('close')
+      closeCall.resolve(undefined)
+      await picked
+    }
+    expect(await picked).toBeInstanceOf(Error)
+    expect(finished).toBe(true)
+  })
+
+  it.each(['refused', 'throws'] as const)('retains a %s termination failure even after child close', async (kind) => {
+    vi.useFakeTimers()
+    const { worker, internals } = harness()
+    const controller = new AbortController()
+    worker.kill.mockImplementation(() => { if (kind === 'throws') throw new Error('permission denied'); return false })
+    let finished = false
+    const picked = pickWin32Directory(controller.signal, internals)
+      .catch((error: unknown) => error).finally(() => { finished = true })
+    try {
+      controller.abort()
+      await vi.advanceTimersByTimeAsync(22)
+      expect(worker.kill).toHaveBeenCalledOnce()
+      expect(finished).toBe(false)
+    } finally {
+      worker.emit('close')
+      vi.useRealTimers()
+    }
+    expect(await picked).toBeInstanceOf(NativeCommandCleanupError)
+  })
+
+  it('cancels an abort that occurs during worker creation', async () => {
+    vi.useFakeTimers()
+    const controller = new AbortController()
+    const { worker, internals } = harness()
+    const picked = pickWin32Directory(controller.signal, {
+      ...internals, spawnWorker: () => { controller.abort(); return worker },
+    }).catch((error: unknown) => error)
+    try {
+      await vi.advanceTimersByTimeAsync(22)
+      expect(worker.kill).toHaveBeenCalledOnce()
+      expect(await picked).toBeInstanceOf(Error)
+    } finally {
+      worker.emit('close')
+      vi.useRealTimers()
+    }
+  })
+
   it('resolves the selected path and the cancellation null', async () => {
     const first = harness()
     const picked = pickWin32Directory(live(), first.internals)
@@ -65,11 +152,12 @@ describe('pickWin32Directory', () => {
     const crashed = harness()
     const crashing = pickWin32Directory(live(), crashed.internals)
     crashed.worker.emit('error', new Error('worker blew up'))
+    crashed.worker.emit('close')
     await expect(crashing).rejects.toThrow('worker blew up')
 
     const silent = harness()
     const exiting = pickWin32Directory(live(), silent.internals)
-    silent.worker.emit('exit', 0)
+    silent.worker.emit('close')
     await expect(exiting).rejects.toThrow('exited before reporting a result')
   })
 
@@ -77,8 +165,9 @@ describe('pickWin32Directory', () => {
     const { worker, internals } = harness()
     const picked = pickWin32Directory(live(), internals)
     worker.post({ kind: 'done', path: 'C:\\once' })
-    worker.emit('exit', 0)
+    worker.emit('close')
     await expect(picked).resolves.toBe('C:\\once')
+    worker.emit('message', { kind: 'done', path: 'C:\\late' })
   })
 
   it('throws immediately on an already-aborted signal without spawning', async () => {

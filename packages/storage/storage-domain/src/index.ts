@@ -68,6 +68,10 @@ export const Config: z<Config> = z.object({
  */
 export class DomainFacility {
   private readonly domains = new Map<string, DomainImpl>()
+  private readonly opening = new Set<Promise<unknown>>()
+  private readonly cleanupFailures: unknown[] = []
+  private stopping = false
+  private shutdown: Promise<void> | undefined
   /** Names reserved by an in-flight or completed open, so concurrent opens of one name fail loud. */
   private readonly reserved = new Set<string>()
 
@@ -101,6 +105,17 @@ export class DomainFacility {
    * @returns the opened domain handle, typed by the spec.
    */
   async open<S extends DomainSpec>(spec: S): Promise<Domain<S>> {
+    if (this.stopping) throw new Error('storage domain admission is closed')
+    const work = this.openAdmitted(spec)
+    this.opening.add(work)
+    try {
+      return await work
+    } finally {
+      this.opening.delete(work)
+    }
+  }
+
+  private async openAdmitted<S extends DomainSpec>(spec: S): Promise<Domain<S>> {
     if (this.reserved.has(spec.name)) {
       throw new DomainError('already-open', `domain '${spec.name}' is already open`)
     }
@@ -163,7 +178,12 @@ export class DomainFacility {
         // S's conditional global-handle type stays unresolved here.
         return domain as unknown as Domain<S>
       } catch (error) {
-        await unit.close()
+        try {
+          await unit.close()
+        } catch (cleanupError) {
+          this.cleanupFailures.push(cleanupError)
+          throw cleanupError
+        }
         throw error
       }
     } catch (error) {
@@ -193,6 +213,27 @@ export class DomainFacility {
    */
   async closeAll(): Promise<void> {
     await Promise.all([...this.domains.values()].map(domain => domain.close()))
+  }
+
+  /**
+   * Freeze domain opens and join admitted allocation, writes, and unit cleanup.
+   * @returns completion after all owned domains close; cleanup failures reject.
+   */
+  stopForShutdown(): Promise<void> {
+    this.stopping = true
+    this.shutdown ??= (async () => {
+      const existing = new Set(this.domains.values())
+      const closes = [...existing].map(domain => domain.close())
+      const early = Promise.allSettled(closes)
+      await Promise.allSettled([...this.opening])
+      const late = await Promise.allSettled([...this.domains.values()]
+        .filter(domain => !existing.has(domain)).map(domain => domain.close()))
+      const failures = [...await early, ...late]
+        .filter(result => result.status === 'rejected').map(result => result.reason as unknown)
+      failures.push(...this.cleanupFailures)
+      if (failures.length > 0) throw new AggregateError(failures, 'Storage domain cleanup failed')
+    })()
+    return this.shutdown
   }
 }
 
@@ -229,7 +270,7 @@ export function apply(ctx: Context, config: Config): Promise<void> {
       return async () => {
         // Close leftovers before unmounting: draining writes still emit
         // domain/changed, whose invariant resolves the facility through the hub.
-        await facility.closeAll()
+        await facility.stopForShutdown()
         unmount()
       }
     })

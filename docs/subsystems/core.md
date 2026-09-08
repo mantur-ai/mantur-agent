@@ -354,6 +354,28 @@ Concrete agent factory and driver service.
 
 ```ts cordis-catalog
 /**
+ * Freeze admission and stop drivers while keeping published sessions available to admitted Host requests.
+ * @returns completion after drivers and startup work settle; writer closure still requires stopForShutdown.
+ */
+quiesceForShutdown(): Promise<void>
+
+/**
+ * Freeze admission, join owned startup and teardown, and verify closed writer offsets.
+ * This covers agent-loop ownership only; the Host must separately stop other producers.
+ * @returns immutable checkpoints after all owned work settles; repeated calls share the result.
+ * @throws if any writer or owned cleanup failed, including a previously closed writer.
+ */
+stopForShutdown(): Promise<readonly AgentShutdownCheckpoint[]>
+
+/**
+ * Recheck sealed writers after the Host has joined every other producer.
+ * Requires an existing shutdown; waits for its completion without starting one.
+ * @returns the original immutable checkpoints after a fresh seal check.
+ * @throws if shutdown has not started, failed, or a subsequent append was attempted.
+ */
+verifyShutdown(): Promise<readonly AgentShutdownCheckpoint[]>
+
+/**
  * Create an agent and session under one caller-supplied identity, owned by
  * the accessing fiber. Constructor-driven config calls mint a fresh combined
  * id before entering this boundary. When a persistence backend is mounted,
@@ -395,6 +417,13 @@ Registry over the deployment's agent presets.
 Discovery is unmemoized: `list()` and `resolve()` re-read the roots on every call so a preset authored while the process runs is visible immediately, and a preset deleted underneath a picker disappears from the next read.
 
 ```ts cordis-catalog
+/**
+ * Freeze composition and authoring admission before the Host enumerates installed owners.
+ * Standing plugin trees remain installed for their individual shutdown operations.
+ * @returns once admitted operations settle; operation failures retain their original callers.
+ */
+stopForShutdown(): Promise<void>
+
 /**
  * Every preset the configured roots currently supply.
  * @returns the presets, first-root-wins per id.
@@ -699,6 +728,16 @@ withoutInitiator<T>(operation: () => T): T
  *   yield it directly — exact identity nests the teardown in order.
  */
 setFactory(factory: AgentFactory): () => void
+
+/** Permanently close agent creation, publication, and live inbox mutation admission for Host shutdown. */
+freezeAdmission(): void
+
+/**
+ * Reject work after Host shutdown has frozen admission.
+ * Drivers check this before accepting input or starting maintenance.
+ * @throws when this registry has been frozen for shutdown.
+ */
+assertAdmission(): void
 
 /**
  * Create and publish a new agent through the registered factory.

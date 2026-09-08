@@ -123,6 +123,8 @@ interface Workspace {
 
 ## 消费方
 
+[目录选择服务](../../packages/host/directory-picker/README.zh.md)为 Host 释放提供原生能力专有的 `stopForShutdown()`。后端冻结新请求并等待所持有的选择器进程和输出读取结束；它不通过 Remote 暴露停止操作，也不扩展浏览能力。
+
 [漫途项目准备](../../packages/workspace/mantur-projects/README.zh.md)拥有 `ctx.manturProjects`。其品牌化 `ProjectCreationId` 是由原生草稿保留的 UUID。`ProjectRootSettings` 区分未配置根目录与桌面或自定义绝对根目录。`PreparedProject` 返回 `workspaceId`、确定的 `sessionId` 和规范目录 `path`，但不创建 Session。持久预留记录在重试间固定初始本地化标题和路径；目录冲突、删除或替换均明确失败。[类型](../../packages/workspace/mantur-projects/src/types.ts)定义浏览器安全的返回值。
 
 [`dsh-workspace-controller`](../../packages/api/workspace-controller) 经 `ctx.workspaceRegistry` 向 GUI 客户端提供工作区 CRUD，[`dsh-session-controller`](../../packages/api/session-controller) 执行上文「先建会话再 attach」的流程。[dsh-agent-instructions](../../packages/context/agent-instructions) 尽管名字如此，却**不是**消费方：它在 agent 自己的 cwd 下发现 AGENTS.md 风格的指令文件，从不触碰 `ctx.workspaceRegistry`——两者共用的这个词指的是用户的工作目录，而非本注册表的实体。
@@ -184,6 +186,33 @@ Host service backing the generated `ctx.remote.directoryPicker` namespace. The s
 ```
 
 Source: [`packages/api/workspace-controller/src/directory-picker.ts`](../../packages/api/workspace-controller/src/directory-picker.ts)
+
+<a id="ctxmanturediting--manturediting"></a>
+
+### `ctx.manturEditing` — `ManturEditing`
+
+Runtime and tools share the exact Agent identity resolved by the authenticated Remote gateway.
+
+```ts cordis-catalog
+/**
+ * Refuse new opens and MCP executions, then drain every acquired or opening editor before releasing its scope.
+ * The Host must retain accepted execution signals, its model and attachment services, HTTP and editor windows until completion.
+ * @returns The retained shutdown result; failed or unconfirmed work rejects and prevents installation.
+ */
+stopForShutdown(): Promise<void>
+
+/**
+ * Open the Session's workspace and connect its tools only to that Agent.
+ * @param agent - Live or resumed Agent resolved by the gateway from the Session id.
+ * @param parentOrigin - Mantur browser origin, checked against this Host's listening port.
+ * @returns Loopback editor address and canonical Session editing directory.
+ */
+@Remote('open') async open(agent: Agent, parentOrigin: string): Promise<EditingWorkspace>
+```
+
+Types: [Agent](core.zh.md)
+
+Source: [`packages/client/ui-mantur-editing/src/index.ts`](../../packages/client/ui-mantur-editing/src/index.ts)
 
 <a id="ctxmanturprojects--manturprojectcontroller"></a>
 

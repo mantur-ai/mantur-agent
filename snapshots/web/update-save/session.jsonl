@@ -1,0 +1,5 @@
+{"type":"session","version":0,"id":"{{session:1}}","createdAt":1786406400000,"isSeeded":false,"delegationDepth":0}
+{"type":"turn/start","data":{"turn":1}}
+{"type":"user/message","data":{"role":"user","content":[{"type":"text","text":"Keep my saved project notes through the update."}],"source":{"kind":"user"},"id":"{{message:1}}"},"surfaceOp":"append"}
+{"type":"turn/end","data":{"turn":1,"reason":{"kind":"completed"}}}
+{"type":"session/end-seed","data":{}}

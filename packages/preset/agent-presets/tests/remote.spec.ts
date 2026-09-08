@@ -20,7 +20,7 @@ import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { remoteErrorOf, type RemoteFailure } from '@deepseek-ai/dsh-typert-protocol'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import AgentPresets, { COMPOSITION_FILE, METADATA_FILE } from '@deepseek-ai/dsh-agent-presets'
+import AgentPresets, { COMPOSITION_FILE, METADATA_FILE, livePresetMounts } from '@deepseek-ai/dsh-agent-presets'
 import type { Config } from '@deepseek-ai/dsh-agent-presets'
 import type {} from '@deepseek-ai/dsh-agent-presets/types'
 
@@ -454,8 +454,80 @@ describe('switching one session\'s composition', () => {
     const ctx = await harness()
     const agent = await agentOn(ctx, 'sel-internal', 'standard')
     const thrown = new Error('mount failed')
-    vi.spyOn(ctx.agentPresets, 'recompose').mockRejectedValueOnce(thrown)
+    vi.spyOn(ctx.agentPresets, 'resolve').mockRejectedValueOnce(thrown)
 
     await expect(ctx.agentPresets.select(agent, 'minimal')).rejects.toBe(thrown)
+  })
+})
+
+
+describe('Host shutdown admission', () => {
+  it('completes an admitted selection when shutdown starts before its queued turn', async () => {
+    const ctx = await harness()
+    let selecting: Promise<string> | undefined
+    try {
+      const agent = await agentOn(ctx, 'shutdown-admitted-select', 'standard')
+      selecting = ctx.agentPresets.select(agent, 'minimal')
+      const stopping = ctx.agentPresets.stopForShutdown()
+      await expect(selecting).resolves.toBe('minimal')
+      await stopping
+      expect(ctx.agentPresets.composedPreset(agent.ctx)).toBe('minimal')
+      expect(recordedPreset(agent)).toEqual({ agentPreset: 'minimal' })
+    } finally {
+      if (selecting !== undefined) await Promise.allSettled([selecting])
+      await ctx.agentPresets.stopForShutdown()
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('joins a cold-read mount admitted before stop and leaves its owners installed', async () => {
+    const ctx = await harness()
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const resolve = ctx.agentPresets.resolve.bind(ctx.agentPresets)
+    vi.spyOn(ctx.agentPresets, 'resolve').mockImplementation(async (id: string | undefined) => {
+      entered.resolve(undefined)
+      await release.promise
+      return resolve(id)
+    })
+    let mounting: Promise<unknown> | undefined
+    try {
+      mounting = ctx.agentPresets.standingKeyFor('standard')
+      await entered.promise
+      let stopped = false
+      const stopping = ctx.agentPresets.stopForShutdown().then(() => { stopped = true })
+      expect(ctx.agentPresets.stopForShutdown()).toBe(ctx.agentPresets.stopForShutdown())
+      await Promise.resolve()
+      expect(stopped).toBe(false)
+      expect(livePresetMounts(ctx.fiber)).toHaveLength(0)
+      release.resolve(undefined)
+      await mounting
+      await stopping
+      expect(livePresetMounts(ctx.fiber)).toHaveLength(1)
+      await expect(ctx.agentPresets.standingKeyFor('minimal')).rejects.toThrow('stopping')
+    } finally {
+      release.resolve(undefined)
+      if (mounting !== undefined) await Promise.allSettled([mounting])
+      await ctx.agentPresets.stopForShutdown()
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('refuses new composition and authoring while retaining the existing preset', async () => {
+    const ctx = await harness()
+    try {
+      const agent = await agentOn(ctx, 'shutdown-preset', 'standard')
+      await ctx.agentPresets.stopForShutdown()
+      await expect(ctx.agentPresets.mount(agent.ctx, 'minimal')).rejects.toThrow('stopping')
+      await expect(ctx.agentPresets.recompose(agent.ctx, 'minimal')).rejects.toThrow('stopping')
+      await expect(ctx.agentPresets.select(agent, 'minimal')).rejects.toThrow('stopping')
+      await expect(ctx.agentPresets.copy('standard', 'new')).rejects.toThrow('stopping')
+      await expect(ctx.agentPresets.remove('standard')).rejects.toThrow('stopping')
+      expect(() => ctx.agentPresets.composeFrom(agent.ctx, agent.ctx)).toThrow('stopping')
+      expect(ctx.agentPresets.composedPreset(agent.ctx)).toBe('standard')
+      expect(livePresetMounts(ctx.fiber)).toHaveLength(1)
+    } finally {
+      await ctx.fiber.dispose()
+    }
   })
 })

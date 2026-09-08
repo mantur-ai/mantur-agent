@@ -1,17 +1,22 @@
 /** Thin native window over the shipped Mantur profile. */
 
 import { appendFile } from 'node:fs/promises'
+import { hostname } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, safeStorage, shell } from 'electron'
 import electronUpdater from 'electron-updater'
+import { requestUpdateSave } from './update-save.ts'
+import { prepareDesktopUpdate } from './prepare-update.ts'
 import { DesktopDraftStorage } from './draft-storage.ts'
 import { installDraftBridge } from './draft-bridge.ts'
 import { installUpdateBridge } from './update-bridge.ts'
+import { NativeAccountHost } from './auth/host.ts'
+import type { NativeAccountController } from './auth/controller.ts'
+import { installNativeAccountBridge } from './auth/ipc.ts'
 import {
   canResetProjectionCache,
-  desktopPaths,
-  desktopUserDataPath,
+  initializeDesktopPaths,
   prepareDesktopPaths,
   resetProjectionCache,
 } from './desktop-state.ts'
@@ -30,13 +35,18 @@ let serviceUrl: string | undefined
 let quitting = false
 let updates: DesktopUpdateController | undefined
 let updateState: DesktopUpdateState = { kind: 'idle' }
+let preparingUpdate = false
+let accountHost: NativeAccountHost | undefined
+let nativeAccount: NativeAccountController | undefined
 
 app.setName(APP_NAME)
-app.setPath('userData', desktopUserDataPath(
-  app.getPath('appData'),
-  app.isPackaged ? 'release' : 'development',
-))
-const paths = desktopPaths(app.getPath('userData'))
+const paths = initializeDesktopPaths(app, app.commandLine.hasSwitch('user-data-dir')
+  ? app.commandLine.getSwitchValue('user-data-dir')
+  : undefined)
+const accountBridge = installNativeAccountBridge({ ipc: ipcMain, window: () => mainWindow,
+  origin: () => serviceUrl === undefined ? undefined : new URL(serviceUrl).origin,
+  controller: () => nativeAccount,
+})
 const drafts = installDraftBridge({ ipc: ipcMain, window: () => mainWindow,
   origin: () => serviceUrl === undefined ? undefined : new URL(serviceUrl).origin,
   storage: new DesktopDraftStorage(paths.userData),
@@ -167,12 +177,24 @@ async function launch(): Promise<void> {
         ...process.env,
         DSH_HOME: paths.dshHome,
         DSH_MANTUR_PROJECTS_ROOT: join(app.getPath('documents'), '漫途项目'),
+        DSH_MANTUR_NATIVE_ACCOUNT: '1',
+        DSH_MANTUR_UPDATE_IPC: '1',
+        ...(app.isPackaged ? {
+          DSH_MANTUR_EDITOR_ROOT: join(process.resourcesPath, 'mantur-cut'),
+          DSH_MANTUR_EDITOR_NODE: process.execPath,
+        } : {}),
       },
       logPath: paths.logPath,
       mirrorOutput: !app.isPackaged,
     })
+    if (process.platform !== 'darwin' && process.platform !== 'win32') throw new Error('Native account requires macOS or Windows')
+    accountHost = new NativeAccountHost({ child: service.child, userData: paths.userData, cipher: safeStorage,
+      deviceName: `${APP_NAME} — ${hostname()}`, platform: process.platform === 'darwin' ? 'macos' : 'windows',
+      openBrowser: url => shell.openExternal(url), onController: (controller) => { nativeAccount = controller },
+      onSnapshot: () => { accountBridge.publish() },
+    })
     service.child.once('exit', (code, signal) => {
-      if (quitting || serviceUrl === undefined) return
+      if (quitting || preparingUpdate || serviceUrl === undefined) return
       void startupRecovery(new Error(
         `dsh stopped while the desktop window was running (code ${String(code)}, signal ${String(signal)}).`,
       )).then((action) => {
@@ -189,6 +211,8 @@ async function launch(): Promise<void> {
       if (isQuitting()) return
       const action = await startupRecovery(error)
       if (action === 'reset-cache') {
+        await accountHost.close()
+        accountHost = undefined
         await resetProjectionCache(paths.dshHome)
         writeDesktopLog('desktop recovery: reset session projection cache after user approval')
         continue
@@ -203,6 +227,8 @@ async function launch(): Promise<void> {
 async function stopService(): Promise<void> {
   const active = service
   if (active === undefined) return
+  await accountHost?.close()
+  accountHost = undefined
   active.stop()
   await active.closed
   if (service === active) service = undefined
@@ -223,13 +249,20 @@ function startUpdates(): void {
       showUpdateFeedback(state)
     },
     beforeInstall: async () => {
-      try {
-        await drafts.prepare()
-        throw new Error(copy.updateShutdownUnavailable)
-      } catch (error) {
-        drafts.release()
-        throw error
-      }
+      const active = service
+      if (active === undefined) throw new Error(copy.updateShutdownUnavailable)
+      preparingUpdate = true
+      try { await prepareDesktopUpdate({
+        saveDrafts: () => drafts.prepare(),
+        releaseDrafts: () => { drafts.release() },
+        saveHost: () => requestUpdateSave({ child: active.child, timeoutMs: 30_000 }),
+        closeAccount: async () => { await accountHost?.close(); accountHost = undefined },
+        stopHost: async () => {
+          await active.stopAndVerifyExit()
+          if (service === active) service = undefined
+        },
+        cancelled: () => quitting,
+      }) } finally { preparingUpdate = false }
     },
     prompts: {
       confirmInstall: async (version) => {

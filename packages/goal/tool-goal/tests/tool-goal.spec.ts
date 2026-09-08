@@ -62,7 +62,7 @@ function openTurn(stub: StubAgent, source: MessageSource, text = 'prompt'): numb
     source,
   })
   stub.agent.inbox.append('next-turn', message)
-  const claimed = stub.agent.inbox.claim('next-turn', turn)
+  const claimed = stub.agent.inbox.claim('next-turn', turn).messages
   if (claimed.length === 0) throw new Error('expected queued turn input')
   stub.session.append('turn/start', { turn })
   for (const admitted of claimed) {

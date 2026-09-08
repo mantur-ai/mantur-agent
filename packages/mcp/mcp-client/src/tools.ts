@@ -28,6 +28,10 @@ import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 
 /** Resolved options relevant to tool bridging. */
 export interface ToolBridgeOptions {
+  /** Admit and own the complete execution, including durable result attachments. */
+  runTool: <T>(work: (recordWriteFailure: (error: unknown) => void) => Promise<T>) => Promise<T>
+  /** Whether this connection generation may still publish tools or issue calls. */
+  isCurrent: () => boolean
   /** Whether a registry conflict is contained or rejects this synchronization. */
   registrationFailure: 'contain' | 'throw'
   serverName: string
@@ -175,6 +179,7 @@ export async function syncTools(
   } while (cursor)
 
   // Phase 2: swap generations.
+  if (!opts.isCurrent()) return previous
   for (const dispose of previous.values()) dispose()
   const disposers: ToolDisposers = new Map()
   try {
@@ -309,7 +314,8 @@ function createExecutor(
   opts: ToolBridgeOptions,
   projections: WeakMap<ToolExecution, PreparedProjection>,
 ): ToolDefinition['execute'] {
-  return async (args: unknown, exec: ToolExecution) => {
+  return (args: unknown, exec: ToolExecution) => opts.runTool(async (recordWriteFailure) => {
+    if (!opts.isCurrent()) throw new Error(`MCP connection for "${opts.serverName}" is unavailable; this call was not sent`)
     if (taskRequired) {
       throw new Error(`Tool "${rawName}" requires task-based execution, which this bridge does not support`)
     }
@@ -319,6 +325,7 @@ function createExecutor(
     // specific "missing required param" error the model can learn from.
     const argsObj = (typeof args === 'object' && args !== null ? args : {}) as Record<string, unknown>
     const result = await callToolUncached(client, rawName, argsObj, exec, opts)
+    if (!opts.isCurrent()) throw new Error(`MCP connection for "${opts.serverName}" changed during this call; inspect saved state before retrying`)
 
     // The SDK may return a legacy `toolResult` shape; normalize to content array.
     if (!Array.isArray(result.content)) {
@@ -327,6 +334,7 @@ function createExecutor(
         : '(no output)'
       const text = typeof rendered === 'string' ? rendered : '(no output)'
       if (result.isError === true) throw new Error(text)
+      if (exec.signal.aborted) recordWriteFailure(exec.signal.reason)
       return {
         content: [{ type: 'text', text }],
         ...result.structuredContent !== undefined
@@ -354,11 +362,12 @@ function createExecutor(
     }
     if (containsImage(content)) {
       const fallback: ContentBlock[] = [{ type: 'text', text: extractText(content, rawName) }]
-      const projected = await prepareImageProjection(ctx, exec, content, rawName)
+      const projected = await prepareImageProjection(ctx, exec, content, rawName, recordWriteFailure)
       projections.set(exec, { value, fallback, content: projected })
     }
+    if (exec.signal.aborted) recordWriteFailure(exec.signal.reason)
     return value
-  }
+  })
 }
 
 /** Whether an untrusted MCP content array contains a declared image block. */
@@ -436,6 +445,7 @@ async function prepareImageProjection(
   exec: ToolExecution,
   content: JsonValue[],
   toolName: string,
+  recordWriteFailure: (error: unknown) => void,
 ): Promise<ContentBlock[]> {
   const decoded: SaveImageAttachment[] = []
   const validationErrors = new Map<number, string>()
@@ -477,6 +487,7 @@ async function prepareImageProjection(
       attachment: byIndex.get(index) as ImageAttachmentRef,
     }))
   } catch (error: unknown) {
+    if (!isImageAdmissionError(error)) recordWriteFailure(error)
     const reason = isImageAdmissionError(error)
       ? `image admission rejected the result: ${error.message}`
       : 'durable image storage rejected the result'

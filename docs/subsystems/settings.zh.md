@@ -181,6 +181,13 @@ Abstract settings service. Providers implement raw-document storage (`load`/`per
 
 ```ts cordis-catalog
 /**
+ * Stop a ready provider's writes and watcher starts, then join admitted operation chains.
+ * Queued writes not yet started reject through their original caller promises.
+ * @returns completion after write queues and started watcher callbacks settle.
+ */
+stopForShutdown(): Promise<void>
+
+/**
  * Prepare the provider's user-editable document for a native editor. File
  * providers may materialize an absent document before returning its path;
  * non-file providers return undefined.

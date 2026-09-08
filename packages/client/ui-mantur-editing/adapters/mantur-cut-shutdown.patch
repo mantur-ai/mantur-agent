@@ -1,0 +1,3171 @@
+diff --git a/desktop/embedded-server.ts b/desktop/embedded-server.ts
+index 7f373b1..3813420 100644
+--- a/desktop/embedded-server.ts
++++ b/desktop/embedded-server.ts
+@@ -81,9 +81,6 @@ export async function startEmbeddedServer(
+   });
+   const server = createServer((req, res) => app.handle(req, res));
+
+-  // Authorize the renderer request before the proxy can inject the provider key.
+-  mountAssemblyAiProxy(app);
+-
+   // vite server pile: complete set of plugin dependencies = middlewares.use + config.logger (verified by plugin)
+   const fake = {
+     middlewares: { use: app.use.bind(app) },
+@@ -102,6 +99,9 @@ export async function startEmbeddedServer(
+     await fn?.call(plugin as never, fake);
+   }
+
++  // The shutdown gate runs before authorization and provider-key injection.
++  mountAssemblyAiProxy(app);
++
+   // Static cover at the end: uploading assets at runtime takes precedence over dist's build-stage copy
+   app.use('/media/uploads', uploadsMiddleware());
+   if (mantur) {
+diff --git a/package.json b/package.json
+index 69a1f6b..cc56b05 100644
+--- a/package.json
++++ b/package.json
+@@ -33,7 +33,7 @@
+     "verify:clip-fx-export": "node src/gl/clipFxExport.verify.mjs",
+     "verify:approval-policy": "tsx src/agent/approval-policy.verify.ts",
+     "verify:mcp": "tsx server/external-agent/mcp-tool-exposure.verify.ts && tsx server/external-agent/mcp.verify.ts && tsx server/external-agent/mcp-check.verify.ts",
+-    "pretest": "npm run verify:approval-policy && npm run verify:semantic-sampling && npm run verify:runtime-profile && npm run verify:directory-watch && npm run verify:salvage && npm run verify:harness && npm run verify:mcp && npm run verify:caption-motion && npm run verify:export-adaptive && npm run verify:editor && npm run verify:captions && npm run verify:agent-tools && npm run verify:components && npm run verify:media-persist && npm run verify:export-gl && npm run verify:server-extra && npm run verify:sqlite-migration && npm run verify:production-contracts && npm run verify:desktop-window && npm run verify:desktop-update && npm run verify:toolbar-tooltips && npm run verify:project-store-transport && tsx src/agent/tools/upload-tools.verify.ts && tsx server/plugins/upload-routes.verify.ts && tsx src/agent/local-models.verify.ts && tsx server/codex/codex-agent.verify.ts && tsx src/agent/codex/runtime.verify.ts && tsx src/agent/codex/followup-activation.verify.ts && tsx src/components/settings/codexReasoning.verify.ts && tsx src/library/sound-localization.verify.ts && tsx src/media/qualityPolicy.verify.ts && tsx src/components/chat/chatAttachmentLifecycle.verify.ts && npm run verify:music-intelligence && npm run verify:skills && npm run verify:shortcuts && npm run verify:i18n",
++    "pretest": "npm run verify:approval-policy && npm run verify:semantic-sampling && npm run verify:runtime-profile && npm run verify:directory-watch && npm run verify:salvage && npm run verify:harness && npm run verify:mcp && npm run verify:caption-motion && npm run verify:export-adaptive && npm run verify:editor && npm run verify:captions && npm run verify:agent-tools && npm run verify:components && npm run verify:media-persist && npm run verify:export-gl && npm run verify:server-extra && npm run verify:sqlite-migration && npm run verify:production-contracts && npm run verify:desktop-window && npm run verify:desktop-update && npm run verify:toolbar-tooltips && npm run verify:project-store-transport && tsx src/agent/tools/upload-tools.verify.ts && tsx server/plugins/upload-routes.verify.ts && tsx src/agent/local-models.verify.ts && tsx server/codex/codex-agent.verify.ts && tsx src/agent/codex/runtime.verify.ts && tsx src/agent/codex/followup-activation.verify.ts && tsx src/components/settings/codexReasoning.verify.ts && tsx src/library/sound-localization.verify.ts && tsx src/media/qualityPolicy.verify.ts && tsx src/components/chat/chatAttachmentLifecycle.verify.ts && npm run verify:music-intelligence && npm run verify:skills && npm run verify:shortcuts && npm run verify:i18n && npm run verify:mantur-shutdown",
+     "verify:salvage": "tsx src/agent/model-selection.verify.ts && tsx src/agent/context-compaction.verify.ts && tsx src/agent/context-overflow-guidance.verify.ts && tsx src/agent/tool-activation.verify.ts && tsx src/agent/tool-result-compaction.verify.ts && tsx src/agent/tool-result-output.verify.ts && tsx src/agent/token-efficiency.verify.ts && tsx src/captions/srt.verify.ts && tsx server/plugins/assemblyai-upload.verify.ts && tsx src/agent/capabilities.verify.ts && tsx src/agent/vision.verify.ts",
+     "verify:harness": "tsx src/agent/harness-context.verify.ts && tsx src/agent/harness-runtime.verify.ts && tsx src/agent/agent-hydration-recovery.verify.ts && tsx src/agent/retry-message.verify.ts && tsx src/agent/useAgentHistoryActions.verify.ts && tsx src/agent/external-draft-persistence.verify.ts && tsx server/external-agent/agent-runtime-persistence.verify.ts && tsx server/plugins/project-store-project-document.verify.ts",
+     "verify:skills": "tsx src/agent/skills/skill-loading.verify.ts && tsx src/agent/skills/skill-deps.verify.ts && tsx server/skills-files.verify.ts",
+@@ -80,7 +80,8 @@
+     "verify:export-gl": "tsx src/export/export-reliability.verify.ts && tsx src/export/exportMediaPlan.verify.ts && tsx src/export/range.verify.ts && tsx src/gl/customTransitions.verify.ts && tsx src/gl/fx/chroma-key.verify.ts && tsx src/gl/fx/cube.verify.ts && tsx src/gl/fx/fx.verify.ts && tsx src/gl/shader-contract.verify.ts && tsx src/generate/media-export.geometry.verify.ts && tsx src/generate/video.verify.ts && tsx src/plugins/export.verify.ts && tsx src/plugins/resourcePreview.verify.ts && tsx src/plugins/validate.verify.ts && tsx src/multicam/align.verify.ts && tsx src/multicam/sync.verify.ts && tsx src/reframe/detect.verify.ts && tsx src/script/script.verify.ts && tsx --tsconfig tsconfig.app.json src/fonts/notoSansOffline.verify.ts",
+     "verify:server-extra": "tsx server/media-process.verify.ts && tsx server/media-references.verify.ts && tsx server/media-normalization-reason.verify.ts && tsx server/media-normalization-reference.verify.ts && tsx server/media-normalization-admission.verify.ts && tsx server/plugins/upload-multipart-meta.verify.ts && tsx server/plugins/firecrawl.verify.ts && tsx server/plugins/request-shape-gate.verify.ts && tsx server/plugins/isolate-voice.verify.ts && tsx server/plugins/project-store-merge.verify.ts && tsx server/plugins/render-clip-cancellation.verify.ts && tsx server/plugins/storage-lifecycle.verify.ts && tsx server/plugins/video-reference.verify.ts && tsx server/safe-public-fetch.verify.ts && tsx shared/timeline-geometry.verify.ts && tsx remotion/render-timeout.verify.mjs && tsx server/plugins/stock-check.verify.ts",
+     "verify:sqlite-migration": "tsx server/storage/sqlite-store.verify.ts && tsx server/storage/sqlite-migration-http.verify.ts && tsx server/plugins/project-store-export-recovery-sqlite.verify.ts && tsx src/export/serverExportRecovery.verify.ts",
+-    "verify:extract-audio": "tsx server/plugins/extract-audio.verify.ts"
++    "verify:extract-audio": "tsx server/plugins/extract-audio.verify.ts",
++    "verify:mantur-shutdown": "node --import tsx server/plugins/generation-shutdown.verify.ts && node --import tsx server/plugins/project-shutdown.verify.ts && node --import tsx server/external-agent/broker-shutdown.verify.ts && node --import tsx server/plugins/mantur-shutdown.verify.ts && node --import tsx src/agent/external-shutdown.verify.ts && node remotion/render-shutdown.verify.mjs && node --import tsx src/media/semantic-search/vectorCapability.verify.ts && node --import tsx server/plugins/mcp-transport-shutdown.verify.ts"
+   },
+   "dependencies": {
+     "@ai-sdk/alibaba": "^2.0.16",
+diff --git a/remotion/render-shutdown.d.mts b/remotion/render-shutdown.d.mts
+new file mode 100644
+index 0000000..eeea792
+--- /dev/null
++++ b/remotion/render-shutdown.d.mts
+@@ -0,0 +1,6 @@
++/** Retain the first close operation for an acquired render browser. */
++export function ownRenderBrowser(browser: { close(options: { silent: boolean }): Promise<void> }): () => Promise<void>;
++/** Preserve both render and close errors. */
++export function closeRenderBrowser(close: () => Promise<void>, renderingFailure?: { error: unknown }): Promise<void>;
++/** Reject when this process lacks exact render process-and-pipe close evidence. */
++export function assertRenderShutdownConfirmed(): void;
+diff --git a/remotion/render-shutdown.mjs b/remotion/render-shutdown.mjs
+new file mode 100644
+index 0000000..312c14c
+--- /dev/null
++++ b/remotion/render-shutdown.mjs
+@@ -0,0 +1,31 @@
++/** Render browser ownership recorded only when this instance acquires a browser handle. */
++let acquiredBrowsers = 0;
++const closeFailures = [];
++
++/** Retain the first close promise and its failure, including an earlier abort-triggered close. */
++export function ownRenderBrowser(browser) {
++  acquiredBrowsers += 1;
++  let closing;
++  return () => closing ??= Promise.resolve().then(() => browser.close({ silent: true })).catch((error) => {
++    closeFailures.push(error);
++    throw error;
++  });
++}
++
++/** Keep rendering failure and browser cleanup failure as separate evidence. */
++export async function closeRenderBrowser(close, renderingFailure) {
++  try { await close(); }
++  catch (error) {
++    if (renderingFailure) throw new AggregateError([renderingFailure.error, error], 'Rendering and browser closure both failed');
++    throw error;
++  }
++}
++
++/** The pinned public Browser.close waits for exit, not the spawned process's close event and pipes. */
++export function assertRenderShutdownConfirmed() {
++  const failures = [...closeFailures];
++  if (acquiredBrowsers) failures.push(new Error(
++    `This editor acquired ${acquiredBrowsers} rendering browser(s); Remotion does not expose their process-and-pipe close completion`,
++  ));
++  if (failures.length) throw new AggregateError(failures, 'Rendering subprocess shutdown is unconfirmed; installation is blocked');
++}
+diff --git a/remotion/render-shutdown.verify.mjs b/remotion/render-shutdown.verify.mjs
+new file mode 100644
+index 0000000..9d4c87e
+--- /dev/null
++++ b/remotion/render-shutdown.verify.mjs
+@@ -0,0 +1,37 @@
++import assert from 'node:assert/strict';
++import { setImmediate as tick } from 'node:timers/promises';
++import { withAbortableCompositionSelection } from './render.mjs';
++import { assertRenderShutdownConfirmed } from './render-shutdown.mjs';
++
++// Merely importing the installed renderer has not acquired a rendering subprocess.
++assert.doesNotThrow(assertRenderShutdownConfirmed);
++const released = Promise.withResolvers();
++const closing = Promise.withResolvers();
++let closes = 0;
++const closeError = new Error('render browser close failed');
++const rendering = withAbortableCompositionSelection({
++  selectionOptions: {},
++  openBrowserImpl: async () => ({ close: async () => { closes += 1; closing.resolve(); await released.promise; throw closeError; } }),
++  selectCompositionImpl: async () => ({}),
++  run: async () => 'rendered',
++});
++let finished = false;
++const rejected = assert.rejects(rendering, (error) => error === closeError).then(() => { finished = true; });
++await closing.promise;
++await tick(); assert.equal(finished, false, 'render result cannot precede browser cleanup');
++released.resolve(); await rejected;
++assert.equal(closes, 1);
++assert.throws(assertRenderShutdownConfirmed, (error) => error instanceof AggregateError && error.errors.includes(closeError));
++
++const abort = new AbortController();
++const original = new Error('composition selection failed');
++const earlierClose = new Error('abort-triggered browser close failed');
++let abortCloses = 0;
++await assert.rejects(withAbortableCompositionSelection({
++  signal: abort.signal, selectionOptions: {},
++  openBrowserImpl: async () => ({ close: async () => { abortCloses += 1; throw earlierClose; } }),
++  selectCompositionImpl: async () => { abort.abort(original); throw original; },
++  run: async () => assert.fail('failed selection must not render'),
++}), (error) => error instanceof AggregateError && error.errors[0] === original && error.errors[1] === earlierClose);
++assert.equal(abortCloses, 1, 'finally retains the original abort-triggered close promise');
++console.log('render shutdown: unused instance, pending close, failed close and original failure retention passed');
+diff --git a/remotion/render.mjs b/remotion/render.mjs
+index 0357324..62bdff6 100644
+--- a/remotion/render.mjs
++++ b/remotion/render.mjs
+@@ -18,6 +18,7 @@ import {
+ } from './performance.mjs';
+ import { renderDirectHardware } from './direct-hardware.mjs';
+ import { finalizeH264Audio, usesPcmFinalization } from './audio-finalization.mjs';
++import { ownRenderBrowser, closeRenderBrowser } from './render-shutdown.mjs';
+ import { assertMaterializedRenderSnapshot, normalizeH264Profile } from './render-contract.mjs';
+ import { resolveRenderTimeout } from './render-timeout.mjs';
+
+@@ -90,9 +91,9 @@ export async function withAbortableCompositionSelection({
+     browserExecutable: browserExecutable(),
+     chromiumOptions: { gl: resolveRenderGlBackend() },
+   });
+-  let closePromise;
+-  const closeBrowser = () => closePromise ??= Promise.resolve(browser.close({ silent: true })).catch(() => undefined);
+-  const onAbort = () => { void closeBrowser(); };
++  const closeBrowser = ownRenderBrowser(browser);
++  const onAbort = () => { void closeBrowser().catch(() => undefined); };
++  let renderingFailure;
+   signal?.addEventListener('abort', onAbort, { once: true });
+   try {
+     signal?.throwIfAborted();
+@@ -102,9 +103,12 @@ export async function withAbortableCompositionSelection({
+     });
+     signal?.throwIfAborted();
+     return await run(composition, browser);
++  } catch (error) {
++    renderingFailure = { error };
++    throw error;
+   } finally {
+     signal?.removeEventListener('abort', onAbort);
+-    await closeBrowser();
++    await closeRenderBrowser(closeBrowser, renderingFailure);
+   }
+ }
+
+@@ -472,8 +476,10 @@ export async function renderTimelineStills({
+     browserExecutable: browserExecutable(),
+     chromiumOptions: { gl: resolveRenderGlBackend() },
+   });
++  const closeBrowser = ownBrowser ? ownRenderBrowser(browser) : undefined;
++  let renderingFailure;
+   const closeOnAbort = () => {
+-    if (ownBrowser) void browser.close({ silent: true }).catch(() => undefined);
++    if (closeBrowser) void closeBrowser().catch(() => undefined);
+   };
+   signal?.addEventListener('abort', closeOnAbort, { once: true });
+   try {
+@@ -506,10 +512,11 @@ export async function renderTimelineStills({
+       out.push({ frame: f, base64: buffer.toString('base64') });
+     }
+     return out;
++  } catch (error) {
++    renderingFailure = { error };
++    throw error;
+   } finally {
+     signal?.removeEventListener('abort', closeOnAbort);
+-    if (ownBrowser) {
+-      try { await browser.close({ silent: true }); } catch { /* ignore */ }
+-    }
++    if (closeBrowser) await closeRenderBrowser(closeBrowser, renderingFailure);
+   }
+ }
+diff --git a/server/external-agent/broker-shutdown.verify.ts b/server/external-agent/broker-shutdown.verify.ts
+new file mode 100644
+index 0000000..71bcf61
+--- /dev/null
++++ b/server/external-agent/broker-shutdown.verify.ts
+@@ -0,0 +1,104 @@
++import assert from 'node:assert/strict';
++import { spawn } from 'node:child_process';
++import { mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
++import { tmpdir } from 'node:os';
++import { join } from 'node:path';
++import { setImmediate as tick } from 'node:timers/promises';
++import { fileURLToPath } from 'node:url';
++
++const scenario = process.argv[2];
++if (!scenario) {
++  for (const name of ['accepted', 'unregister-failure', 'failed-flush', 'no-browser']) {
++    await new Promise<void>((resolve, reject) => {
++      const child = spawn(process.execPath, ['--import', 'tsx', fileURLToPath(import.meta.url), name], { stdio: 'inherit' });
++      child.once('error', reject);
++      child.once('close', (code, signal) => code === 0 && signal === null ? resolve() : reject(new Error(`${name}: ${code}/${signal}`)));
++    });
++  }
++  console.log('broker shutdown: 4 isolated native-channel and durable unregister cases passed');
++} else {
++  const root = await mkdtemp(join(tmpdir(), 'mantur-broker-shutdown-'));
++  process.env.OPENCHATCUT_DATA_DIR = root;
++  process.env.OPENCHATCUT_SQLITE_STORE = '0';
++  try {
++    const broker = await import('./broker.ts');
++    if (scenario === 'no-browser') {
++      await broker.stopEditorCallsForShutdown();
++      await assert.rejects(broker.requestEditorShutdown('freeze', 1000), /No browser editor/);
++    } else {
++      const store = await import('../plugins/project-store.ts');
++      const { INITIAL } = await import('../../src/editor/initial.ts');
++      const { docFromTimeline } = await import('../../src/persist/projectStore.ts');
++      const { revisionOf } = await import('../../src/agent/external-edit-session.ts');
++      const { claimBrowserProjectOwnership, projectEditOwnershipKey } = await import('./project-edit-ownership.ts');
++      const projectId = 'shutdown-project';
++      const editorId = 'shutdown-editor';
++      const doc = docFromTimeline(INITIAL);
++      await store.setStoredEntry(`project:${projectId}`, doc);
++      const revision = revisionOf(doc);
++      const ownership = await claimBrowserProjectOwnership(projectId, editorId, revision);
++      assert.equal(ownership.status, 'claimed');
++      if (ownership.status !== 'claimed') throw new Error('Test ownership setup failed');
++      const capability = broker.registerEditor(projectId, editorId, revision, [], ownership.claim);
++      const binding = broker.editorBinding(projectId)!;
++      const poll = () => broker.nextEditorCall(projectId, editorId, revision, AbortSignal.timeout(1000), capability);
++      const accepted = broker.invokeEditorTool('native-owner', binding, 'read_timeline', {});
++      const acceptedCall = await poll();
++      assert(acceptedCall);
++      const cutoff = broker.stopEditorCallsForShutdown();
++      assert.strictEqual(cutoff, broker.stopEditorCallsForShutdown());
++      let drained = false;
++      void cutoff.then(() => { drained = true; });
++      await assert.rejects(broker.invokeEditorTool('late-owner', binding, 'read_timeline', {}), /shutting down/);
++      await tick(); assert.equal(drained, false);
++      assert.equal(broker.settleEditorCall(acceptedCall.id, 'applied', { fps: 30 }, capability), true);
++      await accepted; await cutoff;
++      const freezing = broker.requestEditorShutdown('freeze', 1000);
++      const freezeCall = await poll();
++      assert.equal(freezeCall?.name, 'mantur_shutdown');
++      assert.equal(broker.settleEditorCall(freezeCall!.id, 'applied', { phase: 'freeze' }, capability), true);
++      await freezing;
++      const flushing = broker.requestEditorShutdown('flush', 1000);
++      const observed = flushing.then(() => ({ ok: true as const }), error => ({ ok: false as const, error }));
++      const flushCall = await poll();
++      assert.equal(flushCall?.arguments.phase, 'flush');
++      if (scenario === 'failed-flush') {
++        assert.equal(broker.settleEditorCall(flushCall!.id, 'failed', 'browser checkpoint failed', capability), true);
++        const result = await observed;
++        assert.equal(result.ok, false);
++        if (!result.ok) assert.match(String(result.error), /browser checkpoint failed/);
++        assert.equal(broker.isProjectConnected(projectId), true, 'failed browser retains its registration');
++      } else {
++        const entered = Promise.withResolvers<void>();
++        const release = Promise.withResolvers<void>();
++        const heldWrite = store.withSerializedProjectStore(async () => { entered.resolve(); await release.promise; });
++        await entered.promise;
++        assert.equal(broker.settleEditorCall(flushCall!.id, 'applied', { phase: 'flush' }, capability), true);
++        let confirmed = false;
++        void observed.then(() => { confirmed = true; });
++        const unregister = broker.unregisterEditor(projectId, editorId, capability);
++        const unregisterResult = unregister.then(() => ({ ok: true as const }), error => ({ ok: false as const, error }));
++        await tick();
++        assert.equal(broker.isProjectConnected(projectId), false);
++        assert.equal(confirmed, false, 'removing registration is not durable lease release');
++        if (scenario === 'unregister-failure') {
++          await rename(join(root, 'project-store-v1'), join(root, 'before-failure'));
++          await writeFile(join(root, 'project-store-v1'), 'not a directory');
++        }
++        release.resolve(); await heldWrite;
++        const result = await observed;
++        const released = await unregisterResult;
++        assert.equal(result.ok, scenario === 'accepted');
++        assert.equal(released.ok, scenario === 'accepted');
++        if (scenario === 'accepted') {
++          await broker.stopEditorRegistrationsForShutdown();
++          await store.stopProjectStoreForShutdown();
++          const lease = JSON.parse(await readFile(join(root, 'project-store-v1', `${encodeURIComponent(projectEditOwnershipKey(projectId))}.json`), 'utf8'));
++          assert.equal(lease.leaseExpiresAt, 0);
++        } else {
++          await assert.rejects(broker.stopEditorRegistrationsForShutdown(), /failed; shutdown is unconfirmed/);
++        }
++      }
++    }
++  } finally { await rm(root, { recursive: true, force: true }); }
++}
+diff --git a/server/external-agent/broker.ts b/server/external-agent/broker.ts
+index 55fcac7..f7de823 100644
+--- a/server/external-agent/broker.ts
++++ b/server/external-agent/broker.ts
+@@ -1,4 +1,6 @@
+ import { randomUUID } from 'node:crypto';
++import { ShutdownWork } from '../../shared/shutdown-work.ts';
++import { EDITOR_SHUTDOWN_CALL, type EditorShutdownPhase } from '../../shared/editor-shutdown.ts';
+ import type { ProjectEditOwnershipClaim } from './project-edit-ownership.ts';
+ import {
+   EditorConnectionRegistry,
+@@ -62,6 +64,11 @@ const waiters = new Map<string, Set<() => void>>();
+ const sessionOwnership = new EditSessionOwnershipRegistry();
+ const cancellationQueues = new Map<string, ExternalEditorCancellation[]>();
+ const cancellationWaiters = new Map<string, Set<() => void>>();
++const toolWork = new ShutdownWork('Native editor broker calls');
++const registrationWork = new ShutdownWork('Native editor ownership writes');
++let registrationClosing = false;
++let registrationsClosed = false;
++const unregisterWaiters = new Map<string, PromiseWithResolvers<void>>();
+
+ const editorKey = (projectId: string, editorInstanceId: string) => `${projectId}\u0000${editorInstanceId}`;
+
+@@ -173,6 +180,7 @@ export function registerEditor(
+   ownership?: ProjectEditOwnershipClaim,
+   registrationCapability?: string | null,
+ ): string {
++  if (registrationClosing) throw new Error('Editor registrations are shutting down');
+   return registry.register(
+     projectId,
+     editorInstanceId,
+@@ -194,7 +202,13 @@ export function unregisterEditor(
+   projectId: string, editorInstanceId: string,
+   registrationCapability?: string | null,
+ ): Promise<boolean> {
+-  return registry.unregister(projectId, editorInstanceId, registrationCapability);
++  const result = registrationWork.admit(() => registry.unregister(projectId, editorInstanceId, registrationCapability));
++  const waiter = unregisterWaiters.get(editorKey(projectId, editorInstanceId));
++  if (waiter) void result.then((removed) => {
++    if (removed) waiter.resolve();
++    else waiter.reject(new Error('Editor shutdown unregister did not match its owner'));
++  }, waiter.reject);
++  return result;
+ }
+
+ export function onRegisteredToolsChanged(listener: () => void): () => void {
+@@ -205,7 +219,8 @@ export function touchEditor(
+   projectId: string, editorInstanceId: string,
+   baseRevision?: string, registrationCapability?: string | null,
+ ): Promise<boolean> {
+-  return registry.touch(projectId, editorInstanceId, baseRevision, registrationCapability);
++  if (registrationsClosed) return Promise.resolve(false);
++  return registrationWork.admit(() => registry.touch(projectId, editorInstanceId, baseRevision, registrationCapability));
+ }
+
+ export function editorBinding(projectId: string): EditorBinding | null {
+@@ -294,7 +309,14 @@ export function invokeEditorTool(
+   args: Record<string, unknown>,
+   timeoutMs = DEFAULT_TIMEOUT_MS,
+ ): Promise<unknown> {
+-  const allowRevisionDrift = name === 'get_edit_session';
++  if (name === EDITOR_SHUTDOWN_CALL) return Promise.reject(new Error('Editor shutdown is owned by its Host'));
++  return toolWork.admit(() => enqueueEditorCall(ownerId, binding, name, args, timeoutMs));
++}
++
++function enqueueEditorCall(
++  ownerId: string, binding: EditorBinding, name: string, args: Record<string, unknown>, timeoutMs: number,
++): Promise<unknown> {
++  const allowRevisionDrift = name === 'get_edit_session' || name === EDITOR_SHUTDOWN_CALL;
+   const recoveryTool = name === 'list_edit_sessions' || name === 'recover_edit_session';
+   const ownsSession = name !== 'begin_edit_session' && !recoveryTool && 'editSessionId' in args;
+   if (ownsSession) requireOwnedEditSession(ownerId, binding, args);
+@@ -337,6 +359,36 @@ export function invokeEditorTool(
+   });
+ }
+
++/** The Host reaches this after its accepted MCP responses and attachments settle. */
++export function stopEditorCallsForShutdown(): Promise<void> {
++  registrationClosing = true;
++  return toolWork.stop();
++}
++
++/** Ask each registered browser over its original authenticated poll/result channel. */
++export async function requestEditorShutdown(phase: EditorShutdownPhase, timeoutMs: number): Promise<void> {
++  if (!registrationClosing) throw new Error('Editor shutdown requires the native call cutoff first');
++  const bindings = editorStatuses().map((status) => editorBinding(status.projectId)!);
++  if (!bindings.length) throw new Error('No browser editor can confirm authoritative project saving');
++  await Promise.all(bindings.map(async (binding) => {
++    const waiter = phase === 'flush' ? Promise.withResolvers<void>() : undefined;
++    if (waiter) unregisterWaiters.set(editorKey(binding.projectId, binding.editorInstanceId), waiter);
++    const call = enqueueEditorCall('mantur-host-shutdown', binding, EDITOR_SHUTDOWN_CALL, { phase }, timeoutMs);
++    const pending = waiter ? [call, waiter.promise] : [call];
++    const results = await Promise.all(pending);
++    const result: unknown = results[0];
++    if (!result || typeof result !== 'object' || !('phase' in result) || result.phase !== phase) {
++      throw new Error(`Editor ${binding.projectId} did not confirm shutdown ${phase}`);
++    }
++  }));
++}
++
++/** Browser flush acknowledgements and unregister persistence must already have completed. */
++export function stopEditorRegistrationsForShutdown(): Promise<void> {
++  registrationsClosed = true;
++  return registrationWork.stop();
++}
++
+ function takeNextCall(projectId: string, binding: EditorBinding): QueuedCall | undefined {
+   const queue = queues.get(projectId);
+   while (queue?.length) {
+diff --git a/server/external-agent/mcp.ts b/server/external-agent/mcp.ts
+index d5b4530..fd2b6b8 100644
+--- a/server/external-agent/mcp.ts
++++ b/server/external-agent/mcp.ts
+@@ -1,4 +1,6 @@
+ import { randomUUID } from 'node:crypto';
++import { ShutdownWork } from '../../shared/shutdown-work.ts';
++import { recordUnconfirmedEditorProducer, registerEditorTimerStop } from '../shutdown-runtime.ts';
+ import type { IncomingMessage, ServerResponse } from 'node:http';
+ import { setImmediate as delayImmediate } from 'node:timers/promises';
+ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+@@ -76,6 +78,17 @@ interface McpSession extends McpBindingSession {
+ }
+
+ const sessions = new Map<string, McpSession>();
++const retirements = new ShutdownWork('Editor MCP retired transports');
++let shuttingDown = false;
++
++/** Keep live native transports available for the Host's final close handshake. */
++export function stopMcpRetirementsForShutdown(): Promise<void> {
++  shuttingDown = true;
++  for (const session of sessions.values()) {
++    if (session.offline) recordUnconfirmedEditorProducer('offline MCP runtime ownership');
++  }
++  return retirements.stop();
++}
+
+ function editorUrl(args: Record<string, unknown>, projectId: string, fallbackBase: string): string {
+   const base = String(args.editorBaseUrl ?? '').trim() || fallbackBase;
+@@ -184,6 +197,7 @@ async function callTool(
+       && editSessionOwnerMatches(session.id, session.binding, args.editSessionId),
+     );
+   if (session.offline) {
++    recordUnconfirmedEditorProducer('offline MCP runtime ownership');
+     if (MCP_CONTROL_TOOL_NAMES[name] === true) {
+       await validateOfflineBinding(session);
+       return callControlTool(session, name, args, baseUrl);
+@@ -283,9 +297,10 @@ function makeServer(baseUrl: string, session: McpSession): Server {
+         markMcpSessionStale(session, error.message);
+         // Close the transport after the error response is sent so the client
+         // does not keep sending requests against a permanently-stale session.
+-        void delayImmediate().then(() => {
+-          if (session.server) void session.server.close().catch(() => undefined);
+-          else void session.transport.close().catch(() => undefined);
++        void retirements.admit(async () => {
++          await delayImmediate();
++          if (session.server) await session.server.close();
++          else await session.transport.close();
+         });
+       }
+       const result = mcpToolError(error);
+@@ -304,7 +319,10 @@ function forgetSession(
+   outcome: 'cancelled' | 'stale' | 'failed',
+   message: string,
+ ): void {
+-  void session.offline?.dispose();
++  if (session.offline) {
++    recordUnconfirmedEditorProducer('offline MCP runtime ownership');
++    void retirements.admit(() => session.offline!.dispose());
++  }
+   const id = session.id;
+   if (!id) return;
+   if (sessions.get(id) === session) sessions.delete(id);
+@@ -319,12 +337,14 @@ function evictSession(
+   const session = sessions.get(id);
+   if (!session) return;
+   forgetSession(session, outcome, message);
+-  void delayImmediate()
+-    .then(() => (session.server ? session.server.close() : session.transport.close()))
+-    .catch(() => undefined);
++  void retirements.admit(async () => {
++    await delayImmediate();
++    await (session.server ? session.server.close() : session.transport.close());
++  });
+ }
+
+ export function pruneMcpSessions(now = Date.now()): void {
++  if (shuttingDown) return;
+   for (const [id, session] of sessions) {
+     if (now - session.lastUsed > MCP_SESSION_IDLE_LIMIT_MS) {
+       evictSession(id, 'cancelled', 'MCP transport session expired while the editor call was pending.');
+@@ -337,9 +357,11 @@ export function pruneMcpSessions(now = Date.now()): void {
+   }
+ }
+
+-setInterval(() => {
+-  try { pruneMcpSessions(); } catch { /* interval must not die */ }
+-}, 10 * 60 * 1000).unref?.();
++const pruneTimer = setInterval(() => {
++  try { pruneMcpSessions(); } catch (error) { retirements.recordFailure(error); }
++}, 10 * 60 * 1000);
++pruneTimer.unref?.();
++registerEditorTimerStop(() => clearInterval(pruneTimer));
+
+ onRegisteredToolsChanged(() => {
+   for (const session of sessions.values()) {
+diff --git a/server/media-acceleration.ts b/server/media-acceleration.ts
+index 2b6e85e..98fbce1 100644
+--- a/server/media-acceleration.ts
++++ b/server/media-acceleration.ts
+@@ -1,4 +1,5 @@
+ import { spawn } from 'node:child_process';
++import { trackEditorMediaProcess } from './shutdown-runtime.ts';
+ import { dirname } from 'node:path';
+ import { ffmpegThreadArgs } from './media-process.ts';
+
+@@ -86,6 +87,7 @@ async function availableHwAccels(ffmpeg: string): Promise<Set<string>> {
+     cwd: dirname(ffmpeg),
+     stdio: ['ignore', 'pipe', 'ignore'],
+   });
++  trackEditorMediaProcess(child);
+   let output = '';
+   child.stdout.on('data', (chunk: Buffer) => { output = `${output}${chunk}`.slice(0, 8192); });
+   const timer = setTimeout(() => child.kill('SIGKILL'), 5_000);
+@@ -120,6 +122,7 @@ export async function probeEncoderQualityMode(
+     cwd: dirname(ffmpeg),
+     stdio: ['ignore', 'pipe', 'pipe'],
+   });
++  trackEditorMediaProcess(child);
+   let output = '';
+   const collect = (chunk: Buffer) => { output = `${output}${chunk}`.slice(0, 16_384); };
+   child.stdout.on('data', collect);
+@@ -243,6 +246,7 @@ function probeEncoder(
+     cwd: dirname(ffmpeg),
+     stdio: ['pipe', 'ignore', 'ignore'],
+   });
++  trackEditorMediaProcess(child);
+   const timer = setTimeout(() => child.kill('SIGKILL'), 12_000);
+   child.once('error', () => {
+     clearTimeout(timer);
+@@ -265,6 +269,7 @@ function probeCompiledEncoder(ffmpeg: string, encoder: H264Encoder): Promise<boo
+     cwd: dirname(ffmpeg),
+     stdio: ['ignore', 'pipe', 'pipe'],
+   });
++  trackEditorMediaProcess(child);
+   let output = '';
+   const collect = (chunk: Buffer) => { output = `${output}${chunk}`.slice(0, 16_384); };
+   child.stdout.on('data', collect);
+diff --git a/server/media-process.ts b/server/media-process.ts
+index 868587f..45b872d 100644
+--- a/server/media-process.ts
++++ b/server/media-process.ts
+@@ -9,6 +9,7 @@ import {
+   type StdioPipe,
+ } from 'node:child_process';
+ import { availableParallelism, constants, setPriority } from 'node:os';
++import { trackEditorMediaProcess, recordUnconfirmedEditorProducer } from './shutdown-runtime.ts';
+
+ /** Cap ffmpeg worker threads so a single encode cannot saturate the whole
+  * machine and starve the editor or other Node/Electron applications. */
+@@ -56,7 +57,8 @@ export function spawnMediaProcess(
+   args: string[],
+   options: SpawnOptions = {},
+ ): ChildProcess {
+-  const child = spawn(command, args, options);
++  const child = trackEditorMediaProcess(spawn(command, args, options));
++  if (options.detached || options.shell) recordUnconfirmedEditorProducer('media subprocess with detached or shell descendants');
+   if (child.pid !== undefined) {
+     try {
+       setPriority(child.pid, constants.priority.PRIORITY_BELOW_NORMAL);
+diff --git a/server/plugins/export-job-routes.ts b/server/plugins/export-job-routes.ts
+index 36411d0..6dbcead 100644
+--- a/server/plugins/export-job-routes.ts
++++ b/server/plugins/export-job-routes.ts
+@@ -185,13 +185,9 @@ export function registerExportJobRoute(server: ViteDevServer): void {
+             }
+           },
+           cleanupPolicy: 'server-export',
+-          onSettled: (jobId) => {
++          onSettled: async (jobId) => {
+             forgetExportJobController(jobId);
+-            void cleanupRenderMedia().catch((error) => {
+-              server.config.logger.warn(
+-                `[export] failed to clean materialized media: ${error instanceof Error ? error.message : String(error)}`,
+-              );
+-            });
++            await cleanupRenderMedia();
+           },
+         },
+       );
+diff --git a/server/plugins/export-stage.ts b/server/plugins/export-stage.ts
+index e26b987..a36f18b 100644
+--- a/server/plugins/export-stage.ts
++++ b/server/plugins/export-stage.ts
+@@ -6,6 +6,7 @@ import { extname, join } from 'node:path';
+ import { Transform } from 'node:stream';
+ import { pipeline } from 'node:stream/promises';
+ import type { Plugin } from 'vite';
++import { trackEditorMaintenance, registerEditorTimerStop, recordEditorMaintenanceFailure } from '../shutdown-runtime.ts';
+ import { uploadDir } from '../media-dir.ts';
+
+ const STAGE_PREFIX = 'openchatcut-export-stage-';
+@@ -126,14 +127,16 @@ export function exportStagePlugin(): Plugin {
+     name: 'openchatcut-export-stage',
+     configureServer(server) {
+       const cleanup = () => cleanupStaleExportStages(uploadDir()).catch((error) => {
++        recordEditorMaintenanceFailure(error);
+         server.config.logger.warn(`[export-stage] cleanup failed: ${error instanceof Error ? error.message : String(error)}`);
+       });
+-      void cleanup();
+-      const cleanupTimer = setInterval(() => { void cleanup(); }, EXPORT_STAGE_RETENTION_MS);
++      void trackEditorMaintenance(cleanup());
++      const cleanupTimer = setInterval(() => { void trackEditorMaintenance(cleanup()); }, EXPORT_STAGE_RETENTION_MS);
+       cleanupTimer.unref();
+       server.httpServer?.once('close', () => clearInterval(cleanupTimer));
++      registerEditorTimerStop(() => clearInterval(cleanupTimer));
+       server.middlewares.use('/export/stage', (req, res) => {
+-        void handleStage(req, res).catch((error) => {
++        return handleStage(req, res).catch((error) => {
+           server.config.logger.error(`[export-stage] ${error instanceof Error ? error.message : String(error)}`);
+           if (!res.headersSent) sendJson(res, 500, { error: error instanceof Error ? error.message : String(error) });
+           else res.end();
+diff --git a/server/plugins/export.ts b/server/plugins/export.ts
+index db26432..04b98db 100644
+--- a/server/plugins/export.ts
++++ b/server/plugins/export.ts
+@@ -1,4 +1,5 @@
+ import type { Plugin } from 'vite';
++import { trackEditorMaintenance, registerEditorTimerStop, recordEditorMaintenanceFailure } from '../shutdown-runtime.ts';
+ import {
+   cleanupStaleExportFiles,
+   EXPORT_JOB_RETENTION_MS,
+@@ -44,18 +45,21 @@ export function exportPlugin(): Plugin {
+       setUploadsDirProvider(uploadDir);
+       const cleanStaleExports = () => cleanupStaleExportFiles(uploadDir(), {
+           shouldRetain: retainUnresolvedExportRecovery,
+-          onError: (path, error) => server.config.logger.warn(
+-            `[export] failed to clean stale artifact ${path}: ${error instanceof Error ? error.message : String(error)}`,
+-          ),
++          onError: (path, error) => {
++            recordEditorMaintenanceFailure(error);
++            server.config.logger.warn(`[export] failed to clean stale artifact ${path}: ${error instanceof Error ? error.message : String(error)}`);
++          },
+         }).then((removed) => {
+           if (removed > 0) server.config.logger.info(`[export] removed ${removed} stale export artifact(s)`);
+         }).catch((error) => {
++          recordEditorMaintenanceFailure(error);
+           server.config.logger.warn(`[export] stale artifact scan failed: ${error instanceof Error ? error.message : String(error)}`);
+         });
+-      void cleanStaleExports();
+-      const cleanupTimer = setInterval(() => { void cleanStaleExports(); }, EXPORT_JOB_RETENTION_MS);
++      void trackEditorMaintenance(cleanStaleExports());
++      const cleanupTimer = setInterval(() => { void trackEditorMaintenance(cleanStaleExports()); }, EXPORT_JOB_RETENTION_MS);
+       cleanupTimer.unref?.();
+       server.httpServer?.once('close', () => clearInterval(cleanupTimer));
++      registerEditorTimerStop(() => clearInterval(cleanupTimer));
+
+       registerRenderStillRoute(server);
+       registerRenderClipRoute(server);
+diff --git a/server/plugins/external-agent.ts b/server/plugins/external-agent.ts
+index 289e318..919c93c 100644
+--- a/server/plugins/external-agent.ts
++++ b/server/plugins/external-agent.ts
+@@ -132,7 +132,7 @@ export function externalAgentPlugin(): Plugin {
+     name: 'openchatcut-external-agent',
+     configureServer(server) {
+       server.middlewares.use('/api/external-agent', (req, res) => {
+-        void handleExternalAgentBridge(req, res).catch((error) => {
++        return handleExternalAgentBridge(req, res).catch((error) => {
+           if (!res.headersSent) sendBridgeJson(res, 400, { error: error instanceof Error ? error.message : String(error) });
+         });
+       });
+@@ -141,7 +141,7 @@ export function externalAgentPlugin(): Plugin {
+           sendBridgeJson(res, 401, { error: 'invalid OpenChatCut MCP token' });
+           return;
+         }
+-        void handleMcpRequest(req, res, requestBaseUrl(req)).catch((error) => {
++        return handleMcpRequest(req, res, requestBaseUrl(req)).catch((error) => {
+           server.config.logger.error(`[external-mcp] ${error instanceof Error ? error.message : String(error)}`);
+           if (!res.headersSent) sendBridgeJson(res, 500, { error: 'MCP request failed' });
+         });
+diff --git a/server/plugins/generation-job-lifecycle.ts b/server/plugins/generation-job-lifecycle.ts
+index 4ffdcc2..01c23c6 100644
+--- a/server/plugins/generation-job-lifecycle.ts
++++ b/server/plugins/generation-job-lifecycle.ts
+@@ -1,4 +1,5 @@
+ import { randomUUID } from 'node:crypto';
++import { ShutdownWork } from '../../shared/shutdown-work.ts';
+ import { ResultDownloadError } from './result-download.ts';
+ import {
+   TERMINAL,
+@@ -29,13 +30,20 @@ import {
+   resumerKey,
+   resumers,
+   scheduleExpiry,
++  stopGenerationJobExpiry,
++  flushGenerationJobPersistenceForShutdown,
+ } from './generation-job-store.ts';
+
+ let loadPromise: Promise<void> | undefined;
++const jobWork = new ShutdownWork('Generation jobs');
++let shutdown: Promise<void> | undefined;
+
+ export function initializeGenerationJobs(): Promise<void> {
+-  if (!loadPromise) loadPromise = loadPersistedJobs().then(resumeRestoredJobs);
+-  return loadPromise;
++  return loadPromise ?? jobWork.admit(initializeGenerationJobsOwned);
++}
++
++function initializeGenerationJobsOwned(): Promise<void> {
++  return loadPromise ??= jobWork.track(loadPersistedJobs().then(resumeRestoredJobsOwned));
+ }
+
+ function applyProgress(job: GenerationJob, next: GenerationJobProgress): void {
+@@ -76,6 +84,7 @@ function completeGenerationJob(job: GenerationJob, returned: GenerationResult |
+ }
+
+ function failGenerationJob(job: GenerationJob, error: unknown): void {
++  jobWork.recordFailure(error);
+   const message = error instanceof Error ? error.message : String(error);
+   const rawCode = error && typeof error === 'object' && 'code' in error ? error.code : undefined;
+   const rawRetryable = error && typeof error === 'object' && 'retryable' in error ? error.retryable : undefined;
+@@ -155,17 +164,23 @@ async function runGenerationJob(job: GenerationJob, task: GenerationJobTask, opt
+       console.warn(`[generation-job] failed to persist ${job.id}: ${error instanceof Error ? error.message : String(error)}`);
+     });
+     scheduleExpiry(job);
+-    options.onSettled?.(job.id);
++    await options.onSettled?.(job.id);
+     job.resuming = false;
+   }
+ }
+
+-export async function createGenerationJob(
++export function createGenerationJob(
+   params: Record<string, unknown>,
+   task: GenerationJobTask,
+   options: GenerationJobOptions = {},
+ ): Promise<GenerationJobSubmission> {
+-  await initializeGenerationJobs();
++  return jobWork.admit(() => createGenerationJobOwned(params, task, options));
++}
++
++async function createGenerationJobOwned(
++  params: Record<string, unknown>, task: GenerationJobTask, options: GenerationJobOptions,
++): Promise<GenerationJobSubmission> {
++  await initializeGenerationJobsOwned();
+   await cleanOldJobs();
+   const id = options.operationId?.trim() || randomUUID();
+   const existing = jobs.get(id);
+@@ -202,7 +217,7 @@ export async function createGenerationJob(
+     throw error;
+   }
+   queueMicrotask(() => {
+-    void runGenerationJob(job, task, options);
++    void jobWork.track(runGenerationJob(job, task, options));
+   });
+   return { operationId: id, jobId: id, status: 'queued' };
+ }
+@@ -226,14 +241,15 @@ async function resumeWithRegisteredHandler(job: GenerationJob): Promise<boolean>
+   job.phase = 'recovering';
+   job.retryClass = 'restart-recoverable';
+   await persistJobs();
+-  void runGenerationJob(job, (_id, update, registerDownload, registerProviderTask) => (
++  void jobWork.track(runGenerationJob(job, (_id, update, registerDownload, registerProviderTask) => (
+     resumer(snapshotOf(job), update, registerDownload, registerProviderTask)
+-  ), {});
++  ), {}));
+   return true;
+ }
+
+ function restoredFailure(job: GenerationJob, code: string, message: string): void {
+   if (TERMINAL.has(job.status)) return;
++  jobWork.recordFailure(new Error(message));
+   const now = Date.now();
+   job.status = 'failed';
+   job.progress = 100;
+@@ -251,7 +267,14 @@ function restoredFailure(job: GenerationJob, code: string, message: string): voi
+   scheduleExpiry(job);
+ }
+
+-export async function resumeRestoredJobs(): Promise<void> {
++export function resumeRestoredJobs(): Promise<void> {
++  return jobWork.admit(resumeRestoredJobsOwned);
++}
++
++/** Status polling must not start recovery work after the editor cutoff. */
++export function generationJobsShuttingDown(): boolean { return shutdown !== undefined; }
++
++async function resumeRestoredJobsOwned(): Promise<void> {
+   const candidates = [...jobs.values()].filter((job) => (
+     job.restored && !job.resuming && !TERMINAL.has(job.status)
+   ));
+@@ -269,8 +292,12 @@ export async function resumeRestoredJobs(): Promise<void> {
+   }));
+ }
+
+-export async function resumeGenerationJobDownload(jobId: string): Promise<boolean> {
+-  await initializeGenerationJobs();
++export function resumeGenerationJobDownload(jobId: string): Promise<boolean> {
++  return jobWork.admit(() => resumeGenerationJobDownloadOwned(jobId));
++}
++
++async function resumeGenerationJobDownloadOwned(jobId: string): Promise<boolean> {
++  await initializeGenerationJobsOwned();
+   const job = jobs.get(jobId);
+   if (!job || job.status !== 'failed') return false;
+   if ((!job.resumeDownload || !job.pendingDownloadUrl) && await resumeWithRegisteredHandler(job)) return true;
+@@ -303,5 +330,23 @@ export function getGenerationJobSnapshot(jobId: string): GenerationJobSnapshot |
+ }
+
+ export function deleteGenerationJob(jobId: string): Promise<boolean> {
+-  return evictTerminalJob(jobId);
++  return jobWork.admit(() => evictTerminalJob(jobId));
++}
++
++/** Freeze new jobs, retain accepted work, then verify its final ledger writes. */
++export function stopGenerationJobsForShutdown(): Promise<void> {
++  if (shutdown) return shutdown;
++  jobWork.freeze();
++  stopGenerationJobExpiry();
++  shutdown = (async () => {
++    const work = await Promise.allSettled([jobWork.stop()]);
++    const storage = await Promise.allSettled([flushGenerationJobPersistenceForShutdown()]);
++    const failures: unknown[] = [...work, ...storage]
++      .filter((result) => result.status === 'rejected').map((result) => result.reason);
++    for (const job of jobs.values()) {
++      if (!TERMINAL.has(job.status)) failures.push(new Error(`Generation job ${job.id} has no confirmed terminal result`));
++    }
++    if (failures.length) throw new AggregateError(failures, 'Generation shutdown failed');
++  })();
++  return shutdown;
+ }
+diff --git a/server/plugins/generation-job-store.ts b/server/plugins/generation-job-store.ts
+index 91ee821..10ee0d9 100644
+--- a/server/plugins/generation-job-store.ts
++++ b/server/plugins/generation-job-store.ts
+@@ -1,6 +1,7 @@
+ import { randomUUID } from 'node:crypto';
+ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+ import { dirname } from 'node:path';
++import { ShutdownWork } from '../../shared/shutdown-work.ts';
+ import { runtimeProfile } from '../runtime-profile.ts';
+ import {
+   initializeSqliteProjectStore,
+@@ -36,6 +37,9 @@ const STORE_PATH = runtimeProfile().generationJobStore;
+ let persistenceHydrated = false;
+ let persistenceQueue: Promise<void> = Promise.resolve();
+ let persistenceMigrationGate: Promise<void> | null = null;
++const persistenceWork = new ShutdownWork('Generation ledger writes');
++const cleanupWork = new ShutdownWork('Generation artifact cleanup');
++let expiryStopped = false;
+ registerStorageMigrationBarrier(async () => {
+   // Before hydration, only drain existing writes: writing the empty in-memory
+   // map would destroy the configured legacy ledger before it is imported.
+@@ -86,6 +90,10 @@ function persistedRows(): GenerationJobSnapshot[] {
+ }
+
+ export function persistJobs(): Promise<void> {
++  return persistenceWork.admit(persistJobsOwned);
++}
++
++function persistJobsOwned(): Promise<void> {
+   const write = persistenceQueue.catch(() => undefined).then(async () => {
+     const migrationGate = persistenceMigrationGate;
+     if (migrationGate) await migrationGate;
+@@ -185,6 +193,7 @@ export function normalizeRetentionMs(value: number | undefined): number {
+ }
+
+ export function scheduleExpiry(job: GenerationJob, retryMs?: number): void {
++  if (expiryStopped) return;
+   if (!TERMINAL.has(job.status)) return;
+   clearTimeout(job.expiryTimer);
+   const remaining = retryMs ?? Math.max(0, job.retentionMs - (Date.now() - job.updatedAt));
+@@ -198,12 +207,17 @@ async function retentionBlocked(job: GenerationJob): Promise<boolean> {
+   try {
+     return await guard(job.id);
+   } catch (error) {
++    cleanupWork.recordFailure(error);
+     console.warn(`[generation-job] retention guard failed for ${job.id}: ${error instanceof Error ? error.message : String(error)}`);
+     return true;
+   }
+ }
+
+-export async function evictTerminalJob(jobId: string, retentionExpiry = false): Promise<boolean> {
++export function evictTerminalJob(jobId: string, retentionExpiry = false): Promise<boolean> {
++  return cleanupWork.admit(() => evictTerminalJobOwned(jobId, retentionExpiry));
++}
++
++async function evictTerminalJobOwned(jobId: string, retentionExpiry: boolean): Promise<boolean> {
+   const job = jobs.get(jobId);
+   if (!job || !TERMINAL.has(job.status)) return false;
+   const cleanup = job.cleanupPolicy
+@@ -221,6 +235,7 @@ export async function evictTerminalJob(jobId: string, retentionExpiry = false):
+     try {
+       await Promise.all(job.results.map((result) => cleanup(result)));
+     } catch (error) {
++      cleanupWork.recordFailure(error);
+       console.warn(`[generation-job] failed to clean result for ${jobId}: ${error instanceof Error ? error.message : String(error)}`);
+     }
+   }
+@@ -237,7 +252,23 @@ export async function evictTerminalJob(jobId: string, retentionExpiry = false):
+ }
+
+ export async function cleanOldJobs(): Promise<void> {
++  if (expiryStopped) return;
+   const cutoff = Date.now() - MAX_JOB_AGE_MS;
+   const expired = [...jobs.values()].filter((job) => TERMINAL.has(job.status) && job.updatedAt < cutoff);
+   await Promise.all(expired.map((job) => evictTerminalJob(job.id, true)));
+ }
++
++/** Stop future expiry callbacks before waiting for accepted jobs. */
++export function stopGenerationJobExpiry(): void {
++  expiryStopped = true;
++  for (const job of jobs.values()) clearTimeout(job.expiryTimer);
++}
++
++/** Call after job producers settle; caught write and cleanup failures still reject. */
++export async function flushGenerationJobPersistenceForShutdown(): Promise<void> {
++  stopGenerationJobExpiry();
++  const cleanup = await Promise.allSettled([cleanupWork.stop()]);
++  const writes = await Promise.allSettled([persistenceWork.stop()]);
++  const failures = [...cleanup, ...writes].filter((result) => result.status === 'rejected');
++  if (failures.length) throw new AggregateError(failures.map((result) => result.reason), 'Generation storage shutdown failed');
++}
+diff --git a/server/plugins/generation-job-types.ts b/server/plugins/generation-job-types.ts
+index 5578c21..3fb3046 100644
+--- a/server/plugins/generation-job-types.ts
++++ b/server/plugins/generation-job-types.ts
+@@ -201,7 +201,7 @@ export interface GenerationJobOptions {
+   cleanupResult?: (result: GenerationResult) => Promise<void> | void;
+   cleanupPolicy?: GenerationCleanupPolicy;
+   retentionMs?: number;
+-  onSettled?: (jobId: string) => void;
++  onSettled?: (jobId: string) => void | Promise<void>;
+ }
+
+ export interface GenerationJobSubmission {
+diff --git a/server/plugins/generation-jobs.ts b/server/plugins/generation-jobs.ts
+index 32ec8e6..90108b8 100644
+--- a/server/plugins/generation-jobs.ts
++++ b/server/plugins/generation-jobs.ts
+@@ -7,6 +7,7 @@ import {
+   initializeGenerationJobs,
+   resumeGenerationJobDownload,
+   resumeRestoredJobs,
++  generationJobsShuttingDown,
+ } from './generation-job-lifecycle.ts';
+
+ export {
+@@ -125,7 +126,7 @@ export function generationProgressPlugin(): Plugin {
+         if (req.method !== 'POST') { sendJson(res, 405, { error: 'method not allowed — use POST' }); return; }
+         try {
+           await initializeGenerationJobs();
+-          await resumeRestoredJobs();
++          if (!generationJobsShuttingDown()) await resumeRestoredJobs();
+           const input = await readJson(req);
+           if (input.target !== 'generation') throw new Error('target must be generation');
+           if (!input.action || !['params', 'status', 'wait', 'resume'].includes(input.action)) throw new Error('action must be params, status, wait, or resume');
+diff --git a/server/plugins/generation-shutdown.verify.ts b/server/plugins/generation-shutdown.verify.ts
+new file mode 100644
+index 0000000..b34a51d
+--- /dev/null
++++ b/server/plugins/generation-shutdown.verify.ts
+@@ -0,0 +1,97 @@
++import assert from 'node:assert/strict';
++import { spawn } from 'node:child_process';
++import { mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
++import { tmpdir } from 'node:os';
++import { join } from 'node:path';
++import { setImmediate as tick } from 'node:timers/promises';
++import { fileURLToPath } from 'node:url';
++
++const scenario = process.argv[2];
++if (!scenario) {
++  for (const name of ['accepted', 'task-failure', 'write-failure', 'cleanup', 'unknown-restored']) {
++    await new Promise<void>((resolve, reject) => {
++      const child = spawn(process.execPath, ['--import', 'tsx', fileURLToPath(import.meta.url), name], { stdio: 'inherit' });
++      child.once('error', reject);
++      child.once('close', (code, signal) => code === 0 && signal === null ? resolve() : reject(new Error(`${name}: ${code}/${signal}`)));
++    });
++  }
++  console.log('generation shutdown: 5 isolated process cases passed');
++} else {
++  const root = await mkdtemp(join(tmpdir(), 'mantur-generation-shutdown-'));
++  process.env.OPENCHATCUT_DATA_DIR = root;
++  process.env.OPENCHATCUT_GENERATION_JOB_STORE = join(root, 'ledger', 'jobs.json');
++  process.env.OPENCHATCUT_SQLITE_STORE = '0';
++  try {
++    if (scenario === 'unknown-restored') {
++      process.env.OPENCHATCUT_GENERATION_JOB_STORE = join(root, 'jobs.json');
++      await writeFile(join(root, 'jobs.json'), JSON.stringify({ version: 1, jobs: [{
++        id: 'unconfirmed', status: 'running', progress: 5, params: {},
++        createdAt: Date.now(), updatedAt: Date.now(),
++      }] }));
++    }
++    const lifecycle = await import('./generation-job-lifecycle.ts');
++    const store = await import('./generation-job-store.ts');
++    const entered = Promise.withResolvers<void>();
++    const release = Promise.withResolvers<void>();
++    const finalized = Promise.withResolvers<void>();
++    const finishCleanup = Promise.withResolvers<void>();
++    const result = { path: '/uploads/test.mp4', mimeType: 'video/mp4' };
++    if (scenario === 'accepted') {
++      // The cutoff can precede initialization and the actual provider invocation.
++      const submission = lifecycle.createGenerationJob({}, async () => {
++        entered.resolve(); await release.promise; return result;
++      }, { onSettled: async () => { finalized.resolve(); await finishCleanup.promise; } });
++      const stopping = lifecycle.stopGenerationJobsForShutdown();
++      assert.strictEqual(stopping, lifecycle.stopGenerationJobsForShutdown());
++      await assert.rejects(lifecycle.createGenerationJob({}, async () => result), /shutting down/);
++      await entered.promise;
++      const job = await submission;
++      let closed = false;
++      void stopping.then(() => { closed = true; });
++      await tick(); assert.equal(closed, false);
++      release.resolve(); await finalized.promise;
++      assert.equal(lifecycle.getGenerationJobSnapshot(job.jobId)?.status, 'succeeded');
++      await tick(); assert.equal(closed, false, 'status is not the final cleanup promise');
++      finishCleanup.resolve(); await stopping;
++      const saved = JSON.parse(await readFile(process.env.OPENCHATCUT_GENERATION_JOB_STORE!, 'utf8'));
++      assert.equal(saved.jobs[0].status, 'succeeded');
++      await assert.rejects(store.persistJobs(), /shutting down/);
++    } else if (scenario === 'task-failure' || scenario === 'write-failure') {
++      const job = await lifecycle.createGenerationJob({}, async () => {
++        entered.resolve(); await release.promise;
++        if (scenario === 'task-failure') throw new Error('provider failed after acceptance');
++        return result;
++      });
++      await entered.promise;
++      if (scenario === 'write-failure') {
++        await rename(join(root, 'ledger'), join(root, 'original-ledger'));
++        await writeFile(join(root, 'ledger'), 'not a directory');
++      }
++      const stopping = lifecycle.stopGenerationJobsForShutdown();
++      const rejected = assert.rejects(stopping, /Generation shutdown failed/);
++      release.resolve(); await rejected;
++      assert.strictEqual(stopping, lifecycle.stopGenerationJobsForShutdown());
++      assert.equal(lifecycle.getGenerationJobSnapshot(job.jobId)?.status, scenario === 'task-failure' ? 'failed' : 'succeeded');
++    } else if (scenario === 'cleanup') {
++      const job = await lifecycle.createGenerationJob({}, async () => result, {
++        cleanupResult: async () => { entered.resolve(); await release.promise; },
++        onSettled: () => finalized.resolve(),
++      });
++      await finalized.promise;
++      const deleting = lifecycle.deleteGenerationJob(job.jobId);
++      await entered.promise;
++      const stopping = lifecycle.stopGenerationJobsForShutdown();
++      let stopped = false;
++      void stopping.then(() => { stopped = true; });
++      await tick(); assert.equal(stopped, false);
++      release.resolve(); await deleting; await stopping;
++      assert.equal(lifecycle.getGenerationJobSnapshot(job.jobId), undefined);
++    } else {
++      await lifecycle.initializeGenerationJobs();
++      await assert.rejects(lifecycle.stopGenerationJobsForShutdown(), /Generation shutdown failed/);
++      assert.equal(lifecycle.getGenerationJobSnapshot('unconfirmed')?.code, 'submission_unknown');
++    }
++  } finally {
++    await rm(root, { recursive: true, force: true });
++  }
++}
+diff --git a/server/plugins/index.ts b/server/plugins/index.ts
+index a4ab905..24a6670 100644
+--- a/server/plugins/index.ts
++++ b/server/plugins/index.ts
+@@ -53,10 +53,13 @@ import { getKey } from "../keystore.ts";
+
+ import { installSystemProxy } from '../net.ts';
+ import { requestShapeGatePlugin } from './request-shape-gate';
++import { ManturEditorShutdown } from './mantur-shutdown.ts';
+
+ export function serverPlugins(options: { projectStoreHttp?: boolean } = {}): Plugin[] {
+   installSystemProxy();
++  const shutdown = new ManturEditorShutdown();
+   return [
++    shutdown.plugin(),
+     requestShapeGatePlugin(),
+     manturProjectMediaPlugin(),
+     crossOriginIsolationPlugin(),
+@@ -348,5 +351,5 @@ export function serverPlugins(options: { projectStoreHttp?: boolean } = {}): Plu
+         return getKey("E2B_TEMPLATE") || undefined;
+       },
+     }),
+-  ];
++  ].map((plugin) => plugin.name === 'mantur-editor-shutdown' ? plugin : shutdown.ownPlugin(plugin));
+ }
+diff --git a/server/plugins/mantur-shutdown.ts b/server/plugins/mantur-shutdown.ts
+new file mode 100644
+index 0000000..b3555d8
+--- /dev/null
++++ b/server/plugins/mantur-shutdown.ts
+@@ -0,0 +1,165 @@
++import type { IncomingMessage, ServerResponse } from 'node:http';
++import { ShutdownWork } from '../../shared/shutdown-work.ts';
++import { Server } from 'node:http';
++import type { Connect, Plugin, ViteDevServer } from 'vite';
++import {
++  editorRequests, editorCallbacks, recordUnconfirmedEditorProducer,
++  stopEditorMaintenanceForShutdown, stopEditorMediaProcessesForShutdown,
++} from '../shutdown-runtime.ts';
++import { stopGenerationJobsForShutdown } from './generation-job-lifecycle.ts';
++import { stopProjectStoreForShutdown } from './project-store.ts';
++import {
++  requestEditorShutdown, stopEditorCallsForShutdown, stopEditorRegistrationsForShutdown,
++} from '../external-agent/broker.ts';
++import { stopMcpRetirementsForShutdown } from '../external-agent/mcp.ts';
++import { flushServerRunPersistence } from '../agent-runs/store.ts';
++import { assertRenderShutdownConfirmed } from '../../remotion/render-shutdown.mjs';
++
++declare module 'node:http' {
++  interface Server {
++    /** Actual shared editor owner, consumed by the development and packaged Host adapters. */
++    manturShutdown?: { stopForShutdown(): Promise<void>; finishTransportShutdown(): Promise<void> };
++  }
++}
++
++const OWNED_PLUGINS = new Set([
++  'openchatcut-request-shape-gate', 'openchatcut-cross-origin-isolation',
++  'mantur-project-media', 'openchatcut-project-store', 'openchatcut-external-agent',
++  'openchatcut-export', 'openchatcut-export-stage', 'openchatcut-export-destination',
++  'openchatcut-generation-progress', 'openchatcut-media-preview', 'openchatcut-settings',
++]);
++
++function requestPath(mount: string, req: IncomingMessage): string {
++  const pathname = (req.url ?? '/').split('?')[0];
++  return mount && !pathname.startsWith(mount) ? `${mount}${pathname === '/' ? '' : pathname}` : pathname;
++}
++
++function callbackRoute(pathname: string, req: IncomingMessage): boolean {
++  if (pathname.startsWith('/api/project-store/')) return true;
++  if (pathname === '/api/external-mcp/mcp') return req.method === 'DELETE' || req.method === 'GET';
++  return ['/poll', '/cancellation', '/result', '/unregister'].some((path) => pathname === `/api/external-agent${path}`);
++}
++
++function ownedCatalogRequest(name: string, pathname: string, req: IncomingMessage): boolean {
++  return req.method === 'GET' && (
++    name === 'openchatcut-extension-store' && (pathname === '/api/plugins' || pathname === '/api/plugins/')
++    || name === 'openchatcut-model-packs' && pathname === '/api/model-packs'
++  );
++}
++
++function refuse(res: ServerResponse): void {
++  res.statusCode = 503;
++  res.setHeader('Content-Type', 'application/json');
++  res.end(JSON.stringify({ error: 'Editor is shutting down; new work is not accepted' }));
++}
++
++/** One editor process: native MCP cutoff, browser work, backend work, then authoritative saves. */
++export class ManturEditorShutdown {
++  private phase: 'open' | 'preparing' | 'draining' | 'sealed' = 'open';
++  private stopping: Promise<void> | undefined;
++  private readonly transports = new ShutdownWork('Editor MCP transport closure');
++  private transportClosing: Promise<void> | undefined;
++
++  plugin(): Plugin {
++    return {
++      name: 'mantur-editor-shutdown',
++      configureServer: (server) => {
++        if (!(server.httpServer instanceof Server)) throw new Error('Editor shutdown requires its owning HTTP/1 server');
++        server.httpServer.manturShutdown = this;
++        // Both hosts place their provider proxy after this admission gate. Its remote job is not drain-owned.
++        server.middlewares.use('/assemblyai', this.ownRequest('assemblyai-proxy', '/assemblyai', (_req, _res, next) => {
++          recordUnconfirmedEditorProducer('AssemblyAI proxy remote work');
++          next();
++        }));
++      },
++    };
++  }
++
++  stopForShutdown(): Promise<void> {
++    if (this.stopping) return this.stopping;
++    this.phase = 'preparing';
++    this.stopping = (async () => {
++      const budget = Number(process.env.MANTUR_CUT_DRAIN_TIMEOUT_MS);
++      if (!Number.isSafeInteger(budget) || budget < 1) throw new Error('Editor shutdown requires its Host drain deadline');
++      await stopEditorCallsForShutdown();
++      // Browser input stops before its accepted operations finish; their late backend submissions remain valid.
++      await requestEditorShutdown('freeze', budget);
++      this.phase = 'draining';
++      await editorRequests.stop();
++      await stopGenerationJobsForShutdown();
++      await stopEditorMaintenanceForShutdown();
++      await requestEditorShutdown('flush', budget);
++      this.phase = 'sealed';
++      await editorCallbacks.stop();
++      await stopEditorRegistrationsForShutdown();
++      await stopMcpRetirementsForShutdown();
++      await flushServerRunPersistence();
++      await stopProjectStoreForShutdown();
++      await stopEditorMediaProcessesForShutdown();
++      assertRenderShutdownConfirmed();
++    })();
++    return this.stopping;
++  }
++
++  /** After the Host closes its drained MCP client, await the original GET/DELETE handlers before HTTP closure. */
++  finishTransportShutdown(): Promise<void> {
++    return this.transportClosing ??= (async () => {
++      await this.stopForShutdown();
++      await this.transports.stop();
++    })();
++  }
++
++  /** Preserve each route's original promise, including work after its HTTP response is sent. */
++  ownPlugin(plugin: Plugin): Plugin {
++    const configure = plugin.configureServer;
++    if (!configure) return plugin;
++    const handler = typeof configure === 'function' ? configure : configure.handler;
++    const ownRequest = this.ownRequest.bind(this);
++    const configureServer: NonNullable<Plugin['configureServer']> = function (server) {
++      const middlewares = new Proxy(server.middlewares, {
++        get(target, key, receiver) {
++          if (key !== 'use') return Reflect.get(target, key, receiver);
++          return (pathOrHandler: string | Connect.NextHandleFunction, callback?: Connect.NextHandleFunction) => {
++            const mount = typeof pathOrHandler === 'string' ? pathOrHandler : '';
++            const route = typeof pathOrHandler === 'function' ? pathOrHandler : callback;
++            if (!route) throw new Error(`Editor plugin ${plugin.name} registered no middleware`);
++            const wrapped = ownRequest(plugin.name, mount, route);
++            return mount ? target.use(mount, wrapped) : target.use(wrapped);
++          };
++        },
++      });
++      const owned = new Proxy(server, { get: (target, key, receiver) => key === 'middlewares' ? middlewares : Reflect.get(target, key, receiver) });
++      return handler.call(this, owned as ViteDevServer);
++    };
++    return { ...plugin, configureServer: typeof configure === 'function' ? configureServer : { ...configure, handler: configureServer } };
++  }
++
++  private ownRequest(name: string, mount: string, handler: Connect.NextHandleFunction): Connect.NextHandleFunction {
++    return (req, res, next) => {
++      const pathname = requestPath(mount, req);
++      // The Host closes its native transport after the editor acknowledges durable shutdown.
++      const transport = name === 'openchatcut-external-agent' && pathname === '/api/external-mcp/mcp'
++        && (req.method === 'GET' || req.method === 'DELETE');
++      const transportDelete = transport && req.method === 'DELETE';
++      const callback = callbackRoute(pathname, req);
++      if (this.phase === 'sealed' && !transportDelete || this.phase === 'draining' && !callback
++        || this.phase === 'preparing' && name === 'openchatcut-external-agent' && !callback) {
++        refuse(res); return;
++      }
++      const work = transport ? this.transports : callback ? editorCallbacks : editorRequests;
++      const operation = work.admit(async () => {
++        let delegated = false;
++        // Connect types handlers as returning void; feature routes may return their actual async work.
++        const completion: unknown = handler(req, res, (error) => { delegated = true; next(error); });
++        if (!delegated) {
++          if (!OWNED_PLUGINS.has(name) && !ownedCatalogRequest(name, pathname, req)) recordUnconfirmedEditorProducer(`${name} ${mount || '/'}`);
++          if (completion === undefined && !res.writableEnded) recordUnconfirmedEditorProducer(`${name}: asynchronous handler without completion`);
++        }
++        await completion;
++        if (!delegated && res.statusCode >= 400) work.recordFailure(new Error(`${name} ${req.method ?? 'UNKNOWN'} ${pathname} returned HTTP ${res.statusCode}`));
++      });
++      void operation.catch(() => { if (!res.headersSent) refuse(res); });
++      return operation;
++    };
++  }
++}
+diff --git a/server/plugins/mantur-shutdown.verify.ts b/server/plugins/mantur-shutdown.verify.ts
+new file mode 100644
+index 0000000..776f92b
+--- /dev/null
++++ b/server/plugins/mantur-shutdown.verify.ts
+@@ -0,0 +1,127 @@
++import assert from 'node:assert/strict';
++import { spawn } from 'node:child_process';
++import { createServer } from 'node:http';
++import { mkdtemp, rm } from 'node:fs/promises';
++import { tmpdir } from 'node:os';
++import { join } from 'node:path';
++import { setImmediate as tick } from 'node:timers/promises';
++import { fileURLToPath } from 'node:url';
++import type { Plugin, ViteDevServer } from 'vite';
++
++const scenario = process.argv[2];
++if (!scenario) {
++  for (const name of ['accepted', 'callback-failure', 'unknown-producer', 'catalog-read', 'catalog-mutation']) {
++    await new Promise<void>((resolve, reject) => {
++      const child = spawn(process.execPath, ['--import', 'tsx', fileURLToPath(import.meta.url), name], { stdio: 'inherit' });
++      child.once('error', reject);
++      child.once('close', (code, signal) => code === 0 && signal === null ? resolve() : reject(new Error(`${name}: ${code}/${signal}`)));
++    });
++  }
++  console.log('editor shutdown: 5 HTTP admission, callback completion, catalog and unknown-producer cases passed');
++} else {
++  const root = await mkdtemp(join(tmpdir(), 'mantur-editor-shutdown-'));
++  process.env.OPENCHATCUT_DATA_DIR = root;
++  process.env.OPENCHATCUT_SQLITE_STORE = '0';
++  process.env.MANTUR_CUT_DRAIN_TIMEOUT_MS = '3000';
++  const { createMiniConnect } = await import('../../desktop/mini-connect.ts');
++  const { ManturEditorShutdown } = await import('./mantur-shutdown.ts');
++  const broker = await import('../external-agent/broker.ts');
++  const lifecycle = await import('./generation-job-lifecycle.ts');
++  const routeErrors: unknown[] = [];
++  const app = createMiniConnect(error => { routeErrors.push(error); });
++  const server = createServer((req, res) => app.handle(req, res));
++  try {
++    const owner = new ManturEditorShutdown();
++    const fixture = { middlewares: app, httpServer: server } as unknown as ViteDevServer;
++    const mount = async (plugin: Plugin) => {
++      const hook = plugin.configureServer!;
++      const handler = typeof hook === 'function' ? hook : hook.handler;
++      await handler.call({} as Parameters<typeof handler['call']>[0], fixture);
++    };
++    await mount(owner.plugin());
++    app.use('/assemblyai', (_req, res) => res.end('test proxy accepted'));
++    const entered = Promise.withResolvers<void>();
++    const release = Promise.withResolvers<void>();
++    const callbackEntered = Promise.withResolvers<void>();
++    const callbackRelease = Promise.withResolvers<void>();
++    await mount(owner.ownPlugin({ name: 'openchatcut-export', configureServer(s) {
++      s.middlewares.use('/api/export/work', async (_req, res) => {
++        entered.resolve(); res.end('accepted'); await release.promise;
++      });
++    } }));
++    await mount(owner.ownPlugin({ name: 'openchatcut-project-store', configureServer(s) {
++      s.middlewares.use('/api/project-store/save', async (_req, res) => {
++        callbackEntered.resolve(); res.end('accepted'); await callbackRelease.promise;
++        if (scenario === 'callback-failure') throw new Error('final authoritative callback failed');
++      });
++    } }));
++    await mount(owner.ownPlugin({ name: 'openchatcut-external-agent', configureServer(s) {
++      s.middlewares.use('/api/external-mcp/mcp', (_req, res) => { res.end('native transport closed'); });
++    } }));
++    await mount(owner.ownPlugin({ name: 'unowned-renderer', configureServer(s) {
++      s.middlewares.use('/api/unknown', (_req, res) => { res.end('used'); });
++    } }));
++    for (const [name, path] of [['openchatcut-extension-store', '/api/plugins'], ['openchatcut-model-packs', '/api/model-packs']]) {
++      await mount(owner.ownPlugin({ name, configureServer(s) {
++        s.middlewares.use(path, async (_req, res) => { await Promise.resolve(); res.end('catalog fixture'); });
++      } }));
++    }
++    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
++    const address = server.address();
++    assert(address && typeof address !== 'string');
++    const url = `http://127.0.0.1:${address.port}`;
++    const post = (path: string) => fetch(`${url}${path}`, { method: 'POST' });
++    if (scenario === 'catalog-read') {
++      for (const path of ['/api/plugins', '/api/model-packs']) assert.equal((await fetch(`${url}${path}`)).status, 200);
++    }
++    if (scenario === 'catalog-mutation') assert.equal((await post('/api/model-packs')).status, 200);
++    if (scenario === 'unknown-producer') assert.equal((await post('/assemblyai')).status, 200);
++    const capability = broker.registerEditor('project', 'editor', 'revision', []);
++    const poll = () => broker.nextEditorCall('project', 'editor', 'revision', AbortSignal.timeout(3000), capability);
++    assert.equal((await post('/api/export/work')).status, 200);
++    await entered.promise;
++    const stopping = owner.stopForShutdown();
++    assert.strictEqual(stopping, owner.stopForShutdown());
++    const observed = stopping.then(() => ({ ok: true as const }), error => ({ ok: false as const, error }));
++    const freeze = await poll();
++    assert.equal(freeze?.arguments.phase, 'freeze');
++    // An operation accepted by the browser before its freeze acknowledgement can still submit its job.
++    const jobEntered = Promise.withResolvers<void>();
++    const jobRelease = Promise.withResolvers<void>();
++    await lifecycle.createGenerationJob({}, async () => {
++      jobEntered.resolve(); await jobRelease.promise; return { path: '/uploads/test.mp4', mimeType: 'video/mp4' };
++    });
++    await jobEntered.promise;
++    assert.equal(broker.settleEditorCall(freeze!.id, 'applied', { phase: 'freeze' }, capability), true);
++    await tick();
++    assert.equal((await post('/api/export/work')).status, 503, 'new work is refused after browser freeze');
++    assert.equal((await post('/api/project-store/save')).status, 200, 'authoritative callbacks stay reachable');
++    await callbackEntered.promise;
++    let flushArrived = false;
++    const flushPending = poll().then(call => { flushArrived = true; return call; });
++    await tick(); assert.equal(flushArrived, false, 'response end does not finish the original request promise');
++    release.resolve(); await tick();
++    assert.equal(flushArrived, false, 'actual accepted generation work still runs');
++    jobRelease.resolve();
++    const flush = await flushPending;
++    assert.equal(flush?.arguments.phase, 'flush');
++    await assert.rejects(lifecycle.createGenerationJob({}, async () => ({ path: '', mimeType: '' })), /shutting down/);
++    assert.equal(broker.settleEditorCall(flush!.id, 'applied', { phase: 'flush' }, capability), true);
++    await broker.unregisterEditor('project', 'editor', capability);
++    let finished = false;
++    void observed.then(() => { finished = true; });
++    await tick(); assert.equal(finished, false, 'final callback completion stays owned after browser unregister');
++    callbackRelease.resolve();
++    const result = await observed;
++    assert.equal(result.ok, scenario === 'accepted' || scenario === 'catalog-read');
++    assert.equal(routeErrors.length, scenario === 'callback-failure' ? 1 : 0);
++    if (!result.ok) assert.match(String(result.error), scenario === 'callback-failure' ? /callbacks failed/ : scenario === 'catalog-mutation' ? /unconfirmed producers: openchatcut-model-packs/ : /unconfirmed producers: AssemblyAI proxy remote work/);
++    assert.equal((await post('/api/export/work')).status, 503);
++    assert.equal((await post('/assemblyai')).status, 503);
++    assert.equal((await fetch(`${url}/api/external-mcp/mcp`, { method: 'DELETE' })).status, 200, 'native close remains available after editor acknowledgement');
++    assert.strictEqual(stopping, owner.stopForShutdown());
++  } finally {
++    await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
++    await rm(root, { recursive: true, force: true });
++  }
++}
+diff --git a/server/plugins/mcp-transport-shutdown.verify.ts b/server/plugins/mcp-transport-shutdown.verify.ts
+new file mode 100644
+index 0000000..e179075
+--- /dev/null
++++ b/server/plugins/mcp-transport-shutdown.verify.ts
+@@ -0,0 +1,130 @@
++import assert from 'node:assert/strict';
++import { randomUUID } from 'node:crypto';
++import { spawn } from 'node:child_process';
++import { createServer } from 'node:http';
++import { mkdtemp, rm } from 'node:fs/promises';
++import { tmpdir } from 'node:os';
++import { join } from 'node:path';
++import { setImmediate as tick } from 'node:timers/promises';
++import { fileURLToPath } from 'node:url';
++import type { Plugin, ViteDevServer } from 'vite';
++import { Client } from '@modelcontextprotocol/sdk/client/index.js';
++import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
++
++const scenario = process.argv[2];
++if (!scenario) {
++  for (const name of ['accepted', 'save-failure', 'stream-failure', 'delete-failure']) {
++    await new Promise<void>((resolve, reject) => {
++      const child = spawn(process.execPath, ['--import', 'tsx', fileURLToPath(import.meta.url), name], { stdio: 'inherit' });
++      child.once('error', reject);
++      child.once('close', (code, signal) => code === 0 && signal === null ? resolve() : reject(new Error(`${name}: ${code}/${signal}`)));
++    });
++  }
++  console.log('MCP shutdown: real SDK SSE, late save, stream completion and retained failures passed');
++} else {
++  const root = await mkdtemp(join(tmpdir(), 'mantur-mcp-stream-'));
++  process.env.OPENCHATCUT_DATA_DIR = root;
++  process.env.MANTUR_CUT_DRAIN_TIMEOUT_MS = '3000';
++  process.env.OPENCHATCUT_MCP_TOKEN = randomUUID();
++  const { createMiniConnect } = await import('../../desktop/mini-connect.ts');
++  const { ManturEditorShutdown } = await import('./mantur-shutdown.ts');
++  const { externalAgentPlugin } = await import('./external-agent.ts');
++  const broker = await import('../external-agent/broker.ts');
++  const app = createMiniConnect(() => {});
++  const server = createServer((req, res) => app.handle(req, res));
++  const client = new Client({ name: 'shutdown-regression', version: '1' });
++  const saveRelease = Promise.withResolvers<void>();
++  const streamEntered = Promise.withResolvers<void>();
++  const streamEnded = Promise.withResolvers<void>();
++  const streamRelease = Promise.withResolvers<void>();
++  const owner = new ManturEditorShutdown();
++  const deadline = async <T>(work: Promise<T>): Promise<T> => {
++    let timer: ReturnType<typeof setTimeout>;
++    try {
++      return await Promise.race([work, new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('drain is waiting on the live MCP stream')), 1500); })]);
++    } finally { clearTimeout(timer!); }
++  };
++  try {
++    const mount = async (plugin: Plugin) => {
++      const hook = plugin.configureServer!;
++      const configure = typeof hook === 'function' ? hook : hook.handler;
++      await configure.call({} as never, { middlewares: app, httpServer: server, config: { logger: { error() {} } } } as unknown as ViteDevServer);
++    };
++    await mount(owner.plugin());
++    const native = externalAgentPlugin();
++    const hook = native.configureServer!;
++    const configure = typeof hook === 'function' ? hook : hook.handler;
++    await mount(owner.ownPlugin({ ...native, configureServer(s) {
++      const middlewares = new Proxy(s.middlewares, { get(target, key, receiver) {
++        if (key !== 'use') return Reflect.get(target, key, receiver);
++        return (path: string, handler: (req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse, next: (error?: unknown) => void) => unknown) => target.use(path, async (req, res, next) => {
++          const get = path === '/api/external-mcp/mcp' && req.method === 'GET';
++          const deleting = path === '/api/external-mcp/mcp' && req.method === 'DELETE';
++          if (get) streamEntered.resolve();
++          await handler(req, res, next);
++          if (get) {
++            streamEnded.resolve(); await streamRelease.promise;
++            if (scenario === 'stream-failure') throw new Error('late native stream completion failed');
++          }
++          if (deleting) {
++            await streamRelease.promise;
++            if (scenario === 'delete-failure') throw new Error('late native DELETE completion failed');
++          }
++        });
++      } });
++      return configure.call(this, new Proxy(s, { get: (target, key, receiver) => key === 'middlewares' ? middlewares : Reflect.get(target, key, receiver) }));
++    } }));
++    await mount(owner.ownPlugin({ name: 'openchatcut-project-store', configureServer(s) {
++      s.middlewares.use('/api/project-store/test-save', async (_req, res) => {
++        res.end('accepted'); await saveRelease.promise;
++        if (scenario === 'save-failure') throw new Error('late save failed');
++      });
++    } }));
++    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
++    const address = server.address(); assert(address && typeof address !== 'string');
++    const origin = `http://127.0.0.1:${address.port}`;
++    const transport = new StreamableHTTPClientTransport(new URL('/api/external-mcp/mcp', origin), {
++      requestInit: { headers: { Authorization: `Bearer ${process.env.OPENCHATCUT_MCP_TOKEN}` } },
++    });
++    await client.connect(transport);
++    await deadline(streamEntered.promise);
++    assert((await client.listTools()).tools.length > 0);
++    assert.equal((await fetch(`${origin}/api/project-store/test-save`, { method: 'POST' })).status, 200);
++    const capability = broker.registerEditor('project', 'editor', 'revision', []);
++    const stopping = owner.stopForShutdown();
++    const observed = stopping.then(() => ({ ok: true as const }), error => ({ ok: false as const, error }));
++    const poll = () => broker.nextEditorCall('project', 'editor', 'revision', AbortSignal.timeout(3000), capability);
++    for (const phase of ['freeze', 'flush']) {
++      const call = await poll(); assert.equal(call?.arguments.phase, phase);
++      assert.equal(broker.settleEditorCall(call!.id, 'applied', { phase }, capability), true);
++    }
++    await broker.unregisterEditor('project', 'editor', capability);
++    let drained = false; void observed.then(() => { drained = true; });
++    await tick(); assert.equal(drained, false, 'the late save remains owned while SSE is open');
++    saveRelease.resolve();
++    const result = await deadline(observed);
++    assert.equal(result.ok, scenario !== 'save-failure');
++    if (!result.ok) {
++      assert.match(String(result.error), /callbacks failed/);
++      assert.strictEqual(stopping, owner.stopForShutdown());
++    } else {
++      assert.equal((await fetch(`${origin}/api/project-store/test-save`, { method: 'POST' })).status, 503);
++      if (scenario === 'delete-failure') await transport.terminateSession();
++      await client.close();
++      await deadline(streamEnded.promise);
++      const closing = owner.finishTransportShutdown();
++      assert.strictEqual(closing, owner.finishTransportShutdown());
++      const closed = closing.then(() => ({ ok: true as const }), error => ({ ok: false as const, error }));
++      let finished = false; void closed.then(() => { finished = true; });
++      await tick(); assert.equal(finished, false, 'client close does not discard the original GET handler tail');
++      streamRelease.resolve();
++      const final = await deadline(closed);
++      assert.equal(final.ok, scenario !== 'stream-failure' && scenario !== 'delete-failure');
++      if (!final.ok) assert.match(String(final.error), /MCP transport closure failed/);
++    }
++  } finally {
++    saveRelease.resolve(); streamRelease.resolve(); await client.close();
++    await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
++    await rm(root, { recursive: true, force: true });
++  }
++}
+diff --git a/server/plugins/media-preview.ts b/server/plugins/media-preview.ts
+index f520864..b494809 100644
+--- a/server/plugins/media-preview.ts
++++ b/server/plugins/media-preview.ts
+@@ -1,4 +1,5 @@
+ import type { Plugin } from 'vite';
++import { trackEditorMaintenance, registerEditorTimerStop } from '../shutdown-runtime.ts';
+ import type { IncomingMessage, ServerResponse } from 'node:http';
+ import { existsSync } from 'node:fs';
+ import { mkdir, mkdtemp, readFile, readdir, rename, rm, stat, unlink, utimes, writeFile } from 'node:fs/promises';
+@@ -344,7 +345,7 @@ async function runDerivative<T>(
+       return await work(signal);
+     } finally {
+       activePreviewPaths.delete(protectedPath);
+-      void prunePreviewCache();
++      void trackEditorMaintenance(prunePreviewCache());
+     }
+   });
+   const release = () => lease.release();
+@@ -378,7 +379,7 @@ async function serveCachedFile(req: IncomingMessage, res: ServerResponse, cache:
+     await serveDiskFile(req, res, cache);
+   } finally {
+     activePreviewPaths.delete(cache);
+-    void prunePreviewCache();
++    void trackEditorMaintenance(prunePreviewCache());
+   }
+ }
+
+@@ -494,27 +495,28 @@ export function mediaPreviewPlugin(): Plugin {
+         runDerivative, serveCached: serveCachedFile, sendJson, logError,
+         handleError: (res: ServerResponse, label: string, error: unknown) => handleDerivativeError(res, logError, label, error),
+       };
+-      void prunePreviewCache();
+-      const cleanupTimer = setInterval(() => { void prunePreviewCache(); }, PREVIEW_GC_INTERVAL_MS);
++      void trackEditorMaintenance(prunePreviewCache());
++      const cleanupTimer = setInterval(() => { void trackEditorMaintenance(prunePreviewCache()); }, PREVIEW_GC_INTERVAL_MS);
+       cleanupTimer.unref?.();
+       server.httpServer?.once('close', () => clearInterval(cleanupTimer));
++      registerEditorTimerStop(() => clearInterval(cleanupTimer));
+       server.middlewares.use('/api/waveform', (req, res) => {
+-        if (requireEditorRead(req, res)) void handleWaveform(req, res, logError);
++        if (requireEditorRead(req, res)) return handleWaveform(req, res, logError);
+       });
+       server.middlewares.use('/api/filmstrip', (req, res) => {
+-        if (requireEditorRead(req, res)) void handleFilmstrip(req, res, logError);
++        if (requireEditorRead(req, res)) return handleFilmstrip(req, res, logError);
+       });
+       server.middlewares.use('/api/media-frame', (req, res) => {
+-        if (requireEditorRead(req, res)) void handleMediaFrame(req, res, logError);
++        if (requireEditorRead(req, res)) return handleMediaFrame(req, res, logError);
+       });
+       server.middlewares.use('/api/media-poster', (req, res) => {
+-        if (requireEditorRead(req, res)) void handleMediaPoster(req, res, logError);
++        if (requireEditorRead(req, res)) return handleMediaPoster(req, res, logError);
+       });
+       server.middlewares.use('/api/preview-proxy-file', (req, res) => {
+-        if (requireEditorRead(req, res)) void handlePreviewProxyFile(req, res, proxyDeps);
++        if (requireEditorRead(req, res)) return handlePreviewProxyFile(req, res, proxyDeps);
+       });
+       server.middlewares.use('/api/preview-proxy', (req, res) => {
+-        if (requireEditorRead(req, res)) void handlePreviewProxy(req, res, proxyDeps);
++        if (requireEditorRead(req, res)) return handlePreviewProxy(req, res, proxyDeps);
+       });
+     },
+   };
+diff --git a/server/plugins/model-packs.ts b/server/plugins/model-packs.ts
+index 9a8d46f..237ae2b 100644
+--- a/server/plugins/model-packs.ts
++++ b/server/plugins/model-packs.ts
+@@ -1,3 +1,4 @@
++import { trackEditorMaintenance } from '../shutdown-runtime.ts';
+ import type { Plugin } from 'vite';
+ import type { IncomingHttpHeaders, IncomingMessage, ServerResponse } from 'node:http';
+ import { createHash } from 'node:crypto';
+@@ -448,7 +449,7 @@ export function modelPacksPlugin(): Plugin {
+   return {
+     name: 'openchatcut-model-packs',
+     configureServer(server) {
+-      void ensureRecovered().catch((error) => {
++      void trackEditorMaintenance(ensureRecovered()).catch((error) => {
+         server.config.logger.error(`[model-packs] recovery failed: ${errorMessage(error)}`);
+       });
+       server.middlewares.use((req, res, next) => {
+@@ -457,7 +458,7 @@ export function modelPacksPlugin(): Plugin {
+           next();
+           return;
+         }
+-        void handleModelPackRequest(req, res, pathname)
++        return handleModelPackRequest(req, res, pathname)
+           .catch((error) => sendJson(res, 400, { error: errorMessage(error) }));
+       });
+     },
+diff --git a/server/plugins/project-shutdown.verify.ts b/server/plugins/project-shutdown.verify.ts
+new file mode 100644
+index 0000000..c0765f6
+--- /dev/null
++++ b/server/plugins/project-shutdown.verify.ts
+@@ -0,0 +1,48 @@
++import assert from 'node:assert/strict';
++import { spawn } from 'node:child_process';
++import { mkdtemp, readFile, rm } from 'node:fs/promises';
++import { tmpdir } from 'node:os';
++import { join } from 'node:path';
++import { setImmediate as tick } from 'node:timers/promises';
++import { fileURLToPath } from 'node:url';
++
++const scenario = process.argv[2];
++if (!scenario) {
++  for (const name of ['accepted-save', 'failed-save']) {
++    await new Promise<void>((resolve, reject) => {
++      const child = spawn(process.execPath, ['--import', 'tsx', fileURLToPath(import.meta.url), name], { stdio: 'inherit' });
++      child.once('error', reject);
++      child.once('close', (code, signal) => code === 0 && signal === null ? resolve() : reject(new Error(`${name}: ${code}/${signal}`)));
++    });
++  }
++  console.log('project shutdown: 2 isolated process cases passed');
++} else {
++  const root = await mkdtemp(join(tmpdir(), 'mantur-project-shutdown-'));
++  process.env.OPENCHATCUT_DATA_DIR = root;
++  process.env.OPENCHATCUT_SQLITE_STORE = '0';
++  try {
++    const store = await import('./project-store.ts');
++    const entered = Promise.withResolvers<void>();
++    const release = Promise.withResolvers<void>();
++    const writing = store.withSerializedProjectStore(async (locked) => {
++      entered.resolve(); await release.promise;
++      if (scenario === 'failed-save') throw new Error('authoritative write refused');
++      await locked.writeEntry('project:shutdown', { saved: true });
++    });
++    const observedWrite = scenario === 'failed-save' ? assert.rejects(writing, /authoritative write refused/) : writing;
++    await entered.promise;
++    const stopping = store.stopProjectStoreForShutdown();
++    const observedStop = scenario === 'failed-save' ? assert.rejects(stopping, /shutdown is unconfirmed/) : stopping;
++    let stopped = false;
++    void observedStop.then(() => { stopped = true; });
++    assert.strictEqual(stopping, store.stopProjectStoreForShutdown());
++    await assert.rejects(store.setStoredEntry('project:late', {}), /shutting down/);
++    await tick(); assert.equal(stopped, false);
++    release.resolve(); await observedWrite; await observedStop;
++    if (scenario === 'accepted-save') {
++      const profile = (await import('../runtime-profile.ts')).runtimeProfile();
++      const saved = JSON.parse(await readFile(join(profile.projectStore.directory, 'project%3Ashutdown.json'), 'utf8'));
++      assert.deepEqual(saved, { saved: true });
++    }
++  } finally { await rm(root, { recursive: true, force: true }); }
++}
+diff --git a/server/plugins/project-store-plugin.ts b/server/plugins/project-store-plugin.ts
+index 2332d59..c7b5b91 100644
+--- a/server/plugins/project-store-plugin.ts
++++ b/server/plugins/project-store-plugin.ts
+@@ -25,6 +25,7 @@ import {
+ import { handleProjectStoreRequest, sendProjectStoreJson } from '../project-store-http.ts';
+ import {
+   clearSemanticVectors,
++  semanticVectorsAvailable,
+   pruneSemanticVectors,
+   searchSemanticVectors,
+   upsertSemanticVectors,
+@@ -52,6 +53,7 @@ import {
+ } from './project-store.ts';
+
+ const HTTP_OPERATIONS = {
++  semanticVectorsAvailable,
+   writeAgentRuntime,
+   writeProjectDocument,
+   deleteEntry: deleteStoredEntry,
+diff --git a/server/plugins/project-store.ts b/server/plugins/project-store.ts
+index 818e5fe..4071baa 100644
+--- a/server/plugins/project-store.ts
++++ b/server/plugins/project-store.ts
+@@ -1,6 +1,7 @@
+ import { randomUUID } from 'node:crypto';
+ import { access, readFile, readdir } from 'node:fs/promises';
+ import { join } from 'node:path';
++import { ShutdownWork } from '../../shared/shutdown-work.ts';
+ import {
+   isProjectStoreEntries,
+   isProjectStoreKey,
+@@ -70,6 +71,7 @@ const {
+ const PROJECT_DOCUMENT_KEY = /^project:(.+)$/;
+ const PROJECT_EDIT_OWNERSHIP_PREFIX = 'project-edit-ownership:';
+ const VALID_PROJECT_ID = /^[a-zA-Z0-9_-]{1,160}$/;
++const storeWork = new ShutdownWork('Authoritative project store');
+
+ interface StoreFile {
+   version: 1;
+@@ -385,7 +387,11 @@ const { createLockedProjectStore, readEntryFile } = createProjectStoreEntryAdapt
+   writeStoredEntry,
+ });
+
+-export async function getStoredEntry(key: string): Promise<StoredEntryValue> {
++export function getStoredEntry(key: string): Promise<StoredEntryValue> {
++  return storeWork.admit(() => getStoredEntryOwned(key));
++}
++
++async function getStoredEntryOwned(key: string): Promise<StoredEntryValue> {
+   if (!isProjectStoreKey(key)) throw new Error('invalid project store entry key');
+   await ensureStoreReady();
+   const projectId = projectIdFromProjectStoreKey(key);
+@@ -409,11 +415,18 @@ export async function getStoredEntry(key: string): Promise<StoredEntryValue> {
+  */
+ let projectStoreTail = Promise.resolve();
+ function serializeProjectStore<T>(task: () => Promise<T>): Promise<T> {
++  return storeWork.admit(() => serializeOwnedProjectStore(task));
++}
++
++function serializeOwnedProjectStore<T>(task: () => Promise<T>): Promise<T> {
+   const result = projectStoreTail.then(task, task);
+   projectStoreTail = result.then(() => undefined, () => undefined);
+   return result;
+ }
+
++/** Seal only after browser, broker and run owners stop producing writes. */
++export function stopProjectStoreForShutdown(): Promise<void> { return storeWork.stop(); }
++
+ export async function withSerializedProjectStore<T>(
+   work: (store: LockedProjectStore) => Promise<T>,
+ ): Promise<T> {
+@@ -429,11 +442,18 @@ export const {
+   updateStoredAgentRunLease,
+ } = createAgentRuntimeStoreOperations(withSerializedProjectStore);
+ const updateLegacyExportRecovery =
+-  createExportRecoveryLeaseOperation(withSerializedProjectStore);
++  createExportRecoveryLeaseOperation((work) => serializeOwnedProjectStore(async () => {
++    const deletedIds = new Set(Object.keys(await readDeletedProjects()));
++    return work(createLockedProjectStore(deletedIds));
++  }));
+
+-export async function updateExportRecoveryLease(
++export function updateExportRecoveryLease(
+   input: ExportRecoveryLeaseInput,
+ ): Promise<ProjectStoreMutationResponse> {
++  return storeWork.admit(() => updateExportRecoveryLeaseOwned(input));
++}
++
++async function updateExportRecoveryLeaseOwned(input: ExportRecoveryLeaseInput): Promise<ProjectStoreMutationResponse> {
+   await ensureStoreReady();
+   if (!sqliteStoreEnabled()) return updateLegacyExportRecovery(input);
+   return sqliteImmediateTransaction((store) => (
+diff --git a/server/project-store-http-routes.ts b/server/project-store-http-routes.ts
+index e618bfe..b3b9f44 100644
+--- a/server/project-store-http-routes.ts
++++ b/server/project-store-http-routes.ts
+@@ -14,6 +14,7 @@ import type {
+ const MAX_BODY_BYTES = 64 * 1024 * 1024;
+
+ export interface ProjectStoreHttpOperations {
++  semanticVectorsAvailable(): boolean;
+   writeAgentRuntime(
+     input: Extract<ProjectStoreRequest, { operation: 'agent-runtime-write' }>,
+   ): Promise<ProjectStoreMutationResponse>;
+@@ -81,6 +82,10 @@ async function handleGet(
+   operations: ProjectStoreHttpOperations,
+ ): Promise<boolean> {
+   if (req.method !== 'GET') return false;
++  if (req.url === '/semantic-vectors/status') {
++    sendProjectStoreJson(res, 200, { semanticVectorsAvailable: operations.semanticVectorsAvailable() });
++    return true;
++  }
+   if (req.url === '/' || req.url === '') {
+     sendProjectStoreJson(res, 200, await operations.readSnapshot());
+     return true;
+diff --git a/server/project-store-transport.ts b/server/project-store-transport.ts
+index cd50ad1..c8b7fb2 100644
+--- a/server/project-store-transport.ts
++++ b/server/project-store-transport.ts
+@@ -5,6 +5,7 @@ import type {
+ import { isProjectStoreRequest } from '../shared/project-store-validation.ts';
+ import {
+   clearSemanticVectors,
++  semanticVectorsAvailable,
+   pruneSemanticVectors,
+   searchSemanticVectors,
+   upsertSemanticVectors,
+@@ -62,6 +63,8 @@ export async function executeProjectStoreRequest(
+     case 'purge-project':
+       await deleteStoredEntry(`project:${request.projectId}`);
+       return { ok: true };
++    case 'semantic-vectors-status':
++      return { semanticVectorsAvailable: semanticVectorsAvailable() };
+     case 'semantic-vectors-upsert':
+       return { semanticVectors: upsertSemanticVectors(request.scopeId, request.assetId, request.samples) };
+     case 'semantic-vectors-search':
+diff --git a/server/shutdown-runtime.ts b/server/shutdown-runtime.ts
+new file mode 100644
+index 0000000..dd19356
+--- /dev/null
++++ b/server/shutdown-runtime.ts
+@@ -0,0 +1,45 @@
++import type { ChildProcess } from 'node:child_process';
++import { ShutdownWork } from '../shared/shutdown-work.ts';
++
++export const editorRequests = new ShutdownWork('Editor requests');
++export const editorCallbacks = new ShutdownWork('Editor save and bridge callbacks');
++const maintenance = new ShutdownWork('Editor background maintenance');
++const processes = new ShutdownWork('Editor media subprocess closure');
++const timerStops = new Set<() => void>();
++const unconfirmed = new Set<string>();
++
++/** Preserve original maintenance completion, even if its caller logs and continues. */
++export function trackEditorMaintenance<T>(work: Promise<T>): Promise<T> { return maintenance.track(work); }
++export function recordEditorMaintenanceFailure(error: unknown): void { maintenance.recordFailure(error); }
++
++/** Stop future timer callbacks before waiting for their already started work. */
++export function registerEditorTimerStop(stop: () => void): void { timerStops.add(stop); }
++
++/** This instance used a producer whose complete shutdown is not owned by this integration. */
++export function recordUnconfirmedEditorProducer(name: string): void { unconfirmed.add(name); }
++
++/** Retain the exact child handle's close event, including inherited output pipes. */
++export function trackEditorMediaProcess<T extends ChildProcess>(child: T): T {
++  let failure: Error | undefined;
++  const closed = new Promise<void>((resolve, reject) => {
++    child.once('error', (error) => { failure = error; });
++    child.once('close', (_code, signal) => {
++      if (failure && child.pid !== undefined) reject(failure);
++      else if (signal) reject(new Error(`Editor media subprocess ended with ${signal}`));
++      else resolve();
++    });
++  });
++  processes.track(closed);
++  return child;
++}
++
++export async function stopEditorMaintenanceForShutdown(): Promise<void> {
++  for (const stop of timerStops) stop();
++  await maintenance.stop();
++}
++
++/** Call after request, job and maintenance producers stop creating children. */
++export async function stopEditorMediaProcessesForShutdown(): Promise<void> {
++  await processes.stop();
++  if (unconfirmed.size) throw new Error(`Editor shutdown has unconfirmed producers: ${[...unconfirmed].join(', ')}`);
++}
+diff --git a/shared/editor-shutdown.ts b/shared/editor-shutdown.ts
+new file mode 100644
+index 0000000..317fe3b
+--- /dev/null
++++ b/shared/editor-shutdown.ts
+@@ -0,0 +1,3 @@
++/** Internal control carried by the existing editor broker; never published as an MCP tool. */
++export const EDITOR_SHUTDOWN_CALL = 'mantur_shutdown';
++export type EditorShutdownPhase = 'freeze' | 'flush';
+diff --git a/shared/project-store-transport.ts b/shared/project-store-transport.ts
+index 6793bf2..d5e3913 100644
+--- a/shared/project-store-transport.ts
++++ b/shared/project-store-transport.ts
+@@ -35,6 +35,7 @@ export interface ProjectDocumentMutationResponse extends ProjectStoreMutationRes
+
+ export type ProjectStoreRequest =
+   | { operation: 'snapshot' }
++  | { operation: 'semantic-vectors-status' }
+   | { operation: 'entry'; key: string }
+   | { operation: 'merge'; entries: Record<string, unknown> }
+   | { operation: 'set'; key: string; value: unknown }
+@@ -121,4 +122,5 @@ export type ProjectStoreResponse =
+   | { found: boolean; value?: unknown }
+   | { ok: true }
+   | ProjectStoreMutationResponse
+-  | { semanticVectors: unknown };
++  | { semanticVectors: unknown }
++  | { semanticVectorsAvailable: boolean };
+diff --git a/shared/project-store-validation.ts b/shared/project-store-validation.ts
+index da3275e..55e4511 100644
+--- a/shared/project-store-validation.ts
++++ b/shared/project-store-validation.ts
+@@ -333,7 +333,7 @@ function isExportRecoveryLeaseRequest(value: Record<string, unknown>): boolean {
+
+ export function isProjectStoreRequest(value: unknown): value is ProjectStoreRequest {
+   if (!isProjectStoreRecord(value) || typeof value.operation !== 'string') return false;
+-  if (value.operation === 'snapshot') return Object.keys(value).length === 1;
++  if (value.operation === 'snapshot' || value.operation === 'semantic-vectors-status') return Object.keys(value).length === 1;
+   if (value.operation === 'entry') {
+     return Object.keys(value).length === 2 && isProjectStoreKey(value.key);
+   }
+diff --git a/shared/shutdown-work.ts b/shared/shutdown-work.ts
+new file mode 100644
+index 0000000..7b6431d
+--- /dev/null
++++ b/shared/shutdown-work.ts
+@@ -0,0 +1,53 @@
++/** Actual accepted work and failures retained until its owning process closes. */
++export class ShutdownWork {
++  private readonly pending = new Set<Promise<unknown>>();
++  private readonly failures: unknown[] = [];
++  private accepting = true;
++  private settled = false;
++  private stopping: Promise<void> | undefined;
++  private readonly name: string;
++
++  constructor(name: string) { this.name = name; }
++
++  /** Reject new submissions synchronously; already accepted work keeps its signals. */
++  freeze(): void { this.accepting = false; }
++
++  /** Register before invoking the producer, including its startup awaits. */
++  admit<T>(work: () => Promise<T>): Promise<T> {
++    if (!this.accepting) return Promise.reject(new Error(`${this.name} is shutting down`));
++    const accepted = Promise.withResolvers<T>();
++    this.track(accepted.promise);
++    try {
++      const result = work();
++      accepted.resolve(result);
++      return result;
++    } catch (error) {
++      accepted.reject(error);
++      throw error;
++    }
++  }
++
++  /** Include follow-on work created by an already accepted producer. */
++  track<T>(work: Promise<T>): Promise<T> {
++    if (this.settled) throw new Error(`${this.name} submitted work after shutdown completed`);
++    this.pending.add(work);
++    void work.then(
++      () => { this.pending.delete(work); },
++      (error: unknown) => { this.recordFailure(error); this.pending.delete(work); },
++    );
++    return work;
++  }
++
++  /** Preserve failures that an existing API converts into a status or diagnostic. */
++  recordFailure(error: unknown): void { this.failures.push(error); }
++
++  /** Await original promises, including work added before their producers settle. */
++  stop(): Promise<void> {
++    this.freeze();
++    return this.stopping ??= (async () => {
++      while (this.pending.size) await Promise.allSettled([...this.pending]);
++      this.settled = true;
++      if (this.failures.length) throw new AggregateError(this.failures, `${this.name} failed; shutdown is unconfirmed`);
++    })();
++  }
++}
+diff --git a/src/agent/external-bridge-registration.ts b/src/agent/external-bridge-registration.ts
+index 63b1f3c..28404ae 100644
+--- a/src/agent/external-bridge-registration.ts
++++ b/src/agent/external-bridge-registration.ts
+@@ -35,6 +35,7 @@ export async function sendEditorBridgeResult(
+   signal: AbortSignal,
+   registrationCapability: string,
+   baseRevision?: string,
++  requireAccepted = false,
+ ): Promise<void> {
+   const response = await fetch('/api/external-agent/result', {
+     method: 'POST',
+@@ -42,7 +43,7 @@ export async function sendEditorBridgeResult(
+     body: JSON.stringify({ id, outcome, value, ...(baseRevision ? { baseRevision } : {}) }),
+     signal,
+   });
+-  if (!response.ok && response.status !== 404) {
++  if (!response.ok && (requireAccepted || response.status !== 404)) {
+     throw new EditorBridgeRequestError('result', response.status);
+   }
+ }
+@@ -51,14 +52,22 @@ export async function unregisterEditorBridge(
+   projectId: string,
+   editorInstanceId: string,
+   registrationCapability?: string,
++  confirm = false,
+ ): Promise<void> {
+   if (!registrationCapability) return;
+-  await fetch('/api/external-agent/unregister', {
++  const unregister = fetch('/api/external-agent/unregister', {
+     method: 'POST',
+     headers: editorBridgeHeaders(true, registrationCapability),
+     body: JSON.stringify({ projectId, editorId: editorInstanceId }),
+     keepalive: true,
+-  }).catch(() => undefined);
++  });
++  if (confirm) {
++    const response = await unregister;
++    if (!response.ok) throw new EditorBridgeRequestError('shutdown unregister', response.status);
++  } else {
++    // Ordinary page disposal remains best-effort; Host shutdown requires the branch above.
++    await unregister.catch(() => undefined);
++  }
+ }
+
+ export async function registerEditorBridge(
+diff --git a/src/agent/external-bridge-runtime.ts b/src/agent/external-bridge-runtime.ts
+index ad731cd..d8bba01 100644
+--- a/src/agent/external-bridge-runtime.ts
++++ b/src/agent/external-bridge-runtime.ts
+@@ -1,4 +1,5 @@
+ import type { AgentContext } from './context';
++import { ShutdownWork } from '../../shared/shutdown-work';
+ import type { ProjectDoc } from '../editor/types';
+ import {
+   createExternalEditSession, ExternalEditSessionOutcomeError, finishExternalEditSession,
+@@ -41,6 +42,9 @@ export class ExternalBridgeRuntime {
+   private readonly runs = new Map<string, ExternalSessionRunLedger>();
+   private readonly approvalGate = new ExternalApprovalGate();
+   private sessionWriteTail: Promise<void> = Promise.resolve();
++  private readonly acceptedWork = new ShutdownWork('Browser edit-session operations');
++  private readonly sessionWrites = new ShutdownWork('Browser edit-session writes');
++  private shutdown: Promise<void> | undefined;
+   onGuardRequest: ((request: ExternalGuardRequest) => void) | null = null;
+   constructor(
+     projectId: string, editorInstanceId: string, getContext: () => AgentContext,
+@@ -57,7 +61,11 @@ export class ExternalBridgeRuntime {
+       baseRevision: revisionOf(this.getContext().getDoc()),
+     };
+   }
+-  async hydrate(pending: StoredExternalProposal | null): Promise<void> {
++  hydrate(pending: StoredExternalProposal | null): Promise<void> {
++    return this.acceptedWork.admit(() => this.hydrateOwned(pending));
++  }
++
++  private async hydrateOwned(pending: StoredExternalProposal | null): Promise<void> {
+     this.reset();
+     await hydrateStoredExternalBridge({
+       pending,
+@@ -71,7 +79,7 @@ export class ExternalBridgeRuntime {
+         if (session.status === 'awaiting_review') this.proposalSessionId = session.id;
+       },
+       publish: this.publish,
+-      applyAutomatic: async (count) => this.apply(
++      applyAutomatic: async (count) => this.applyOwned(
+         new Set(Array.from({ length: count }, (_, index) => index)), false, false,
+       ),
+     });
+@@ -79,23 +87,43 @@ export class ExternalBridgeRuntime {
+
+   dispose(): void { void this.disconnect().catch(() => undefined); }
+
+-  async disconnect(): Promise<void> {
++  disconnect(): Promise<void> {
++    return this.shutdown ?? this.acceptedWork.admit(() => this.disconnectOwned());
++  }
++
++  /** Preserve saved drafts; shutdown must not reinterpret them as cancelled edits. */
++  stopForShutdown(): Promise<void> {
++    return this.shutdown ??= (async () => {
++      const operations = await Promise.allSettled([this.acceptedWork.stop()]);
++      const writes = await Promise.allSettled([this.sessionWrites.stop()]);
++      const failed = [...operations, ...writes].filter((result) => result.status === 'rejected');
++      if (failed.length) throw new AggregateError(failed.map((result) => result.reason), 'Browser edit-session shutdown failed');
++    })();
++  }
++
++  private async disconnectOwned(): Promise<void> {
+     const runs = [...this.runs.values()];
+     this.runs.clear(); this.approvalGate.clear();
+     await Promise.all(runs.map((run) => run.disconnect()));
+   }
+
+   private reset(): void {
+-    this.dispose(); this.sessions = new Map();
++    void this.acceptedWork.track(this.disconnectOwned()); this.sessions = new Map();
+     this.terminalRevisions = new Map(); this.sessionWarnings = new Map();
+     this.proposalSessionId = null;
+   }
+
+-  async execute(
++  execute(
+     name: string,
+     rawArgs: Record<string, unknown>,
+     binding: ExternalBridgeBinding,
+     signal?: AbortSignal,
++  ): Promise<unknown> {
++    return this.acceptedWork.admit(() => this.executeOwned(name, rawArgs, binding, signal));
++  }
++
++  private async executeOwned(
++    name: string, rawArgs: Record<string, unknown>, binding: ExternalBridgeBinding, signal?: AbortSignal,
+   ): Promise<unknown> {
+     throwIfExternalCallCancelled(signal);
+     const invocationArgs = effectiveToolInvocationArgs(
+@@ -226,7 +254,11 @@ export class ExternalBridgeRuntime {
+         : '这个操作会作用于真实工程。请在 OpenChatCut 中确认后重试同一次调用。',
+     };
+   }
+-  async confirmRealTool(guardId: string, allow: boolean): Promise<void> {
++  confirmRealTool(guardId: string, allow: boolean): Promise<void> {
++    return this.acceptedWork.admit(() => this.confirmRealToolOwned(guardId, allow));
++  }
++
++  private async confirmRealToolOwned(guardId: string, allow: boolean): Promise<void> {
+     await this.approvalGate.resolve(guardId, allow, async (binding, decision) => {
+       const run = this.runs.get(binding.sessionId);
+       if (!run || run.runId !== binding.runId) {
+@@ -245,11 +277,17 @@ export class ExternalBridgeRuntime {
+     } : null;
+   }
+
+-  async apply(
++  apply(
+     selected: Set<number>,
+     force = false,
+     exposeProposal = true,
+     signal?: AbortSignal,
++  ): Promise<void> {
++    return this.acceptedWork.admit(() => this.applyOwned(selected, force, exposeProposal, signal));
++  }
++
++  private async applyOwned(
++    selected: Set<number>, force = false, exposeProposal = true, signal?: AbortSignal,
+   ): Promise<void> {
+     const session = this.currentProposalSession();
+     const proposal = session?.proposal;
+@@ -294,12 +332,16 @@ export class ExternalBridgeRuntime {
+
+   /** Discard the edit sessions orphaned by a disconnected MCP transport. */
+   discardOwnerSessions(sessionIds: readonly string[]): Promise<void> {
+-    return discardOrphanedExternalSessions(
++    return this.acceptedWork.admit(() => discardOrphanedExternalSessions(
+       sessionIds, this.sessions, (session) => this.discard(session),
+-    );
++    ));
+   }
+
+-  async reject(): Promise<void> {
++  reject(): Promise<void> {
++    return this.acceptedWork.admit(() => this.rejectOwned());
++  }
++
++  private async rejectOwned(): Promise<void> {
+     const session = this.currentProposalSession();
+     if (!session) return;
+     await this.requireRun(session.id).confirmOwnership();
+@@ -354,7 +396,7 @@ export class ExternalBridgeRuntime {
+     }
+     if (reviewed.approvalMode === 'auto') {
+       const count = reviewed.proposal?.options[0].operations.length ?? 0;
+-      await this.apply(
++      await this.applyOwned(
+         new Set(Array.from({ length: count }, (_, index) => index)),
+         false,
+         false,
+@@ -450,6 +492,10 @@ export class ExternalBridgeRuntime {
+
+   /** Serialize draft persistence with terminal closure, including their in-memory publication. */
+   private writeSession<T>(work: () => Promise<T>): Promise<T> {
++    return this.sessionWrites.admit(() => this.writeSessionOwned(work));
++  }
++
++  private writeSessionOwned<T>(work: () => Promise<T>): Promise<T> {
+     const result = this.sessionWriteTail.then(work);
+     // A failed write reaches its caller; it must not prevent a later explicit retry.
+     this.sessionWriteTail = result.then(() => undefined, () => undefined);
+diff --git a/src/agent/external-shutdown.ts b/src/agent/external-shutdown.ts
+new file mode 100644
+index 0000000..ff56fd1
+--- /dev/null
++++ b/src/agent/external-shutdown.ts
+@@ -0,0 +1,50 @@
++import { flushSync } from 'react-dom';
++import { EDITOR_SHUTDOWN_CALL, type EditorShutdownPhase } from '../../shared/editor-shutdown';
++import {
++  freezeEditorInputForShutdown, stopEditorBackgroundForShutdown, flushEditorForShutdown,
++} from '../editor/mantur-shutdown';
++import { stopAgentRuntimeWritesForShutdown } from '../persist/agentRuntimeStore';
++import { stopJobRegistryWritesForShutdown } from '../persist/jobRegistryStore';
++import { flushChatWrites, flushProjectSaves } from '../persist/projectStore';
++import { stopRunLedgerForShutdown } from './runtime-ledger';
++import type { ExternalBridgeRuntime } from './external-bridge-runtime';
++import type { ExternalCall } from './externalBridgePayload';
++
++const phases = new Map<EditorShutdownPhase, Promise<{ phase: EditorShutdownPhase }>>();
++
++/** Handle Host-only lifecycle control on the original editor poll/result channel. */
++export function executeEditorShutdown(call: ExternalCall, runtime: ExternalBridgeRuntime): Promise<{ phase: EditorShutdownPhase }> {
++  const phase = call.arguments.phase;
++  if (call.name !== EDITOR_SHUTDOWN_CALL || (phase !== 'freeze' && phase !== 'flush')) {
++    return Promise.reject(new Error('Invalid editor shutdown control'));
++  }
++  const binding = runtime.binding();
++  if (call.binding.projectId !== binding.projectId || call.binding.editorInstanceId !== binding.editorInstanceId) {
++    return Promise.reject(new Error('Editor shutdown identity changed'));
++  }
++  const existing = phases.get(phase);
++  if (existing) return existing;
++  const result: Promise<{ phase: EditorShutdownPhase }> = (async () => {
++    if (phase === 'freeze') {
++      freezeEditorInputForShutdown();
++      await runtime.stopForShutdown();
++      await stopEditorBackgroundForShutdown();
++      flushSync(() => {});
++    } else {
++      const prepared = phases.get('freeze');
++      if (!prepared) throw new Error('Editor save requires completed input and operation cutoff');
++      await prepared;
++      flushSync(() => {});
++      await flushEditorForShutdown(binding.projectId);
++      await stopRunLedgerForShutdown();
++      await stopAgentRuntimeWritesForShutdown();
++      await stopJobRegistryWritesForShutdown();
++      await flushChatWrites(binding.projectId);
++      const saved = await flushProjectSaves(binding.projectId);
++      if (!saved.ok) throw new Error('Editor project saving is unconfirmed');
++    }
++    return { phase };
++  })();
++  phases.set(phase, result);
++  return result;
++}
+diff --git a/src/agent/external-shutdown.verify.ts b/src/agent/external-shutdown.verify.ts
+new file mode 100644
+index 0000000..1b170b6
+--- /dev/null
++++ b/src/agent/external-shutdown.verify.ts
+@@ -0,0 +1,50 @@
++import assert from 'node:assert/strict';
++import { setImmediate as tick } from 'node:timers/promises';
++import { INITIAL } from '../editor/initial';
++import { makeDraft } from '../editor/store';
++import { docFromTimeline, saveProject } from '../persist/projectStore';
++import { saveAutomaticVersion } from '../persist/versionStore';
++import { loadExternalProposal, saveExternalProposal } from '../persist/externalProposalStore';
++import { loadAgentRuntimeSidecar, stopAgentRuntimeWritesForShutdown } from '../persist/agentRuntimeStore';
++import { ExternalBridgeRuntime } from './external-bridge-runtime';
++import { stopRunLedgerForShutdown } from './runtime-ledger';
++import type { AgentContext } from './context';
++
++for (const fail of [false, true]) {
++  const projectId = `shutdown-${crypto.randomUUID()}`;
++  const draft = makeDraft(docFromTimeline({ ...INITIAL, items: [] }));
++  const context: AgentContext = {
++    commands: draft.commands, getState: draft.getState, getDoc: draft.getDoc,
++    getCreativeMode: () => null, templates: [], audio: [], getProjectId: () => projectId,
++  };
++  const entered = Promise.withResolvers<void>();
++  const release = Promise.withResolvers<void>();
++  const runtime = new ExternalBridgeRuntime(projectId, 'shutdown-editor', () => context, () => {}, {
++    saveProject, saveAutomaticVersion,
++    saveExternalProposal: async (id, record) => {
++      entered.resolve(); await release.promise;
++      if (fail) throw new Error('draft checkpoint write failed');
++      await saveExternalProposal(id, record);
++    },
++  });
++  const beginning = runtime.execute('begin_edit_session', {}, runtime.binding());
++  const accepted = fail ? assert.rejects(beginning, /draft checkpoint write failed/) : beginning;
++  await entered.promise;
++  const stopping = runtime.stopForShutdown();
++  const stopped = fail ? assert.rejects(stopping, /Browser edit-session shutdown failed/) : stopping;
++  let finished = false;
++  void stopped.then(() => { finished = true; });
++  assert.strictEqual(stopping, runtime.stopForShutdown());
++  await assert.rejects(runtime.execute('begin_edit_session', {}, runtime.binding()), /shutting down/);
++  await tick(); assert.equal(finished, false);
++  release.resolve(); await accepted; await stopped;
++  if (!fail) {
++    assert.equal((await loadExternalProposal(projectId))?.status, 'drafting');
++    assert.equal((await loadAgentRuntimeSidecar(projectId)).runs[0]?.status, 'running');
++    await runtime.disconnect();
++    assert.equal((await loadExternalProposal(projectId))?.status, 'drafting', 'closing the view does not cancel the saved draft');
++  }
++}
++await stopRunLedgerForShutdown();
++await stopAgentRuntimeWritesForShutdown();
++console.log('external shutdown: accepted checkpoint, failed checkpoint and lease drain passed');
+diff --git a/src/agent/progress/visual-analysis-jobs.ts b/src/agent/progress/visual-analysis-jobs.ts
+index e0580c7..4d4e42a 100644
+--- a/src/agent/progress/visual-analysis-jobs.ts
++++ b/src/agent/progress/visual-analysis-jobs.ts
+@@ -7,6 +7,7 @@
+ // answers whether the asset is pre-warmed and reachable by frame tools.
+
+ import type { MediaAsset } from '../../editor/types';
++import { trackEditorBackground } from '../../editor/mantur-shutdown';
+ import { isMediaSrcReachable } from '../../persist/mediaBlobStore';
+ import { sourceRevisionOf } from '../../editor/mediaSourceRevision';
+ import { isTerminal, type JobReportBase } from './job-model';
+@@ -52,7 +53,7 @@ export function enqueueVisualAnalysis(
+   if (prior?.sourceRevision === sourceRevision && prior.status !== 'failed') return;
+
+   jobs.set(asset.id, { assetId: asset.id, sourceRevision, status: 'running' });
+-  void runAnalysis(asset)
++  void trackEditorBackground(runAnalysis(asset))
+     .then((job) => {
+       if (jobs.get(asset.id)?.sourceRevision === sourceRevision) {
+         jobs.set(asset.id, { ...job, sourceRevision });
+diff --git a/src/agent/runtime-ledger.ts b/src/agent/runtime-ledger.ts
+index 9c82668..b2a894c 100644
+--- a/src/agent/runtime-ledger.ts
++++ b/src/agent/runtime-ledger.ts
+@@ -1,3 +1,4 @@
++import { ShutdownWork } from '../../shared/shutdown-work';
+ import {
+   addAgentCheckpoint,
+   appendAgentRunEvent,
+@@ -58,6 +59,25 @@ export function currentAgentRunOwnerInstanceId(): string {
+   return RUN_OWNER_INSTANCE_ID;
+ }
+ const ACTIVE_RECORDERS = new Map<string, Set<AgentRunRecorder>>();
++const ledgerWork = new ShutdownWork('Browser run ledger');
++let ledgerClosing = false;
++let ledgerShutdown: Promise<void> | undefined;
++
++/** Stop heartbeat producers, settle accepted ledger writes, then release their leases. */
++export function stopRunLedgerForShutdown(): Promise<void> {
++  if (ledgerShutdown) return ledgerShutdown;
++  ledgerClosing = true;
++  const recorders = new Set([...ACTIVE_RECORDERS.values()].flatMap((items) => [...items]));
++  for (const recorder of recorders) recorder.stopHeartbeat();
++  ledgerShutdown = (async () => {
++    const work = await Promise.allSettled([ledgerWork.stop()]);
++    for (const items of ACTIVE_RECORDERS.values()) for (const recorder of items) recorders.add(recorder);
++    const leases = await Promise.allSettled([...recorders].map((recorder) => recorder.releaseLease()));
++    const failed = [...work, ...leases].filter((result) => result.status === 'rejected');
++    if (failed.length) throw new AggregateError(failed.map((result) => result.reason), 'Browser run ledger shutdown failed');
++  })();
++  return ledgerShutdown;
++}
+
+ export async function stopAgentRunLeases(projectId: string): Promise<void> {
+   const recorders = ACTIVE_RECORDERS.get(projectId);
+@@ -121,8 +141,8 @@ export class AgentRunRecorder {
+     this.projectId = projectId;
+     this.runId = runId;
+     this.leaseToken = leaseToken;
+-    this.leaseTimer = setInterval(() => this.heartbeat(), AGENT_RUN_HEARTBEAT_MS);
+-    if (typeof this.leaseTimer === 'object' && 'unref' in this.leaseTimer) this.leaseTimer.unref();
++    if (!ledgerClosing) this.leaseTimer = setInterval(() => this.heartbeat(), AGENT_RUN_HEARTBEAT_MS);
++    if (this.leaseTimer && typeof this.leaseTimer === 'object' && 'unref' in this.leaseTimer) this.leaseTimer.unref();
+     const active = ACTIVE_RECORDERS.get(projectId) ?? new Set<AgentRunRecorder>();
+     active.add(this);
+     ACTIVE_RECORDERS.set(projectId, active);
+@@ -133,14 +153,14 @@ export class AgentRunRecorder {
+
+
+   private heartbeat(): void {
+-    void updateAgentRunLease(
++    void ledgerWork.admit(() => updateAgentRunLease(
+       this.projectId,
+       this.runId,
+       RUN_OWNER_INSTANCE_ID,
+       this.leaseToken,
+       Date.now() + AGENT_RUN_LEASE_MS,
+       false,
+-    ).then((lease) => {
++    )).then((lease) => {
+       if (lease) return;
+       this.leaseOwned = false;
+       this.stopLease();
+@@ -151,12 +171,17 @@ export class AgentRunRecorder {
+   }
+
+   stopLease(): void {
+-    clearInterval(this.leaseTimer ?? undefined);
+-    this.leaseTimer = null;
++    this.stopHeartbeat();
+     const active = ACTIVE_RECORDERS.get(this.projectId);
+     active?.delete(this);
+     if (!active?.size) ACTIVE_RECORDERS.delete(this.projectId);
+   }
++
++  /** Retain lease ownership while its already scheduled heartbeat completes. */
++  stopHeartbeat(): void {
++    clearInterval(this.leaseTimer ?? undefined);
++    this.leaseTimer = null;
++  }
+   async releaseLease(): Promise<void> {
+     this.stopLease();
+     await releaseAgentRunLease(this.projectId, this.runId, RUN_OWNER_INSTANCE_ID, this.leaseToken);
+@@ -211,6 +236,9 @@ export class AgentRunRecorder {
+     return this.serialize(async () => undefined);
+   }
+   private serialize<T>(work: () => Promise<T>, allowSettled = false): Promise<T> {
++    return ledgerWork.admit(() => this.serializeOwned(work, allowSettled));
++  }
++  private serializeOwned<T>(work: () => Promise<T>, allowSettled: boolean): Promise<T> {
+     const result = this.tail.catch(() => undefined).then(async () => {
+       if (allowSettled) {
+         const run = (await loadAgentRuntimeSidecar(this.projectId)).runs.find((item) => item.runId === this.runId);
+@@ -413,7 +441,11 @@ export class AgentRunRecorder {
+     }, true);
+   }
+ }
+-export async function startAgentRun(input: StartAgentRunInput): Promise<AgentRunRecorder> {
++export function startAgentRun(input: StartAgentRunInput): Promise<AgentRunRecorder> {
++  return ledgerWork.admit(() => startAgentRunOwned(input));
++}
++
++async function startAgentRunOwned(input: StartAgentRunInput): Promise<AgentRunRecorder> {
+   const now = Date.now();
+   const runId = `run_${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}`;
+   const userInputAudit = redactTextForAgentRuntime(input.userInput);
+@@ -437,11 +469,15 @@ export async function startAgentRun(input: StartAgentRunInput): Promise<AgentRun
+   if (!lease) throw new Error(`Agent run ownership could not be claimed: ${runId}`);
+   return new AgentRunRecorder(input.projectId, runId, lease.leaseToken);
+ }
+-export async function resumeAgentRun(
++export function resumeAgentRun(
+   projectId: string,
+   runId: string,
+   claimedLeaseToken?: string,
+ ): Promise<AgentRunRecorder | null> {
++  return ledgerWork.admit(() => resumeAgentRunOwned(projectId, runId, claimedLeaseToken));
++}
++
++async function resumeAgentRunOwned(projectId: string, runId: string, claimedLeaseToken?: string): Promise<AgentRunRecorder | null> {
+   const active = [...(ACTIVE_RECORDERS.get(projectId) ?? [])]
+     .find((recorder) => recorder.runId === runId);
+   if (!claimedLeaseToken && active) return active;
+diff --git a/src/agent/useExternalAgentBridge.ts b/src/agent/useExternalAgentBridge.ts
+index f885af7..e4c2910 100644
+--- a/src/agent/useExternalAgentBridge.ts
++++ b/src/agent/useExternalAgentBridge.ts
+@@ -2,6 +2,8 @@ import {
+   useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction,
+ } from 'react';
+ import type { AgentContext } from './context';
++import { EDITOR_SHUTDOWN_CALL } from '../../shared/editor-shutdown';
++import { executeEditorShutdown } from './external-shutdown';
+ import {
+   ExternalBridgeRuntime, type ExternalGuardRequest, type ExternalProposalSnapshot,
+ } from './external-bridge-runtime';
+@@ -120,12 +122,9 @@ export async function executeExternalCall(
+       // syncs the registry to the committed store revision, and a follow-up MCP
+       // session binding against a pre-autosave revision would be rejected as
+       // stale by the ownership renew check.
+-      try {
+-        const { flushProjectSaves } = await import('../persist/projectStore');
+-        await flushProjectSaves(call.binding.projectId);
+-      } catch {
+-        // Save flushing is best-effort; the poll loop still converges afterwards.
+-      }
++      const { flushProjectSaves } = await import('../persist/projectStore');
++      const saved = await flushProjectSaves(call.binding.projectId);
++      if (!saved.ok) throw new Error('Editor project saving failed before the tool result could be confirmed');
+     } catch (error) {
+       const failed = failedOutcome(error, controller.signal);
+       outcome = failed.outcome;
+@@ -144,7 +143,7 @@ async function pollEditor(
+   cancellations: ExternalCallCancellationRegistry,
+   ownership: BrowserProjectOwnership,
+   signal: AbortSignal,
+-): Promise<void> {
++): Promise<boolean> {
+   while (!signal.aborted) {
+     const binding = runtime.binding();
+     const query = new URLSearchParams({
+@@ -158,8 +157,19 @@ async function pollEditor(
+     });
+     if (response.status === 204) continue;
+     if (!response.ok) throw new EditorBridgeRequestError('poll', response.status);
++    const call = parseExternalCall(await response.json());
++    if (call.name === EDITOR_SHUTDOWN_CALL) {
++      try {
++        const result = await executeEditorShutdown(call, runtime);
++        await sendEditorBridgeResult(call.id, 'applied', result, signal, ownership.registrationCapability, runtime.binding().baseRevision, true);
++        if (result.phase === 'flush') return true;
++      } catch (error) {
++        await sendEditorBridgeResult(call.id, 'failed', errorMessage(error), signal, ownership.registrationCapability);
++      }
++      continue;
++    }
+     await executeExternalCall(
+-      parseExternalCall(await response.json()),
++      call,
+       runtime,
+       signal,
+       cancellations,
+@@ -173,6 +183,7 @@ async function pollEditor(
+       ),
+     );
+   }
++  return false;
+ }
+
+ async function pollCancellations(
+@@ -208,9 +219,10 @@ async function pollRegisteredBridge(
+   cancellations: ExternalCallCancellationRegistry,
+   ownership: BrowserProjectOwnership,
+   signal: AbortSignal,
++  onShutdown: () => void,
+ ): Promise<void> {
+   await Promise.all([
+-    pollEditor(projectId, runtime, cancellations, ownership, signal),
++    pollEditor(projectId, runtime, cancellations, ownership, signal).then((shutdown) => { if (shutdown) onShutdown(); }),
+     pollCancellations(
+       projectId,
+       editorInstanceId,
+@@ -226,11 +238,12 @@ async function runBridgeAttempt(
+   projectId: string, editorInstanceId: string,
+   runtime: ExternalBridgeRuntime, signal: AbortSignal,
+   onError: (message: string | null) => void,
+-): Promise<void> {
++): Promise<boolean> {
+   const cancellations = new ExternalCallCancellationRegistry();
+   const controller = new AbortController();
+   const cancel = () => controller.abort(signal.reason);
+   let ownership: BrowserProjectOwnership | undefined;
++  let shutdown = false;
+   if (signal.aborted) controller.abort(signal.reason);
+   else signal.addEventListener('abort', cancel, { once: true });
+   try {
+@@ -248,9 +261,10 @@ async function runBridgeAttempt(
+       cancellations,
+       ownership,
+       controller.signal,
++      () => { shutdown = true; controller.abort(); },
+     );
+   } catch (error) {
+-    handleExternalBridgeAttemptError(error, signal, onError);
++    if (!shutdown) handleExternalBridgeAttemptError(error, signal, onError);
+   } finally {
+     controller.abort();
+     signal.removeEventListener('abort', cancel);
+@@ -258,9 +272,11 @@ async function runBridgeAttempt(
+     await unregisterEditorBridge(
+       projectId, editorInstanceId,
+       ownership?.registrationCapability,
++      shutdown,
+     );
+     if (ownership) clearBrowserProjectOwnership(ownership);
+   }
++  return shutdown;
+ }
+
+ async function runBridge(
+@@ -271,7 +287,7 @@ async function runBridge(
+ ): Promise<void> {
+   const { editorInstanceId } = runtime.binding();
+   while (!signal.aborted) {
+-    await runBridgeAttempt(projectId, editorInstanceId, runtime, signal, onError);
++    if (await runBridgeAttempt(projectId, editorInstanceId, runtime, signal, onError)) break;
+     if (!signal.aborted) await retryDelay();
+   }
+ }
+diff --git a/src/editor/mantur-shutdown.ts b/src/editor/mantur-shutdown.ts
+new file mode 100644
+index 0000000..6b36880
+--- /dev/null
++++ b/src/editor/mantur-shutdown.ts
+@@ -0,0 +1,55 @@
++import { ShutdownWork } from '../../shared/shutdown-work';
++
++const background = new ShutdownWork('Browser editor background work');
++const autosaves = new ShutdownWork('Browser autosave completions');
++const saveOwners = new Map<string, () => Promise<boolean>>();
++let inputFrozen = false;
++const pointers = new Set<number>();
++
++if (typeof window !== 'undefined') {
++  // Install before React effect-based shortcut handlers. Background tasks retain their signals.
++  const blockInput = (event: Event) => {
++    if (!inputFrozen) return;
++    event.preventDefault();
++    event.stopImmediatePropagation();
++  };
++  for (const event of ['keydown', 'pointerdown', 'drop', 'paste']) window.addEventListener(event, blockInput, true);
++  window.addEventListener('pointerdown', (event) => pointers.add(event.pointerId), true);
++  for (const event of ['pointerup', 'pointercancel'] as const) {
++    window.addEventListener(event, (event) => pointers.delete(event.pointerId), true);
++  }
++}
++
++/** Do not interrupt an in-progress timeline gesture to claim a saved document. */
++export function freezeEditorInputForShutdown(): void {
++  if (pointers.size) throw new Error('An editor pointer gesture is still in progress');
++  inputFrozen = true;
++  document.body.inert = true;
++}
++
++/** Register the mounted editor's pending debounce, not just its persistence queue. */
++export function registerEditorSaveOwner(projectId: string, flush: () => Promise<boolean>): () => void {
++  if (saveOwners.has(projectId)) throw new Error(`Multiple editor save owners for ${projectId}`);
++  saveOwners.set(projectId, flush);
++  return () => { if (saveOwners.get(projectId) === flush) saveOwners.delete(projectId); };
++}
++
++/** Original background promise, including result ingestion and its later document mutation. */
++export function trackEditorBackground<T>(work: Promise<T>): Promise<T> { return background.track(work); }
++
++/** Keep failure evidence when an existing UI operation converts rejection into a visible status. */
++export function recordEditorBackgroundFailure(error: unknown): void { background.recordFailure(error); }
++
++/** Original autosave promise, including the durable generation-result acknowledgement. */
++export function trackEditorAutosave<T>(work: Promise<T>): Promise<T> { return autosaves.track(work); }
++
++/** Call after backend jobs settle and browser input admission is frozen. */
++export function stopEditorBackgroundForShutdown(): Promise<void> { return background.stop(); }
++
++/** Flush the mounted editor's newest pending document before sealing its acknowledgements. */
++export async function flushEditorForShutdown(projectId: string): Promise<void> {
++  const flush = saveOwners.get(projectId);
++  if (!flush) throw new Error(`Editor ${projectId} has no mounted authoritative save owner`);
++  if (!await flush()) throw new Error(`Editor ${projectId} has unsaved project changes`);
++  await autosaves.stop();
++}
+diff --git a/src/editor/useEditorProjectPersistence.ts b/src/editor/useEditorProjectPersistence.ts
+index f3b54f7..dc64ced 100644
+--- a/src/editor/useEditorProjectPersistence.ts
++++ b/src/editor/useEditorProjectPersistence.ts
+@@ -14,6 +14,7 @@ import type { ProjectSaveResult } from '../persist/projectStoreCoordinators';
+ import { showAppToast } from '../ui/appToast';
+ import type { EditorCommands } from './store';
+ import type { ProjectDoc, TimelineState } from './types';
++import { registerEditorSaveOwner, trackEditorAutosave, trackEditorBackground } from './mantur-shutdown';
+
+ type MutableRef<T> = { current: T };
+
+@@ -57,7 +58,7 @@ function usePendingSaveQueue(): {
+     unsavedRef.current = null;
+     const attempt = ++latestSaveAttemptRef.current;
+     const saving = saveProject(pending.projectId, pending.doc);
+-    void saving.then((result) => {
++    const completed = trackEditorAutosave(saving.then(async (result) => {
+       if (result.status === 'failed') {
+         unsavedRef.current = recoverFailedAutosave({
+           currentUnsaved: unsavedRef.current,
+@@ -66,11 +67,12 @@ function usePendingSaveQueue(): {
+           latestEnqueuedAttempt: latestSaveAttemptRef.current,
+         });
+       } else if (result.status === 'saved') {
+-        void acknowledgeIngestedGenerationResults(pending.projectId, pending.doc.assets ?? []);
++        await acknowledgeIngestedGenerationResults(pending.projectId, pending.doc.assets ?? []);
+       }
+       observeSave(result);
+-    });
+-    return saving;
++      return result;
++    }));
++    return completed;
+   }, [observeSave]);
+   return { unsavedRef, enqueuePendingSave };
+ }
+@@ -89,7 +91,7 @@ function useEditorAutosave(projectId: string, doc: ProjectDoc): () => Promise<bo
+     return () => clearTimeout(timer);
+   }, [doc, enqueuePendingSave, projectId, unsavedRef]);
+   const flushBeforeLeave = useCallback(async (): Promise<boolean> => {
+-    enqueuePendingSave();
++    await enqueuePendingSave();
+     const result = await flushProjectSaves(projectId);
+     if (!result.ok) {
+       showAppToast(t('工程仍未保存，已阻止离开。请继续编辑以重试保存。'), { error: true });
+@@ -97,6 +99,7 @@ function useEditorAutosave(projectId: string, doc: ProjectDoc): () => Promise<bo
+     }
+     return true;
+   }, [enqueuePendingSave, projectId, t]);
++  useEffect(() => registerEditorSaveOwner(projectId, flushBeforeLeave), [projectId, flushBeforeLeave]);
+   useBrowserSaveGuards(projectId, enqueuePendingSave);
+   return flushBeforeLeave;
+ }
+@@ -131,8 +134,8 @@ function useGenerationJobResume(
+ ): void {
+   useEffect(() => {
+     let alive = true;
+-    void (async () => {
+-      await acknowledgeIngestedGenerationResults(projectId, docRef.current.assets ?? []).catch(() => undefined);
++    void trackEditorBackground((async () => {
++      await acknowledgeIngestedGenerationResults(projectId, docRef.current.assets ?? []);
+       if (!alive) return;
+       await resumeOpenGenerationJobs(projectId, {
+         getState: () => stateRef.current,
+@@ -144,7 +147,7 @@ function useGenerationJobResume(
+         },
+         timeoutSeconds: 180,
+       });
+-    })();
++    })());
+     return () => { alive = false; };
+   }, [projectId, commands, stateRef, docRef]);
+ }
+diff --git a/src/export/backgroundExportStore.ts b/src/export/backgroundExportStore.ts
+index aa68b82..f2770c8 100644
+--- a/src/export/backgroundExportStore.ts
++++ b/src/export/backgroundExportStore.ts
+@@ -1,3 +1,4 @@
++import { trackEditorBackground, recordEditorBackgroundFailure } from '../editor/mantur-shutdown';
+ import type {
+   ExportEngineInfo,
+   ExportEngineReason,
+@@ -151,7 +152,11 @@ export function createExportJobStore(now: () => number = Date.now): ExportJobSto
+     setClock: (value) => update(jobId, (job) => ({ ...job, clock: nextValue(job.clock, value) })),
+     setEngineInfo: (value) => update(jobId, (job) => ({ ...job, engineInfo: nextValue(job.engineInfo, value) })),
+     setEngineReason: (value) => update(jobId, (job) => ({ ...job, engineReason: nextValue(job.engineReason, value) })),
+-    setError: (value) => update(jobId, (job) => ({ ...job, error: nextValue(job.error, value) })),
++    setError: (value) => update(jobId, (job) => {
++      const error = nextValue(job.error, value);
++      if (error) recordEditorBackgroundFailure(new Error(error));
++      return { ...job, error };
++    }),
+     setFailure: (value) => update(jobId, (job) => ({ ...job, failure: nextValue(job.failure, value) })),
+     setProgress: (value) => update(jobId, (job) => {
+       if (TERMINAL_PHASE[job.progress.phase]) return job;
+@@ -206,8 +211,8 @@ export function createExportJobStore(now: () => number = Date.now): ExportJobSto
+     const controller = new AbortController();
+     controllers.set(id, controller);
+     publish([...snapshot.jobs, job]);
+-    void Promise.resolve()
+-      .then(() => input.execute({ signal: controller.signal, setters: settersFor(id) }))
++    void trackEditorBackground(Promise.resolve()
++      .then(() => input.execute({ signal: controller.signal, setters: settersFor(id) })))
+       .catch((reason: unknown) => failUnexpectedly(id, reason))
+       .finally(() => {
+         controllers.delete(id);
+diff --git a/src/export/serverExportOperation.ts b/src/export/serverExportOperation.ts
+index 75b4f16..eaa3334 100644
+--- a/src/export/serverExportOperation.ts
++++ b/src/export/serverExportOperation.ts
+@@ -1,4 +1,5 @@
+ import type { BackgroundExportJobSetters, ExportJobStore } from './backgroundExportStore';
++import { trackEditorBackground, recordEditorBackgroundFailure } from '../editor/mantur-shutdown';
+ import { isAbortError } from './browserExport';
+ import { recordExport } from '../persist/exportHistoryStore';
+ import {
+@@ -65,20 +66,26 @@ async function writeCompletedWithLease(
+   const onAbort = () => controller.abort(signal?.reason);
+   signal?.addEventListener('abort', onAbort, { once: true });
+   let renewing = false;
++  let renewal: Promise<void> | undefined;
+   const heartbeat = setInterval(() => {
+     if (renewing || controller.signal.aborted) return;
+     renewing = true;
+-    void renewServerExportDelivery(renderId, claim)
++    renewal = renewServerExportDelivery(renderId, claim)
+       .then((active) => {
+-        if (!active) controller.abort(new Error('导出恢复所有权已失效'));
++        if (!active) {
++          const error = new Error('导出恢复所有权已失效');
++          recordEditorBackgroundFailure(error);
++          controller.abort(error);
++        }
+       })
+-      .catch((error: unknown) => controller.abort(error))
++      .catch((error: unknown) => { recordEditorBackgroundFailure(error); controller.abort(error); })
+       .finally(() => { renewing = false; });
+   }, 40_000);
+   try {
+     await writeUrlToDestination(context.destination, filename, path, controller.signal);
+   } finally {
+     clearInterval(heartbeat);
++    await renewal;
+     signal?.removeEventListener('abort', onAbort);
+   }
+ }
+@@ -137,7 +144,7 @@ async function saveCompleted(
+   context.setProgress((current) => current ? { ...current, outputSize: completed.sizeBytes } : current);
+   const destinationId = exportHistoryDestinationId(context.destination);
+   const historyName = exportDestinationFilename(context.destination, filename);
+-  void recordExport({
++  await recordExport({
+     name: historyName,
+     format,
+     codec,
+@@ -182,9 +189,9 @@ async function exportMedia(
+     if (format === 'video') recordServerPerformance(context, completed, startedAt);
+     return completed;
+   } finally {
+-    if (claim) await releaseServerExportDelivery(renderId, claim).catch(() => undefined);
++    if (claim) await releaseServerExportDelivery(renderId, claim).catch(recordEditorBackgroundFailure);
+     if (targetCommitted) {
+-      await retireAndDeleteExportJob(renderId).catch(() => false);
++      await retireAndDeleteExportJob(renderId).catch((error) => { recordEditorBackgroundFailure(error); return false; });
+     }
+   }
+ }
+@@ -319,16 +326,20 @@ async function runRecoveredServerExport(
+       finishedAt: Date.now(),
+     } : current);
+   } finally {
+-    if (claim) await releaseServerExportDelivery(record.renderId, claim).catch(() => undefined);
++    if (claim) await releaseServerExportDelivery(record.renderId, claim).catch(recordEditorBackgroundFailure);
+     if (targetCommitted) {
+-      await retireAndDeleteExportJob(record.renderId).catch(() => false);
++      await retireAndDeleteExportJob(record.renderId).catch((error) => { recordEditorBackgroundFailure(error); return false; });
+     }
+     setters.setBusy(null);
+   }
+ }
+
+ /** Reattach this editor to durable server renders accepted before a browser refresh. */
+-export async function resumePersistedServerExports({
++export function resumePersistedServerExports(options: ResumePersistedServerExportsOptions): Promise<void> {
++  return trackEditorBackground(resumePersistedServerExportsOwned(options));
++}
++
++async function resumePersistedServerExportsOwned({
+   exportJobs,
+   projectId,
+   t,
+@@ -366,7 +377,7 @@ export async function rebindAndResumePersistedServerExport({
+   try {
+     rebound = await rebindServerExportJob(renderId, destination, targetPath, claim);
+   } catch (error) {
+-    await releaseServerExportDelivery(renderId, claim).catch(() => undefined);
++    await releaseServerExportDelivery(renderId, claim).catch(recordEditorBackgroundFailure);
+     throw error;
+   }
+   return exportJobs.start({
+diff --git a/src/media/ProjectMediaPanel.tsx b/src/media/ProjectMediaPanel.tsx
+index 7b971ee..9325983 100644
+--- a/src/media/ProjectMediaPanel.tsx
++++ b/src/media/ProjectMediaPanel.tsx
+@@ -5,6 +5,7 @@ import { useT } from '../i18n/locale';
+ import { listProjectMedia, importProjectMedia } from './manturProjectMedia';
+ import { directoryFileToAsset } from './directoryImportAsset';
+ import { mediaAssetRelinkPatch } from './mediaAssetRelink';
++import { trackEditorBackground, recordEditorBackgroundFailure } from '../editor/mantur-shutdown';
+ import './ProjectMediaPanel.css';
+
+ interface Props {
+@@ -46,7 +47,8 @@ export function ProjectMediaPanel({ projectId, fps, assets, offlineAssetIds, onI
+     } catch (error) { if (alive.current) setError(error instanceof Error ? error.message : String(error)); }
+     finally { if (alive.current) setBusy(false); }
+   };
+-  const ingest = async () => {
++  const ingest = () => trackEditorBackground(ingestOwned());
++  const ingestOwned = async () => {
+     setBusy(true); setError(''); setNotice('');
+     try {
+       const result = await importProjectMedia({ paths: selected, projectId,
+@@ -57,11 +59,16 @@ export function ProjectMediaPanel({ projectId, fps, assets, offlineAssetIds, onI
+       if (target && imported.length === 1) { onRelink?.(target, mediaAssetRelinkPatch(imported[0])); setTarget(''); }
+       else if (!target) imported.forEach(onIngest);
+       setNotice(t('已引用 {count} 个素材，跳过 {duplicates} 个重复素材', { count: imported.length, duplicates: result.duplicateCount }));
+-      if (result.errors.length || result.unsupportedFiles.length) setError([
+-        ...result.errors.map(item => `${item.path}: ${item.error}`), ...result.unsupportedFiles,
+-      ].join('\n'));
++      if (result.errors.length || result.unsupportedFiles.length) {
++        const message = [...result.errors.map(item => `${item.path}: ${item.error}`), ...result.unsupportedFiles].join('\n');
++        recordEditorBackgroundFailure(new Error(message));
++        setError(message);
++      }
+       setSelected([]);
+-    } catch (error) { if (alive.current) setError(error instanceof Error ? error.message : String(error)); }
++    } catch (error) {
++      recordEditorBackgroundFailure(error);
++      if (alive.current) setError(error instanceof Error ? error.message : String(error));
++    }
+     finally { if (alive.current) setBusy(false); }
+   };
+   const offline = assets.filter(asset => offlineAssetIds.has(asset.id));
+diff --git a/src/media/semantic-search/vectorCapability.verify.ts b/src/media/semantic-search/vectorCapability.verify.ts
+new file mode 100644
+index 0000000..048e052
+--- /dev/null
++++ b/src/media/semantic-search/vectorCapability.verify.ts
+@@ -0,0 +1,94 @@
++import assert from 'node:assert/strict';
++import { createServer } from 'node:http';
++import { mkdtemp, rm } from 'node:fs/promises';
++import { tmpdir } from 'node:os';
++import { join } from 'node:path';
++import { setImmediate as tick } from 'node:timers/promises';
++import { stopEditorBackgroundForShutdown } from '../../editor/mantur-shutdown';
++import type { ViteDevServer } from 'vite';
++import { pruneSemanticVectors, searchSemanticVectorsRemote } from './vectorStore';
++
++const globals = globalThis as unknown as { window?: unknown; location?: unknown };
++const originalWindow = globals.window;
++const originalLocation = globals.location;
++const originalFetch = globalThis.fetch;
++const root = await mkdtemp(join(tmpdir(), 'mantur-vector-capability-'));
++process.env.OPENCHATCUT_DATA_DIR = root;
++delete process.env.OPENCHATCUT_SQLITE_STORE;
++const { createMiniConnect } = await import('../../../desktop/mini-connect.ts');
++const { projectStorePlugin } = await import('../../../server/plugins/project-store-plugin.ts');
++const { ManturEditorShutdown } = await import('../../../server/plugins/mantur-shutdown.ts');
++const { editorCallbacks } = await import('../../../server/shutdown-runtime.ts');
++const { executeProjectStoreRequest } = await import('../../../server/project-store-transport.ts');
++const { isProjectStoreRequest } = await import('../../../shared/project-store-validation.ts');
++const app = createMiniConnect(error => { throw error; });
++const server = createServer((req, res) => app.handle(req, res));
++try {
++  const plugin = new ManturEditorShutdown().ownPlugin(projectStorePlugin());
++  const hook = plugin.configureServer!;
++  const configure = typeof hook === 'function' ? hook : hook.handler;
++  await configure.call({} as never, { middlewares: app, httpServer: server, config: { logger: { error() {} } } } as unknown as ViteDevServer);
++  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
++  const address = server.address(); assert(address && typeof address !== 'string');
++  const origin = `http://127.0.0.1:${address.port}`;
++  const requests: string[] = [];
++  globals.window = {};
++  globals.location = { protocol: 'http:' };
++  globalThis.fetch = (input, init) => {
++    const url = new URL(String(input), origin);
++    requests.push(url.pathname);
++    return originalFetch(url, { ...init, headers: { ...init?.headers, Origin: origin, 'Sec-Fetch-Site': 'same-origin' } });
++  };
++  assert.equal(isProjectStoreRequest({ operation: 'semantic-vectors-status' }), true);
++  assert.equal(isProjectStoreRequest({ operation: 'semantic-vectors-status', scopeId: 'extra' }), false);
++  await assert.rejects(executeProjectStoreRequest({ operation: 'semantic-vectors-status', scopeId: 'extra' }), /invalid project store request/);
++  assert.deepEqual(await executeProjectStoreRequest({ operation: 'semantic-vectors-status' }), { semanticVectorsAvailable: false });
++  await pruneSemanticVectors('fresh-project', new Set());
++  assert.deepEqual(requests, ['/api/project-store/semantic-vectors/status'], 'new JSON project must not send an unsupported remote prune');
++  assert.equal(await searchSemanticVectorsRemote('fresh-project', new Float32Array(512)), null);
++  assert.equal(requests.length, 2, 'each operation resolves current capability instead of permanently caching absence');
++  let mutationCalls = 0;
++  let availability: unknown = false;
++  globals.window = { openChatCutDesktop: { projectStore: async (request: { operation: string }) => {
++    if (request.operation === 'semantic-vectors-status') return { semanticVectorsAvailable: availability };
++    mutationCalls += 1;
++    return { semanticVectors: [] };
++  } } };
++  await pruneSemanticVectors('fresh-project', new Set());
++  assert.equal(mutationCalls, 0);
++  availability = true;
++  await pruneSemanticVectors('fresh-project', new Set());
++  assert.equal(mutationCalls, 1, 'an explicitly available index still receives the original operation');
++  availability = 'unknown';
++  await assert.rejects(pruneSemanticVectors('fresh-project', new Set()), /Invalid semantic-vector capability response/);
++  assert.equal(mutationCalls, 1);
++  globals.window = { openChatCutDesktop: { projectStore: async () => { throw new Error('capability request failed'); } } };
++  await assert.rejects(pruneSemanticVectors('fresh-project', new Set()), /capability request failed/);
++  assert.equal(mutationCalls, 1, 'a failed probe must not be treated as unavailable success');
++  const invalidPrune = await globalThis.fetch('/api/project-store/semantic-vectors/prune', {
++    method: 'POST', headers: { 'Content-Type': 'application/json' },
++    body: JSON.stringify({ operation: 'semantic-vectors-prune', scopeId: 'fresh-project', validAssetIds: [] }),
++  });
++  assert.equal(invalidPrune.status, 400, 'the server still rejects a real unsupported operation');
++  await assert.rejects(editorCallbacks.stop(), /callbacks failed; shutdown is unconfirmed/);
++  const probeEntered = Promise.withResolvers<void>();
++  const probeRelease = Promise.withResolvers<void>();
++  globals.window = { openChatCutDesktop: { projectStore: async () => {
++    probeEntered.resolve(); await probeRelease.promise; return { semanticVectorsAvailable: false };
++  } } };
++  const pendingPrune = pruneSemanticVectors('late-probe', new Set());
++  await probeEntered.promise;
++  const draining = stopEditorBackgroundForShutdown();
++  const rejected = assert.rejects(draining, /Browser editor background work failed/);
++  let finished = false;
++  void rejected.then(() => { finished = true; });
++  await tick(); assert.equal(finished, false, 'the earlier failures do not discard the accepted pending capability operation');
++  probeRelease.resolve(); await pendingPrune; await rejected;
++  console.log('vector capability: JSON HTTP/IPC, enabled routing, invalid/failed probe, pending drain and retained HTTP400 passed');
++} finally {
++  globalThis.fetch = originalFetch;
++  if (originalWindow === undefined) delete globals.window; else globals.window = originalWindow;
++  if (originalLocation === undefined) delete globals.location; else globals.location = originalLocation;
++  await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
++  await rm(root, { recursive: true, force: true });
++}
+diff --git a/src/media/semantic-search/vectorStore.ts b/src/media/semantic-search/vectorStore.ts
+index 3328ea2..384d2b3 100644
+--- a/src/media/semantic-search/vectorStore.ts
++++ b/src/media/semantic-search/vectorStore.ts
+@@ -5,6 +5,7 @@ import {
+   requestProjectStore,
+ } from '../../persist/projectStoreTransport';
+ import { readSamplingConfig } from './samplingConfig';
++import { trackEditorBackground } from '../../editor/mantur-shutdown';
+
+ const DATABASE_NAME = 'openchatcut-semantic-index';
+ const STORE_NAME = 'vectors';
+@@ -28,9 +29,9 @@ function serializeScopeMutation<T>(scopeId: string, operation: () => Promise<T>)
+   const previous = mutationQueues.get(scopeId) ?? Promise.resolve();
+   const current = previous.catch(() => undefined).then(operation);
+   mutationQueues.set(scopeId, current);
+-  return current.finally(() => {
++  return trackEditorBackground(current.finally(() => {
+     if (mutationQueues.get(scopeId) === current) mutationQueues.delete(scopeId);
+-  });
++  }));
+ }
+
+ interface StoredVector {
+@@ -83,8 +84,14 @@ async function withStore<T>(
+   return promise;
+ }
+
+-function remoteSemanticAvailable(): boolean {
+-  return !remoteSemanticFailed && projectStoreRemoteAvailable() && projectStoreWriteCredential();
++async function remoteSemanticAvailable(): Promise<boolean> {
++  if (remoteSemanticFailed || !projectStoreRemoteAvailable() || !projectStoreWriteCredential()) return false;
++  const status = await requestProjectStore({ operation: 'semantic-vectors-status' });
++  if (!status || typeof status !== 'object' || !('semanticVectorsAvailable' in status)
++    || typeof status.semanticVectorsAvailable !== 'boolean') {
++    throw new Error('Invalid semantic-vector capability response');
++  }
++  return status.semanticVectorsAvailable;
+ }
+
+ function toWireVector(vector: ArrayLike<number>): number[] {
+@@ -97,8 +104,7 @@ export async function hybridSearchRemote(
+   query: string,
+   queryVector: ArrayLike<number>,
+ ): Promise<{ visual: SemanticMatch[]; text: HybridTextHit[] } | null> {
+-  if (remoteSemanticFailed) return null;
+-  if (!projectStoreRemoteAvailable()) return null;
++  if (!await remoteSemanticAvailable()) return null;
+   try {
+     const response = await fetch('/api/project-store/hybrid-search', {
+       method: 'POST',
+@@ -153,8 +159,7 @@ export async function searchSemanticVectorsRemote(
+   queryVector: ArrayLike<number>,
+   limit?: number,
+ ): Promise<SemanticMatch[] | null> {
+-  if (remoteSemanticFailed) return null;
+-  if (!projectStoreRemoteAvailable()) return null;
++  if (!await remoteSemanticAvailable()) return null;
+   const config = readSamplingConfig();
+   try {
+     const response = await requestProjectStore({
+@@ -213,7 +218,7 @@ export function replaceAssetVectors(
+   records: SemanticVectorRecord[],
+ ): Promise<void> {
+   return serializeScopeMutation(scopeId, async () => {
+-    if (remoteSemanticAvailable()) {
++    if (await remoteSemanticAvailable()) {
+       try {
+         await requestProjectStore({
+           operation: 'semantic-vectors-upsert',
+@@ -258,7 +263,7 @@ export async function pruneSemanticVectors(
+   validSourceRevisions?: ReadonlyMap<string, string>,
+ ): Promise<PruneSemanticResult> {
+   return serializeScopeMutation(scopeId, async () => {
+-    if (remoteSemanticAvailable()) {
++    if (await remoteSemanticAvailable()) {
+       try {
+         await requestProjectStore({
+           operation: 'semantic-vectors-prune',
+@@ -305,7 +310,7 @@ export function shouldPruneVector(
+
+ export async function clearSemanticVectors(scopeId: string): Promise<void> {
+   return serializeScopeMutation(scopeId, async () => {
+-    if (remoteSemanticAvailable()) {
++    if (await remoteSemanticAvailable()) {
+       try {
+         await requestProjectStore({ operation: 'semantic-vectors-clear', scopeId });
+       } catch {
+diff --git a/src/media/semantic-search/vectorStore.verify.ts b/src/media/semantic-search/vectorStore.verify.ts
+index 284efd9..35cabfe 100644
+--- a/src/media/semantic-search/vectorStore.verify.ts
++++ b/src/media/semantic-search/vectorStore.verify.ts
+@@ -18,6 +18,7 @@ function installTransport(): void {
+   (globalThis as Record<string, unknown>).window = {
+     openChatCutDesktop: {
+       projectStore: async (request: unknown) => {
++        if ((request as { operation: string }).operation === 'semantic-vectors-status') return { semanticVectorsAvailable: true };
+         requests.push({ request });
+         return { ok: true };
+       },
+@@ -66,6 +67,7 @@ async function main(): Promise<void> {
+   (globalThis as Record<string, unknown>).window = {
+     openChatCutDesktop: {
+       projectStore: async (request: unknown) => {
++        if ((request as { operation: string }).operation === 'semantic-vectors-status') return { semanticVectorsAvailable: true };
+         requests.push({ request });
+         const search = request as { operation: string };
+         if (search.operation === 'semantic-vectors-search') {
+diff --git a/src/persist/agentRuntimeStore.ts b/src/persist/agentRuntimeStore.ts
+index 8cc2d47..ac97d62 100644
+--- a/src/persist/agentRuntimeStore.ts
++++ b/src/persist/agentRuntimeStore.ts
+@@ -1,4 +1,5 @@
+ import type { AgentRunLeaseState } from '../../shared/project-store-transport';
++import { ShutdownWork } from '../../shared/shutdown-work';
+ import {
+   kvWriteAgentRuntime,
+   kvDel,
+@@ -47,6 +48,10 @@ export { MAX_AGENT_RUNS, MAX_APPROVALS, MAX_CHECKPOINTS, MAX_EVENTS_PER_RUN };
+ const PROJECT_ID = /^[A-Za-z0-9_-]{1,160}$/;
+ const ARTIFACT_ID = /^[A-Za-z0-9_-]{1,20}$/;
+ const queues = new Map<string, Promise<void>>();
++const runtimeWrites = new ShutdownWork('Browser agent runtime writes');
++
++/** Call after run and edit-session producers stop; reject any caught write failure. */
++export function stopAgentRuntimeWritesForShutdown(): Promise<void> { return runtimeWrites.stop(); }
+ const listeners = new Map<string, Set<() => void>>();
+ const runtimeKey = (projectId: string, generation = 'legacy') => generation === 'legacy'
+   ? `agent-runtime:${projectId}`
+@@ -68,6 +73,10 @@ function requireProjectId(projectId: string): void {
+   if (!PROJECT_ID.test(projectId)) throw new Error('Invalid agent runtime project id.');
+ }
+ function enqueue<T>(projectId: string, work: () => Promise<T>): Promise<T> {
++  return runtimeWrites.admit(() => enqueueOwned(projectId, work));
++}
++
++function enqueueOwned<T>(projectId: string, work: () => Promise<T>): Promise<T> {
+   const previous = queues.get(projectId) ?? Promise.resolve();
+   const run = previous.catch(() => undefined).then(work);
+   const settled = run.then(() => undefined, () => undefined);
+diff --git a/src/persist/jobRegistryStore.ts b/src/persist/jobRegistryStore.ts
+index ee0d693..6807f47 100644
+--- a/src/persist/jobRegistryStore.ts
++++ b/src/persist/jobRegistryStore.ts
+@@ -2,6 +2,8 @@
+ // provider execution; this store keeps the complete, secret-free submission snapshot
+ // so refresh/restart recovery and explicit reruns do not have to reconstruct args.
+
++import { ShutdownWork } from '../../shared/shutdown-work';
++import { trackEditorBackground } from '../editor/mantur-shutdown';
+ import { isTerminal, normalizeStatus } from '../agent/progress/job-model';
+ import type { MediaAsset, TimelineState } from '../editor/types';
+ import {
+@@ -94,9 +96,17 @@ export interface TrackedJobPatch extends Partial<Pick<TrackedJob,
+ }
+
+ const projectQueues = new Map<string, Promise<void>>();
++const jobWrites = new ShutdownWork('Browser generation job writes');
++
++/** Call after result ingestion and autosave acknowledgements finish. */
++export function stopJobRegistryWritesForShutdown(): Promise<void> { return jobWrites.stop(); }
+ const listeners = new Map<string, Set<() => void>>();
+
+ function enqueueProjectWrite<T>(projectId: string, write: () => Promise<T>): Promise<T> {
++  return jobWrites.admit(() => enqueueOwnedProjectWrite(projectId, write));
++}
++
++function enqueueOwnedProjectWrite<T>(projectId: string, write: () => Promise<T>): Promise<T> {
+   const previous = projectQueues.get(projectId) ?? Promise.resolve();
+   const run = previous.catch(() => undefined).then(write);
+   const settled = run.then(() => undefined, () => undefined);
+@@ -663,7 +673,7 @@ export async function resumeOpenGenerationJobs(
+         existingAssets.add(asset.id);
+       }
+       ingestedAssets.add(asset.id);
+-      void cacheMediaFromUrl(asset.src, asset.name);
++      void trackEditorBackground(cacheMediaFromUrl(asset.src, asset.name));
+     }
+     completed.add(job.jobId);
+     pending.delete(job.jobId);
+@@ -704,7 +714,7 @@ export async function resumeOpenGenerationJobs(
+         if (ingestedAssets.has(asset.id)) continue;
+         ingestedAssets.add(asset.id);
+         opts.onAsset(asset);
+-        void cacheMediaFromUrl(asset.src, asset.name);
++        void trackEditorBackground(cacheMediaFromUrl(asset.src, asset.name));
+       }
+       if (onlyProvisionalMisses && pending.size && Date.now() < deadline) {
+         await new Promise((resolvePromise) => setTimeout(resolvePromise, 250));
+diff --git a/src/persist/projectStoreTransport.ts b/src/persist/projectStoreTransport.ts
+index 2df2c2b..bb03e27 100644
+--- a/src/persist/projectStoreTransport.ts
++++ b/src/persist/projectStoreTransport.ts
+@@ -166,6 +166,9 @@ async function requestHttp(request: ProjectStoreRequest): Promise<ProjectStoreRe
+       path = '/project/purge';
+       init = postJson(init, headers, request);
+       break;
++    case 'semantic-vectors-status':
++      path = '/semantic-vectors/status';
++      break;
+     case 'semantic-vectors-upsert':
+       path = '/semantic-vectors/upsert';
+       init = postJson(init, headers, request);

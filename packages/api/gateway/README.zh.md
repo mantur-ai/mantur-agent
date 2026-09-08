@@ -36,6 +36,8 @@ Connection 可用时，Host 入口会在 Connection 共享的 `/api` FetchHandle
 
 Host 组合可通过 `registerRemoteEvents()` 注册唯一的应用事件 source。Gateway 为它保留内部 `$events` logical endpoint，只接受空 `args`，并在 source 撤回时中止该注册打开的 stream。事件名单、参数校验、每 Client 队列及 opening `{ type: 'ready', clientId, host: { home } }` frame 中的 Host home 由 API Remotes 拥有。source factory 在返回 iterable 前同步挂好增量 listener，因此 Client 只在增量投递就绪后发布 generation 并开始 baseline 读取。
 
+`stopForShutdown()` 冻结新调用和事件源注册，中止流观察，并等待已接纳的单次调用、流打开、原始迭代器读取和迭代器清理完成。流方法接收调用方与 Gateway 生命周期合并后的信号；单次调用保留调用方信号及原始结果。即使流已离开活动注册表，清理失败仍会保留并使关闭失败。服务卸载使用同一操作。普通 UI 隐藏不会调用此操作。
+
 <a id="client-service-clientremote-ctx-key-remote"></a>
 ## Client 服务：`ClientRemote`（ctx key：`remote`）
 

@@ -601,3 +601,82 @@ describe('TerminalSessionService ownership and lifecycle', () => {
     expect(internal.ownerCleanups.size).toBe(0)
   })
 })
+
+
+describe('TerminalSessionService shutdown proof', () => {
+  it('freezes sends and spawns while joining an existing close', async () => {
+    const ctx = await harness()
+    const b = backend()
+    ctx.terminals.registerBackend(b.provider)
+    const owner = stubAgent(ctx, 'shutdown-owner')
+    ctx.agents.register(owner)
+    const created = await ctx.terminals.spawn(owner, { type: 'stub' })
+    const session = b.sessions[0]!
+    const gate = Promise.withResolvers<undefined>()
+    session.closeGate = gate
+    let stopped = false
+    const completion = ctx.terminals.stopForShutdown()
+    void completion.then(() => { stopped = true })
+    try {
+      expect(ctx.terminals.stopForShutdown()).toBe(completion)
+      await expect(ctx.terminals.spawn(owner, { type: 'stub' })).rejects.toMatchObject({ code: 'SERVICE_DISPOSING' })
+      expect(() => ctx.terminals.startSend(owner, created.sessionId, { text: 'late', submit: true })).toThrow('disposing')
+      expect(stopped).toBe(false)
+      gate.resolve(undefined)
+      await completion
+      expect(ctx.terminals.list(owner)).toEqual([])
+    } finally {
+      gate.resolve(undefined)
+      await completion
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('joins a backend that returns its handle after shutdown and retains rollback failure', async () => {
+    const ctx = await harness()
+    const gate = Promise.withResolvers<TerminalBackendSession>()
+    let signal: AbortSignal | undefined
+    ctx.terminals.registerBackend({ type: 'slow', spawn: (spec) => { signal = spec.signal; return gate.promise } })
+    const owner = stubAgent(ctx, 'late-owner')
+    ctx.agents.register(owner)
+    const pending = ctx.terminals.spawn(owner, { type: 'slow' }).catch((error: unknown) => error)
+    const completion = ctx.terminals.stopForShutdown()
+    const outcome = completion.catch((error: unknown) => error)
+    const session = new StubSession()
+    session.rejectClose = true
+    try {
+      expect(signal?.aborted).toBe(true)
+      gate.resolve(session)
+      await pending
+      expect(await outcome).toBeInstanceOf(AggregateError)
+      expect(ctx.terminals.stopForShutdown()).toBe(completion)
+      expect(session.closed).toEqual(['PTY spawn rolled back'])
+    } finally {
+      gate.resolve(session)
+      await pending
+      await outcome
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('retains a failed close after a later ordinary retry removes the session', async () => {
+    const ctx = await harness()
+    const b = backend()
+    ctx.terminals.registerBackend(b.provider)
+    const owner = stubAgent(ctx, 'failed-close-owner')
+    ctx.agents.register(owner)
+    const created = await ctx.terminals.spawn(owner, { type: 'stub' })
+    const session = b.sessions[0]!
+    try {
+      session.rejectClose = true
+      await expect(ctx.terminals.kill(owner, created.sessionId)).rejects.toThrow('close failed')
+      session.rejectClose = false
+      await ctx.terminals.kill(owner, created.sessionId)
+      expect(ctx.terminals.list(owner)).toEqual([])
+      await expect(ctx.terminals.stopForShutdown()).rejects.toThrow('PTY shutdown failed')
+    } finally {
+      session.rejectClose = false
+      await ctx.fiber.dispose()
+    }
+  })
+})

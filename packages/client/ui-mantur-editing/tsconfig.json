@@ -1,42 +1,11 @@
 {
-  "extends": "../../../tsconfig.base.client.json",
-  "compilerOptions": {
-    "rootDir": "src",
-    "outDir": "lib/types"
-  },
-  "include": [
-    "src"
-  ],
+  "files": [],
   "references": [
     {
-      "path": "../../../vendor/cordis"
+      "path": "./tsconfig.host.json"
     },
     {
-      "path": "../../../vendor/schemastery"
-    },
-    {
-      "path": "../../settings/settings"
-    },
-    {
-      "path": "../ui-slots"
-    },
-    {
-      "path": "../locale"
-    },
-    {
-      "path": "../ui-layout"
-    },
-    {
-      "path": "../ui-mantur-navigation"
-    },
-    {
-      "path": "../ui-renderer"
-    },
-    {
-      "path": "../ui-settings"
-    },
-    {
-      "path": "../ui-theme"
+      "path": "./tsconfig.client.json"
     }
   ]
 }

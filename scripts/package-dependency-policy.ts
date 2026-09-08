@@ -50,6 +50,8 @@ const SAFE_HOST_DEPENDENCY_EXPORTS = {
 
 /** Runtime exports that require every consumer to resolve the provider's shared peer instance. */
 const PEER_REQUIRED_HOST_EXPORTS = {
+  // connectMcpServer shares server-name reservations across all mounted MCP clients.
+  '@deepseek-ai/dsh-mcp-client': ['connectMcpServer'],
   '@deepseek-ai/dsh-scope': ['carrierKeyOf', 'scopeOf', 'scopeTarget'],
   '@deepseek-ai/dsh-session-persistence': ['SessionPersistenceNotFoundError'],
 } as const satisfies HostDependencyExports

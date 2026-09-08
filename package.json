@@ -156,6 +156,7 @@
     "desktop:dist:mac:arm64": "pnpm --filter @deepseek-ai/dsh-desktop run dist:mac:arm64",
     "desktop:dist:mac:x64": "pnpm --filter @deepseek-ai/dsh-desktop run dist:mac:x64",
     "desktop:dist:win:x64": "pnpm --filter @deepseek-ai/dsh-desktop run dist:win:x64",
+    "desktop:prepare:mantur-cut": "tsx scripts/mantur-cut-distribution.ts",
     "desktop:dev": "pnpm --filter @deepseek-ai/dsh-desktop run dev",
     "desktop:smoke": "pnpm --filter @deepseek-ai/dsh-desktop run smoke:packaged",
     "demo:ptc": "node scripts/demo-ptc.mjs",

@@ -28,6 +28,7 @@ import type {
 } from '../src/client/contract/slots.ts'
 import type { DraftAttachmentId } from '../src/client/contract/input.ts'
 import { InputBar } from '../src/client/skeleton/InputBar.tsx'
+import { PermissionControl } from '../src/client/skeleton/PermissionControl.tsx'
 import type { InputBarProps } from '../src/client/skeleton/InputBar.tsx'
 import { zh } from '../src/client/locales.ts'
 
@@ -173,6 +174,7 @@ function bench(over?: BenchOptions) {
         : key === 'plan' ? over?.plan : key === 'imageLimits' ? over?.imageLimits : undefined)),
     useInput: bindSnapshotSelector(shell.state),
     useComposerInput: bindSnapshotSelector(shell.state),
+    useExternalPermissions: bindSnapshotSelector(createSnapshotStore(false)),
     unassignedActions: undefined,
     inputActions: shell.actions,
     keyboard: shell,
@@ -1324,6 +1326,27 @@ describe('command launcher chrome and control seats', () => {
     expect(toggleCommandMenu).toHaveBeenCalledExactlyOnceWith({ start: 2, end: 7 })
     act(() => { menuLauncher.set('command') })
     expect(launcher.getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('the layout permission adapter uses the same locks and hides without a command face', async () => {
+    const permissions = { options: [{ value: 'read-only', name: 'read-only' }], currentValue: 'read-only' }
+    const { view, props, session } = bench({ permissions })
+    view.rerender(<PermissionControl {...props} disabled={false} />)
+    const trigger = () => view.getByLabelText(/^访问模式/) as HTMLButtonElement
+    expect(trigger().disabled).toBe(false)
+    view.rerender(<PermissionControl {...props} disabled />)
+    expect(trigger().disabled).toBe(true)
+    view.rerender(<PermissionControl {...props} disabled={false} inputActions={undefined} />)
+    expect(trigger().disabled).toBe(true)
+    view.rerender(<PermissionControl {...props} disabled={false} keyboard={undefined} />)
+    expect(trigger().disabled).toBe(true)
+    view.rerender(<PermissionControl {...props} disabled={false} useComposerInput={bindSnapshotSelector(createSnapshotStore(undefined))} />)
+    expect(trigger().disabled).toBe(true)
+    view.rerender(<PermissionControl {...props} disabled={false} />)
+    act(() => { session.set(snapshotOf({ removed: true })) })
+    expect(trigger().disabled).toBe(true)
+    view.rerender(<PermissionControl {...props} disabled={false} sessionId={undefined} command={undefined} />)
+    expect(view.queryByLabelText(/^访问模式/)).toBeNull()
   })
 
   it('the Access chip renders the projection value and submits a non-Full-access pick directly', async () => {

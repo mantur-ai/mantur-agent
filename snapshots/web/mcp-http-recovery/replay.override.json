@@ -1,0 +1,154 @@
+[
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "tool-call-delta",
+        "index": 0,
+        "id": "first-call",
+        "name": "mcp__expiry__mutate",
+        "argumentsDelta": "{}"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "first-call",
+          "name": "mcp__expiry__mutate",
+          "arguments": "{}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 100,
+          "outputTokens": 20
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "text"
+      },
+      {
+        "type": "text-delta",
+        "index": 0,
+        "text": "The call failed; its result is unknown. I have not retried it."
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "text",
+          "text": "The call failed; its result is unknown. I have not retried it."
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 100,
+          "outputTokens": 20
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "stop"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "tool-call-delta",
+        "index": 0,
+        "id": "explicit-new-call",
+        "name": "mcp__expiry__mutate",
+        "argumentsDelta": "{}"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "explicit-new-call",
+          "name": "mcp__expiry__mutate",
+          "arguments": "{}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 100,
+          "outputTokens": 20
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "text"
+      },
+      {
+        "type": "text-delta",
+        "index": 0,
+        "text": "The explicitly requested new call succeeded."
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "text",
+          "text": "The explicitly requested new call succeeded."
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 100,
+          "outputTokens": 20
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "stop"
+        }
+      }
+    ]
+  }
+]

@@ -1,0 +1,11 @@
+version: 1
+scenario: mcp-shutdown
+profile: web
+composition: web-mcp-shutdown
+recording: authored
+header:
+  class: web-mcp-shutdown
+  pin: true
+  changes: 0
+replay:
+  override: true

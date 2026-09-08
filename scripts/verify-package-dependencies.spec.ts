@@ -149,6 +149,7 @@ describe('package dependency scope', () => {
       '@deepseek-ai/dsh-util-values',
     ])
     expect(PACKAGE_DEPENDENCY_POLICY.safeHostDependencyExports['@deepseek-ai/dsh-deque']).toEqual(['Deque'])
+    expect(PACKAGE_DEPENDENCY_POLICY.safeHostDependencyExports['@deepseek-ai/dsh-mcp-client']).toBeUndefined()
     expect(PACKAGE_DEPENDENCY_POLICY.safeHostDependencyExports['@deepseek-ai/schemastery']).toEqual(['default'])
     expect(PACKAGE_DEPENDENCY_POLICY.safeHostDependencyExports['@deepseek-ai/dsh-session/types']).toBeUndefined()
     expect(PACKAGE_DEPENDENCY_POLICY.safeHostDependencyExports['@deepseek-ai/dsh-typert-protocol']).toBeUndefined()
@@ -156,6 +157,7 @@ describe('package dependency scope', () => {
       'carrierKeyOf', 'scopeOf', 'scopeTarget',
     ])
     expect(PACKAGE_DEPENDENCY_POLICY.peerRequiredHostExports['@deepseek-ai/dsh-typert-protocol']).toBeUndefined()
+    expect(PACKAGE_DEPENDENCY_POLICY.peerRequiredHostExports['@deepseek-ai/dsh-mcp-client']).toEqual(['connectMcpServer'])
   })
 
   it('discovers the Client directory, dsh.client declarations, and configured Host packages', () => {
@@ -254,6 +256,29 @@ describe('package dependency scope', () => {
 })
 
 describe('face-aware source classification', () => {
+  it('requires an MCP connection consumer to retain the shared peer instance', () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-package-mcp-peer-'))
+    roots.push(root)
+    const mcp = '@deepseek-ai/dsh-mcp-client'
+    const subject = pkg('@f/mcp-consumer', 'packages/g/mcp-consumer/package.json', {
+      dependencies: { [mcp]: 'workspace:^' },
+      devDependencies: { [CORDIS]: 'workspace:^' },
+      peerDependencies: { [CORDIS]: 'workspace:^' },
+    })
+    const directory = join(root, subject.dir, 'src')
+    mkdirSync(directory, { recursive: true })
+    writeFileSync(join(directory, 'index.ts'), `import { connectMcpServer } from '${mcp}'; export const plugin = { connectMcpServer }`)
+    const workspaceNames = new Set([CORDIS, mcp, subject.name])
+    const observed = readPackageDependencyFacts(root, subject, 'configured-host', workspaceNames)
+    expect(observed.peerRequiredHostDependencies).toEqual(new Set([mcp]))
+    const state = { facts: [observed], packages: [subject], policyViolations: [], workspaceNames }
+    expect(collectPackageDependencyViolations(state)).toEqual([
+      `${subject.manifestPath}: ${mcp} must be matching peerDependencies + devDependencies at workspace:^; found dependencies`,
+    ])
+    repairPackageDependencyManifest(observed)
+    expect(collectPackageDependencyViolations(state)).toEqual([])
+  })
+
   it('fails when a managed Host package has no Host entry', () => {
     const root = mkdtempSync(join(tmpdir(), 'dsh-package-missing-host-'))
     roots.push(root)

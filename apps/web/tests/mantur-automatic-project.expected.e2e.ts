@@ -10,7 +10,7 @@ import type { ReplayOverrideDoc } from '@deepseek-ai/dsh-llm-replay'
 import type {} from '@deepseek-ai/dsh-mantur-projects'
 import type { Browser } from 'playwright'
 import { chromium } from 'playwright'
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { DesktopDraftStorage, type DraftCheckpoint } from '../../desktop/src/draft-storage.ts'
 import { captureStableAria, compareOrRefreshGolden, launchWebScaffold, readPersistedEvents, watchConsole, webSnapshotMode, type WebScaffold } from './scaffold.ts'
 import { ZH_BROWSER_LOCALE } from './support.ts'
@@ -45,6 +45,8 @@ it.skipIf(webSnapshotMode() === 'record' || process.platform === 'win32')('resum
   })
   let scaffold: WebScaffold | undefined
   let browser: Browser | undefined
+  let restorePicker: (() => void) | undefined
+  let restoreRootSave: (() => void) | undefined
   const failures: unknown[] = []
   try {
     await new Promise<void>((resolve, reject) => {
@@ -59,7 +61,8 @@ it.skipIf(webSnapshotMode() === 'record' || process.platform === 'win32')('resum
       replayFixture: join(fixtureRoot, 'override-only.jsonl'), replayOverride,
     })
     const projectRoot = join(scaffold.workspaceCwd, 'automatic-projects')
-    await scaffold.ctx.manturProjects.setRoot(projectRoot)
+    const initialRoot = join(scaffold.workspaceCwd, 'initial-projects')
+    await scaffold.ctx.manturProjects.setRoot(initialRoot)
     const skillRoot = join(scaffold.harnessHome, 'skills', skill.slug)
     await mkdir(skillRoot, { recursive: true })
     await writeFile(join(skillRoot, 'SKILL.md'), `---\nname: ${skill.slug}\ntitle: ${skill.name}\ndescription: ${skill.description}\n---\nHelp write a script.\n`)
@@ -95,13 +98,46 @@ it.skipIf(webSnapshotMode() === 'record' || process.platform === 'win32')('resum
     expect(prompts).toBe(0)
     expect(existsSync(projectRoot)).toBe(false)
 
-    await page.getByText('自动创建项目', { exact: true }).click()
-    await page.getByText(projectRoot, { exact: true }).waitFor()
-    const locationAria = await captureStableAria(page, '[data-workspace-footer]', scaffold.workspaceCwd)
-    await page.getByText('自动创建项目', { exact: true }).click()
+    expect(await page.locator('[data-workspace-footer] details').count()).toBe(0)
+    expect(await page.getByText(initialRoot, { exact: true }).count()).toBe(0)
+    const homeAria = await captureStableAria(page, '[data-workspace-footer]', scaffold.workspaceCwd)
+    await page.getByRole('button', { name: '设置', exact: true }).click()
+    const settings = page.getByRole('dialog', { name: '设置', exact: true })
+    const pathRow = settings.getByRole('group', { name: '默认项目路径', exact: true })
+    await pathRow.getByText(initialRoot, { exact: true }).waitFor()
+    // Only the OS picker result is substituted; the row, Remote and durable project owner are real.
+    const picker = vi.spyOn(scaffold.ctx.directoryPickerController, 'pick').mockResolvedValue(null)
+    restorePicker = () => { picker.mockRestore() }
+    const saveRoot = vi.spyOn(scaffold.ctx.manturProjects, 'setRoot')
+    restoreRootSave = () => { saveRoot.mockRestore() }
+    await pathRow.getByRole('button', { name: '更改', exact: true }).click()
+    await expect.poll(() => picker.mock.calls.length).toBe(1)
+    await pathRow.getByRole('button', { name: '更改', exact: true }).waitFor()
+    expect(saveRoot).not.toHaveBeenCalled()
+    expect(scaffold.ctx.manturProjects.settings()).toEqual({ source: 'custom', rootPath: initialRoot })
+    picker.mockResolvedValue(projectRoot)
+    await pathRow.getByRole('button', { name: '更改', exact: true }).click()
+    await pathRow.getByText(projectRoot, { exact: true }).waitFor()
+    expect(scaffold.ctx.manturProjects.settings()).toEqual({ source: 'custom', rootPath: projectRoot })
+    expect(existsSync(initialRoot)).toBe(false)
+    expect(existsSync(projectRoot)).toBe(false)
+    picker.mockRejectedValueOnce(new Error('OS picker unavailable'))
+    await pathRow.getByRole('button', { name: '更改', exact: true }).click()
+    await pathRow.getByRole('alert').waitFor()
+    expect(await pathRow.getByText(projectRoot, { exact: true }).count()).toBe(0)
+    await pathRow.getByRole('button', { name: '重试', exact: true }).click()
+    await pathRow.getByText(projectRoot, { exact: true }).waitFor()
+    saveRoot.mockRejectedValueOnce(new Error('Root save unavailable'))
+    await pathRow.getByRole('button', { name: '更改', exact: true }).click()
+    await pathRow.getByRole('alert').waitFor()
+    expect(scaffold.ctx.manturProjects.settings()).toEqual({ source: 'custom', rootPath: projectRoot })
+    await pathRow.getByRole('button', { name: '重试', exact: true }).click()
+    await pathRow.getByText(projectRoot, { exact: true }).waitFor()
+    const locationAria = await captureStableAria(page, '[role="group"][aria-label="默认项目路径"]', scaffold.workspaceCwd)
+    await settings.getByRole('button', { name: '关闭', exact: true }).click()
     await editor.fill('根据参考图编写第一集 ')
     await page.getByRole('button', { name: '短剧编剧', exact: true }).click()
-    await expect.poll(() => editor.innerText()).toContain(skill.name)
+    await expect.poll(() => editor.innerText()).toContain('短剧编剧')
     await editor.evaluate((element, bytes) => {
       const transfer = new DataTransfer()
       transfer.items.add(new File([new Uint8Array(bytes)], 'reference.png', { type: 'image/png' }))
@@ -127,7 +163,10 @@ it.skipIf(webSnapshotMode() === 'record' || process.platform === 'win32')('resum
     await page.reload()
     await page.getByRole('button', { name: '暂时跳过', exact: true }).click()
     await editor.waitFor()
-    await expect.poll(() => editor.innerText()).toContain(skill.name)
+    await page.getByRole('button', { name: '设置', exact: true }).click()
+    await pathRow.getByText(projectRoot, { exact: true }).waitFor()
+    await settings.getByRole('button', { name: '关闭', exact: true }).click()
+    await expect.poll(() => editor.innerText()).toContain('短剧编剧')
     expect(await editor.innerText()).toContain('根据参考图编写第一集')
     await page.getByRole('img', { name: 'reference.png', exact: true }).waitFor()
 
@@ -165,7 +204,7 @@ it.skipIf(webSnapshotMode() === 'record' || process.platform === 'win32')('resum
     expect(JSON.stringify(events)).not.toContain('data:image')
     expect(console.pageErrors).toEqual([])
     expect(console.warnings).toEqual([])
-    await compareOrRefreshGolden(expected, `# First-send project location\n\n${locationAria}\n\n# Lost response, retained draft\n\n${failureAria}`, webSnapshotMode())
+    await compareOrRefreshGolden(expected, `# Unassigned home\n\n${homeAria}\n\n# Default project location in General settings\n\n${locationAria}\n\n# Lost response, retained draft\n\n${failureAria}`, webSnapshotMode())
   } catch (error) {
     failures.push(error)
     const page = browser?.contexts()[0]?.pages()[0]
@@ -175,6 +214,8 @@ it.skipIf(webSnapshotMode() === 'record' || process.platform === 'win32')('resum
       await writeFile(artifact, await page.locator('body').ariaSnapshot())
     }
   } finally {
+    restoreRootSave?.()
+    restorePicker?.()
     await browser?.close().catch((error: unknown) => { failures.push(error) })
     await scaffold?.close().catch((error: unknown) => { failures.push(error) })
     if (server.listening) {

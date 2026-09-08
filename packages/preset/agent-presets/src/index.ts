@@ -159,6 +159,35 @@ export class AgentPresets extends TypertRemoteService {
    * off the untraced original (the `jobs-local` selfCtx precedent).
    */
   private readonly selfCtx: Context
+  private closing = false
+  private closed: Promise<void> | undefined
+  private readonly operations = new Set<Promise<unknown>>()
+
+  /**
+   * Freeze composition and authoring admission before the Host enumerates installed owners.
+   * Standing plugin trees remain installed for their individual shutdown operations.
+   * @returns once admitted operations settle; operation failures retain their original callers.
+   */
+  stopForShutdown(): Promise<void> {
+    this.closing = true
+    this.closed ??= (async () => {
+      while (this.operations.size > 0) await Promise.allSettled([...this.operations])
+    })()
+    return this.closed
+  }
+
+  private requireOpen(): void {
+    if (this.closing) throw new Error('agent-presets: composition is stopping')
+  }
+
+  private own<T>(operation: () => Promise<T>): Promise<T> {
+    this.requireOpen()
+    const pending = operation()
+    this.operations.add(pending)
+    const retire = (): void => { this.operations.delete(pending) }
+    void pending.then(retire, retire)
+    return pending
+  }
 
   constructor(ctx: Context, public config: Config) {
     super(ctx, 'agentPresets')
@@ -412,18 +441,20 @@ export class AgentPresets extends TypertRemoteService {
    * @throws when the preset is unknown or its composition is unusable.
    */
   async mount(agentCtx: Context, id?: string): Promise<AgentPreset> {
-    const agentKey = scopeOf(agentCtx)
-    if (agentKey === undefined) {
-      throw new Error('agent-presets: refusing to compose an unscoped context; the scope key is what joins an agent to its preset')
-    }
-    const preset = await this.resolveMountable(id)
-    const standing = await this.ensureStanding(preset)
-    // The one bind of this agent's ancestry. The binding is the only re-link
-    // authority, held privately so nothing outside this roster can move a
-    // composed agent to another preset; a later recompose layer re-links
-    // through it under the caller-owned blank-session contract.
-    this.bindings.set(agentKey, bindScopeParent(agentKey, standing.key))
-    return preset
+    return await this.own(async () => {
+      const agentKey = scopeOf(agentCtx)
+      if (agentKey === undefined) {
+        throw new Error('agent-presets: refusing to compose an unscoped context; the scope key is what joins an agent to its preset')
+      }
+      const preset = await this.resolveMountable(id)
+      const standing = await this.ensureStanding(preset)
+      // The one bind of this agent's ancestry. The binding is the only re-link
+      // authority, held privately so nothing outside this roster can move a
+      // composed agent to another preset; a later recompose layer re-links
+      // through it under the caller-owned blank-session contract.
+      this.bindings.set(agentKey, bindScopeParent(agentKey, standing.key))
+      return preset
+    })
   }
 
   /**
@@ -453,6 +484,7 @@ export class AgentPresets extends TypertRemoteService {
    * @throws when `agentCtx` carries no scope, or has already joined a preset.
    */
   composeFrom(agentCtx: Context, parentCtx: Context): string | undefined {
+    this.requireOpen()
     const agentKey = scopeOf(agentCtx)
     if (agentKey === undefined) {
       throw new Error('agent-presets: refusing to compose an unscoped context; the scope key is what joins an agent to its preset')
@@ -538,18 +570,20 @@ export class AgentPresets extends TypertRemoteService {
    * or the deployment configures no writable root.
    */
   async copy(from: string, id: string, name?: string): Promise<void> {
-    const source = await this.resolve(from)
-    // The roster check refuses ids any root supplies — shipped ones included,
-    // since a user directory named like a shipped preset is shadowed by it.
-    // The disk check inside copyComposition only sees the writable root.
-    if ((await this.list()).some(preset => preset.id === id)) {
-      throw presetExists(id)
-    }
-    await copyComposition(this.resolvedRoots, source, id, name)
-    // A settled mount under this id can only be stale (its preset was deleted
-    // from disk outside `remove`); the new preset must not inherit it. Every
-    // session already joined keeps the generation it runs on regardless.
-    this.standing.delete(id)
+    await this.own(async () => {
+      const source = await this.resolve(from)
+      // The roster check refuses ids any root supplies — shipped ones included,
+      // since a user directory named like a shipped preset is shadowed by it.
+      // The disk check inside copyComposition only sees the writable root.
+      if ((await this.list()).some(preset => preset.id === id)) {
+        throw presetExists(id)
+      }
+      await copyComposition(this.resolvedRoots, source, id, name)
+      // A settled mount under this id can only be stale (its preset was deleted
+      // from disk outside `remove`); the new preset must not inherit it. Every
+      // session already joined keeps the generation it runs on regardless.
+      this.standing.delete(id)
+    })
   }
 
   /**
@@ -575,21 +609,23 @@ export class AgentPresets extends TypertRemoteService {
    * @throws when the preset is unknown or ships with the deployment.
    */
   async remove(id: string): Promise<void> {
-    await deleteComposition(this.resolvedRoots, await this.resolve(id))
-    // Sessions on the deleted preset keep their standing mount; only new
-    // sessions see the roster without it.
-    this.standing.delete(id)
-    // Storing a default that does not exist YET is deliberate — the roster is a
-    // live directory, so a name absent now may exist by the time a session asks
-    // for it, and `resolve` reports it then. A default this call just deleted is
-    // not that case: nothing will ever supply it again, and left in place every
-    // session created without an explicit pick would fail to start. Clearing it
-    // exposes the deployment's own default underneath, which is the layering.
-    if (this.settings?.get().default !== id) return
-    await this.settingsService?.mutate(
-      SETTINGS_NAMESPACE,
-      [{ op: 'unset', path: ['default'] }],
-    )
+    await this.own(async () => {
+      await deleteComposition(this.resolvedRoots, await this.resolve(id))
+      // Sessions on the deleted preset keep their standing mount; only new
+      // sessions see the roster without it.
+      this.standing.delete(id)
+      // Storing a default that does not exist YET is deliberate — the roster is a
+      // live directory, so a name absent now may exist by the time a session asks
+      // for it, and `resolve` reports it then. A default this call just deleted is
+      // not that case: nothing will ever supply it again, and left in place every
+      // session created without an explicit pick would fail to start. Clearing it
+      // exposes the deployment's own default underneath, which is the layering.
+      if (this.settings?.get().default !== id) return
+      await this.settingsService?.mutate(
+        SETTINGS_NAMESPACE,
+        [{ op: 'unset', path: ['default'] }],
+      )
+    })
   }
 
   /**
@@ -648,6 +684,11 @@ export class AgentPresets extends TypertRemoteService {
    * @throws when the preset is unknown or its composition is unusable.
    */
   async recompose(agentCtx: Context, id: string): Promise<AgentPreset> {
+    return await this.own(() => this.recomposeAdmitted(agentCtx, id))
+  }
+
+  /** Complete a composition already admitted directly or through select. */
+  private async recomposeAdmitted(agentCtx: Context, id: string): Promise<AgentPreset> {
     const agentKey = scopeOf(agentCtx)
     if (agentKey === undefined) {
       throw new Error('agent-presets: refusing to recompose an unscoped context')
@@ -693,16 +734,18 @@ export class AgentPresets extends TypertRemoteService {
    */
   @Remote('select')
   async select(agent: Agent, agentPreset: string): Promise<string> {
-    validatePresetId(agentPreset, 'agentPreset')
-    const queued = this.switches.get(agent.id) ?? Promise.resolve()
-    const turn = queued.then(() => this.swap(agent, agentPreset))
-    const guard = turn.catch(() => undefined)
-    this.switches.set(agent.id, guard)
-    try {
-      return await turn
-    } finally {
-      if (this.switches.get(agent.id) === guard) this.switches.delete(agent.id)
-    }
+    return await this.own(async () => {
+      validatePresetId(agentPreset, 'agentPreset')
+      const queued = this.switches.get(agent.id) ?? Promise.resolve()
+      const turn = queued.then(() => this.swap(agent, agentPreset))
+      const guard = turn.catch(() => undefined)
+      this.switches.set(agent.id, guard)
+      try {
+        return await turn
+      } finally {
+        if (this.switches.get(agent.id) === guard) this.switches.delete(agent.id)
+      }
+    })
   }
 
   /** One queued switch: re-check, recompose, then record what the agent runs. */
@@ -720,7 +763,7 @@ export class AgentPresets extends TypertRemoteService {
         { sessionId: agent.id, agentPreset },
       )
     }
-    const preset = await this.recompose(agent.ctx, agentPreset)
+    const preset = await this.recomposeAdmitted(agent.ctx, agentPreset)
     // Recorded only after the swap committed: the log states what the agent
     // runs, and a rejected mount leaves the previous composition.
     agent.session.append('agent-preset/selected', { agentPreset: preset.id })
@@ -739,8 +782,10 @@ export class AgentPresets extends TypertRemoteService {
    * @throws when the preset is unknown or its composition is unusable.
    */
   async standingKeyFor(id?: string): Promise<ScopeKey> {
-    const preset = await this.resolveMountable(id)
-    return (await this.ensureStanding(preset)).key
+    return await this.own(async () => {
+      const preset = await this.resolveMountable(id)
+      return (await this.ensureStanding(preset)).key
+    })
   }
 
   /** Resolve (or create, single-flight) the standing mount of one preset. */

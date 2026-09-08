@@ -11,6 +11,8 @@ kind: "package-reference"
 
 `dsh-goal-round-driver` 会在同一会话中自动继续 active 的 goal：每当 agent 空闲且存在 active、已启用续行并有剩余容量的 goal 时，驱动器就会启动下一个 Goal Round。每一轮都是朝目标前进的一次模型轮次，由保留的 goal-round 提示词驱动；只有来源为 goal 的 Round 会计入 goal 的 Round 上限，上限耗尽时 goal 会记录一个 blocker。驱动器没有自己的配置——Round 上限属于 goal 定义，面向模型的阻塞阈值属于 `dsh-tool-goal`，策略因此只保留在一处。当任务应跨多轮自行推进时，与 `dsh-goal` 和 `dsh-tool-goal` 一起挂载它；当每一步都需要人工 steering（中途引导）时，不要挂载。
 
+`ctx.goalRoundDriver.stopForShutdown()` 冻结自动调度，撤销当前目标的自动执行授权，在保留待执行输入的同时取消已接纳的目标轮次，并等待原始驱动任务和轮次完成。步骤检查在插件卸载前保持安装。Host 关闭先冻结智能体接纳，再停止此驱动，并在两者都结束后验证 Session 写入器。仅停止目标驱动仍允许之后的手动请求，但不会重启自动轮次。
+
 ## 目录
 
 - [使用本包](#use-this-package)

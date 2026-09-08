@@ -29,7 +29,7 @@ interface FakeChokidar {
   __instances: Array<{
     path: string
     options: { awaitWriteFinish: { stabilityThreshold: number; pollInterval: number } }
-    watcher: import('node:events').EventEmitter
+    watcher: import('node:events').EventEmitter & { close(): Promise<void> }
   }>
 }
 
@@ -64,6 +64,39 @@ async function boot(config: ConstructorParameters<typeof FileSettingsProvider>[1
 }
 
 describe('watcher pipeline', () => {
+  it.each([false, true])('joins watcher close and a started settings callback (close failure: %s)', async (fails) => {
+    const dir = await tempDir()
+    const path = join(dir, 'settings.yaml')
+    const ctx = await boot({ path })
+    const scope = ctx.settings.register('ui-theme', ThemeSchema)
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    scope.watch(async () => { entered.resolve(undefined); await release.promise })
+    await scope.update({ theme: 'light' })
+    await entered.promise
+    const [instance] = await fakeInstances()
+    const failure = new Error('watcher close failed')
+    const close = vi.spyOn(instance!.watcher, 'close').mockImplementation(async () => {
+      if (fails) throw failure
+    })
+    const stopping = ctx.settings.stopForShutdown()
+    expect(ctx.settings.stopForShutdown()).toBe(stopping)
+    let stopped = false
+    const observed = stopping.then(() => { stopped = true }, (error: unknown) => { stopped = true; return error })
+    try {
+      await new Promise<void>(resolve => setImmediate(resolve))
+      expect(stopped).toBe(false)
+      await expect(scope.update({ theme: 'late' })).rejects.toThrow('disposed')
+      release.resolve(undefined)
+      if (fails) expect(await observed).toMatchObject({ errors: [failure] })
+      else expect(await observed).toBeUndefined()
+      expect(close).toHaveBeenCalledTimes(1)
+    } finally {
+      release.resolve(undefined)
+      await observed
+    }
+  })
+
   it('clamps the write-settle poll interval for a zero debounce', async () => {
     const dir = await tempDir()
     await boot({ path: join(dir, 'settings.yaml'), debounceMs: 0 })

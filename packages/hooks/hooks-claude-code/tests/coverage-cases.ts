@@ -1,3 +1,4 @@
+import CommandScopes from '@deepseek-ai/dsh-command-scopes'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync, writeFileSync, chmodSync, existsSync, readFileSync } from 'node:fs'
@@ -46,6 +47,7 @@ async function harness(configPath: string, adapter: MockAdapter, opts: HarnessOp
   if (opts.sessionRoot !== undefined) await ctx.plugin(JsonlSessionPersistence, { root: opts.sessionRoot })
   await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(LocalSubprocessRuntime)
+  await ctx.plugin(CommandScopes, { identity: 'none' })
   await ctx.plugin(LocalBashExecutor, { timeoutMs: 10_000 })
   await ctx.plugin(HooksClaude, { configPath, ...opts })
   ctx.llm.registerAdapter(['mock'], adapter)
@@ -366,6 +368,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
       await ctx.plugin(SessionProjectionRegistry)
       await ctx.plugin(AgentLoop, { agents: [] })
       await ctx.plugin(LocalSubprocessRuntime)
+      await ctx.plugin(CommandScopes, { identity: 'none' })
       await ctx.plugin(LocalBashExecutor, { timeoutMs: 10_000 })
       // Direct apply with only configPath — bypasses schemastery's defaults, so
       // the bridge must run on the raw minimal config (the per-hook timeout is
@@ -667,6 +670,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
       await ctx.plugin(AgentLoop, { agents: [] })
       // Executor default cwd = serverDir (deliberately NOT the session cwd).
       await ctx.plugin(LocalSubprocessRuntime)
+      await ctx.plugin(CommandScopes, { identity: 'none' })
       await ctx.plugin(LocalBashExecutor, { timeoutMs: 10_000, cwd: serverDir })
       await ctx.plugin(HooksClaude, { configPath: join(serverDir, 'hooks.json') })
       ctx.llm.registerAdapter(['mock'], adapter)
@@ -697,6 +701,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
       await ctx.plugin(AgentLoop, { agents: [] })
       // Executor default cwd = serverDir (deliberately NOT the child session cwd).
       await ctx.plugin(LocalSubprocessRuntime)
+      await ctx.plugin(CommandScopes, { identity: 'none' })
       await ctx.plugin(LocalBashExecutor, { timeoutMs: 10_000, cwd: serverDir })
       await ctx.plugin(HooksClaude, { configPath: join(serverDir, 'hooks.json') })
       ctx.llm.registerAdapter(['mock'], new MockAdapter([]))

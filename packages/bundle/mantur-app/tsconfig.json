@@ -16,6 +16,39 @@
     },
     {
       "path": "../../core/system-prompt"
+    },
+    {
+      "path": "../../core/agent"
+    },
+    {
+      "path": "../../core/agent-loop"
+    },
+    {
+      "path": "../../preset/agent-presets"
+    },
+    {
+      "path": "../../boot/app-boot"
+    },
+    {
+      "path": "../../util/brand"
+    },
+    {
+      "path": "../../host/directory-picker"
+    },
+    {
+      "path": "../../../vendor/hmr"
+    },
+    {
+      "path": "../../../vendor/loader"
+    },
+    {
+      "path": "../../llm/llm"
+    },
+    {
+      "path": "../../code-runtime/code-runtime-worker-thread"
+    },
+    {
+      "path": "../../extensions/cordis-host-runner"
     }
   ]
 }

@@ -82,7 +82,7 @@ await handle.agent.whenIdle()
 
 ### 步骤准入
 
-`PreStepDecision` 要么是 `{ kind: 'reject' }`，要么是 `{ kind: 'enter', messages, startsRequestSeries? }`。enter 分支包含完整、带标识且冻结的消息批次。`startsRequestSeries: true` 声明一个独立的模型消息序列；包装下游 enter 的监听器会保留该声明与批次，除非有意替换其中一项。领取会从 inbox 移除候选消息，领取后插入的消息则等待后续边界。
+`PreStepDecision` 要么是 `{ kind: 'reject' }`，要么是 `{ kind: 'enter', messages, startsRequestSeries? }`。enter 分支包含完整、带标识且冻结的消息批次。`startsRequestSeries: true` 声明一个独立的模型消息序列；包装下游 enter 的监听器会保留该声明与批次，除非有意替换其中一项。领取会从 inbox 移除候选消息，领取后插入的消息则等待后续边界。 Host 停机可以永久冻结注册表准入，包括所有存活收件箱的公开修改。已有且尚未执行的领取批次保留一次性恢复操作，保持消息标识并将消息放回原队列头部；冻结不会丢弃输入，也不能证明会话已持久化。
 
 ### 源码地图
 

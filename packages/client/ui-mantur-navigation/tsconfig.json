@@ -15,6 +15,7 @@
     { "path": "../locale" },
     { "path": "../store" },
     { "path": "../ui-layout" },
+    { "path": "../ui-mantur-account" },
     { "path": "../ui-conversation" },
     { "path": "../ui-primitives" },
     { "path": "../ui-renderer" },

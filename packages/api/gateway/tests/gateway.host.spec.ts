@@ -391,6 +391,31 @@ class InheritedMethodBase extends Service {
 class InheritedMethodService extends InheritedMethodBase {}
 
 describe('TypertGatewayService', () => {
+  it('joins an admitted unary result without cancelling or replaying the invocation', async () => {
+    const { ctx, service } = await setup()
+    const held = Promise.withResolvers<string>()
+    service.nextResult = held.promise
+    const invocation = ctx.typertGateway.invoke({ namespace: 'goals', method: 'passthrough', args: { value: 'original' } })
+    await new Promise<void>(resolve => setImmediate(resolve))
+    expect(service.calls).toEqual(['passthrough'])
+    let stopped = false
+    const stopping = ctx.typertGateway.stopForShutdown()
+    expect(ctx.typertGateway.stopForShutdown()).toBe(stopping)
+    void stopping.then(() => { stopped = true })
+    try {
+      await new Promise<void>(resolve => setImmediate(resolve))
+      expect(stopped).toBe(false)
+      held.resolve('original result')
+      expect(await invocation).toBe('original result')
+      await stopping
+      expect(service.calls).toEqual(['passthrough'])
+    } finally {
+      held.resolve('original result')
+      await Promise.all([invocation, stopping])
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('invokes a strict direct method with schema decoding and a live lookup', async () => {
     const { ctx, service } = await setup()
     const agent = { id: 'agent-1' }

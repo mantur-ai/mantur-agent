@@ -173,6 +173,13 @@ async write(session: Session): Promise<void>
  * @returns the projection cut at the log end.
  */
 coldSnapshot( meta: SessionHeader, inheritedEventCount: SessionLogOffset, events: readonly SessionEvent[], ): ProjectionSnapshot
+
+/**
+ * Freeze checkpoint producers and join live-session writes and cold-read write-back.
+ * Derived-cache write failures retain their existing caller or warning behavior.
+ * @returns completion after admitted writes settle; the storage owner closes the domain.
+ */
+stopForShutdown(): Promise<void>
 ```
 
 Types: [Session](session.md) · [SessionEvent](session.md) · [SessionHeader](persistence.md) · [SessionLogOffset](session.md)

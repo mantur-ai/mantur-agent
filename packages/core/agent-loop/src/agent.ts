@@ -71,6 +71,9 @@ export class ReactLoopAgent implements Agent {
   readonly inbox: Inbox
   private phase: Phase
   private activityDone: Promise<void> = Promise.resolve()
+  private pendingClaim: ReturnType<Inbox['claim']> | undefined
+  private shutdown: Promise<void> | undefined
+  private readonly shutdownErrors: unknown[] = []
 
   /** The agent-scoped registration boundary; the lifecycle owner unwinds it after the driver exits. */
   readonly scope: Scope
@@ -120,6 +123,7 @@ export class ReactLoopAgent implements Agent {
   }
 
   send(message: UserMessage, target: InboxTarget, wakeup: boolean): void {
+    this.loopCtx.agents.assertAdmission()
     // Waking input cannot join an aborted activity, so it starts the next turn.
     // Captured before the insertion so a reentrant cancel from a splice observer cannot reclassify it.
     const wakingAfterAbort = wakeup && this.phase.kind !== 'idle' && this.phase.abort.signal.aborted
@@ -149,6 +153,7 @@ export class ReactLoopAgent implements Agent {
   }
 
   runMaintenance<T>(job: (signal: AbortSignal) => Promise<T>): Promise<T> {
+    this.loopCtx.agents.assertAdmission()
     if (this.phase.kind !== 'idle') throw new Error(`agent "${this.id}" already has active work`)
     const done = Promise.withResolvers<void>()
     const maintenance: Phase = {
@@ -179,6 +184,7 @@ export class ReactLoopAgent implements Agent {
    *   the inbox insertion so a reentrant cancel cannot reclassify it.
    */
   private wakeDriver(wakeAfterAbort = false): void {
+    if (!this.loopCtx.agents.acceptingWork) return
     if (this.phase.kind !== 'idle') {
       // Maintenance and aborted drivers cannot deliver the wake: latch it for
       // replay at convergence. Live drivers claim queued work themselves;
@@ -208,6 +214,31 @@ export class ReactLoopAgent implements Agent {
     } while (activity !== this.activityDone)
   }
 
+  /**
+   * Stop this driver after registry admission has closed, preserving unexecuted input.
+   * The scope and session remain live for resource convergence and final persistence.
+   * @returns driver completion; rejects on shutdown failures or unmatched event boundaries.
+   */
+  stopForShutdown(): Promise<void> {
+    if (this.shutdown !== undefined) return this.shutdown
+    if (this.loopCtx.agents.acceptingWork) throw new Error('freeze agent admission before stopping drivers')
+    const completion = Promise.withResolvers<void>()
+    this.shutdown = completion.promise
+    const stop = async (): Promise<void> => {
+      this.cancel({ kind: 'hook', reason: 'desktop update' }, { keepInbox: true })
+      await this.whenIdle()
+      this.pendingClaim?.restore()
+      this.pendingClaim = undefined
+      if (this.shutdownErrors.length > 0) throw new AggregateError(this.shutdownErrors, 'agent shutdown failed')
+      const boundary = this.loopCtx.sessionProjections.stateOf(this.session, 'turnBoundary')
+      if (boundary === undefined || boundary.openTurnStartSeq !== null || boundary.lastStepBoundary?.kind === 'start') {
+        throw new Error(`agent "${this.id}" has unclosed execution records`)
+      }
+    }
+    stop().then(completion.resolve, completion.reject)
+    return completion.promise
+  }
+
   /** Report one failure at its live boundary, then preserve it for driver containment. */
   private throwError(error: unknown): never {
     const turn = this.phase.kind === 'running' ? this.phase.turn : this.phase.lastTurn
@@ -219,9 +250,14 @@ export class ReactLoopAgent implements Agent {
   private async kick(): Promise<void> {
     try {
       while (await this.turn()) {}
-    } catch (_error) {
-      // Reported failures and cancellation are contained at the driver boundary.
+    } catch (error: unknown) {
+      // Ordinary driving contains reported failures; shutdown must retain non-cancellation failures.
+      if (this.shutdown !== undefined && !(this.phase.kind === 'running'
+        && this.phase.abort.signal.aborted && error === this.phase.abort.signal.reason)) {
+        this.shutdownErrors.push(error)
+      }
     } finally {
+      if (this.shutdown === undefined) this.pendingClaim = undefined
       /* v8 ignore next -- kick owns a running phase until this driver boundary */
       if (this.phase.kind === 'running') {
         const { turn, wakeRequested } = this.phase
@@ -235,7 +271,11 @@ export class ReactLoopAgent implements Agent {
     /* v8 ignore next -- private callers establish the running phase before proposing a step */
     if (this.phase.kind !== 'running') throw new Error(`agent "${this.id}": pre-step outside running phase`)
     const signal = this.phase.abort.signal
-    const claimed = this.inbox.claim(target, position.turn)
+    signal.throwIfAborted()
+    this.loopCtx.agents.assertAdmission()
+    const claim = this.inbox.claim(target, position.turn)
+    this.pendingClaim = claim
+    const claimed = claim.messages
     const assembly = await this.loopCtx.systemPrompt.assemble(assembleContextFor(this, signal))
     signal.throwIfAborted()
     const sections = renderContextSections(assembly)
@@ -274,18 +314,24 @@ export class ReactLoopAgent implements Agent {
         const step = phase.step + 1
         const decision = await this.preStep(target, { turn, step })
         if (decision.kind === 'reject') {
+          this.pendingClaim = undefined
           turnEnds = { kind: 'blocked' }
           return false
         }
-        if (turnEnds && decision.messages.length === 0) break
+        if (turnEnds && decision.messages.length === 0) {
+          this.pendingClaim = undefined
+          break
+        }
         // A removed waking message or an enter decision rewritten to empty
         // still owns the initial turn boundary, but it spends no model call.
         if (phase.step === 0 && decision.messages.length === 0) {
+          this.pendingClaim = undefined
           turnEnds = { kind: 'completed' }
           return false
         }
         signal.throwIfAborted()
         this.session.append('step/start', { turn, step })
+        this.pendingClaim = undefined
         phase.step = step
         try {
           for (const message of decision.messages) {

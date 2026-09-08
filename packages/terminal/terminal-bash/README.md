@@ -38,6 +38,7 @@ Mount the terminal service, a subprocess provider, the sandbox and policy servic
 ```yaml
 - name: '@deepseek-ai/dsh-terminal'
 - name: '@deepseek-ai/dsh-subprocess-local'
+- name: '@deepseek-ai/dsh-command-scopes'
 - name: '@deepseek-ai/dsh-sandbox-local'
 - name: '@deepseek-ai/dsh-sandbox-policy'
 - name: '@deepseek-ai/dsh-terminal-bash'
@@ -65,7 +66,7 @@ Both dialects expose the same readiness contract, so consumers are dialect-agnos
 
 ### Sandboxing and safe operation
 
-The shell runs under the effective sandbox boundary for its whole life. Changing the effective sandbox mode is rejected while the owner still has open sessions or a spawn in progress — wait for creation to settle and close the sessions first, so a terminal opened with wider access cannot survive a downgrade. The backend supplies only terminal-specific environment overrides; the subprocess provider applies its shared credential scrub.
+The shell runs under the effective sandbox boundary for its whole life. Changing the effective sandbox mode is rejected while the owner still has open sessions or a spawn in progress — wait for creation to settle and close the sessions first, so a terminal opened with wider access cannot survive a downgrade. The backend supplies terminal-specific environment overrides; [command-scopes](../../shell/command-scopes/README.md) prepares identity before allocation and retains it across sends until complete terminal cleanup and release acknowledgment. The subprocess provider applies its shared credential scrub.
 
 ### Observable outcomes and failures
 

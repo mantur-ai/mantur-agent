@@ -6,6 +6,7 @@
 
 import { mkdirSync, mkdtempSync, unlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
+import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -19,6 +20,7 @@ import {
   loadOptionalPatches,
   PROFILE_PATCH_FILENAME,
   watchUserPatches,
+  stopUserPatchWatches,
 } from '../src/index.ts'
 
 const NAME = 'dsh-test-bin'
@@ -449,5 +451,104 @@ describe('boot with user patches', () => {
     } finally {
       await ctx.fiber.dispose()
     }
+  })
+})
+
+describe('profile patch-watcher shutdown', () => {
+  it('joins watcher opening and its refresh cleanup before reporting stopped', async () => {
+    const dir = tmp()
+    const ctx = await boot(NAME, writeTree(dir))
+    const opening = Promise.withResolvers<() => Promise<void>>()
+    const enteredClose = Promise.withResolvers<undefined>()
+    const releaseClose = Promise.withResolvers<undefined>()
+    let closes = 0
+    const close = async (): Promise<void> => {
+      closes += 1
+      enteredClose.resolve(undefined)
+      await releaseClose.promise
+    }
+    ctx.provide('hmr', { registerConfig: () => opening.promise })
+    const watching = watchUserPatches(ctx, { binName: NAME, filename: join(dir, PROFILE_PATCH_FILENAME) })
+    const stopping = stopUserPatchWatches(ctx)
+    try {
+      let stopped = false
+      void stopping.then(() => { stopped = true })
+      expect(stopUserPatchWatches(ctx)).toBe(stopping)
+      await Promise.resolve()
+      expect(stopped).toBe(false)
+      opening.resolve(close)
+      const dispose = await watching
+      expect(stopped).toBe(false)
+      await enteredClose.promise
+      expect(stopped).toBe(false)
+      await expect(watchUserPatches(ctx, { binName: NAME, filename: join(dir, 'late.yml') })).rejects.toThrow('stopping')
+      releaseClose.resolve(undefined)
+      await stopping
+      await dispose()
+      expect(closes).toBe(1)
+    } finally {
+      opening.resolve(close)
+      releaseClose.resolve(undefined)
+      await Promise.allSettled([watching, stopping])
+      await ctx.fiber.dispose()
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('reports failed opening while still closing an already registered watcher', async () => {
+    const dir = tmp()
+    const ctx = await boot(NAME, writeTree(dir))
+    let closes = 0
+    const opening = Promise.withResolvers<() => Promise<void>>()
+    let registrations = 0
+    ctx.provide('hmr', { registerConfig: () => {
+      registrations += 1
+      return registrations === 1 ? Promise.resolve(async () => { closes += 1 }) : opening.promise
+    } })
+    await watchUserPatches(ctx, { binName: NAME, filename: join(dir, 'first.yml') })
+    const watching = watchUserPatches(ctx, { binName: NAME, filename: join(dir, 'second.yml') })
+    const stopping = stopUserPatchWatches(ctx)
+    const rejectedWatch = expect(watching).rejects.toThrow('opening failed')
+    const rejectedStop = expect(stopping).rejects.toThrow('did not stop')
+    try {
+      opening.reject(new Error('opening failed'))
+      await rejectedWatch
+      await rejectedStop
+      expect(closes).toBe(1)
+    } finally {
+      opening.reject(new Error('opening failed'))
+      await Promise.allSettled([watching, stopping])
+      await ctx.fiber.dispose()
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('retains a failed exact watcher close while joining every other close', async () => {
+    const dir = tmp()
+    const ctx = await boot(NAME, writeTree(dir))
+    let calls = 0
+    ctx.provide('hmr', { registerConfig: async () => () => {
+      calls += 1
+      if (calls === 1) throw new Error('watch close failed')
+      return Promise.resolve()
+    } })
+    try {
+      await watchUserPatches(ctx, { binName: NAME, filename: join(dir, 'first.yml') })
+      await watchUserPatches(ctx, { binName: NAME, filename: join(dir, 'second.yml') })
+      await expect(stopUserPatchWatches(ctx)).rejects.toThrow('did not stop')
+      await expect(stopUserPatchWatches(ctx)).rejects.toThrow('did not stop')
+      expect(calls).toBe(2)
+    } finally {
+      await ctx.fiber.dispose()
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('freezes a root even if watcher setup has not started', async () => {
+    const ctx = new Context()
+    try {
+      await stopUserPatchWatches(ctx)
+      await expect(watchUserPatches(ctx, { binName: NAME, filename: 'unused.yml' })).rejects.toThrow('stopping')
+    } finally { await ctx.fiber.dispose() }
   })
 })

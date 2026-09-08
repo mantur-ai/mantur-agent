@@ -20,7 +20,13 @@ import HttpServer from '@deepseek-ai/dsh-host-webserver'
 import type { DirectoryPicker } from '@deepseek-ai/dsh-host-directory-picker'
 import BrowseDirectoryPicker from '@deepseek-ai/dsh-host-directory-picker-browse'
 import NativeDirectoryPicker from '@deepseek-ai/dsh-host-directory-picker-native'
+import { pickNativeDirectory } from '@deepseek-ai/dsh-host-directory-picker-native/src/native-picker.ts'
 import * as DirectoryPickerAuto from '../src/index.ts'
+
+vi.mock('@deepseek-ai/dsh-host-directory-picker-native/src/native-picker.ts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@deepseek-ai/dsh-host-directory-picker-native/src/native-picker.ts')>()
+  return { ...actual, pickNativeDirectory: vi.fn(actual.pickNativeDirectory) }
+})
 
 const renameControl = vi.hoisted(() => ({
   attempts: 0,
@@ -163,6 +169,28 @@ function stubAttendedHost(): void {
 }
 
 describe('real Loader composition', () => {
+  it('joins an accepted native chooser before unloading its real Loader entry', async () => {
+    stubAttendedHost()
+    const { ctx } = await loadComposition('127.0.0.1')
+    const capability = ctx.directoryPicker.capability()
+    if (capability.kind !== 'native') throw new Error('expected native picker')
+    const childClosed = Promise.withResolvers<string | null>()
+    vi.mocked(pickNativeDirectory).mockImplementationOnce(() => childClosed.promise)
+    const pick = capability.pick(new AbortController().signal).catch((error: unknown) => error)
+    const autoEntry = [...ctx.loader.entries()].find(entry => entry.options.name === AUTO)!
+    let disposed = false
+    const disposal = autoEntry.fiber!.dispose().then(() => { disposed = true })
+    try {
+      await vi.waitFor(() => { expect(vi.mocked(pickNativeDirectory).mock.calls.at(-1)![0].aborted).toBe(true) })
+      expect(disposed).toBe(false)
+      await expect(capability.pick(new AbortController().signal)).rejects.toThrow('is stopping')
+    } finally {
+      childClosed.reject(new Error('owned chooser closed'))
+      await Promise.all([pick, disposal])
+    }
+    expect(ctx.get('directoryPicker')).toBeUndefined()
+  })
+
   // The 60s budget covers this file's static imports (webserver plus both
   // backend node halves through tsx), which dominate on cold caches; the
   // Loader itself resolves nothing here — `loader.internal` is a module map.

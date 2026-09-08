@@ -28,6 +28,7 @@
     "@deepseek-ai/dsh-code-runtime-worker-thread": "workspace:^",
     "@deepseek-ai/dsh-command-compact": "workspace:^",
     "@deepseek-ai/dsh-command-goal": "workspace:^",
+    "@deepseek-ai/dsh-command-scopes": "workspace:^",
     "@deepseek-ai/dsh-commands": "workspace:^",
     "@deepseek-ai/dsh-compaction": "workspace:^",
     "@deepseek-ai/dsh-compaction-basic": "workspace:^",

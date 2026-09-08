@@ -56,11 +56,75 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-function subject(remote: object): ManturMarketplaceStore {
-  return new ManturMarketplaceStore({ remote } as Context)
+function subject(remote: { manturAccount?: object; [key: string]: unknown }, openNative = vi.fn()): ManturMarketplaceStore {
+  return new ManturMarketplaceStore({ remote: { ...remote,
+    manturAccount: { identityMode: vi.fn().mockResolvedValue({ ok: true, value: 'standalone' }), ...remote.manturAccount },
+  }, bail: openNative } as unknown as Context)
 }
 
 describe('Mantur marketplace store', () => {
+  it.each(['closed', 'skipped'] as const)('preserves selected detail and permissions after native outcome %s', async (outcome) => {
+    const request = Promise.withResolvers<typeof outcome>()
+    const identityMode = vi.fn().mockResolvedValue({ ok: true, value: 'desktop-managed' })
+    const open = vi.fn(() => request.promise)
+    const store = subject({ manturAccount: { identityMode } }, open)
+    const state = { phase: 'ready' as const, catalog: { skills: [listed], installedCount: 0, signedIn: false }, detailLoading: 'kept' }
+    store.store.set(state)
+    const login = store.startLogin()
+    await store.startLogin()
+    expect(identityMode).toHaveBeenCalledOnce()
+    request.resolve(outcome)
+    await login
+    expect(open).toHaveBeenCalledOnce()
+    expect(store.store.getSnapshot()).toMatchObject({ ...state, loginPhase: undefined })
+  })
+
+  it.each(['mode-error', 'owner-missing', 'owner-busy', 'owner-unloaded'] as const)('reports %s without selecting legacy credentials', async (failure) => {
+    const identityMode = vi.fn().mockResolvedValue(failure === 'mode-error' ? { ok: false } : { ok: true, value: 'desktop-managed' })
+    const legacy = vi.fn()
+    const open = vi.fn(() => {
+      if (failure === 'owner-busy') throw new Error('busy')
+      if (failure === 'owner-unloaded') return Promise.reject(new Error('unavailable'))
+      return undefined
+    })
+    const store = subject({ manturAccount: { identityMode, startLogin: legacy } }, open)
+    store.store.set({ phase: 'ready', catalog: { skills: [listed], installedCount: 0, signedIn: false } })
+    await store.startLogin()
+    expect(store.store.getSnapshot()).toMatchObject({ loginPhase: 'unavailable', catalog: { signedIn: false } })
+    expect(legacy).not.toHaveBeenCalled()
+  })
+
+  it.each([false, true])('ignores a late native result after disposal with ok=%s', async (ok) => {
+    const request = Promise.withResolvers<'authenticated'>()
+    const open = vi.fn(() => request.promise)
+    const store = subject({ manturAccount: { identityMode: vi.fn().mockResolvedValue({ ok: true, value: 'desktop-managed' }) } }, open)
+    store.store.set({ phase: 'ready', catalog: { skills: [listed], installedCount: 0, signedIn: false } })
+    const login = store.startLogin()
+    await Promise.resolve()
+    expect(open).toHaveBeenCalledOnce()
+    store.dispose()
+    const state = store.store.getSnapshot()
+    if (ok) request.resolve('authenticated'); else request.reject(new Error('late failure'))
+    await login
+    expect(store.store.getSnapshot()).toBe(state)
+  })
+
+  it('uses the native account owner without starting a legacy attempt or repeating installation', async () => {
+    const startLogin = vi.fn().mockResolvedValue({ ok: false })
+    const openNative = vi.fn().mockResolvedValue('authenticated')
+    const installSkill = vi.fn()
+    const store = subject({ manturAccount: {
+      identityMode: vi.fn().mockResolvedValue({ ok: true, value: 'desktop-managed' }), startLogin,
+    }, manturMarketplace: { installSkill } }, openNative)
+    const detail = { ...listed, usesOperators: [] }
+    store.store.set({ phase: 'ready', catalog: { skills: [listed], installedCount: 0, signedIn: false }, detail })
+    await store.startLogin()
+    expect(startLogin).not.toHaveBeenCalled()
+    expect(openNative).toHaveBeenCalledExactlyOnceWith('mantur/native-account-open')
+    expect(installSkill).not.toHaveBeenCalled()
+    expect(store.store.getSnapshot()).toMatchObject({ detail, catalog: { signedIn: true }, login: undefined, loginPhase: undefined })
+  })
+
   it('reuses settled catalogs and coalesces the same pending Recipe query', async () => {
     const list = vi.fn().mockResolvedValue({
       ok: true,
@@ -689,6 +753,20 @@ describe('Mantur marketplace store', () => {
     expect(cancelLogin).toHaveBeenCalledWith(attemptId)
     expect(store.store.getSnapshot()).toMatchObject({ login: undefined, loginPhase: undefined })
     store.dispose()
+  })
+
+  it('ignores a standalone login reply after the requesting owner leaves', async () => {
+    const dispatched = Promise.withResolvers<undefined>()
+    const reply = Promise.withResolvers<{ ok: false; error: { code: string; message: string } }>()
+    const store = subject({ manturAccount: { startLogin: () => { dispatched.resolve(undefined); return reply.promise } } })
+    store.store.set({ phase: 'ready', catalog: { skills: [], installedCount: 0, signedIn: false } })
+    const pending = store.startLogin()
+    await dispatched.promise
+    store.dispose()
+    const state = store.store.getSnapshot()
+    reply.resolve({ ok: false, error: { code: 'gateway/internal', message: 'failed' } })
+    await pending
+    expect(store.store.getSnapshot()).toBe(state)
   })
 
   it('ignores stale login start, cancellation, and polling settlements', async () => {

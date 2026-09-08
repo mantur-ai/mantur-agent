@@ -9,6 +9,7 @@ import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { MockAdapter, textResponse } from './mock-adapter.ts'
+import { ReactLoopAgent } from '../src/agent.ts'
 
 async function harness(adapter: MockAdapter): Promise<Context> {
   const ctx = new Context()
@@ -28,6 +29,168 @@ function send(agent: Agent, text: string): void {
 }
 
 describe('Agent', () => {
+  it('does not requeue input from a completed model step during shutdown', async () => {
+    const adapter = new MockAdapter([textResponse('done')])
+    const ctx = await harness(adapter)
+    const agent = await ctx.agentLoop.create(SessionId('shutdown-completed'), { provider: 'mock', model: 'mock' }) as ReactLoopAgent
+    try {
+      send(agent, 'run once')
+      await agent.whenIdle()
+      ctx.agents.freezeAdmission()
+      await agent.stopForShutdown()
+      expect(agent.inbox.hasPending).toBe(false)
+      expect(adapter.requests).toHaveLength(1)
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('refuses shutdown proof for an earlier failed turn closing event', async () => {
+    const ctx = await harness(new MockAdapter([textResponse('done')]))
+    const agent = await ctx.agentLoop.create(SessionId('shutdown-unclosed'), { provider: 'mock', model: 'mock' }) as ReactLoopAgent
+    ctx.on('agent/turn-stopping', () => {
+      vi.spyOn(agent.session, 'append').mockImplementationOnce(() => { throw new Error('turn close failed') })
+    })
+    try {
+      send(agent, 'run')
+      await agent.whenIdle()
+      ctx.agents.freezeAdmission()
+      await expect(agent.stopForShutdown()).rejects.toThrow('unclosed execution records')
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('restores claimed input ahead of later queued work when shutdown interrupts assembly', async () => {
+    const adapter = new MockAdapter([textResponse('unexpected')])
+    const ctx = await harness(adapter)
+    const agent = await ctx.agentLoop.create(SessionId('shutdown-claim'), { provider: 'mock', model: 'mock' }) as ReactLoopAgent
+    const release = Promise.withResolvers<undefined>()
+    const assemble = ctx.systemPrompt.assemble.bind(ctx.systemPrompt)
+    const paused = vi.spyOn(ctx.systemPrompt, 'assemble').mockImplementation(async (input) => {
+      await release.promise
+      return assemble(input)
+    })
+    const input = (text: string) => createUserMessage({ content: [{ type: 'text', text }], source: { kind: 'user' } })
+    const context = input('context')
+    const first = input('first')
+    const later = input('later')
+    try {
+      expect(() => agent.stopForShutdown()).toThrow('freeze agent admission')
+      agent.inject(context)
+      agent.followup(first)
+      await vi.waitFor(() => { expect(paused).toHaveBeenCalledOnce() })
+      agent.followup(later)
+      ctx.agents.freezeAdmission()
+      const stopping = agent.stopForShutdown()
+      release.resolve(undefined)
+      await stopping
+      expect(agent.stopForShutdown()).toBe(stopping)
+      expect(agent.inbox.nextStep).toEqual([context])
+      expect(agent.inbox.nextTurn).toEqual([first, later])
+      expect(adapter.requests).toHaveLength(0)
+      expect(agent.session.snapshotEvents().filter(event => event.type === 'turn/end')).toMatchObject([
+        { data: { reason: { kind: 'aborted' } } },
+      ])
+    } finally {
+      release.resolve(undefined)
+      paused.mockRestore()
+      await agent.whenIdle()
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('restores unexecuted input when the step opening event fails during shutdown', async () => {
+    const adapter = new MockAdapter([textResponse('unexpected')])
+    const ctx = await harness(adapter)
+    const agent = await ctx.agentLoop.create(SessionId('shutdown-step-opening'), { provider: 'mock', model: 'mock' }) as ReactLoopAgent
+    const release = Promise.withResolvers<undefined>()
+    const assemble = ctx.systemPrompt.assemble.bind(ctx.systemPrompt)
+    const paused = vi.spyOn(ctx.systemPrompt, 'assemble').mockImplementation(async (input) => {
+      await release.promise
+      return assemble(input)
+    })
+    const message = createUserMessage({ content: [{ type: 'text', text: 'not executed' }], source: { kind: 'user' } })
+    const failure = new Error('step opening event could not be appended')
+    let rejected: Promise<void> | undefined
+    try {
+      agent.followup(message)
+      await vi.waitFor(() => { expect(paused).toHaveBeenCalledOnce() })
+      vi.spyOn(agent.session, 'append').mockImplementationOnce(() => {
+        ctx.agents.freezeAdmission()
+        rejected = expect(agent.stopForShutdown()).rejects.toMatchObject({ errors: [failure] })
+        throw failure
+      })
+      release.resolve(undefined)
+      await agent.whenIdle()
+      expect(rejected).toBeDefined()
+      await rejected
+      expect(agent.inbox.nextTurn).toEqual([message])
+      expect(adapter.requests).toHaveLength(0)
+      expect(agent.session.snapshotEvents().some(event => event.type === 'step/start')).toBe(false)
+    } finally {
+      release.resolve(undefined)
+      paused.mockRestore()
+      await agent.whenIdle()
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('retains a failed final event even when the driver becomes idle', async () => {
+    const ctx = await harness(new MockAdapter([textResponse('unexpected')]))
+    const agent = await ctx.agentLoop.create(SessionId('shutdown-final-event'), { provider: 'mock', model: 'mock' }) as ReactLoopAgent
+    const release = Promise.withResolvers<undefined>()
+    const assemble = ctx.systemPrompt.assemble.bind(ctx.systemPrompt)
+    const paused = vi.spyOn(ctx.systemPrompt, 'assemble').mockImplementation(async (input) => {
+      await release.promise
+      return assemble(input)
+    })
+    const failure = new Error('final event could not be appended')
+    try {
+      send(agent, 'pending')
+      await vi.waitFor(() => { expect(paused).toHaveBeenCalledOnce() })
+      vi.spyOn(agent.session, 'append').mockImplementationOnce(() => { throw failure })
+      ctx.agents.freezeAdmission()
+      const stopping = agent.stopForShutdown()
+      const rejected = expect(stopping).rejects.toMatchObject({ errors: [failure] })
+      release.resolve(undefined)
+      await rejected
+      await expect(agent.whenIdle()).resolves.toBeUndefined()
+      await expect(agent.stopForShutdown()).rejects.toMatchObject({ errors: [failure] })
+    } finally {
+      release.resolve(undefined)
+      paused.mockRestore()
+      await agent.whenIdle()
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('keeps a queued wake pending when shutdown freezes admission during maintenance', async () => {
+    const adapter = new MockAdapter([textResponse('unexpected')])
+    const ctx = await harness(adapter)
+    const agent = await ctx.agentLoop.create(SessionId('shutdown-maintenance'), { provider: 'mock', model: 'mock' })
+    const release = Promise.withResolvers<undefined>()
+    const maintenance = agent.runMaintenance(async () => { await release.promise })
+    const message = createUserMessage({ content: [{ type: 'text', text: 'pending' }], source: { kind: 'user' } })
+    try {
+      agent.followup(message)
+      ctx.agents.freezeAdmission()
+      agent.cancel({ kind: 'hook', reason: 'desktop update' }, { keepInbox: true })
+      release.resolve(undefined)
+      await maintenance
+      await agent.whenIdle()
+      expect(agent.inbox.nextTurn).toEqual([message])
+      expect(adapter.requests).toHaveLength(0)
+      expect(() => { agent.followup(message) }).toThrow('admission is closed')
+      expect(() => { agent.inject(message) }).toThrow('admission is closed')
+      expect(() => agent.runMaintenance(async () => {})).toThrow('admission is closed')
+    } finally {
+      release.resolve(undefined)
+      await maintenance
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('idle inject() durably stages context without opening a turn', async () => {
     const adapter = new MockAdapter([textResponse('ok')])
     const ctx = await harness(adapter)

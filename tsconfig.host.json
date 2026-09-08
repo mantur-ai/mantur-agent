@@ -9,6 +9,9 @@
   },
   "include": [
     "apps/web/tests/scaffold.ts",
+    "apps/web/tests/mantur-editing-workflow.snapshot.ts",
+    "apps/web/tests/mcp-http-recovery.snapshot.ts",
+    "apps/web/tests/mcp-shutdown.snapshot.ts",
     "apps/web/tests/desktop-drafts.e2e.ts",
     "apps/web/tests/desktop-updates.e2e.ts",
     "apps/web/tests/default-model.e2e.ts",
@@ -36,6 +39,7 @@
     "apps/web/tests/models-settings.e2e.ts",
     "apps/web/tests/mantur-brand.snapshot.ts",
     "apps/web/tests/mantur-guide.expected.e2e.ts",
+    "apps/web/tests/mantur-native-account.expected.e2e.ts",
     "apps/web/tests/mantur-automatic-project.expected.e2e.ts",
     "apps/web/tests/onboarding-deepseek-config.e2e.ts",
     "apps/web/tests/onboarding-usable-provider.e2e.ts",
@@ -124,6 +128,7 @@
     "scripts/client-bundle-purity.spec.ts"
   ],
   "references": [
+    { "path": "./packages/client/ui-mantur-editing/tsconfig.host.json" },
     { "path": "./packages/bundle/mantur-app" },
     { "path": "./vendor/cosmokit" },
     { "path": "./vendor/schemastery" },
@@ -237,6 +242,7 @@
     { "path": "./packages/llm/llm-deepseek" },
     { "path": "./packages/llm/llm-pi-ai" },
     { "path": "./packages/shell/bash-local" },
+    { "path": "./packages/shell/command-scopes" },
     { "path": "./packages/shell/shell-env" },
     { "path": "./packages/shell/pwsh-local" },
     { "path": "./packages/shell/pwsh-sandbox" },

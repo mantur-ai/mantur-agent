@@ -11,6 +11,8 @@ English | [中文](README.zh.md)
 
 `dsh-settings-file` keeps every namespace's user settings in one YAML or JSON document, by default `settings.yaml` under the harness home: users can edit the document directly — changes take effect live — or write through the service, which merges concurrent edits safely. YAML writes preserve comments, anchors, and formatting on every untouched node, and a section owned by a plugin that is not loaded is never dropped. Boot fails loud on an invalid document; a live reload that fails keeps the last good sections and warns rather than taking the process down.
 
+`stopForShutdown()` freezes document operations and joins the settings queues, started callbacks, file operations, and watcher close on a ready provider. Watcher cleanup failure rejects the shared shutdown result after the remaining queues drain. Service disposal uses the same operation.
+
 ## Table of Contents
 
 - [Use this package](#use-this-package)

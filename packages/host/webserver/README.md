@@ -68,7 +68,7 @@ The package is a plain route registry with no harness vocabulary: `WebServer` ex
 
 ### Matching and lifecycle
 
-`match(pathname)` consults the exact table first, then walks the prefix table for the longest match, then the fallback. Activation (`[Service.init]`) listens immediately; disposal starts `close()` and `closeAllConnections()`, destroys every tracked upgraded socket, and returns only after the server and those sockets have closed. Node does not include upgraded sockets in `closeAllConnections()`, so the service tracks them explicitly.
+`match(pathname)` consults the exact table first, then walks the prefix table for the longest match, then the fallback. Activation (`[Service.init]`) listens immediately. `stopForShutdown()` freezes registration and dispatch, starts `close()` and `closeAllConnections()`, destroys tracked upgraded sockets, and joins original HTTP and upgrade handler promises after socket closure. Disposal uses the same operation. Listener-close and request-error-observer failures remain visible through repeated shutdown calls. This covers handler completion; a separate protocol owner must drain work continuing beyond an upgrade handler. Node does not include upgraded sockets in `closeAllConnections()`, so the service tracks them explicitly.
 
 ### Source map
 

@@ -38,6 +38,7 @@ kind: "package-reference"
 ```yaml
 - name: '@deepseek-ai/dsh-terminal'
 - name: '@deepseek-ai/dsh-subprocess-local'
+- name: '@deepseek-ai/dsh-command-scopes'
 - name: '@deepseek-ai/dsh-sandbox-local'
 - name: '@deepseek-ai/dsh-sandbox-policy'
 - name: '@deepseek-ai/dsh-terminal-bash'
@@ -65,7 +66,7 @@ kind: "package-reference"
 
 ### 沙箱与安全运行
 
-shell 在整个生命周期内运行在有效的沙箱边界之下。当所有者仍有打开的会话或进行中的 spawn 时，改变有效沙箱模式会被拒绝——请先等待创建完成并关闭会话，避免以更宽权限打开的终端在权限降级后继续存在。后端只提供终端专属的环境覆盖；共享凭据清理由子进程提供方负责。
+shell 在整个生命周期内运行在有效的沙箱边界之下。当所有者仍有打开的会话或进行中的 spawn 时，改变有效沙箱模式会被拒绝——请先等待创建完成并关闭会话，避免以更宽权限打开的终端在权限降级后继续存在。后端提供终端专属的环境覆盖；[command-scopes](../../shell/command-scopes/README.zh.md)在分配前准备身份，并在多次发送之间保留，直至完整终端清理和释放确认。共享凭据清理由子进程提供方负责。
 
 ### 可观察结果与失败
 

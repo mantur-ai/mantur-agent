@@ -11,6 +11,14 @@ import type { InboxTarget } from './types.ts'
 /** Mutable state privately owned by an {@link Inbox}. */
 type InboxState = Record<InboxTarget, UserMessage[]>
 
+/** One step's claimed input and its pre-execution recovery capability. */
+export interface InboxClaim {
+  /** Next-step input followed by the queued turn, when requested. */
+  readonly messages: UserMessage[]
+  /** Restore the original IDs and queue positions once, only before execution begins. */
+  restore(): void
+}
+
 /** Live notifications committed by inbox mutations. */
 export interface InboxNotifications {
   /** Publish one inserted message. */
@@ -24,6 +32,7 @@ export interface InboxNotifications {
 /** A replay-once projection that incrementally consumes later inbox splices. */
 export class Inbox {
   private readonly state: InboxState = { 'next-turn': [], 'next-step': [] }
+  private admissionOpen = true
 
   constructor(
     private readonly session: Session,
@@ -37,6 +46,15 @@ export class Inbox {
         throw new Error(`invalid persisted inbox splice at session seq ${event.seq}`, { cause: error })
       }
     }
+  }
+
+  /** Permanently reject new public mutations and claims; existing claims remain restorable. */
+  freezeAdmission(): void {
+    this.admissionOpen = false
+  }
+
+  private assertAdmission(): void {
+    if (!this.admissionOpen) throw new Error('inbox admission is closed for shutdown')
   }
 
   /** Prompts awaiting individual turns. */
@@ -65,16 +83,34 @@ export class Inbox {
    * each claimed message. The durable splices are pure deletions.
    * @param target - whether this boundary also consumes one queued turn.
    * @param turn - turn that will own the claimed batch.
-   * @returns next-step input followed by the queued turn, when requested.
+   * @returns claimed messages and a one-shot recovery capability for shutdown before execution.
    * @internal - The agent loop's step-boundary operation, not a plugin extension point.
    */
-  claim(target: InboxTarget, turn: number): UserMessage[] {
-    const claimed = this.mutate('next-step', 0, this.nextStep.length, [], false)
-    if (target === 'next-turn') {
-      claimed.push(...this.mutate('next-turn', 0, 1, [], false))
+  claim(target: InboxTarget, turn: number): InboxClaim {
+    this.assertAdmission()
+    let nextStep: UserMessage[] = []
+    let nextTurn: UserMessage[] = []
+    let restored = false
+    const restore = (): void => {
+      if (restored) throw new Error('inbox claim has already been restored')
+      restored = true
+      this.mutate('next-step', 0, 0, nextStep, false)
+      this.mutate('next-turn', 0, 0, nextTurn, false)
     }
-    for (const message of claimed) this.notifications.claimed(message, turn)
-    return claimed
+    try {
+      nextStep = this.mutate('next-step', 0, this.nextStep.length, [], false)
+      nextTurn = target === 'next-turn' ? this.mutate('next-turn', 0, 1, [], false) : []
+      const claimed = [...nextStep, ...nextTurn]
+      for (const message of claimed) this.notifications.claimed(message, turn)
+      return { messages: claimed, restore }
+    } catch (error: unknown) {
+      try {
+        restore()
+      } catch (restoreError: unknown) {
+        throw new AggregateError([error, restoreError], 'inbox claim and restoration failed')
+      }
+      throw error
+    }
   }
 
   /**
@@ -142,6 +178,7 @@ export class Inbox {
     deleteCount: number,
     inserted: UserMessage[],
   ): UserMessage[] {
+    this.assertAdmission()
     return this.mutate(target, start, deleteCount, inserted, true)
   }
 

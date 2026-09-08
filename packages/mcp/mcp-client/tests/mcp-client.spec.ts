@@ -145,6 +145,8 @@ function textAt(content: readonly ContentBlock[], index = 0): string {
 }
 
 const defaultOpts: ToolBridgeOptions = {
+  runTool: work => work(() => {}),
+  isCurrent: () => true,
   registrationFailure: 'contain',
   serverName: 'srv',
   toolCallTimeoutMs: 60_000,
@@ -294,6 +296,35 @@ describe('syncTools', () => {
     expect(ctx.tools.get('mcp__srv__old_tool')).toBeUndefined()
     expect(ctx.tools.get('mcp__srv__new_tool')).toBeDefined()
     expect(secondDisposers.size).toBe(1)
+  })
+
+  it('does not publish a tool list returned after its generation retired', async () => {
+    let current = true
+    const opts = { ...defaultOpts, isCurrent: () => current }
+    const client = createMockClient([{ name: 'old', inputSchema: { type: 'object' } }])
+    const previous = await syncTools(client as never, ctx, opts, new Map())
+    const gate: PromiseWithResolvers<Awaited<ReturnType<typeof client.listTools>>> = Promise.withResolvers()
+    client.listTools.mockImplementation(() => gate.promise)
+    const pending = syncTools(client as never, ctx, opts, previous)
+    current = false
+    gate.resolve({ tools: [{ name: 'late', inputSchema: { type: 'object' } }], nextCursor: undefined })
+    expect(await pending).toBe(previous)
+    expect(ctx.tools.get('mcp__srv__late')).toBeUndefined()
+  })
+
+  it('reports an uncertain result when the generation retires during a call', async () => {
+    let current = true
+    const client = createMockClient([{ name: 'held', inputSchema: { type: 'object' } }])
+    const gate: PromiseWithResolvers<Record<string, unknown>> = Promise.withResolvers()
+    client.callTool.mockImplementation(() => gate.promise)
+    await syncTools(client as never, ctx, { ...defaultOpts, isCurrent: () => current }, new Map())
+    const pending = ctx.tools.execute({ name: 'mcp__srv__held', arguments: {}, callId: ToolCallId('retired-result'), signal: testToolSignal })
+    await vi.waitFor(() => { expect(client.callTool).toHaveBeenCalledOnce() })
+    current = false
+    gate.resolve({ content: [{ type: 'text', text: 'late success' }] })
+    const result = await pending
+    expect(result.isError).toBe(true)
+    expect(textAt(result.content)).toContain('inspect saved state before retrying')
   })
 
   it('drains paginated listTools responses', async () => {
@@ -889,6 +920,29 @@ describe('tool execution', () => {
 
     expect(result.isError).toBe(false)
     expect(result.content[0]).toEqual({ type: 'text', text: '{"key":"value"}' })
+  })
+
+  it('retains an abort that arrives while a legacy result is returned', async () => {
+    const controller = new AbortController()
+    const reason = new Error('stop after remote result')
+    const failures: unknown[] = []
+    const client = createMockClient([{ name: 'legacy-aborted', inputSchema: { type: 'object' } }])
+    client.callTool.mockImplementation(async () => {
+      controller.abort(reason)
+      return { toolResult: 'completed remotely' }
+    })
+
+    await syncTools(client as never, ctx, {
+      ...defaultOpts,
+      runTool: work => work((error) => { failures.push(error) }),
+    }, new Map())
+    const result = await ctx.tools.execute({
+      signal: controller.signal,
+      callId: ToolCallId('legacy-aborted'), name: 'mcp__srv__legacy-aborted', arguments: {},
+    })
+
+    expect(result.isError).toBe(true)
+    expect(failures).toEqual([reason])
   })
 
   it('preserves structuredContent on a successful legacy result', async () => {

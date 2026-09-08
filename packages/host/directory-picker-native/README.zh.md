@@ -51,6 +51,8 @@ kind: "package-reference"
 
 后端是平台选择器之上的一层薄服务：`NativeDirectoryPicker` 注册 `native` 能力，其 `pick` 转发给 `pickNativeDirectory`，选择器以子进程运行，宿主进程因此绝不为对话框阻塞。命令边界（`DirectoryPickerRunner`）与平台事实可注入；共享的免 shell 子进程运行器位于 [`dsh-native-command`](../../util/native-command/README.zh.md)。
 
+服务持有每个已受理的选择请求，直到它的进程和输出读取结束。原生能力专有的 `stopForShutdown()` 同步拒绝新请求、中止已受理请求并等待它们完成；插件释放使用同一次停止操作。重复调用保留相同的完成结果或清理失败。调用方取消和普通选择器失败不会让已完成的清理失败；进程若未关闭，关闭流程就保持待定。这项所有权属于各个服务实例，也覆盖浏览器连接建立前受理的选择请求。
+
 ### 平台机制
 
 平台工具不经 shell 调用：macOS 使用 `osascript`，Linux 使用 Zenity 并以 KDialog 回退；调用方的中止信号会终止原生进程。Windows 在 spawn 的子进程中打开现代 `IFileOpenDialog`——由 koffi 在子进程主线程上驱动的 COM 会话，采用宿主接受的最佳线程 DPI 感知（优先 per-monitor-v2），中止时向对话框线程投递 `WM_CLOSE`。
@@ -109,4 +111,4 @@ kind: "package-reference"
 
 </details>
 
-**运行时不变式：** 不发布伴生入口。每次 pick 都是一次无状态 subprocess 往返，chooser outcome 只存在于返回路径。
+**运行时不变式：** 不发布伴生入口。只有服务持有活跃选择请求和停止结果，没有可能与该所有权不一致的独立注册表或事件投影；生命周期测试观察请求受理和真实子进程关闭。

@@ -134,6 +134,10 @@ export class WebServer extends Service {
   private readonly prefixes = new Map<string, WebRoute>()
   private readonly upgrades = new Map<string, WebUpgradeRoute>()
   private readonly upgradedSockets = new Set<Duplex>()
+  private readonly pending = new Set<Promise<void>>()
+  private readonly failures: unknown[] = []
+  private closing = false
+  private shutdown: Promise<void> | undefined
   private readonly indexTaps: ((html: string) => string)[] = []
   private fallback: WebRoute['handler'] | undefined
   private server!: Server
@@ -163,6 +167,7 @@ export class WebServer extends Service {
    * @returns the disposer removing the route.
    */
   register(route: WebRoute): () => void {
+    this.assertOpen()
     const table = route.kind === 'exact' ? this.exact : this.prefixes
     if (table.has(route.path)) {
       throw new Error(`webserver: duplicate ${route.kind} route "${route.path}"`)
@@ -178,6 +183,7 @@ export class WebServer extends Service {
    * @returns the disposer removing the route.
    */
   registerUpgrade(route: WebUpgradeRoute): () => void {
+    this.assertOpen()
     if (this.upgrades.has(route.path)) {
       throw new Error(`webserver: duplicate upgrade route "${route.path}"`)
     }
@@ -194,6 +200,7 @@ export class WebServer extends Service {
    * @returns the disposer releasing the seat.
    */
   registerFallback(handler: WebRoute['handler']): () => void {
+    this.assertOpen()
     if (this.fallback !== undefined) {
       throw new Error('webserver: fallback already registered')
     }
@@ -209,6 +216,7 @@ export class WebServer extends Service {
    * @returns the disposer removing the transform.
    */
   tapIndex(transform: (html: string) => string): () => void {
+    this.assertOpen()
     this.indexTaps.push(transform)
     return () => {
       const at = this.indexTaps.indexOf(transform)
@@ -241,7 +249,8 @@ export class WebServer extends Service {
     // never a process exit.
     this.server = createServer((req, res) => {
       const next = (): void => {
-        void handle(req, res).catch((err: unknown) => {
+        if (this.closing) { res.destroy(); return }
+        const work = handle(req, res).catch((err: unknown) => {
           this.ctx.logger.warn(err instanceof Error ? err : new Error(String(err)))
           if (res.headersSent) {
             res.destroy()
@@ -250,11 +259,13 @@ export class WebServer extends Service {
           res.writeHead(400)
           res.end()
         })
+        this.track(work)
       }
       if (this.gzip === undefined) next()
       else this.gzip(req, res, next)
     })
     this.server.on('upgrade', (req, socket, head) => {
+      if (this.closing) { socket.destroy(); return }
       const onError = (error: Error): void => {
         this.ctx.logger.warn(error)
         socket.destroy()
@@ -279,10 +290,11 @@ export class WebServer extends Service {
       }
       this.upgradedSockets.add(socket)
       try {
-        Promise.resolve(route.handler(req, socket, head)).catch((error: unknown) => {
+        const work = Promise.resolve(route.handler(req, socket, head)).catch((error: unknown) => {
           this.ctx.logger.warn(error instanceof Error ? error : new Error(String(error)))
           socket.destroy()
         })
+        this.track(work)
       } catch (error) {
         this.ctx.logger.warn(error instanceof Error ? error : new Error(String(error)))
         socket.destroy()
@@ -301,17 +313,42 @@ export class WebServer extends Service {
 
     // Node does not include upgraded sockets in closeAllConnections(). The service
     // owns them with the other connections, so it tracks and destroys them explicitly.
-    this.ctx.effect(() => async () => {
-      const serverClosed = new Promise<void>((resolve) => {
-        this.server.close(() => { resolve() })
+    this.ctx.effect(() => () => this.stopForShutdown(), 'webServer.listen')
+  }
+
+  /**
+   * Close admission and sockets, then join original HTTP and upgrade handlers.
+   * @returns completion after handlers settle; transport or observer cleanup failures reject.
+   */
+  stopForShutdown(): Promise<void> {
+    this.closing = true
+    this.shutdown ??= (async () => {
+      const serverClosed = new Promise<void>((resolve, reject) => {
+        this.server.close((error) => { if (error) reject(error); else resolve() })
       })
       this.server.closeAllConnections()
       const upgradedClosed = [...this.upgradedSockets].map(socket => new Promise<void>((resolve) => {
         socket.once('close', () => { resolve() })
         socket.destroy()
       }))
-      await Promise.all([serverClosed, ...upgradedClosed])
-    }, 'webServer.listen')
+      const closed = await Promise.allSettled([serverClosed, ...upgradedClosed])
+      while (this.pending.size > 0) await Promise.allSettled([...this.pending])
+      const failures = [...this.failures, ...closed.flatMap(result => result.status === 'rejected' ? [result.reason as unknown] : [])]
+      if (failures.length > 0) throw new AggregateError(failures, 'Web server shutdown failed')
+    })()
+    return this.shutdown
+  }
+
+  private assertOpen(): void {
+    if (this.closing) throw new Error('webserver: admission is closed')
+  }
+
+  private track(work: Promise<void>): void {
+    this.pending.add(work)
+    void work.then(() => { this.pending.delete(work) }, (error: unknown) => {
+      this.pending.delete(work)
+      this.failures.push(error)
+    })
   }
 
   /** Longest-prefix-wins over the prefix table after an exact-table miss. */

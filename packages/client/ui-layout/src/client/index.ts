@@ -77,7 +77,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     'details': { kind: 'single'; scope: 'session'; owner: DetailsOwnerProps }
     /**
      * Optional work area beside the mounted conversation, including the home screen.
-     * Receives closeWorkbench to dismiss itself; absence renders an empty work area.
+     * Receives closeWorkbench to hide itself while retaining its mounted state.
+     * Switching Sessions or unmounting the shell releases the occupant; first use mounts it.
      * Registering replaces the single workbench occupant, independent of session details.
      */
     'main.workbench': { kind: 'single'; scope: 'root'; owner: { closeWorkbench: () => void } }

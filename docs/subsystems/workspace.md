@@ -123,6 +123,8 @@ Sessions get their cwd at create time from whoever creates them, not from this r
 
 ## Consumers
 
+The [directory-picker service](../../packages/host/directory-picker/README.md) exposes a native-only `stopForShutdown()` capability for Host teardown. Its backend freezes new picks and waits for owned chooser processes and output readers; it does not expose shutdown over Remote or extend the browse capability.
+
 [Mantur project preparation](../../packages/workspace/mantur-projects/README.md) owns `ctx.manturProjects`. Its branded `ProjectCreationId` is a UUID retained by the native draft. `ProjectRootSettings` distinguishes an unconfigured root from an absolute desktop or custom root. `PreparedProject` returns `workspaceId`, deterministic `sessionId`, and the canonical directory `path`, without creating the Session. A stored reservation fixes the initial localized title and path across retries; directory conflicts and missing or replaced directories are explicit failures. [Types](../../packages/workspace/mantur-projects/src/types.ts) define the browser-safe results.
 
 [`dsh-workspace-controller`](../../packages/api/workspace-controller) serves workspace CRUD to GUI clients over `ctx.workspaceRegistry`, and [`dsh-session-controller`](../../packages/api/session-controller) performs the create-session-then-attach flow above. [dsh-agent-instructions](../../packages/context/agent-instructions) is **not** a consumer despite the name: it discovers AGENTS.md-style instruction files under an agent's own cwd and never touches `ctx.workspaceRegistry` — the shared word refers to the user's working directory, not to this registry's entities.
@@ -184,6 +186,33 @@ Host service backing the generated `ctx.remote.directoryPicker` namespace. The s
 ```
 
 Source: [`packages/api/workspace-controller/src/directory-picker.ts`](../../packages/api/workspace-controller/src/directory-picker.ts)
+
+<a id="ctxmanturediting--manturediting"></a>
+
+### `ctx.manturEditing` — `ManturEditing`
+
+Runtime and tools share the exact Agent identity resolved by the authenticated Remote gateway.
+
+```ts cordis-catalog
+/**
+ * Refuse new opens and MCP executions, then drain every acquired or opening editor before releasing its scope.
+ * The Host must retain accepted execution signals, its model and attachment services, HTTP and editor windows until completion.
+ * @returns The retained shutdown result; failed or unconfirmed work rejects and prevents installation.
+ */
+stopForShutdown(): Promise<void>
+
+/**
+ * Open the Session's workspace and connect its tools only to that Agent.
+ * @param agent - Live or resumed Agent resolved by the gateway from the Session id.
+ * @param parentOrigin - Mantur browser origin, checked against this Host's listening port.
+ * @returns Loopback editor address and canonical Session editing directory.
+ */
+@Remote('open') async open(agent: Agent, parentOrigin: string): Promise<EditingWorkspace>
+```
+
+Types: [Agent](core.md)
+
+Source: [`packages/client/ui-mantur-editing/src/index.ts`](../../packages/client/ui-mantur-editing/src/index.ts)
 
 <a id="ctxmanturprojects--manturprojectcontroller"></a>
 

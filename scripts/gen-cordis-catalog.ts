@@ -61,6 +61,7 @@ export const SERVICE_PAGE: Record<string, string> = {
   approval: 'approval.md',
   attachments: 'attachment.md',
   shell: 'shell.md',
+  commandScopes: 'shell.md',
   shellEnv: 'shell.md',
   clientModules: 'client-modules.md',
   codeRuntime: 'code-runtime.md',
@@ -81,8 +82,10 @@ export const SERVICE_PAGE: Record<string, string> = {
   fileReferences: 'session-reference.md',
   fs: 'filesystem.md',
   goals: 'goal.md',
+  goalRoundDriver: 'goal.md',
   inspector: 'extensions.md',
   webServer: 'web-server.md',
+  manturEditing: 'workspace.md',
   invariants: 'invariants.md',
   llm: 'llm-streaming.md',
   lsp: 'lsp.md',
@@ -233,6 +236,7 @@ export const EVENT_WALK_EXEMPTIONS: Record<string, string> = {
   'slots/changed': 'client-face slot invalidation signal — packages/client/ui-renderer/README.md owns the API',
   'theme/change': 'client-face theme switch signal — packages/client/ui-theme/README.md owns the API',
   'mantur/creation-mode-selected': 'client-face explicit mode selection — packages/client/ui-mantur-navigation/README.md owns the API',
+  'mantur/native-account-open': 'client-face requested account dialog — packages/client/ui-mantur-account/README.md owns the API',
 }
 
 /**
@@ -366,6 +370,8 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   ShellExecRequest: 'shell.md',
   ShellExecSpec: 'shell.md',
   ShellProcess: 'shell.md',
+  CommandIdentityProvider: 'shell.md',
+  CommandProcess: 'shell.md',
   ShellRunResult: 'shell.md',
   DshEnvironment: 'subprocess.md',
   SubprocessHandle: 'subprocess.md',
@@ -573,6 +579,7 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   AuthorizationSettlement: 'credentials.md',
   AuthorizationStatus: 'credentials.md',
   ManturAccountStatus: 'credentials.md',
+  ManturIdentityMode: 'credentials.md',
   ManturLoginAttemptId: 'credentials.md',
   ManturLoginProgress: 'credentials.md',
   ManturLoginStart: 'credentials.md',
@@ -676,12 +683,14 @@ export const FOUNDATION_TYPE_NAMES: ReadonlySet<string> = new Set([
 
 /** Project types deliberately documented outside the subsystems catalog. */
 export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
+  EditingWorkspace: 'Session editor address and directories are documented in packages/client/ui-mantur-editing/README.md',
   z: 'schemastery schema constructor is owned by vendor/schemastery (vendored upstream)',
   BeginCommandRequest: 'event-local request contract is owned by packages/client/ui-input-trigger/src/types.ts',
   InsertReferenceRequest: 'event-local request contract is owned by packages/client/ui-input-trigger/src/types.ts',
   ConsumeTokenRequest: 'event-local request contract is owned by packages/client/ui-input-trigger/src/types.ts',
   InsertTextRequest: 'event-local request contract is owned by packages/client/ui-input-trigger/src/types.ts',
   AgentHandle: 'agent ownership handle is owned by packages/core/agent/README.md',
+  AgentShutdownCheckpoint: 'agent writer shutdown checkpoints are owned by packages/core/agent-loop/README.md',
   AgentPreset: 'discovered preset record is owned by packages/preset/agent-presets/README.md',
   AgentPresetRoster: 'path-free preset roster is owned by packages/preset/agent-presets/README.md',
   AgentPresetDocument: 'preset composition view is owned by packages/preset/agent-presets/README.md',

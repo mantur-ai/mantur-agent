@@ -25,6 +25,23 @@ const uncoveredLocationsReporter = fileURLToPath(new URL('./scripts/coverage-unc
 // lib/ never loads a second module-singleton copy.
 const pathsPlugin = (): ReturnType<typeof tsconfigPaths> => tsconfigPaths({ projects: ['./tsconfig.base.json'] })
 
+// Source composition tests provide the explicit mock; this resolver does not supply a Remote implementation.
+const mockedEditingRemote = {
+  name: 'mocked-mantur-editing-remote',
+  resolveId(id: string) {
+    if (id === '@deepseek-ai/dsh-client-ui-mantur-editing/remote') return id
+  },
+}
+
+// The jsdom import resolver must recognize this build-generated module before
+// apply.client.spec.ts supplies its explicit vi.mock; this resolver provides no implementation.
+const mockedAccountRemote = {
+  name: 'mocked-mantur-account-remote',
+  resolveId(id: string) {
+    if (id === '@deepseek-ai/dsh-authorization-manturhub/remote') return id
+  },
+}
+
 const windowsUnsupportedPackages = process.platform === 'win32'
   ? [
       // Bash-requiring suites (a real POSIX shell is unavailable on Windows).
@@ -157,7 +174,7 @@ const processBoundTests = [
 const coverageTimeouts = coverageTestTimeoutConfig(process.env[COVERAGE_TEST_TIMEOUT_ENV])
 
 export default defineConfig({
-  plugins: [pathsPlugin(), standardDecoratorPlugin()],
+  plugins: [pathsPlugin(), standardDecoratorPlugin(), mockedEditingRemote, mockedAccountRemote],
   test: {
     setupFiles: ['./scripts/test-proxy-environment.ts', './scripts/test-invariants.ts'],
     // .tsx: client component specs (jsdom via per-file @vitest-environment pragma).
@@ -167,7 +184,7 @@ export default defineConfig({
     // Node stability; process-bound suites stay separate for inventory control.
     projects: [
       {
-        plugins: [pathsPlugin(), standardDecoratorPlugin()],
+        plugins: [pathsPlugin(), standardDecoratorPlugin(), mockedEditingRemote, mockedAccountRemote],
         test: {
           name: 'thread-safe',
           ...coverageTimeouts,
@@ -186,7 +203,7 @@ export default defineConfig({
         },
       },
       {
-        plugins: [pathsPlugin(), standardDecoratorPlugin()],
+        plugins: [pathsPlugin(), standardDecoratorPlugin(), mockedEditingRemote, mockedAccountRemote],
         test: {
           name: 'process-bound',
           ...coverageTimeouts,

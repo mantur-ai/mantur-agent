@@ -11,6 +11,8 @@ English | [中文](README.zh.md)
 
 `dsh-terminal` provides persistent, owner-scoped terminal sessions to the harness: a session keeps shell or REPL state across tool calls, and every operation is fenced to the exact agent that created it. It provides the `ctx.terminals` service, which mints opaque session ids, routes session creation through registered backends, and waits for quiescent cleanup when an owner or the service disposes. It defines no terminal mechanics itself: backends such as the shipped `dsh-terminal-bash` own spawning and readiness, and the model-facing tools in `dsh-tool-terminal` own presentation. Sessions are process-local: they do not survive a harness restart.
 
+`stopForShutdown()` synchronously rejects new spawns and sends, joins unpublished setup rollback and owned closes, and returns the same completion to repeated callers. Cleanup failures remain observable even after an ordinary retry removes a terminal record. This proves terminal ownership only; the Host must stop other producers and verify session durability separately.
+
 ## Table of Contents
 
 - [Use this package](#use-this-package)

@@ -1,0 +1,65 @@
+# Agent Note：停机准入与 writer 检查点
+
+Status: implemented
+
+[English](2026-09-07-agent-shutdown-writers.md) | 中文
+
+## 问题
+
+注册表移除不能证明待处理 setup 已结束，也不能证明 writer 成功关闭。驱动器还可能在执行前持有已经离开队列的输入。安装不能从这些局部观察推断已持久化的静止状态。
+
+## 决定
+
+Host 停机必须先调用明确的所有者操作，才能授权安装。agent 注册表冻结新 agent 和所有存活收件箱。循环在步骤开始记录提交前保留已领取批次；在此之前停止会将原消息标识和队列顺序恢复一次。已完成或执行情况不确定的工作不会重放。
+
+即使公开请求已经因取消而拒绝，工厂仍等待原始 setup 与持久化获取操作结束。被放弃的句柄会持续跟踪到 close 完成。writer 关闭失败在对象离开活跃注册表后仍保留。每个会话在 writer 关闭前封存追加准入，工厂在全部已跟踪操作结束后再次验证封存；被捕获的晚到追加异常不能产生有效 writer 结果。成功结果包含已关闭 writer 生命周期的最终排他偏移。Host 必须在其他所有者结束后调用 `verifyShutdown()`：原停机 Promise 保留原结果，重新校验则会拒绝该结果返回后发生的追加尝试。
+
+本地子进程所有者独立关闭 spawn 准入并等待整棵进程树和 PTY，保留失败对象的所有权。这些操作不取消远程付费任务，也不构成全局 Host 回执：Cordis 会吞掉作用域 disposer 错误，其余生产方所有者必须独立提供成功结果。[Host 更新消费者](../../../../packages/bundle/mantur-app/README.zh.md#use-this-package) 协调这些结果，并拒绝不支持的组合。
+
+终端注册表也提供显式停止：拒绝新的创建和发送，等待待处理后端分配及回滚，并关闭已发布终端。即使普通释放或成功重试已移除记录，清理错误仍会保留。
+
+后台任务注册表冻结新注册，并等待原始生产者释放 Promise 和异步完成监听器。记录离开注册表后仍保留失败。它不会取消工作，后续所有者释放也不会触发取消；本地资源由独立执行所有者停止。注册表记录被强制标记失败不能证明资源已释放。停止开始后，所有者和服务释放会等待对应完成通知再返回，避免 agent 清理在通知结束前封存 writer。
+
+工作流引擎冻结新运行，等待线程终止、待处理子任务创建和超过普通释放期限的子任务清理。子任务清理错误在子任务和运行记录被移除后仍保留。只有释放操作结束、线程退出、全部子任务创建及清理结束后，运行才离开引擎所有权集合；此后只保留失败信息。
+
+子代理运行时独立于委派工具和工作流 worker 跟踪原始启动与已发布的一次性运行回收。直接启动的 SDK 子进程使用独立启动器且没有本地 Agent，因此 agent 工厂和本地子进程注册表都不能证明它已经释放。停机也等待续跑子代理准备工作、浏览器附件接纳和生命周期监听器结束。只跟踪投递会漏掉先于投递的附件写入，因此浏览器消息入口拥有完整操作，并在任何新的存储调用前关闭。父作用域已经销毁、writer 正在关闭时不再投递完成通知；停机抑制自动通知并保留排队输入。句柄和 Activation 离开映射后，清理失败仍被记录。
+
+代码运行时在程序返回后继续持有所有权，直到线程清理和已接纳的 Host 绑定调用完成。显式关闭会冻结准入，并独立于程序结果保留终止失败。程序代码直接启动的 OS 子进程不在此证明范围内，需要单独的部署所有者。
+
+标题服务将已有的取消和原始调用排空作为显式关闭操作。在 writer 关闭前冻结直接重命名、刷新和提供方注册，使忽略取消的调用也无法追加迟到标题。
+
+Web 服务器冻结路由准入，并在 socket 关闭后等待原始 HTTP 和升级 handler。仅关闭 socket 无法停止忽略取消的 handler。超出升级 handler 生命周期的协议工作仍由协议服务拥有。
+
+## 上游所有权
+
+现有观察钩子无法冻结直接收件箱修改、恢复驱动器内部持有的领取批次、封存直接 Session 追加，或在工厂释放 writer 后继续保留它。因此改动位于 `packages/core/agent/src/{index,inbox}.ts`、`packages/core/agent-loop/src/{index,agent}.ts`、`packages/core/session/src/index.ts` 和 `packages/subprocess/subprocess-local/src/index.ts`。终端注册表操作位于 `packages/terminal/terminal/src/index.ts`，因为外部钩子无法冻结发送或保留已移除分配的失败；受控晚到分配、等待关闭和失败保留测试用于验证上游升级。任务注册表改动位于 `packages/jobs/jobs-local/src/index.ts`；插件无法冻结直接 start 或恢复已丢弃的生产者 Promise。未取消的待处理工作、强制失败记录、晚到释放及完成监听器测试用于验证升级。 工作流改动位于 `packages/workflow/workflow-worker-thread/src/{index,host}.ts`，因为普通释放会在等待期限后放弃子任务，并吞掉清理失败。晚到子任务创建、超出期限的清理、历史失败及线程终止拒绝构成升级回归。 code-runtime worker 提供方在 `packages/code-runtime/code-runtime-worker-thread/src/index.ts` 中拥有待处理线程和绑定调用；外部钩子无法恢复被丢弃的操作。延迟终止、未等待的绑定及终止失败保留测试用于验证升级。标题服务操作位于 `packages/session/session-title/src/index.ts`；外部钩子无法冻结直接标题 API。忽略取消和拒绝停止后修改的测试用于验证升级。Web handler 所有权位于 `packages/host/webserver/src/index.ts`；socket 关闭观察器无法恢复被丢弃的 handler Promise。挂起的 HTTP／升级 handler 及关闭失败保留用于验证升级。不修改 vendored Cordis 行为。工厂在自身生命周期结束前保留已关闭会话对象，以检测关闭后的写入；这是验证先前已关闭 writer 的保留成本。
+
+子代理改动位于 `packages/subagent/subagent/src/{index,lifecycle,continuation}.ts`：提供方移除和结果完成都不能证明资源释放，纯观察钩子无法冻结直接委派或找回已丢弃的清理异常。进程内驱动器也在 agent 准入冻结后取消时保留排队输入；中止监听器不能清空已经冻结的收件箱。该改动位于 `packages/subagent/subagent-in-process-driver/src/index.ts`。晚到启动回滚、已移除运行的失败、异步通知、尚未结束的续跑准备以及一次性和续跑子代理与 agent-loop 联合停机构成升级回归检查。
+
+## 验证
+
+受控测试拒绝晚到 agent 发布、保留未执行输入、阻止直接收件箱生产方、等待已取消 setup 和被放弃 writer 的清理、保留关闭失败，并拒绝封存后的写入。真实 JSONL 读取将最终存储事件列表与返回偏移对应。这些所有者回归也用于检查上游文件升级。原生安装和完整 Host 生产方验证仍是独立验收要求。
+
+## 考虑过的替代方案
+
+全局 flush 会漏掉已离开活跃注册表的 writer。重放所有已领取消息可能重复已执行工作。作用域 dispose 会吞掉失败，不能代替明确的所有者结果。这些替代方案无法提供所需证据。
+
+## 后果
+
+检查点失败时安装保持阻断。不会自动重启驱动器或排队工作。[Host 更新消费者](../../../../packages/bundle/mantur-app/README.zh.md#use-this-package) 等待这些原语；原生安装仍要求每个部署所有者和原生草稿存储证明持久化完成。
+
+Gateway 的操作归属由 `packages/api/gateway/src/index.ts` 管理：关闭套接字或取消响应并不意味着原始业务 Promise 或迭代器读取已结束。Gateway 冻结接纳、等待原始操作并保留迭代器清理失败。挂起的单次调用结果、已取消的读取、中断的流打开和失败的迭代器返回是升级回归检查。业务服务自行脱离调用的后台工作不归 Gateway 管理。
+
+存储域操作由 `packages/storage/storage-domain/src/index.ts` 管理：活动域快照会遗漏尚未完成的后端打开。设施冻结接纳，立即禁止现有域的新写入，等待未完成的分配和单元清理，并保留失败的分配回滚。延迟分配与关闭、失败回滚以及普通关闭后的重新打开是升级检查。
+
+投影缓存的操作由 `packages/session/session-projection-cache/src/index.ts` 管理：实时检查点队列不包含冷读取写回。显式停止会冻结生产者，并在存储所有者关闭领域之前等待两类写入。挂起的冷写入、保留的警告语义和清除的检查点定时器验证升级。缓存写入错误仍是派生数据失败，不作为领域清理回执。
+
+设置关闭由 `packages/settings/settings/src/index.ts` 和 `packages/settings/settings-file/src/index.ts` 管理：命名空间写入与观察回调可能晚于文件操作队列结束。就绪提供者停止两类生产者，并等待两层队列及监听器关闭。已启动的回调、挂起的文档创建、重复停止及监听器关闭失败验证升级。请求就绪提供者关闭前，必须先完成启动组合。
+
+目标轮次驱动关闭由 `packages/goal/goal-round-driver/src/index.ts` 管理：调度 Promise 和轮次预留是生产者私有状态。显式生命周期接口冻结自动触发，并独立于活动智能体查找保留原始驱动任务。步骤检查持续到插件卸载；已接纳的轮次在保留待执行输入的同时取消。Host 在停止此生产者前冻结智能体接纳。智能体接纳冻结后，AgentLoop 保留并恢复原始收件箱领取记录；目标驱动不修改已冻结的收件箱。挂起的检查点、之后的手动工作，以及使用真实 JSONL 写入器与 AgentLoop 联合关闭期间中断的步骤前钩子验证升级。
+
+预设准入停机归 `packages/preset/agent-presets/src/index.ts` 所有：冷会话读取的解析可能在 Host 首次读取所有者后分配常驻插件树。显式停止会冻结修改和挂载调用、等待已接收的操作，并保留已安装代次供后续 `livePresetMounts(rootFiber)` 清点。调用方可见的操作失败仍由原调用方接收；单独排空不证明插件清理成功。受控冷读取分配，以及停机后的组合和编写拒绝用于验证升级。
+
+Profile 补丁监听器停止归属于 `packages/boot/app-boot/src/index.ts`：监听器打开可能在接纳冻结后才完成，刷新回调仍可能重组根 include。根作用域内的所有权先等待打开，再关闭每个已注册监听器，并在重复停止时保留关闭失败。挂起的打开和清理、打开拒绝以及同步关闭失败用于验证升级。模块 HMR 和应用销毁仍由独立所有者负责。
+
+原生身份清理归属于 `packages/credentials/authorization-manturhub/src/index.ts`：私有连接拥有 broker 响应体和命令 lease。连接 effect 与显式 `stopNativeForShutdown()` 共享同一操作，撤销命令注册、排空其消费者，并在回执完成后关闭连接。命令清理失败不会跳过连接清理，重复调用方会收到保留的失败。Standalone 模式拒绝此原生专用操作。真实进程退出后挂起的命令回执，以及挂起的响应取消用于验证升级；Main 保持 IPC 直到这些回执完成。

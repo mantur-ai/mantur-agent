@@ -25,6 +25,8 @@ kind: "package-bundle"
 
 通过 `dsh --profile mantur` 启动完整产品；桌面载体会自动选择该 profile。有序 bundle 栈为 `dsh-base`、`dsh-web-app` 与本层。`web` profile 保持不变。
 
+已安装的桌面客户端将 `DSH_MANTUR_EDITOR_ROOT` 和 `DSH_MANTUR_EDITOR_NODE` 指向包内资源与 Electron 可执行文件。本层以打包模式启用[剪辑运行服务](../../client/ui-mantur-editing/README.zh.md)，并显式设置启动、退出和工具调用预算。缺少包资源会校验失败，不会静默禁用剪辑。未提供资源环境时，该配置行保持禁用，直到开发 profile 显式启用。
+
 新对话保持未关联状态，直到用户选择项目或提交首条草稿。本层挂载[自动项目准备](../../workspace/mantur-projects/README.zh.md)，通过 `DSH_MANTUR_PROJECTS_ROOT` 提供桌面解析的根目录。首次发送要求已持久保存的原生草稿标识；打开首页不创建项目。用户可以在输入框页脚查看或更改根目录。
 
 漫途侧栏在“项目”之前增加“功能”分组，并固定提供“技能广场”和“配方广场”入口。两个入口分别打开独立主页面，可以返回当前对话，且不会持久化页面选择。Skill 页面加载 ManturHub 公开目录与详情，复用 ManturHub 设备登录，并请求 Host 把校验后的压缩包安装到当前 profile 的实时 Skill 目录。配方页面把配方定义为带有效果样片、提示词模板、可复现算子参数、模型与算子信息和预计复刻成本的优秀验证案例，而不是通用工作流模板。账号页只提供登录与退出。登录、两个广场、详情与下载统一使用本机 profile 配置选定的部署，且每个 origin 的授权分开保存。
@@ -40,6 +42,12 @@ kind: "package-bundle"
 ```
 
 把 `environment` 改为 `production` 即可返回线上环境。每次编辑后应退出并重新打开桌面应用，避免浏览器账号与广场状态跨环境留存。profile 会拒绝缺少测试 URL、含路径的 URL（例如 `https://test.example.com/api`）以及与 `baseUrl` 相同的测试 origin。
+
+桌面更新消费者只在用户明确确认安装后启动。在获准的组合中，它首先等待每个保留的剪辑所有者，同时保留 Agent/inbox 准入、回调、信号和 writer。剪辑失败会阻止后续 Host 关闭；此阶段后新发现的剪辑所有者会阻止 writer 封存。然后它停止 profile 重载和预设准入，冻结每个所属智能体注册表，静止驱动器，并等待原生选择器、原始 Gateway/HTTP 请求及生产方所有者结束，然后关闭设置、会话 writer、投影缓存和存储域。再次校验 writer 后才生成绑定请求的 IPC 回执。协调器在自身生命周期内保留隔离及已退役的服务实例，避免服务替换丢弃清理失败。每次重复准备都会重新校验 writer 封存。
+
+只有更新策略中已审核的模块可以参与。具有未管理 OS 后代的代码执行、模块 HMR、任意 Host 插件，以及缺少停机所有者的剪辑/MCP 组合都会阻止安装。失败或 Main 等待到期不会授权安装；已开始的 Host 清理继续进行，已停止的工作不会自动重启。普通应用关闭使用独立路径。OTLP 遥测是本地会话日志的非权威副本，不参与保存回执；应用树仍执行其既有限时关闭，并保留关闭失败告警。
+
+协调器为每次回执检查整个根的 worker 和动态激活历史，即使所有提供方实例已经消失。缺少历史仍会拒绝。在 Shell 完成策略未明确时，保留既有 codeRuntime 存在门禁和 Host runner 模块排除规则；执行服务从未使用也不会启用安装。默认 profile 安装及真实浏览器中的剪辑完成仍未验证。[所有者组合回归](tests/editing-combined.spec.ts) 使用夹具 editor，覆盖真实 AgentLoop/MCP 信号、图片持久化和会话日志；浏览器 job 与 lease 需要独立证据。
 
 <a id="model-experience"></a>
 ## 模型体验
