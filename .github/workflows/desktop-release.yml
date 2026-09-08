@@ -114,7 +114,9 @@ jobs:
         run: xcrun clang --version
 
       - name: Build, sign, and notarize native installer
-        run: pnpm run ${{ matrix.script }}
+        run: |
+          ulimit -n 65536
+          pnpm run ${{ matrix.script }}
 
       - name: Verify Developer ID signature and notarization ticket
         env:
