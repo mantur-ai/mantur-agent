@@ -2,6 +2,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import type { ChildProcess } from 'node:child_process'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Llm, { createUserMessage } from '@deepseek-ai/dsh-llm'
@@ -21,12 +22,12 @@ import { MockAdapter, toolCallResponse, textResponse } from '../../../core/agent
 import { startExpiryFixture } from '../../../mcp/mcp-client/tests/http-expiry-fixture.ts'
 import { createHostUpdateShutdown } from '../src/update-shutdown.ts'
 
-const childClosures = vi.hoisted(() => [] as Array<{ closed: boolean }>)
+const childClosures = vi.hoisted(() => [] as Array<{ closed: boolean; child: ChildProcess }>)
 vi.mock('node:child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:child_process')>()
   return { ...actual, spawn: (...args: Parameters<typeof actual.spawn>) => {
     const child = actual.spawn(...args)
-    const state = { closed: false }
+    const state = { closed: false, child }
     child.once('close', () => { state.closed = true })
     childClosures.push(state)
     return child
@@ -52,7 +53,11 @@ import { createServer as http, request } from 'node:http';
 import { writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 export async function createServer() {
+  const responses = new Set();
   const httpServer = http((incoming, outgoing) => {
+    const completion = new Promise(resolve => outgoing.once('close', resolve));
+    responses.add(completion);
+    completion.then(() => responses.delete(completion));
     const upstream = request(${JSON.stringify(fixture.url)}, { method: incoming.method, headers: incoming.headers }, response => {
       const chunks = [];
       response.on('data', chunk => chunks.push(chunk));
@@ -71,6 +76,9 @@ export async function createServer() {
       if (existsSync('release-editor')) { clearInterval(timer); resolve(); }
     }, 10); });
     await writeFile('saved-before-close', '1');
+  }, async finishTransportShutdown() {
+    await Promise.all([...responses]);
+    await writeFile('transport-closed', '1');
   } };
   return { config: { server: {}, inlineConfig: { server: {} } }, httpServer,
     close: async () => {
@@ -98,7 +106,7 @@ export async function createServer() {
       startupTimeoutMs: 10000, stopTimeoutMs: 10000, toolCallTimeoutMs: 10000 })
     const handle = await ctx.agents.create({ sessionId: SessionId('combined'), meta: { cwd: root }, agentOptions: { provider: 'mock', model: 'mock' } })
     const workspace = await ctx.manturEditing.open(handle.agent, 'http://127.0.0.1:5298')
-    expect(childClosures).toEqual([{ closed: false }])
+    expect(childClosures.map(state => state.closed)).toEqual([false])
     ctx.on('tools/execute', async (exec, next) => {
       if (exec.name === 'mcp__mantur_cut__mutate') signal = exec.signal
       return next()
@@ -129,7 +137,7 @@ export async function createServer() {
     await expect.poll(async () => readFile(join(editorRoot, 'drain-entered'), 'utf8').catch(() => '')).toBe('1')
     expect(signal?.aborted).toBe(false)
     expect(quiesce).not.toHaveBeenCalled()
-    expect(childClosures).toEqual([{ closed: false }])
+    expect(childClosures.map(state => state.closed)).toEqual([false])
     expect(savedImages).toHaveLength(1)
     expect((await ctx.attachments.readImage(savedImages[0]!)).data.byteLength).toBeGreaterThan(0)
     await handle.agent.whenIdle()
@@ -137,8 +145,9 @@ export async function createServer() {
     expect(before.some(event => event.type === 'tool/result' && event.data.message.content[0].isError === false)).toBe(true)
     await writeFile(join(editorRoot, 'release-editor'), '1')
     await preparing
-    expect(childClosures).toEqual([{ closed: true }])
+    expect(childClosures.map(state => state.closed)).toEqual([true])
     expect(await readFile(join(editorRoot, 'saved-before-close'), 'utf8')).toBe('1')
+    expect(await readFile(join(editorRoot, 'transport-closed'), 'utf8')).toBe('1')
     expect(await readFile(join(editorRoot, 'editor-closed'), 'utf8')).toBe('1')
     await expect(fetch(workspace.editorUrl)).rejects.toThrow()
     const reader = await ctx.sessionPersistence.open(handle.agent.id, 'read')
@@ -148,8 +157,15 @@ export async function createServer() {
     await writeFile(join(editorRoot, 'release-editor'), '1')
     await preparationResult
     vi.restoreAllMocks()
-    await ctx.fiber.dispose()
-    await fixture.close()
-    await rm(root, { recursive: true, force: true })
+    try { await ctx.fiber.dispose() } finally {
+      // Failed fixtures retain their owner; only this test's captured child is force-cleaned.
+      for (const state of childClosures) if (!state.closed) {
+        const closed = new Promise<void>(resolve => state.child.once('close', () => resolve()))
+        state.child.kill('SIGKILL')
+        await closed
+      }
+      await fixture.close()
+      await rm(root, { recursive: true, force: true })
+    }
   }
 }, 30000)
