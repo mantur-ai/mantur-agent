@@ -16,8 +16,7 @@ import type { NativeAccountController } from './auth/controller.ts'
 import { installNativeAccountBridge } from './auth/ipc.ts'
 import {
   canResetProjectionCache,
-  desktopPaths,
-  desktopUserDataPath,
+  initializeDesktopPaths,
   prepareDesktopPaths,
   resetProjectionCache,
 } from './desktop-state.ts'
@@ -41,11 +40,9 @@ let accountHost: NativeAccountHost | undefined
 let nativeAccount: NativeAccountController | undefined
 
 app.setName(APP_NAME)
-app.setPath('userData', desktopUserDataPath(
-  app.getPath('appData'),
-  app.isPackaged ? 'release' : 'development',
-))
-const paths = desktopPaths(app.getPath('userData'))
+const paths = initializeDesktopPaths(app, app.commandLine.hasSwitch('user-data-dir')
+  ? app.commandLine.getSwitchValue('user-data-dir')
+  : undefined)
 const accountBridge = installNativeAccountBridge({ ipc: ipcMain, window: () => mainWindow,
   origin: () => serviceUrl === undefined ? undefined : new URL(serviceUrl).origin,
   controller: () => nativeAccount,

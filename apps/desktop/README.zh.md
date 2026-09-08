@@ -20,7 +20,9 @@ pnpm run desktop:dev
 
 该命令会监听桌面端 TypeScript、资源和构建配置。每次改动都会执行桌面端 TypeScript 增量构建、bundle Electron 主进程、停止上一组 Electron 与 dsh 进程，再重新启动开发应用。dsh 的 stdout 和 stderr 仍会写入持久 Harness 日志，也会直接显示在终端。
 
-开发模式使用 `mantur-agent-dev` 用户数据目录，已安装构建使用 `mantur-agent`；设置、会话、凭据和缓存不会在两种模式间串用。Electron 的 `app.isPackaged` 检查也会禁用开发模式的自动更新检查。如果 `apps/desktop` 之外的改动影响已构建的 Harness 或 Web 产物，需要再次执行 `pnpm run build:mantur`。
+默认情况下，开发模式使用 `mantur-agent-dev` 用户数据目录，已安装构建使用 `mantur-agent`；各自的设置、会话、凭据和缓存保持分离。Electron 的 `app.isPackaged` 检查也会禁用开发模式的自动更新检查。如果 `apps/desktop` 之外的改动影响已构建的 Harness 或 Web 产物，需要再次执行 `pnpm run build:mantur`。
+
+需要显式配置本地 profile 时，传入 Electron 的 `--user-data-dir=/absolute/directory` 启动参数。桌面端将该目录同时用于 `userData` 和 `sessionData`，包括浏览器 cookie 与缓存，并从其 `harness` 子目录派生 `DSH_HOME`。不同目录隔离各个 profile；选择同一目录会共享数据。目录不存在时会创建。空值、相对路径、含 NUL 的路径、文件系统根目录或不可用路径会在账号、草稿或 Harness 初始化前阻止启动；失败不会切换到默认目录。该选项不会搜索、迁移或复制账号、密钥及已有 profile。仅修改 `HOME` 不能隔离桌面数据。
 
 `desktop:dev` 不会创建 DMG、ZIP 或 NSIS 安装包，不会签名或 notarize 应用，不会向操作系统应用目录安装任何内容，也不会检查 release。只在验证安装、签名、notarization、release 更新或发布候选版时使用原生打包。
 

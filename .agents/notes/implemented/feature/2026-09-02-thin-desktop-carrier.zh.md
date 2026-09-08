@@ -18,6 +18,8 @@ client 构建 profile `mantur` 会把 `DSH_CLIENT_TITLE` 固定为 `漫途Agent`
 
 同一用户数据根目录还持有 Harness 与桌面诊断的持久合并日志。启动失败会先关闭子进程并完成日志写入。只有错误指向 schema 无效的 `session_projcache` 时，才会提供一项窄范围恢复：在用户通过原生对话框明确同意后，载体只删除该投影缓存并重试。会话日志、设置、凭据、profile 与 workspace 保持不变。其他错误只提供日志与退出。
 
+显式配置本地 profile 使用既有 Electron `--user-data-dir` 参数，不另加环境变量。传入的绝对非根目录同时选择 Electron `userData` 和 `sessionData`，其 `harness` 子目录仍是桌面端唯一的 `DSH_HOME`。校验和目录创建先于账号、草稿及 Harness 初始化，错误不会改选默认存储。未传参数时，两种模式的默认目录及初始化保持不变。不同配置目录隔离 profile 文件；选择同一目录会共享文件。该参数既不发现，也不迁移账号或凭据。
+
 已安装构建通过 electron-updater 检查 `mantur-ai/mantur-harness` GitHub Releases。stable 构建只接收 stable release；版本号含 `alpha`、`beta` 或 `rc` 的构建可以接收预发布版本。检查会在启动后开始，并每六小时重复。macOS 的原生应用菜单和 Windows 的帮助菜单会显示当前版本、手动检查操作、检查与下载进度、失败状态和可安装操作。手动检查得到无更新或错误结果时，还会显示本地化原生对话框。两个改变状态的步骤都需要分别同意：载体会先在下载前询问，再在停止 Harness 并重启进入安装器前第二次询问。下载后选择稍后仍可从菜单触发安装。释放 updater 会移除监听器，并阻止尚未完成的对话框结果触发下载或安装。后台检查与失败都会写入桌面日志。
 
 根目录的 `desktop:dev` 命令负责本地编辑循环，不会调用 electron-builder。监听器会重新运行桌面端 TypeScript 增量项目、bundle Electron 入口，并直接启动 Electron。源码或资源改动会终止活动 Electron 进程；Electron 先等待其 dsh 子进程关闭，再开始下一轮。开发 dsh 输出会同步显示在终端，同时保留在持久日志中。开发模式选用 `mantur-agent-dev` 用户数据目录，不会触及已安装应用的 `mantur-agent` 状态；`app.isPackaged` 会保持 updater 不活动。
@@ -43,6 +45,8 @@ macOS release 工作流通过受保护的 GitHub 环境 secret 为原生 arm64 �
 **在一台 host 上交叉构建全部目标。** 否决。产生 archive 不能证明目标专属原生模块能够加载，也不能证明打包应用能够启动。原生 runner smoke 才是验收证据。
 
 **为每次开发改动构建原生安装包。** 否决。DMG、ZIP、NSIS、签名、notarization 与更新元数据不会为普通 Electron 入口改动提供证据。这些操作仍属于发布路径检查，开发命令则直接验证同一套未打包主进程和 dsh Web 启动。
+
+**仅修改 HOME 来隔离桌面测试。** 否决。主进程在 Electron 的操作系统应用数据根目录下选择存储位置。显式桌面目录同时选择浏览器会话存储和子进程 Harness home，无需依赖环境中的 CLI 配置。
 
 **通过 Web 应用暴露桌面 updater 状态。** 否决。renderer 有意不提供 Electron preload bridge、Node integration 或桌面专用 HTTP API。原生菜单可以呈现应用生命周期功能，而无需给 Harness profile 或 Web client 增加桌面 transport。
 
