@@ -37,6 +37,8 @@ pnpm run desktop:smoke
 
 Each `desktop:dist:*` command first prepares the matching Mantur Cut resource tree from pinned OpenChatCut and whisper.cpp commits. It verifies both Mantur patch digests and resulting Git trees, package-lock integrities, downloaded archive hashes, and the requested native target. The package carries the embedded server, built editor, Remotion bundle and compositor, Chrome Headless Shell, FFmpeg, ffprobe, Whisper CLI and server, exact source records, retained license files, and a production dependency audit. No packaged runtime downloads a missing executable or falls back to a developer checkout.
 
+Chrome for Testing download URLs place the version in the directory and use `chrome-headless-shell-<platform>.zip` as the archive name. Local cache filenames additionally contain the pinned version.
+
 The macOS commands let electron-builder sign and produce the update ZIP, then create the DMG with Apple's `hdiutil`. A temporary unique volume name prevents collisions with an installed or mounted copy of the application; the finished image restores the `漫途Agent` volume name, adds an Applications shortcut, and receives a separate update blockmap.
 
 Run the x64 macOS command on an Intel Mac and the Windows command on x64 Windows. The manual `Desktop package` GitHub Actions workflow checks out one commit on three native runners, runs the packaged smoke, and retains these files for seven days:

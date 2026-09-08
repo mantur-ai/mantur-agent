@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -54,6 +54,12 @@ function sourceConfig(): unknown {
 }
 
 describe('Mantur Cut distribution', () => {
+  it('keeps the Chrome cache version out of the upstream archive filename', async () => {
+    const source = await readFile(new URL('./mantur-cut-distribution.ts', import.meta.url), 'utf8')
+    expect(source).toContain('const chromeArchive = `chrome-headless-shell-${target.chromePlatform}-${target.chromeVersion}.zip`')
+    expect(source).toContain('await download(`https://storage.googleapis.com/chrome-for-testing-public/${target.chromeVersion}/${target.chromePlatform}/chrome-headless-shell-${target.chromePlatform}.zip`, cachedChrome, target.chromeSha256)')
+  })
+
   it('accepts only the three native release targets and two pinned patches', () => {
     expect(parseSourceConfig(sourceConfig()).targets['win32-x64'].platform).toBe('win32')
     expect(hostTarget('darwin', 'arm64')).toBe('darwin-arm64')

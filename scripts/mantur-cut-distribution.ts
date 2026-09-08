@@ -648,7 +648,7 @@ async function prepare(targetKey: ManturCutTarget, cacheDir: string, outputDir: 
     run('npm', ['run', 'desktop:prebundle'], source, environment)
     const chromeArchive = `chrome-headless-shell-${target.chromePlatform}-${target.chromeVersion}.zip`
     const cachedChrome = join(cacheDir, 'downloads', chromeArchive)
-    await download(`https://storage.googleapis.com/chrome-for-testing-public/${target.chromeVersion}/${target.chromePlatform}/${chromeArchive}`, cachedChrome, target.chromeSha256)
+    await download(`https://storage.googleapis.com/chrome-for-testing-public/${target.chromeVersion}/${target.chromePlatform}/chrome-headless-shell-${target.chromePlatform}.zip`, cachedChrome, target.chromeSha256)
     await mkdir(join(source, 'desktop-dist'), { recursive: true })
     await cp(cachedChrome, join(source, 'desktop-dist', `chs-${target.chromePlatform}-${target.chromeVersion}.zip`))
     run('npm', ['run', 'desktop:prepare', '--', targetKey], source, environment)

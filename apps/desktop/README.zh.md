@@ -37,6 +37,8 @@ pnpm run desktop:smoke
 
 每条 `desktop:dist:*` 命令都会先从固定的 OpenChatCut 与 whisper.cpp commit 准备对应的 Mantur Cut 资源树。该步骤会校验两层漫途补丁的摘要与结果 Git tree、package-lock integrity、下载归档哈希以及请求的原生目标。安装包会携带内嵌服务端、已构建编辑器、Remotion bundle 与 compositor、Chrome Headless Shell、FFmpeg、ffprobe、Whisper CLI 与 server、精确源码记录、保留的许可证文件和生产依赖审计。打包运行时不会下载缺失可执行文件，也不会回退到开发检出。
 
+Chrome for Testing 下载 URL 将版本号放在目录中，并使用 `chrome-headless-shell-<platform>.zip` 作为归档文件名。本地缓存文件名还会包含固定版本号。
+
 macOS 命令先由 electron-builder 完成签名并生成更新 ZIP，再用 Apple 的 `hdiutil` 创建 DMG。构建阶段使用临时唯一卷名，避免与已安装或已挂载的同名应用冲突；最终镜像会恢复 `漫途Agent` 卷名、加入 Applications 快捷方式，并生成独立的更新 blockmap。
 
 macOS x64 命令必须在 Intel Mac 上运行，Windows 命令必须在 x64 Windows 上运行。手动触发的 `Desktop package` GitHub Actions 工作流会在三个原生 runner 上检出同一个 commit、运行打包 smoke，并将以下文件保留七天：
