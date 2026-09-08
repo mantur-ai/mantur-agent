@@ -64,13 +64,19 @@ Agent 导入本地文件在手动模式下保留单次确认，素材先加入�
 
 应用[打包补丁](adapters/mantur-cut-packaged.patch)得到编辑器树 `2a5be55239826a9e74bde5a5a5484a0f033d4da0` 后，再应用[退出补丁](adapters/mantur-cut-shutdown.patch)。退出补丁不增加公开 MCP 工具，也不修改固定的音频收尾流程。受管理的渲染路径传播 `browser.close()` 失败，但 Remotion 4.0.509 没有提供受支持的子进程及管道完整关闭确认；实际取得渲染浏览器的实例因此拒绝退出确认。使用过尚未接入排空的工作来源，或保留有保存及任务错误时，也拒绝确认。该增量不代表完整安装许可；[退出决策](../../../.agents/notes/implemented/bug-fix/2026-09-08-mantur-editing-owned-shutdown.zh.md)记录验证限制。
 
+编辑器固定修复后的图像与归档依赖，保留模型及语音提供方；范围与原生验证限制见[依赖安全决策](../../../.agents/notes/implemented/bug-fix/2026-09-08-mantur-editor-security-dependencies.zh.md)。
+
 编辑器通过工程存储通道确认实际语义向量可用性后才执行索引操作；检查失败或响应无效仍然报错。已接受的修改纳入浏览器退出等待。扩展与模型目录的指定 GET 请求保留原始完成 Promise；下载及安装请求仍须具备自己的退出管理。
+
+本地 `/api/extract-frames` 请求保留 FFmpeg、FFprobe、可选 Python 标注及临时文件清理的完成结果。部分预览不会清除采样或标注错误；这些错误仍会拒绝退出。[抽帧决策](../../../.agents/notes/implemented/bug-fix/2026-09-08-mantur-extract-frames-shutdown.zh.md)记录实际媒体验证与范围限制。
+
+隔离配置下 `/upload` 的 POST 和 PUT 请求保留请求体、存储工作及文件流关闭结果。其他上传路由和默认配置仍未确认。[本地上传决策](../../../.agents/notes/implemented/bug-fix/2026-09-08-mantur-local-upload-shutdown.zh.md)记录支持路径与验证限制。
 
 | 退出补丁层 | 固定值 |
 |---|---|
-| 编辑器提交 | `aa893e75d5811275bfb59f8974133bf0ce4339f5` |
-| 结果树 | `203f06ef3a916ee19b9948793e50178b912fd90b` |
-| 补丁 SHA-256 | `dd0abd932f995265aab92a31a870c854833fb889a986a83731550091079227ca` |
+| 编辑器提交 | `2fcb4c0c734494387c78068d770709a70bda1bd9` |
+| 结果树 | `889e9551f34e28a5bf8d181334f6ec6bdfd9a2b5` |
+| 补丁 SHA-256 | `fa4698d9794add099b012fadcb63d849c4083c4feb3b1e9dc36628b83ab90cb5` |
 
 Host Remote 解析 Agent，合并并发打开请求，并启动 `adapters/mantur-runtime.mjs`。既有 MCP 客户端挂载于该 Agent 作用域。所有挂载的 MCP 客户端解析到同一 peer 实例，保留 Agent 作用域内的服务器名称预留。MCP bearer 只存在于 Host 内存和子进程环境。卸载等待连接与子进程退出。Client 忽略已切走会话的启动结果。本包不发布 invariant companion：退出状态由子进程句柄直接持有，连接和工具版本约束由 MCP 客户端负责。
 

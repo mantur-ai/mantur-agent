@@ -22,8 +22,617 @@ index 7f373b1..3813420 100644
    // Static cover at the end: uploading assets at runtime takes precedence over dist's build-stage copy
    app.use('/media/uploads', uploadsMiddleware());
    if (mantur) {
+diff --git a/package-lock.json b/package-lock.json
+index 0e72452..80b33b6 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -2093,9 +2093,9 @@
+       }
+     },
+     "node_modules/@img/sharp-darwin-arm64": {
+-      "version": "0.34.5",
+-      "resolved": "https://registry.npmjs.org/@img/sharp-darwin-arm64/-/sharp-darwin-arm64-0.34.5.tgz",
+-      "integrity": "sha512-imtQ3WMJXbMY4fxb/Ndp6HBTNVtWCUI0WdobyheGf5+ad6xX8VIDO8u2xE4qc/fr08CKG/7dDseFtn6M6g/r3w==",
++      "version": "0.35.3",
++      "resolved": "https://registry.npmjs.org/@img/sharp-darwin-arm64/-/sharp-darwin-arm64-0.35.3.tgz",
++      "integrity": "sha512-RMnFX7YQsMoh7lWfcM4NEHHymBX/rLuKNPVM84XE9ONPcaSCDgE7CHIHpSgPcO2xcRthgBy1HfNO319mwhIAkg==",
+       "cpu": [
+         "arm64"
+       ],
+@@ -2105,19 +2105,19 @@
+         "darwin"
+       ],
+       "engines": {
+-        "node": "^18.17.0 || ^20.3.0 || >=21.0.0"
++        "node": ">=20.9.0"
+       },
+       "funding": {
+         "url": "https://opencollective.com/libvips"
+       },
+       "optionalDependencies": {
+-        "@img/sharp-libvips-darwin-arm64": "1.2.4"
++        "@img/sharp-libvips-darwin-arm64": "1.3.2"
+       }
+     },
+     "node_modules/@img/sharp-darwin-x64": {
+-      "version": "0.34.5",
+-      "resolved": "https://registry.npmjs.org/@img/sharp-darwin-x64/-/sharp-darwin-x64-0.34.5.tgz",
+-      "integrity": "sha512-YNEFAF/4KQ/PeW0N+r+aVVsoIY0/qxxikF2SWdp+NRkmMB7y9LBZAVqQ4yhGCm/H3H270OSykqmQMKLBhBJDEw==",
++      "version": "0.35.3",
++      "resolved": "https://registry.npmjs.org/@img/sharp-darwin-x64/-/sharp-darwin-x64-0.35.3.tgz",
++      "integrity": "sha512-Xo+5uFBtLN0BKqieTxiFzFPQAUlBbbH5iBKyRX/z1JrbnYsHTfKJnUfL8+p2TPXr1pXqao4eeL4Rl144uDpK9w==",
+       "cpu": [
+         "x64"
+       ],
+@@ -2127,19 +2127,38 @@
+         "darwin"
+       ],
+       "engines": {
+-        "node": "^18.17.0 || ^20.3.0 || >=21.0.0"
++        "node": ">=20.9.0"
+       },
+       "funding": {
+         "url": "https://opencollective.com/libvips"
+       },
+       "optionalDependencies": {
+-        "@img/sharp-libvips-darwin-x64": "1.2.4"
++        "@img/sharp-libvips-darwin-x64": "1.3.2"
++      }
++    },
++    "node_modules/@img/sharp-freebsd-wasm32": {
++      "version": "0.35.3",
++      "resolved": "https://registry.npmjs.org/@img/sharp-freebsd-wasm32/-/sharp-freebsd-wasm32-0.35.3.tgz",
++      "integrity": "sha512-lUxcqWIj2wMQ9BrwNjngcr1gWUr5xgaGThBRqPPalIC2n67Cqj1uPh8NnA/ZhAg8hUbKl+kVHKwgUIwe6ZYPrg==",
++      "license": "Apache-2.0",
++      "optional": true,
++      "os": [
++        "freebsd"
++      ],
++      "dependencies": {
++        "@img/sharp-wasm32": "0.35.3"
++      },
++      "engines": {
++        "node": ">=20.9.0"
++      },
++      "funding": {
++        "url": "https://opencollective.com/libvips"
+       }
+     },
+     "node_modules/@img/sharp-libvips-darwin-arm64": {
+-      "version": "1.2.4",
+-      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-darwin-arm64/-/sharp-libvips-darwin-arm64-1.2.4.tgz",
+-      "integrity": "sha512-zqjjo7RatFfFoP0MkQ51jfuFZBnVE2pRiaydKJ1G/rHZvnsrHAOcQALIi9sA5co5xenQdTugCvtb1cuf78Vf4g==",
++      "version": "1.3.2",
++      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-darwin-arm64/-/sharp-libvips-darwin-arm64-1.3.2.tgz",
++      "integrity": "sha512-9J6ypZFpQBj4YnePGoq/S38w6nz+vqg5WZLrLGY4YuSemdMq47GMLBPO42MzwdGwpg/agZ7xzZcFHa48xlywfg==",
+       "cpu": [
+         "arm64"
+       ],
+@@ -2153,9 +2172,9 @@
+       }
+     },
+     "node_modules/@img/sharp-libvips-darwin-x64": {
+-      "version": "1.2.4",
+-      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-darwin-x64/-/sharp-libvips-darwin-x64-1.2.4.tgz",
+-      "integrity": "sha512-1IOd5xfVhlGwX+zXv2N93k0yMONvUlANylbJw1eTah8K/Jtpi15KC+WSiaX/nBmbm2HxRM1gZ0nSdjSsrZbGKg==",
++      "version": "1.3.2",
++      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-darwin-x64/-/sharp-libvips-darwin-x64-1.3.2.tgz",
++      "integrity": "sha512-m2pW1n6cns9VaubNwsZ+c3CRYjxNQWgJ5gPlnL1nbBcpkBvFm6SCFN5o0psFHI8w9n11NKhFkeEDns98tiqbEw==",
+       "cpu": [
+         "x64"
+       ],
+@@ -2169,9 +2188,9 @@
+       }
+     },
+     "node_modules/@img/sharp-libvips-linux-arm": {
+-      "version": "1.2.4",
+-      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linux-arm/-/sharp-libvips-linux-arm-1.2.4.tgz",
+-      "integrity": "sha512-bFI7xcKFELdiNCVov8e44Ia4u2byA+l3XtsAj+Q8tfCwO6BQ8iDojYdvoPMqsKDkuoOo+X6HZA0s0q11ANMQ8A==",
++      "version": "1.3.2",
++      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linux-arm/-/sharp-libvips-linux-arm-1.3.2.tgz",
++      "integrity": "sha512-1eMLzy92I4J6rmi4mAT8yC3HxOtniyGELlzGbNMLLeqe052ahFQ0h6LFq+lh5DsDIdYViIDst08abvSbcEdLXQ==",
+       "cpu": [
+         "arm"
+       ],
+@@ -2188,9 +2207,9 @@
+       }
+     },
+     "node_modules/@img/sharp-libvips-linux-arm64": {
+-      "version": "1.2.4",
+-      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linux-arm64/-/sharp-libvips-linux-arm64-1.2.4.tgz",
+-      "integrity": "sha512-excjX8DfsIcJ10x1Kzr4RcWe1edC9PquDRRPx3YVCvQv+U5p7Yin2s32ftzikXojb1PIFc/9Mt28/y+iRklkrw==",
++      "version": "1.3.2",
++      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linux-arm64/-/sharp-libvips-linux-arm64-1.3.2.tgz",
++      "integrity": "sha512-dqVSFynCox4C/J8kT16V7SIFAns0IjgLwkvYT7p8LQVmJ5OS5b6tI9IGflxTeuBS//zXeFIUbwt5dwxyZ17cnA==",
+       "cpu": [
+         "arm64"
+       ],
+@@ -2207,9 +2226,9 @@
+       }
+     },
+     "node_modules/@img/sharp-libvips-linux-ppc64": {
+-      "version": "1.2.4",
+-      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linux-ppc64/-/sharp-libvips-linux-ppc64-1.2.4.tgz",
+-      "integrity": "sha512-FMuvGijLDYG6lW+b/UvyilUWu5Ayu+3r2d1S8notiGCIyYU/76eig1UfMmkZ7vwgOrzKzlQbFSuQfgm7GYUPpA==",
++      "version": "1.3.2",
++      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linux-ppc64/-/sharp-libvips-linux-ppc64-1.3.2.tgz",
++      "integrity": "sha512-3z0NHDxD6n5I9gc05U1eW1AyRm+Gznzq3naMrthPNqE6oYykcogW0l/jfpJdjYnuNl8R7yI9pNbE1XiUeyq0Aw==",
+       "cpu": [
+         "ppc64"
+       ],
+@@ -2226,9 +2245,9 @@
+       }
+     },
+     "node_modules/@img/sharp-libvips-linux-riscv64": {
+-      "version": "1.2.4",
+-      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linux-riscv64/-/sharp-libvips-linux-riscv64-1.2.4.tgz",
+-      "integrity": "sha512-oVDbcR4zUC0ce82teubSm+x6ETixtKZBh/qbREIOcI3cULzDyb18Sr/Wcyx7NRQeQzOiHTNbZFF1UwPS2scyGA==",
++      "version": "1.3.2",
++      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linux-riscv64/-/sharp-libvips-linux-riscv64-1.3.2.tgz",
++      "integrity": "sha512-bsb4rI+NldGOsXuej2r8OdSS8+zXDVaCWxyWrcv6kneTOlgAHtZABRzBBCwdsPiD90J4myNJuHpg6kA20ImW/w==",
+       "cpu": [
+         "riscv64"
+       ],
+@@ -2245,9 +2264,9 @@
+       }
+     },
+     "node_modules/@img/sharp-libvips-linux-s390x": {
+-      "version": "1.2.4",
+-      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linux-s390x/-/sharp-libvips-linux-s390x-1.2.4.tgz",
+-      "integrity": "sha512-qmp9VrzgPgMoGZyPvrQHqk02uyjA0/QrTO26Tqk6l4ZV0MPWIW6LTkqOIov+J1yEu7MbFQaDpwdwJKhbJvuRxQ==",
++      "version": "1.3.2",
++      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linux-s390x/-/sharp-libvips-linux-s390x-1.3.2.tgz",
++      "integrity": "sha512-/ABshyj8gCpyIrNXnHn4LorDJ0HHm1VhXPBlxZ8zAtfVPAaSafXPGn+sUSIRiwaSBy0mmFjSjiXI5mkcwdChKQ==",
+       "cpu": [
+         "s390x"
+       ],
+@@ -2264,9 +2283,9 @@
+       }
+     },
+     "node_modules/@img/sharp-libvips-linux-x64": {
+-      "version": "1.2.4",
+-      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linux-x64/-/sharp-libvips-linux-x64-1.2.4.tgz",
+-      "integrity": "sha512-tJxiiLsmHc9Ax1bz3oaOYBURTXGIRDODBqhveVHonrHJ9/+k89qbLl0bcJns+e4t4rvaNBxaEZsFtSfAdquPrw==",
++      "version": "1.3.2",
++      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linux-x64/-/sharp-libvips-linux-x64-1.3.2.tgz",
++      "integrity": "sha512-ITPEtgffGJ0S6G9dRyw/366tJQqFRcHWPHhC+Stpg3Z8AEMrDrTr2lhdz4f/Y/HMbRh//7Z5mBzEpVdi62Oc3w==",
+       "cpu": [
+         "x64"
+       ],
+@@ -2283,9 +2302,9 @@
+       }
+     },
+     "node_modules/@img/sharp-libvips-linuxmusl-arm64": {
+-      "version": "1.2.4",
+-      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linuxmusl-arm64/-/sharp-libvips-linuxmusl-arm64-1.2.4.tgz",
+-      "integrity": "sha512-FVQHuwx1IIuNow9QAbYUzJ+En8KcVm9Lk5+uGUQJHaZmMECZmOlix9HnH7n1TRkXMS0pGxIJokIVB9SuqZGGXw==",
++      "version": "1.3.2",
++      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linuxmusl-arm64/-/sharp-libvips-linuxmusl-arm64-1.3.2.tgz",
++      "integrity": "sha512-zE9EdiUzUmg5mDT5a1rk5fYJ6GWPloTwWBYDS14naqHsL+EaMpDj1AWnpLgh3u0YCORv2Tt50wrcrpYqkP97Kw==",
+       "cpu": [
+         "arm64"
+       ],
+@@ -2302,9 +2321,9 @@
+       }
+     },
+     "node_modules/@img/sharp-libvips-linuxmusl-x64": {
+-      "version": "1.2.4",
+-      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linuxmusl-x64/-/sharp-libvips-linuxmusl-x64-1.2.4.tgz",
+-      "integrity": "sha512-+LpyBk7L44ZIXwz/VYfglaX/okxezESc6UxDSoyo2Ks6Jxc4Y7sGjpgU9s4PMgqgjj1gZCylTieNamqA1MF7Dg==",
++      "version": "1.3.2",
++      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linuxmusl-x64/-/sharp-libvips-linuxmusl-x64-1.3.2.tgz",
++      "integrity": "sha512-m0lrLiUt+lBYnCFr8qV/65yMR4E/c7/wf78I5eKTdkEakFAlZ9QlzEM3QIhhAwVeUhLAHLcCq7a7Vszq/oFNZQ==",
+       "cpu": [
+         "x64"
+       ],
+@@ -2321,9 +2340,9 @@
+       }
+     },
+     "node_modules/@img/sharp-linux-arm": {
+-      "version": "0.34.5",
+-      "resolved": "https://registry.npmjs.org/@img/sharp-linux-arm/-/sharp-linux-arm-0.34.5.tgz",
+-      "integrity": "sha512-9dLqsvwtg1uuXBGZKsxem9595+ujv0sJ6Vi8wcTANSFpwV/GONat5eCkzQo/1O6zRIkh0m/8+5BjrRr7jDUSZw==",
++      "version": "0.35.3",
++      "resolved": "https://registry.npmjs.org/@img/sharp-linux-arm/-/sharp-linux-arm-0.35.3.tgz",
++      "integrity": "sha512-affVWCTLooy8TSxbDx2qkzuDeaWLNVBA+P//FNBirHsXpP2fuBhk5AuboYUnrDnzoXes8GFjpTx0SBFOCRg+FA==",
+       "cpu": [
+         "arm"
+       ],
+@@ -2336,19 +2355,19 @@
+         "linux"
+       ],
+       "engines": {
+-        "node": "^18.17.0 || ^20.3.0 || >=21.0.0"
++        "node": ">=20.9.0"
+       },
+       "funding": {
+         "url": "https://opencollective.com/libvips"
+       },
+       "optionalDependencies": {
+-        "@img/sharp-libvips-linux-arm": "1.2.4"
++        "@img/sharp-libvips-linux-arm": "1.3.2"
+       }
+     },
+     "node_modules/@img/sharp-linux-arm64": {
+-      "version": "0.34.5",
+-      "resolved": "https://registry.npmjs.org/@img/sharp-linux-arm64/-/sharp-linux-arm64-0.34.5.tgz",
+-      "integrity": "sha512-bKQzaJRY/bkPOXyKx5EVup7qkaojECG6NLYswgktOZjaXecSAeCWiZwwiFf3/Y+O1HrauiE3FVsGxFg8c24rZg==",
++      "version": "0.35.3",
++      "resolved": "https://registry.npmjs.org/@img/sharp-linux-arm64/-/sharp-linux-arm64-0.35.3.tgz",
++      "integrity": "sha512-QgKDspHPnrU+GQ55XPhGwyhC8acLVOOSyAvo1oVfFmrIXLkDNmGWzAfDZ4xK8oSA1qBQrALcHX0G5UZni/SuFQ==",
+       "cpu": [
+         "arm64"
+       ],
+@@ -2361,19 +2380,19 @@
+         "linux"
+       ],
+       "engines": {
+-        "node": "^18.17.0 || ^20.3.0 || >=21.0.0"
++        "node": ">=20.9.0"
+       },
+       "funding": {
+         "url": "https://opencollective.com/libvips"
+       },
+       "optionalDependencies": {
+-        "@img/sharp-libvips-linux-arm64": "1.2.4"
++        "@img/sharp-libvips-linux-arm64": "1.3.2"
+       }
+     },
+     "node_modules/@img/sharp-linux-ppc64": {
+-      "version": "0.34.5",
+-      "resolved": "https://registry.npmjs.org/@img/sharp-linux-ppc64/-/sharp-linux-ppc64-0.34.5.tgz",
+-      "integrity": "sha512-7zznwNaqW6YtsfrGGDA6BRkISKAAE1Jo0QdpNYXNMHu2+0dTrPflTLNkpc8l7MUP5M16ZJcUvysVWWrMefZquA==",
++      "version": "0.35.3",
++      "resolved": "https://registry.npmjs.org/@img/sharp-linux-ppc64/-/sharp-linux-ppc64-0.35.3.tgz",
++      "integrity": "sha512-sMd8rDxmpLOwv/7N44klFjOD5DUO7FLdjiXDI0hoxYaf7Ar262dQIEkosE98bps+5HPLtp/EvNqeqQtOycP/IA==",
+       "cpu": [
+         "ppc64"
+       ],
+@@ -2386,19 +2405,19 @@
+         "linux"
+       ],
+       "engines": {
+-        "node": "^18.17.0 || ^20.3.0 || >=21.0.0"
++        "node": ">=20.9.0"
+       },
+       "funding": {
+         "url": "https://opencollective.com/libvips"
+       },
+       "optionalDependencies": {
+-        "@img/sharp-libvips-linux-ppc64": "1.2.4"
++        "@img/sharp-libvips-linux-ppc64": "1.3.2"
+       }
+     },
+     "node_modules/@img/sharp-linux-riscv64": {
+-      "version": "0.34.5",
+-      "resolved": "https://registry.npmjs.org/@img/sharp-linux-riscv64/-/sharp-linux-riscv64-0.34.5.tgz",
+-      "integrity": "sha512-51gJuLPTKa7piYPaVs8GmByo7/U7/7TZOq+cnXJIHZKavIRHAP77e3N2HEl3dgiqdD/w0yUfiJnII77PuDDFdw==",
++      "version": "0.35.3",
++      "resolved": "https://registry.npmjs.org/@img/sharp-linux-riscv64/-/sharp-linux-riscv64-0.35.3.tgz",
++      "integrity": "sha512-0Eob78yjlYPfL5vMNWAW55l3R9Y6BQS/gOfe0ZcP9mEz9ohhKSt4im1hayiknXgf8AWrFqMvJcKIdmLmEe7yeQ==",
+       "cpu": [
+         "riscv64"
+       ],
+@@ -2411,19 +2430,19 @@
+         "linux"
+       ],
+       "engines": {
+-        "node": "^18.17.0 || ^20.3.0 || >=21.0.0"
++        "node": ">=20.9.0"
+       },
+       "funding": {
+         "url": "https://opencollective.com/libvips"
+       },
+       "optionalDependencies": {
+-        "@img/sharp-libvips-linux-riscv64": "1.2.4"
++        "@img/sharp-libvips-linux-riscv64": "1.3.2"
+       }
+     },
+     "node_modules/@img/sharp-linux-s390x": {
+-      "version": "0.34.5",
+-      "resolved": "https://registry.npmjs.org/@img/sharp-linux-s390x/-/sharp-linux-s390x-0.34.5.tgz",
+-      "integrity": "sha512-nQtCk0PdKfho3eC5MrbQoigJ2gd1CgddUMkabUj+rBevs8tZ2cULOx46E7oyX+04WGfABgIwmMC0VqieTiR4jg==",
++      "version": "0.35.3",
++      "resolved": "https://registry.npmjs.org/@img/sharp-linux-s390x/-/sharp-linux-s390x-0.35.3.tgz",
++      "integrity": "sha512-KgAxQ0DxpNOq1rG2t5cgTgShJFGSuU7XO45cqC+1NVOuZnP6tlgZRuSYOfNupGkHID0o3cJOsw4DVeJpMovcGw==",
+       "cpu": [
+         "s390x"
+       ],
+@@ -2436,19 +2455,19 @@
+         "linux"
+       ],
+       "engines": {
+-        "node": "^18.17.0 || ^20.3.0 || >=21.0.0"
++        "node": ">=20.9.0"
+       },
+       "funding": {
+         "url": "https://opencollective.com/libvips"
+       },
+       "optionalDependencies": {
+-        "@img/sharp-libvips-linux-s390x": "1.2.4"
++        "@img/sharp-libvips-linux-s390x": "1.3.2"
+       }
+     },
+     "node_modules/@img/sharp-linux-x64": {
+-      "version": "0.34.5",
+-      "resolved": "https://registry.npmjs.org/@img/sharp-linux-x64/-/sharp-linux-x64-0.34.5.tgz",
+-      "integrity": "sha512-MEzd8HPKxVxVenwAa+JRPwEC7QFjoPWuS5NZnBt6B3pu7EG2Ge0id1oLHZpPJdn3OQK+BQDiw9zStiHBTJQQQQ==",
++      "version": "0.35.3",
++      "resolved": "https://registry.npmjs.org/@img/sharp-linux-x64/-/sharp-linux-x64-0.35.3.tgz",
++      "integrity": "sha512-8pqvxubL2PGdhlPy6GLqzDYMUjyRmKAwKHYKixpdJYBUK7PJ0C029XdsnpFIdgRZG68fZiGdHVWcKPvtiPB4cA==",
+       "cpu": [
+         "x64"
+       ],
+@@ -2461,19 +2480,19 @@
+         "linux"
+       ],
+       "engines": {
+-        "node": "^18.17.0 || ^20.3.0 || >=21.0.0"
++        "node": ">=20.9.0"
+       },
+       "funding": {
+         "url": "https://opencollective.com/libvips"
+       },
+       "optionalDependencies": {
+-        "@img/sharp-libvips-linux-x64": "1.2.4"
++        "@img/sharp-libvips-linux-x64": "1.3.2"
+       }
+     },
+     "node_modules/@img/sharp-linuxmusl-arm64": {
+-      "version": "0.34.5",
+-      "resolved": "https://registry.npmjs.org/@img/sharp-linuxmusl-arm64/-/sharp-linuxmusl-arm64-0.34.5.tgz",
+-      "integrity": "sha512-fprJR6GtRsMt6Kyfq44IsChVZeGN97gTD331weR1ex1c1rypDEABN6Tm2xa1wE6lYb5DdEnk03NZPqA7Id21yg==",
++      "version": "0.35.3",
++      "resolved": "https://registry.npmjs.org/@img/sharp-linuxmusl-arm64/-/sharp-linuxmusl-arm64-0.35.3.tgz",
++      "integrity": "sha512-Vz0iQjzzcSX3HCbfwFfCSG/9SCIqyO0mH2sXyiHaAYfBk0cRsCWXRyQYX0ovCK/PAQBbTzQ0dsPQHh5MAFL59w==",
+       "cpu": [
+         "arm64"
+       ],
+@@ -2486,19 +2505,19 @@
+         "linux"
+       ],
+       "engines": {
+-        "node": "^18.17.0 || ^20.3.0 || >=21.0.0"
++        "node": ">=20.9.0"
+       },
+       "funding": {
+         "url": "https://opencollective.com/libvips"
+       },
+       "optionalDependencies": {
+-        "@img/sharp-libvips-linuxmusl-arm64": "1.2.4"
++        "@img/sharp-libvips-linuxmusl-arm64": "1.3.2"
+       }
+     },
+     "node_modules/@img/sharp-linuxmusl-x64": {
+-      "version": "0.34.5",
+-      "resolved": "https://registry.npmjs.org/@img/sharp-linuxmusl-x64/-/sharp-linuxmusl-x64-0.34.5.tgz",
+-      "integrity": "sha512-Jg8wNT1MUzIvhBFxViqrEhWDGzqymo3sV7z7ZsaWbZNDLXRJZoRGrjulp60YYtV4wfY8VIKcWidjojlLcWrd8Q==",
++      "version": "0.35.3",
++      "resolved": "https://registry.npmjs.org/@img/sharp-linuxmusl-x64/-/sharp-linuxmusl-x64-0.35.3.tgz",
++      "integrity": "sha512-6O1NPKcDVj9QEdg7Hx549EX8U0rp6yXQERqru6yRN7fGBn32UvIRJUlWnk+8xDCiG76hXVBbX82NZ/ZKr0euIg==",
+       "cpu": [
+         "x64"
+       ],
+@@ -2511,38 +2530,54 @@
+         "linux"
+       ],
+       "engines": {
+-        "node": "^18.17.0 || ^20.3.0 || >=21.0.0"
++        "node": ">=20.9.0"
+       },
+       "funding": {
+         "url": "https://opencollective.com/libvips"
+       },
+       "optionalDependencies": {
+-        "@img/sharp-libvips-linuxmusl-x64": "1.2.4"
++        "@img/sharp-libvips-linuxmusl-x64": "1.3.2"
+       }
+     },
+     "node_modules/@img/sharp-wasm32": {
+-      "version": "0.34.5",
+-      "resolved": "https://registry.npmjs.org/@img/sharp-wasm32/-/sharp-wasm32-0.34.5.tgz",
+-      "integrity": "sha512-OdWTEiVkY2PHwqkbBI8frFxQQFekHaSSkUIJkwzclWZe64O1X4UlUjqqqLaPbUpMOQk6FBu/HtlGXNblIs0huw==",
++      "version": "0.35.3",
++      "resolved": "https://registry.npmjs.org/@img/sharp-wasm32/-/sharp-wasm32-0.35.3.tgz",
++      "integrity": "sha512-cZ0XkcYGpHZkqW6iCkqTcmUC0CD9DhD5d/qeZlZkfRBn6GnHniZXLUo5+9xw8Iv76YE6LQFN9YNBlKREcCG76w==",
++      "license": "Apache-2.0 AND LGPL-3.0-or-later AND MIT",
++      "optional": true,
++      "dependencies": {
++        "@emnapi/runtime": "^1.11.1"
++      },
++      "engines": {
++        "node": ">=20.9.0"
++      },
++      "funding": {
++        "url": "https://opencollective.com/libvips"
++      }
++    },
++    "node_modules/@img/sharp-webcontainers-wasm32": {
++      "version": "0.35.3",
++      "resolved": "https://registry.npmjs.org/@img/sharp-webcontainers-wasm32/-/sharp-webcontainers-wasm32-0.35.3.tgz",
++      "integrity": "sha512-2rnq7bX3NzeR2T4YWgz8qiG4h3TSdMe+vN1iQXpJleSJ3SM5zQ8Fy2SyyXAWlbxpEZ2Y+Z4u1BePgJEYbSy80Q==",
+       "cpu": [
+         "wasm32"
+       ],
+-      "license": "Apache-2.0 AND LGPL-3.0-or-later AND MIT",
++      "license": "Apache-2.0",
+       "optional": true,
+       "dependencies": {
+-        "@emnapi/runtime": "^1.7.0"
++        "@img/sharp-wasm32": "0.35.3"
+       },
+       "engines": {
+-        "node": "^18.17.0 || ^20.3.0 || >=21.0.0"
++        "node": ">=20.9.0"
+       },
+       "funding": {
+         "url": "https://opencollective.com/libvips"
+       }
+     },
+     "node_modules/@img/sharp-win32-arm64": {
+-      "version": "0.34.5",
+-      "resolved": "https://registry.npmjs.org/@img/sharp-win32-arm64/-/sharp-win32-arm64-0.34.5.tgz",
+-      "integrity": "sha512-WQ3AgWCWYSb2yt+IG8mnC6Jdk9Whs7O0gxphblsLvdhSpSTtmu69ZG1Gkb6NuvxsNACwiPV6cNSZNzt0KPsw7g==",
++      "version": "0.35.3",
++      "resolved": "https://registry.npmjs.org/@img/sharp-win32-arm64/-/sharp-win32-arm64-0.35.3.tgz",
++      "integrity": "sha512-4bPwFdMbeC4JQ8L8LOyWp6nsHcboP5fxkp6iPOXz2Vg49R42TuMs2whkJ5OAP4/Ul035qOzy0AecOF9VOscn4w==",
+       "cpu": [
+         "arm64"
+       ],
+@@ -2552,16 +2587,16 @@
+         "win32"
+       ],
+       "engines": {
+-        "node": "^18.17.0 || ^20.3.0 || >=21.0.0"
++        "node": ">=20.9.0"
+       },
+       "funding": {
+         "url": "https://opencollective.com/libvips"
+       }
+     },
+     "node_modules/@img/sharp-win32-ia32": {
+-      "version": "0.34.5",
+-      "resolved": "https://registry.npmjs.org/@img/sharp-win32-ia32/-/sharp-win32-ia32-0.34.5.tgz",
+-      "integrity": "sha512-FV9m/7NmeCmSHDD5j4+4pNI8Cp3aW+JvLoXcTUo0IqyjSfAZJ8dIUmijx1qaJsIiU+Hosw6xM5KijAWRJCSgNg==",
++      "version": "0.35.3",
++      "resolved": "https://registry.npmjs.org/@img/sharp-win32-ia32/-/sharp-win32-ia32-0.35.3.tgz",
++      "integrity": "sha512-r53mXsBN6lFUDiST764SvgwUdHAqM4rPAiDzAmf4fLoB6X/rkfyTrLCg6+g17wJJiCmB3JYgHuUldCWUIRFSXw==",
+       "cpu": [
+         "ia32"
+       ],
+@@ -2571,16 +2606,16 @@
+         "win32"
+       ],
+       "engines": {
+-        "node": "^18.17.0 || ^20.3.0 || >=21.0.0"
++        "node": "^20.9.0"
+       },
+       "funding": {
+         "url": "https://opencollective.com/libvips"
+       }
+     },
+     "node_modules/@img/sharp-win32-x64": {
+-      "version": "0.34.5",
+-      "resolved": "https://registry.npmjs.org/@img/sharp-win32-x64/-/sharp-win32-x64-0.34.5.tgz",
+-      "integrity": "sha512-+29YMsqY2/9eFEiW93eqWnuLcWcufowXewwSNIT6UwZdUUCrM3oFjMWH/Z6/TMmb4hlFenmfAVbpWeup2jryCw==",
++      "version": "0.35.3",
++      "resolved": "https://registry.npmjs.org/@img/sharp-win32-x64/-/sharp-win32-x64-0.35.3.tgz",
++      "integrity": "sha512-D4y1vNeZrIIJCN+uHaWVtH86B+aCrdMYYjicy9pXHvbGZeGYLLSd3wdVuC37FxVXlU1ARsk84eKWfWMXGYEqvA==",
+       "cpu": [
+         "x64"
+       ],
+@@ -2590,7 +2625,7 @@
+         "win32"
+       ],
+       "engines": {
+-        "node": "^18.17.0 || ^20.3.0 || >=21.0.0"
++        "node": ">=20.9.0"
+       },
+       "funding": {
+         "url": "https://opencollective.com/libvips"
+@@ -5076,12 +5111,12 @@
+       }
+     },
+     "node_modules/adm-zip": {
+-      "version": "0.5.18",
+-      "resolved": "https://registry.npmjs.org/adm-zip/-/adm-zip-0.5.18.tgz",
+-      "integrity": "sha512-ufJnssQGbxzLNS1Ho9bCtX4rQKCCvoVuDLHoJyc3F9dOGDB4BkWs2Ci0kv53lqocAEQ/Cbi+I2XCsNYGqVYqng==",
++      "version": "0.6.0",
++      "resolved": "https://registry.npmjs.org/adm-zip/-/adm-zip-0.6.0.tgz",
++      "integrity": "sha512-XleryMhbuksdKtofnWZ9Sk+4CUTbms4Mb/EU32SZwToAyZ5RgVos/ki8n+yr0LWHOGKuakbXTuuYNHLQjhddgg==",
+       "license": "MIT",
+       "engines": {
+-        "node": ">=12.0"
++        "node": ">=14.0"
+       }
+     },
+     "node_modules/agent-base": {
+@@ -11507,47 +11542,52 @@
+       "license": "ISC"
+     },
+     "node_modules/sharp": {
+-      "version": "0.34.5",
+-      "resolved": "https://registry.npmjs.org/sharp/-/sharp-0.34.5.tgz",
+-      "integrity": "sha512-Ou9I5Ft9WNcCbXrU9cMgPBcCK8LiwLqcbywW3t4oDV37n1pzpuNLsYiAV8eODnjbtQlSDwZ2cUEeQz4E54Hltg==",
+-      "hasInstallScript": true,
++      "version": "0.35.3",
++      "resolved": "https://registry.npmjs.org/sharp/-/sharp-0.35.3.tgz",
++      "integrity": "sha512-ej0zVHuZGHCiABXcNxeYhpRnPNPAcvbG8RMdBAhDAxLKkCRVSpK3Iyu7qbqw3JMzoj0REeM6f3tJLtVwl0023Q==",
+       "license": "Apache-2.0",
+       "dependencies": {
+-        "@img/colour": "^1.0.0",
++        "@img/colour": "^1.1.0",
+         "detect-libc": "^2.1.2",
+-        "semver": "^7.7.3"
++        "semver": "^7.8.5"
+       },
+       "engines": {
+-        "node": "^18.17.0 || ^20.3.0 || >=21.0.0"
++        "node": ">=20.9.0"
+       },
+       "funding": {
+         "url": "https://opencollective.com/libvips"
+       },
+       "optionalDependencies": {
+-        "@img/sharp-darwin-arm64": "0.34.5",
+-        "@img/sharp-darwin-x64": "0.34.5",
+-        "@img/sharp-libvips-darwin-arm64": "1.2.4",
+-        "@img/sharp-libvips-darwin-x64": "1.2.4",
+-        "@img/sharp-libvips-linux-arm": "1.2.4",
+-        "@img/sharp-libvips-linux-arm64": "1.2.4",
+-        "@img/sharp-libvips-linux-ppc64": "1.2.4",
+-        "@img/sharp-libvips-linux-riscv64": "1.2.4",
+-        "@img/sharp-libvips-linux-s390x": "1.2.4",
+-        "@img/sharp-libvips-linux-x64": "1.2.4",
+-        "@img/sharp-libvips-linuxmusl-arm64": "1.2.4",
+-        "@img/sharp-libvips-linuxmusl-x64": "1.2.4",
+-        "@img/sharp-linux-arm": "0.34.5",
+-        "@img/sharp-linux-arm64": "0.34.5",
+-        "@img/sharp-linux-ppc64": "0.34.5",
+-        "@img/sharp-linux-riscv64": "0.34.5",
+-        "@img/sharp-linux-s390x": "0.34.5",
+-        "@img/sharp-linux-x64": "0.34.5",
+-        "@img/sharp-linuxmusl-arm64": "0.34.5",
+-        "@img/sharp-linuxmusl-x64": "0.34.5",
+-        "@img/sharp-wasm32": "0.34.5",
+-        "@img/sharp-win32-arm64": "0.34.5",
+-        "@img/sharp-win32-ia32": "0.34.5",
+-        "@img/sharp-win32-x64": "0.34.5"
++        "@img/sharp-darwin-arm64": "0.35.3",
++        "@img/sharp-darwin-x64": "0.35.3",
++        "@img/sharp-freebsd-wasm32": "0.35.3",
++        "@img/sharp-libvips-darwin-arm64": "1.3.2",
++        "@img/sharp-libvips-darwin-x64": "1.3.2",
++        "@img/sharp-libvips-linux-arm": "1.3.2",
++        "@img/sharp-libvips-linux-arm64": "1.3.2",
++        "@img/sharp-libvips-linux-ppc64": "1.3.2",
++        "@img/sharp-libvips-linux-riscv64": "1.3.2",
++        "@img/sharp-libvips-linux-s390x": "1.3.2",
++        "@img/sharp-libvips-linux-x64": "1.3.2",
++        "@img/sharp-libvips-linuxmusl-arm64": "1.3.2",
++        "@img/sharp-libvips-linuxmusl-x64": "1.3.2",
++        "@img/sharp-linux-arm": "0.35.3",
++        "@img/sharp-linux-arm64": "0.35.3",
++        "@img/sharp-linux-ppc64": "0.35.3",
++        "@img/sharp-linux-riscv64": "0.35.3",
++        "@img/sharp-linux-s390x": "0.35.3",
++        "@img/sharp-linux-x64": "0.35.3",
++        "@img/sharp-linuxmusl-arm64": "0.35.3",
++        "@img/sharp-linuxmusl-x64": "0.35.3",
++        "@img/sharp-webcontainers-wasm32": "0.35.3",
++        "@img/sharp-win32-arm64": "0.35.3",
++        "@img/sharp-win32-ia32": "0.35.3",
++        "@img/sharp-win32-x64": "0.35.3"
++      },
++      "peerDependenciesMeta": {
++        "@types/node": {
++          "optional": true
++        }
+       }
+     },
+     "node_modules/sharp/node_modules/semver": {
 diff --git a/package.json b/package.json
-index 69a1f6b..cc56b05 100644
+index 69a1f6b..f9a25a5 100644
 --- a/package.json
 +++ b/package.json
 @@ -33,7 +33,7 @@
@@ -41,10 +650,24 @@ index 69a1f6b..cc56b05 100644
      "verify:sqlite-migration": "tsx server/storage/sqlite-store.verify.ts && tsx server/storage/sqlite-migration-http.verify.ts && tsx server/plugins/project-store-export-recovery-sqlite.verify.ts && tsx src/export/serverExportRecovery.verify.ts",
 -    "verify:extract-audio": "tsx server/plugins/extract-audio.verify.ts"
 +    "verify:extract-audio": "tsx server/plugins/extract-audio.verify.ts",
-+    "verify:mantur-shutdown": "node --import tsx server/plugins/generation-shutdown.verify.ts && node --import tsx server/plugins/project-shutdown.verify.ts && node --import tsx server/external-agent/broker-shutdown.verify.ts && node --import tsx server/plugins/mantur-shutdown.verify.ts && node --import tsx src/agent/external-shutdown.verify.ts && node remotion/render-shutdown.verify.mjs && node --import tsx src/media/semantic-search/vectorCapability.verify.ts && node --import tsx server/plugins/mcp-transport-shutdown.verify.ts"
++    "verify:mantur-shutdown": "node --import tsx server/plugins/generation-shutdown.verify.ts && node --import tsx server/plugins/project-shutdown.verify.ts && node --import tsx server/external-agent/broker-shutdown.verify.ts && node --import tsx server/plugins/mantur-shutdown.verify.ts && node --import tsx src/agent/external-shutdown.verify.ts && node remotion/render-shutdown.verify.mjs && node --import tsx src/media/semantic-search/vectorCapability.verify.ts && node --import tsx server/plugins/mcp-transport-shutdown.verify.ts && node --import tsx server/plugins/extract-frames-shutdown.verify.ts && node --import tsx server/plugins/local-upload-shutdown.verify.ts"
    },
    "dependencies": {
      "@ai-sdk/alibaba": "^2.0.16",
+@@ -149,6 +150,12 @@
+     "vite": "^8.1.1"
+   },
+   "overrides": {
+-    "onnxruntime-web": "1.29.0"
++    "onnxruntime-web": "1.29.0",
++    "onnxruntime-node": {
++      "adm-zip": "0.6.0"
++    },
++    "@huggingface/transformers": {
++      "sharp": "0.35.3"
++    }
+   }
+ }
 diff --git a/remotion/render-shutdown.d.mts b/remotion/render-shutdown.d.mts
 new file mode 100644
 index 0000000..eeea792
@@ -518,6 +1141,99 @@ index d5b4530..fd2b6b8 100644
 
  onRegisteredToolsChanged(() => {
    for (const session of sessions.values()) {
+diff --git a/server/frame-grid.ts b/server/frame-grid.ts
+index 64509b0..5bc5027 100644
+--- a/server/frame-grid.ts
++++ b/server/frame-grid.ts
+@@ -4,7 +4,8 @@
+ //   2. Python PIL       — stamps text when drawtext is missing (common on macOS bottles)
+ //   3. no pixel labels  — still tiles; labels remain in the tool note
+ // Used by extract-frames + render-still grid mode.
+-import { spawn, spawnSync } from 'node:child_process';
++import { spawnSync } from 'node:child_process';
++import { editorRequests } from './shutdown-runtime.ts';
+ import { existsSync } from 'node:fs';
+ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+ import { tmpdir } from 'node:os';
+@@ -34,9 +35,10 @@ function run(cmd: string, args: string[], timeoutMs = 120_000): Promise<void> {
+   return new Promise((resolve, reject) => {
+     const child = spawnMediaProcess(cmd, [...ffmpegThreadArgs(), ...args], { stdio: ['ignore', 'ignore', 'pipe'] });
+     let stderr = '';
++    let failure: Error | undefined;
+     const timer = setTimeout(() => {
++      failure = new Error(`${cmd} timed out`);
+       child.kill('SIGKILL');
+-      reject(new Error(`${cmd} timed out`));
+     }, timeoutMs);
+     child.stderr?.on('data', (c: Buffer) => {
+       stderr += String(c);
+@@ -44,11 +46,12 @@ function run(cmd: string, args: string[], timeoutMs = 120_000): Promise<void> {
+     });
+     child.on('error', (err) => {
+       clearTimeout(timer);
+-      reject(err);
++      failure = err;
+     });
+     child.on('close', (code) => {
+       clearTimeout(timer);
+-      if (code === 0) resolve();
++      if (failure) reject(failure);
++      else if (code === 0) resolve();
+       else reject(new Error(`${cmd} exit ${code}: ${stderr.slice(-500)}`));
+     });
+   });
+@@ -196,14 +199,16 @@ draw.text((4 + pad, 4 + pad), label, fill=(255, 255, 255), font=font)
+ im.save(path_out, "JPEG", quality=88)
+ `;
+   await new Promise<void>((resolve, reject) => {
+-    const child = spawn('python3', ['-c', script, scaled, output, label || ''], {
++    const child = spawnMediaProcess('python3', ['-c', script, scaled, output, label || ''], {
+       stdio: ['ignore', 'ignore', 'pipe'],
+     });
+     let err = '';
++    let failure: Error | undefined;
+     child.stderr?.on('data', (c: Buffer) => { err += String(c); });
+-    child.on('error', reject);
++    child.on('error', error => { failure = error; });
+     child.on('close', (code) => {
+-      if (code === 0) resolve();
++      if (failure) reject(failure);
++      else if (code === 0) resolve();
+       else reject(new Error(`PIL stamp failed: ${err.slice(-300)}`));
+     });
+   });
+@@ -232,16 +237,18 @@ async function prepareCell(
+       ]);
+       await run(ffmpegBin(), ['-nostdin', '-hide_banner', '-loglevel', 'error', '-y', '-i', tmp, '-q:v', String(quality), outPath]);
+       return;
+-    } catch {
+-      // fall through to pil/none
++    } catch (error) {
++      editorRequests.recordFailure(error);
++      // Preserve the existing preview behavior; shutdown still reports the failed stamp.
+     }
+   }
+   if (backend === 'pil' && label) {
+     try {
+       await stampWithPil(rawPath, outPath, label, cellWidth, cellH, quality);
+       return;
+-    } catch {
+-      // fall through
++    } catch (error) {
++      editorRequests.recordFailure(error);
++      // Preserve the existing preview behavior; shutdown still reports the failed stamp.
+     }
+   }
+   // no labels — just scale+pad
+@@ -333,7 +340,7 @@ export async function tileContactSheet(cells: GridCell[], opts: TileOptions = {}
+     }
+     return await readFile(sheet);
+   } finally {
+-    await rm(dir, { recursive: true, force: true }).catch(() => {});
++    await rm(dir, { recursive: true, force: true });
+   }
+ }
+
 diff --git a/server/media-acceleration.ts b/server/media-acceleration.ts
 index 2b6e85e..98fbce1 100644
 --- a/server/media-acceleration.ts
@@ -693,6 +1409,298 @@ index 289e318..919c93c 100644
            server.config.logger.error(`[external-mcp] ${error instanceof Error ? error.message : String(error)}`);
            if (!res.headersSent) sendBridgeJson(res, 500, { error: 'MCP request failed' });
          });
+diff --git a/server/plugins/extract-frames-shutdown.verify.ts b/server/plugins/extract-frames-shutdown.verify.ts
+new file mode 100644
+index 0000000..1ef5b14
+--- /dev/null
++++ b/server/plugins/extract-frames-shutdown.verify.ts
+@@ -0,0 +1,176 @@
++import assert from 'node:assert/strict';
++import { randomUUID } from 'node:crypto';
++import childProcess, { execFileSync, spawn } from 'node:child_process';
++import fsPromises, { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
++import { createServer, request } from 'node:http';
++import { syncBuiltinESMExports } from 'node:module';
++import { tmpdir } from 'node:os';
++import { basename, join } from 'node:path';
++import { fileURLToPath } from 'node:url';
++import { setImmediate as tick } from 'node:timers/promises';
++import type { Plugin, ViteDevServer } from 'vite';
++
++const scenario = process.argv[2];
++if (!scenario) {
++  for (const name of ['accepted', 'automatic', 'pipe', 'cleanup-failure', 'partial-failure', 'scene-failure', 'grid-cleanup-failure']) {
++    await new Promise<void>((resolve, reject) => {
++      const child = spawn(process.execPath, ['--import', 'tsx', fileURLToPath(import.meta.url), name], { stdio: 'inherit' });
++      child.once('error', reject);
++      child.once('close', (code, signal) => code === 0 && signal === null ? resolve() : reject(new Error(`${name}: ${code}/${signal}`)));
++    });
++  }
++  console.log('extract frames: real JPEG, accepted work, source integrity, pipe close and retained failures passed');
++} else {
++  const expectedFailure = ['cleanup-failure', 'partial-failure', 'scene-failure', 'grid-cleanup-failure'].includes(scenario);
++  const root = await mkdtemp(join(tmpdir(), 'mantur-extract-shutdown-'));
++  const removeRoot = fsPromises.rm;
++  try {
++  const scratch = join(root, 'tmp'); await mkdir(scratch);
++  process.env.OPENCHATCUT_DATA_DIR = root;
++  process.env.OPENCHATCUT_DEV_PROFILE_ID = randomUUID();
++  process.env.TMPDIR = scratch;
++  process.env.MANTUR_CUT_DRAIN_TIMEOUT_MS = '10000';
++  const { ffmpegBin } = await import('../media-binaries.ts');
++  const ffmpeg = ffmpegBin();
++  const { uploadDir } = await import('../media-dir.ts');
++  const media = uploadDir(); await mkdir(media, { recursive: true });
++  const video = join(media, 'fresh-test.mp4');
++  execFileSync(ffmpeg, ['-nostdin', '-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=160x90:rate=10', '-t', '0.5', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', video], { timeout: 15000 });
++  const originalVideo = await readFile(video);
++  const releaseFile = join(root, 'release');
++  const wrapper = join(root, 'ffmpeg.cjs');
++  const pipeEntered = Promise.withResolvers<ReturnType<typeof spawn>>();
++  const nativeSpawn = childProcess.spawn;
++  const nativeSpawnSync = childProcess.spawnSync;
++  if (scenario === 'pipe' || scenario === 'partial-failure' || scenario === 'scene-failure') {
++    await writeFile(wrapper, `#!${process.execPath}\nconst {spawn}=require('node:child_process'); const fs=require('node:fs');
++const args=process.argv.slice(2);
++if (${JSON.stringify(scenario)}==='scene-failure' && args.some(x=>x.includes('showinfo'))) process.exit(7);
++if (${JSON.stringify(scenario)}==='partial-failure' && /f-1\\.jpg$/.test(args.at(-1))) process.exit(7);
++const work=spawn(${JSON.stringify(ffmpeg)},args,{stdio:['ignore',1,2]});
++work.on('error',e=>{console.error(e);process.exit(1)});
++work.on('close',code=>{
++ if(code===0 && ${JSON.stringify(scenario)}==='pipe' && /f-0\\.jpg$/.test(args.at(-1))) {
++  const holder=spawn(process.execPath,['-e',${JSON.stringify(`const fs=require('node:fs');const timer=setInterval(()=>{if(fs.existsSync(${JSON.stringify(releaseFile)})){clearInterval(timer);process.stderr.write('pipe released');}},10);`)}],{stdio:['ignore','ignore',2]});
++  holder.once('spawn',()=>process.exit(0));
++ } else process.exit(code??1);
++});\n`);
++    process.env.OPENCHATCUT_FFMPEG = wrapper;
++    childProcess.spawn = ((...args: Parameters<typeof nativeSpawn>) => {
++      const child = args[0] === wrapper && Array.isArray(args[1])
++        ? nativeSpawn(process.execPath, [wrapper, ...args[1]], args[2]) : nativeSpawn(...args);
++      if (args[0] === wrapper && Array.isArray(args[1]) && /f-0\.jpg$/.test(String(args[1].at(-1)))) pipeEntered.resolve(child);
++      return child;
++    }) as typeof nativeSpawn;
++    childProcess.spawnSync = ((...args: Parameters<typeof nativeSpawnSync>) => args[0] === wrapper && Array.isArray(args[1])
++      ? nativeSpawnSync(process.execPath, [wrapper, ...args[1]], args[2]) : nativeSpawnSync(...args)) as typeof nativeSpawnSync;
++    syncBuiltinESMExports();
++  }
++  const nativeRm = fsPromises.rm;
++  const cleanupEntered = Promise.withResolvers<void>();
++  const cleanupRelease = Promise.withResolvers<void>();
++  fsPromises.rm = async (path, options) => {
++    if (scenario === 'grid-cleanup-failure' && String(path).startsWith(scratch) && basename(String(path)).startsWith('cc-grid-')) throw new Error('grid cleanup refused');
++    if (String(path).startsWith(scratch) && basename(String(path)).startsWith('cc-frames-')) {
++      cleanupEntered.resolve(); await cleanupRelease.promise;
++      if (scenario === 'cleanup-failure') throw new Error('extraction cleanup refused');
++    }
++    return nativeRm(path, options);
++  };
++  syncBuiltinESMExports();
++  const { createMiniConnect } = await import('../../desktop/mini-connect.ts');
++  const { ManturEditorShutdown } = await import('./mantur-shutdown.ts');
++  const { extractFramesPlugin } = await import('./extract-frames.ts');
++  const broker = await import('../external-agent/broker.ts');
++  const errors: unknown[] = [];
++  const app = createMiniConnect(error => { errors.push(error); });
++  const server = createServer((req, res) => app.handle(req, res));
++  const owner = new ManturEditorShutdown();
++  try {
++    const mount = async (plugin: Plugin) => {
++      const hook = plugin.configureServer!; const configure = typeof hook === 'function' ? hook : hook.handler;
++      await configure.call({} as never, { middlewares: app, httpServer: server, config: { logger: { error() {}, info() {} } } } as unknown as ViteDevServer);
++    };
++    await mount(owner.plugin());
++    const admitted = Promise.withResolvers<void>();
++    // The actual route returns its original promise; this observation adds no work to it.
++    const observedApp = new Proxy(app, { get(target, key, receiver) {
++      if (key !== 'use') return Reflect.get(target, key, receiver);
++      return (path: string, handler: Parameters<typeof app.use>[1]) => target.use(path, (req, res, next) => {
++        const result = handler!(req, res, next); admitted.resolve(); return result;
++      });
++    } });
++    const plugin = owner.ownPlugin(extractFramesPlugin());
++    const hook = plugin.configureServer!; const configure = typeof hook === 'function' ? hook : hook.handler;
++    await configure.call({} as never, { middlewares: observedApp, httpServer: server, config: { logger: { error() {}, info() {} } } } as unknown as ViteDevServer);
++    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
++    const address = server.address(); assert(address && typeof address !== 'string');
++    const url = `http://127.0.0.1:${address.port}/api/extract-frames`;
++    let post!: ReturnType<typeof request>;
++    const response = new Promise<{ status: number; body: Record<string, unknown> }>((resolve, reject) => {
++      post = request(url, { method: 'POST', headers: { 'Content-Type': 'application/json' } }, res => {
++        const chunks: Buffer[] = []; res.on('data', chunk => chunks.push(chunk));
++        res.on('end', () => { resolve({ status: res.statusCode!, body: JSON.parse(Buffer.concat(chunks).toString()) }); });
++        res.on('error', reject);
++      });
++      post.on('error', reject); post.write('{"src":');
++    });
++    let responded = false; void response.then(() => { responded = true; });
++    await admitted.promise;
++    const capability = broker.registerEditor('project', 'editor', 'revision', []);
++    const stopping = owner.stopForShutdown();
++    const observed = stopping.then(() => ({ ok: true as const }), error => ({ ok: false as const, error }));
++    const poll = () => broker.nextEditorCall('project', 'editor', 'revision', AbortSignal.timeout(10000), capability);
++    const freeze = await poll(); assert.equal(freeze?.arguments.phase, 'freeze');
++    broker.settleEditorCall(freeze!.id, 'applied', { phase: 'freeze' }, capability);
++    await tick();
++    assert.equal((await fetch(url, { method: 'POST', body: '{}' })).status, 503, 'new extraction is refused after cutoff');
++    const body = scenario === 'automatic' || scenario === 'scene-failure' ? { src: '/media/uploads/fresh-test.mp4', count: 2 } : { src: '/media/uploads/fresh-test.mp4', sourceTimesMs: [0, 200] };
++    post.end(JSON.stringify(body).slice('{"src":'.length));
++    let finished = false; void observed.then(() => { finished = true; });
++    if (scenario === 'pipe') {
++      const child = await pipeEntered.promise;
++      await new Promise<void>(resolve => child.once('exit', () => resolve()));
++      await tick(); assert.equal(finished, false, 'process exit is insufficient while its stderr is inherited');
++      assert.equal(responded, false, 'frame extraction still awaits its actual child close before replying');
++      await writeFile(releaseFile, 'release');
++    }
++    const result = await response;
++    if (scenario === 'grid-cleanup-failure') {
++      assert.equal(result.status, 500); assert.match(String(result.body.error), /grid cleanup refused/);
++    } else {
++      assert.equal(result.status, 200, JSON.stringify(result.body));
++      assert.equal(result.body.renderedBy, 'ffmpeg');
++      const jpeg = Buffer.from(String(result.body.base64), 'base64');
++      assert.equal(jpeg.subarray(0, 2).toString('hex'), 'ffd8');
++      assert.equal(jpeg.subarray(-2).toString('hex'), 'ffd9');
++      await writeFile(join(root, 'contact-sheet.jpg'), jpeg);
++      execFileSync(ffmpeg, ['-nostdin', '-v', 'error', '-i', join(root, 'contact-sheet.jpg'), '-f', 'null', '-'], { timeout: 15000 });
++      assert.deepEqual(await readFile(join(root, 'contact-sheet.jpg')), jpeg);
++    }
++    assert.deepEqual(await readFile(video), originalVideo, 'source video is never modified');
++    await cleanupEntered.promise; await tick(); assert.equal(finished, false, 'HTTP response does not finish temporary-file cleanup');
++    cleanupRelease.resolve();
++    let flushed = false;
++    const flush = expectedFailure ? Promise.resolve() : poll().then(async call => {
++      assert.equal(call?.arguments.phase, 'flush'); flushed = true;
++      broker.settleEditorCall(call!.id, 'applied', { phase: 'flush' }, capability);
++      await broker.unregisterEditor('project', 'editor', capability);
++    });
++    const stopped = await observed;
++    assert.equal(stopped.ok, !expectedFailure, String(stopped.ok ? '' : stopped.error));
++    if (stopped.ok) { await flush; assert.equal(flushed, true); await owner.finishTransportShutdown(); }
++    else {
++      assert.match(String(stopped.error), /failed; shutdown is unconfirmed/);
++      assert(stopped.error instanceof AggregateError);
++      const expected = scenario === 'grid-cleanup-failure' ? /HTTP 500/ : /cleanup refused|exit 7|Scene analysis exited 7/;
++      assert(stopped.error.errors.some(error => expected.test(String(error))));
++      assert.strictEqual(stopping, owner.stopForShutdown());
++    }
++  } finally {
++    cleanupRelease.resolve(); await writeFile(releaseFile, 'release');
++    fsPromises.rm = nativeRm; childProcess.spawn = nativeSpawn; childProcess.spawnSync = nativeSpawnSync; syncBuiltinESMExports();
++    await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
++  }
++  } finally { await removeRoot(root, { recursive: true, force: true }); }
++}
+diff --git a/server/plugins/extract-frames.ts b/server/plugins/extract-frames.ts
+index 41ee060..c33d9e2 100644
+--- a/server/plugins/extract-frames.ts
++++ b/server/plugins/extract-frames.ts
+@@ -12,6 +12,7 @@ import { formatTimeLabel, tileContactSheet } from '../frame-grid.ts';
+ import { ffmpegBin, ffprobeBin } from '../media-binaries.ts';
+ import { resolveHwDecodeArgs } from '../media-acceleration.ts';
+ import { ffmpegThreadArgs, spawnMediaProcess } from '../media-process.ts';
++import { editorRequests } from '../shutdown-runtime.ts';
+
+ const MAX_JSON = 32 * 1024;
+ const MAX_SAMPLES = 20;
+@@ -59,9 +60,10 @@ function run(cmd: string, args: string[], timeoutMs: number): Promise<void> {
+   return new Promise((resolve, reject) => {
+     const child = spawnMediaProcess(cmd, [...ffmpegThreadArgs(), ...args], { stdio: ['ignore', 'ignore', 'pipe'] });
+     let stderr = '';
++    let failure: Error | undefined;
+     const timer = setTimeout(() => {
++      failure = new Error(`${cmd} timed out`);
+       child.kill('SIGKILL');
+-      reject(new Error(`${cmd} timed out`));
+     }, timeoutMs);
+     child.stderr?.on('data', (c: Buffer) => {
+       stderr += String(c);
+@@ -69,11 +71,12 @@ function run(cmd: string, args: string[], timeoutMs: number): Promise<void> {
+     });
+     child.on('error', (err) => {
+       clearTimeout(timer);
+-      reject(err);
++      failure = err;
+     });
+     child.on('close', (code) => {
+       clearTimeout(timer);
+-      if (code === 0) resolve();
++      if (failure) reject(failure);
++      else if (code === 0) resolve();
+       else reject(new Error(`${cmd} exit ${code}: ${stderr.slice(-400)}`));
+     });
+   });
+@@ -88,9 +91,11 @@ async function probeDurationMs(path: string): Promise<number> {
+       path,
+     ], { stdio: ['ignore', 'pipe', 'pipe'] });
+     let out = '';
++    let failure: Error | undefined;
+     child.stdout?.on('data', (c: Buffer) => { out += String(c); });
+-    child.on('error', reject);
++    child.on('error', error => { failure = error; });
+     child.on('close', (code) => {
++      if (failure) { reject(failure); return; }
+       const sec = Number(out.trim());
+       if (code === 0 && Number.isFinite(sec) && sec > 0) resolve(Math.round(sec * 1000));
+       else reject(new Error('ffprobe duration failed'));
+@@ -110,13 +115,13 @@ export function sampleTimesMs(fromMs: number, toMs: number, count: number): numb
+ // ── Remove nearly duplicates ───────────────────────────────────────────────────────
+ // Uniform sampling will result in N almost identical pictures on fixed-camera asset, and burning visual tokens in vain will not help.
+ // position. First use ffmpeg scene detection to pick out the moments when "the picture really changes", and then use uniform sampling to fill in the gaps.
+-// Analysis is done at scaled down to 160 width, 2fps, at a bounded cost; any failure silently falls back to uniform sampling.
++// Analysis uses 160-pixel frames at 2fps. Collected times remain usable, but failed analysis prevents shutdown confirmation.
+
+ /** Scene difference threshold (0..1): low enough to capture the action changes in the camera, not just hard cuts.*/
+ const SCENE_THRESHOLD = 0.08;
+ const SCENE_ANALYSIS_TIMEOUT_MS = 20_000;
+
+-/** The moment when the picture changes significantly (milliseconds, ascending order). Returns empty array on failure = caller falls back to uniform sampling.*/
++/** Collected scene-change times in milliseconds; retained failures are checked by editor shutdown. */
+ function sceneChangeTimesMs(input: string, fromMs: number, toMs: number): Promise<number[]> {
+   return (async () => {
+     const hwDecode = await resolveHwDecodeArgs(ffmpegBin(), undefined);
+@@ -133,7 +138,8 @@ function sceneChangeTimesMs(input: string, fromMs: number, toMs: number): Promis
+       '-f', 'null', '-',
+     ], { stdio: ['ignore', 'ignore', 'pipe'] });
+     let tail = '';
+-    const done = (): void => { child.kill('SIGKILL'); resolve(times); };
++    let failure: Error | undefined;
++    const done = (): void => { failure = new Error('Scene analysis timed out'); child.kill('SIGKILL'); };
+     const timer = setTimeout(done, SCENE_ANALYSIS_TIMEOUT_MS);
+     child.stderr?.on('data', (chunk: Buffer) => {
+       // Streaming analysis of pts_time avoids storing the entire showinfo in memory
+@@ -145,8 +151,12 @@ function sceneChangeTimesMs(input: string, fromMs: number, toMs: number): Promis
+         if (m) times.push(Math.round(fromMs + Number(m[1]) * 1000));
+       }
+     });
+-    child.on('error', () => { clearTimeout(timer); resolve([]); });
+-    child.on('close', () => { clearTimeout(timer); resolve(times); });
++    child.on('error', error => { clearTimeout(timer); failure = error; });
++    child.on('close', code => {
++      clearTimeout(timer);
++      if (failure || code !== 0) editorRequests.recordFailure(failure ?? new Error(`Scene analysis exited ${code}`));
++      resolve(times);
++    });
+     });
+   })();
+ }
+@@ -266,6 +276,7 @@ export function extractFramesPlugin(): Plugin {
+                 label: formatTimeLabel(t),
+               });
+             } catch (err) {
++              editorRequests.recordFailure(err);
+               server.config.logger.info(
+                 `[extract-frames] skip t=${t}ms: ${err instanceof Error ? err.message : String(err)}`,
+               );
+@@ -300,7 +311,7 @@ export function extractFramesPlugin(): Plugin {
+           const status = /ENOENT|spawn ffmpeg|spawn ffprobe/i.test(message) ? 503 : 500;
+           sendJson(res, status, { error: message });
+         } finally {
+-          await rm(work, { recursive: true, force: true }).catch(() => {});
++          await rm(work, { recursive: true, force: true });
+         }
+       });
+     },
 diff --git a/server/plugins/generation-job-lifecycle.ts b/server/plugins/generation-job-lifecycle.ts
 index 4ffdcc2..01c23c6 100644
 --- a/server/plugins/generation-job-lifecycle.ts
@@ -1098,14 +2106,190 @@ index a4ab905..24a6670 100644
 -  ];
 +  ].map((plugin) => plugin.name === 'mantur-editor-shutdown' ? plugin : shutdown.ownPlugin(plugin));
  }
+diff --git a/server/plugins/local-upload-shutdown.verify.ts b/server/plugins/local-upload-shutdown.verify.ts
+new file mode 100644
+index 0000000..26a3b27
+--- /dev/null
++++ b/server/plugins/local-upload-shutdown.verify.ts
+@@ -0,0 +1,169 @@
++import assert from 'node:assert/strict';
++import { createHash, randomUUID } from 'node:crypto';
++import { spawn, execFileSync } from 'node:child_process';
++import fsPromises, { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
++import { createServer, request } from 'node:http';
++import { syncBuiltinESMExports } from 'node:module';
++import { tmpdir } from 'node:os';
++import { join } from 'node:path';
++import { setImmediate as tick } from 'node:timers/promises';
++import { fileURLToPath } from 'node:url';
++import type { Plugin, ViteDevServer } from 'vite';
++
++const scenario = process.argv[2];
++if (!scenario) {
++  for (const name of ['post', 'put', 'cutoff', 'copy-close', 'close-failure', 'dedupe', 'unsupported-delete']) {
++    await new Promise<void>((resolve, reject) => {
++      const child = spawn(process.execPath, ['--import', 'tsx', fileURLToPath(import.meta.url), name], { stdio: 'inherit' });
++      child.once('error', reject);
++      child.once('close', (code, signal) => code === 0 && signal === null ? resolve() : reject(new Error(`${name}: ${code}/${signal}`)));
++    });
++  }
++  console.log('local upload: real media, streaming cutoff, file close, deduplication and unsupported method passed');
++} else {
++  const root = await mkdtemp(join(tmpdir(), 'mantur-upload-shutdown-'));
++  const nativeLink = fsPromises.link;
++  const nativeOpen = fsPromises.open;
++  const handles: Array<() => Promise<void>> = [];
++  const closeEntered = Promise.withResolvers<void>();
++  const closeRelease = Promise.withResolvers<void>();
++  let post: ReturnType<typeof request> | undefined;
++  let server: ReturnType<typeof createServer> | undefined;
++  const pollAbort = new AbortController();
++  try {
++    process.env.OPENCHATCUT_DATA_DIR = root;
++    process.env.OPENCHATCUT_DEV_PROFILE_ID = randomUUID();
++    process.env.MANTUR_CUT_DRAIN_TIMEOUT_MS = '10000';
++    const { ffmpegBin } = await import('../media-binaries.ts');
++    const source = join(root, 'source.mp4');
++    execFileSync(ffmpegBin(), ['-nostdin', '-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=160x90:rate=10', '-t', '0.2', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', source], { timeout: 15000 });
++    const bytes = await readFile(source);
++    const hash = createHash('sha256').update(bytes).digest('hex');
++    const { uploadDir } = await import('../media-dir.ts');
++    const finalPath = join(uploadDir(), 'local-test.mp4');
++    if (scenario === 'copy-close' || scenario === 'close-failure') {
++      fsPromises.link = async (from, to) => {
++        if (String(to) === finalPath) throw Object.assign(new Error('fixture filesystem has no hard links'), { code: 'ENOTSUP' });
++        return nativeLink(from, to);
++      };
++      fsPromises.open = async (...args: Parameters<typeof nativeOpen>) => {
++        const handle = await nativeOpen(...args);
++        if (String(args[0]) === finalPath && args[1] === 'wx') {
++          const close = handle.close.bind(handle); handles.push(close);
++          handle.close = async () => {
++            closeEntered.resolve(); await closeRelease.promise;
++            if (scenario === 'close-failure') throw new Error('upload file close refused');
++            await close();
++          };
++        }
++        return handle;
++      };
++      syncBuiltinESMExports();
++    }
++    const { createMiniConnect } = await import('../../desktop/mini-connect.ts');
++    const { ManturEditorShutdown } = await import('./mantur-shutdown.ts');
++    const { uploadPlugin } = await import('./upload.ts');
++    const { extractFramesPlugin } = await import('./extract-frames.ts');
++    const broker = await import('../external-agent/broker.ts');
++    const app = createMiniConnect(() => {});
++    server = createServer((req, res) => app.handle(req, res));
++    const owner = new ManturEditorShutdown();
++    const admitted = Promise.withResolvers<void>();
++    const observedApp = new Proxy(app, { get(target, key, receiver) {
++      if (key !== 'use') return Reflect.get(target, key, receiver);
++      return (path: string, handler: Parameters<typeof app.use>[1]) => target.use(path, (req, res, next) => {
++        const result = handler!(req, res, next);
++        if (path === '/upload') admitted.resolve();
++        return result;
++      });
++    } });
++    const mount = async (plugin: Plugin) => {
++      const hook = plugin.configureServer!; const configure = typeof hook === 'function' ? hook : hook.handler;
++      await configure.call({} as never, { middlewares: observedApp, httpServer: server, config: { logger: { error() {}, info() {} } } } as unknown as ViteDevServer);
++    };
++    await mount(owner.plugin()); await mount(owner.ownPlugin(uploadPlugin())); await mount(owner.ownPlugin(extractFramesPlugin()));
++    await new Promise<void>(resolve => server!.listen(0, '127.0.0.1', resolve));
++    const address = server.address(); assert(address && typeof address !== 'string');
++    const origin = `http://127.0.0.1:${address.port}`;
++    const url = `${origin}/upload?name=source.mp4&assetId=local-test${scenario === 'put' ? '' : '&ifAbsent=1'}`;
++    const response = new Promise<{ status: number; body: Record<string, unknown> }>((resolve, reject) => {
++      post = request(url, { method: scenario === 'put' ? 'PUT' : 'POST', headers: { Origin: origin, 'Content-Type': 'video/mp4' } }, res => {
++        const chunks: Buffer[] = []; res.on('data', chunk => chunks.push(chunk));
++        res.on('end', () => resolve({ status: res.statusCode!, body: JSON.parse(Buffer.concat(chunks).toString()) }));
++        res.on('error', reject);
++      });
++      post.on('error', reject); post.write(bytes.subarray(0, 32));
++      if (scenario !== 'cutoff') post.end(bytes.subarray(32));
++    });
++    // Only cleanup can abort this test-owned request after an earlier assertion failed.
++    void response.catch(() => {});
++    await admitted.promise;
++    if (scenario === 'post' || scenario === 'dedupe' || scenario === 'unsupported-delete') {
++      const uploaded = await response; assert.equal(uploaded.status, 200, JSON.stringify(uploaded.body));
++      if (scenario === 'post') {
++        const frames = await fetch(`${origin}/api/extract-frames`, { method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' }, body: JSON.stringify({ src: uploaded.body.path, sourceTimesMs: [0] }) });
++        assert.equal(frames.status, 200); const grid = await frames.json() as { base64: string; sampleCount: number };
++        assert.equal(grid.sampleCount, 1); assert.equal(Buffer.from(grid.base64, 'base64').subarray(0, 2).toString('hex'), 'ffd8');
++      }
++      if (scenario === 'dedupe') {
++        const again = await fetch(url, { method: 'POST', headers: { Origin: origin, 'Content-Type': 'video/mp4' }, body: bytes });
++        assert.equal(again.status, 200); const duplicate = await again.json() as { created: boolean; contentHash: string };
++        assert.equal(duplicate.created, false); assert.equal(duplicate.contentHash, hash);
++      }
++      if (scenario === 'unsupported-delete') {
++        const deleted = await fetch(`${origin}/upload?name=local-test.mp4`, { method: 'DELETE', headers: { Origin: origin } });
++        assert.equal(deleted.status, 200);
++      }
++    }
++    if (scenario === 'copy-close' || scenario === 'close-failure') await closeEntered.promise;
++    const capability = broker.registerEditor('project', 'editor', 'revision', []);
++    const freezeAck = Promise.withResolvers<void>();
++    const stopping = owner.stopForShutdown();
++    const observed = stopping.then(() => ({ ok: true as const }), error => ({ ok: false as const, error }));
++    const pump = (async () => {
++      try {
++        for (const phase of ['freeze', 'flush']) {
++          const call = await broker.nextEditorCall('project', 'editor', 'revision', pollAbort.signal, capability);
++          if (pollAbort.signal.aborted) return;
++          assert.equal(call?.arguments.phase, phase);
++          broker.settleEditorCall(call!.id, 'applied', { phase }, capability);
++          if (phase === 'freeze') freezeAck.resolve();
++          else await broker.unregisterEditor('project', 'editor', capability);
++        }
++      } catch (error) { if (!pollAbort.signal.aborted) throw error; }
++    })();
++    void pump.catch(() => {});
++    await freezeAck.promise; await tick();
++    let finished = false; void observed.then(() => { finished = true; }); await tick();
++    if (scenario === 'cutoff' || scenario === 'copy-close' || scenario === 'close-failure') {
++      assert.equal(finished, false, 'accepted upload must retain its body and file-handle completion');
++      assert.equal((await fetch(url, { method: 'POST', headers: { Origin: origin }, body: bytes })).status, 503);
++    }
++    if (scenario === 'cutoff') post!.end(bytes.subarray(32));
++    closeRelease.resolve();
++    const result = await response;
++    if (scenario === 'close-failure') {
++      assert.equal(result.status, 500); assert.match(String(result.body.error), /upload file close refused/);
++    } else {
++      assert.equal(result.status, 200, JSON.stringify(result.body)); assert.equal(result.body.contentHash, hash);
++      if (scenario !== 'unsupported-delete') {
++        assert.deepEqual(await readFile(finalPath), bytes);
++        assert((await readdir(uploadDir())).every(name => !name.endsWith('.part')));
++      }
++    }
++    assert.deepEqual(await readFile(source), bytes);
++    const stopped = await observed; pollAbort.abort(); await pump;
++    assert.equal(stopped.ok, scenario !== 'close-failure' && scenario !== 'unsupported-delete', String(stopped.ok ? '' : stopped.error));
++    if (stopped.ok) await owner.finishTransportShutdown();
++    else {
++      assert.match(String(stopped.error), scenario === 'unsupported-delete' ? /unconfirmed producers: openchatcut-upload/ : /failed; shutdown is unconfirmed/);
++      assert.strictEqual(stopping, owner.stopForShutdown());
++    }
++  } finally {
++    pollAbort.abort(); closeRelease.resolve(); post?.destroy();
++    fsPromises.link = nativeLink; fsPromises.open = nativeOpen; syncBuiltinESMExports();
++    await Promise.all(handles.map(close => close()));
++    if (server) await new Promise<void>((resolve, reject) => server!.close(error => error ? reject(error) : resolve()));
++    await rm(root, { recursive: true, force: true });
++  }
++}
 diff --git a/server/plugins/mantur-shutdown.ts b/server/plugins/mantur-shutdown.ts
 new file mode 100644
-index 0000000..b3555d8
+index 0000000..6b0cf21
 --- /dev/null
 +++ b/server/plugins/mantur-shutdown.ts
-@@ -0,0 +1,165 @@
+@@ -0,0 +1,172 @@
 +import type { IncomingMessage, ServerResponse } from 'node:http';
 +import { ShutdownWork } from '../../shared/shutdown-work.ts';
++import { isIsolatedDevProfile } from '../runtime-profile.ts';
 +import { Server } from 'node:http';
 +import type { Connect, Plugin, ViteDevServer } from 'vite';
 +import {
@@ -1133,6 +2317,7 @@ index 0000000..b3555d8
 +  'mantur-project-media', 'openchatcut-project-store', 'openchatcut-external-agent',
 +  'openchatcut-export', 'openchatcut-export-stage', 'openchatcut-export-destination',
 +  'openchatcut-generation-progress', 'openchatcut-media-preview', 'openchatcut-settings',
++  'openchatcut-extract-frames',
 +]);
 +
 +function requestPath(mount: string, req: IncomingMessage): string {
@@ -1151,6 +2336,11 @@ index 0000000..b3555d8
 +    name === 'openchatcut-extension-store' && (pathname === '/api/plugins' || pathname === '/api/plugins/')
 +    || name === 'openchatcut-model-packs' && pathname === '/api/model-packs'
 +  );
++}
++
++function ownedLocalUploadRequest(name: string, pathname: string, req: IncomingMessage): boolean {
++  return name === 'openchatcut-upload' && pathname === '/upload'
++    && (req.method === 'POST' || req.method === 'PUT') && isIsolatedDevProfile();
 +}
 +
 +function refuse(res: ServerResponse): void {
@@ -1258,7 +2448,7 @@ index 0000000..b3555d8
 +        // Connect types handlers as returning void; feature routes may return their actual async work.
 +        const completion: unknown = handler(req, res, (error) => { delegated = true; next(error); });
 +        if (!delegated) {
-+          if (!OWNED_PLUGINS.has(name) && !ownedCatalogRequest(name, pathname, req)) recordUnconfirmedEditorProducer(`${name} ${mount || '/'}`);
++          if (!OWNED_PLUGINS.has(name) && !ownedCatalogRequest(name, pathname, req) && !ownedLocalUploadRequest(name, pathname, req)) recordUnconfirmedEditorProducer(`${name} ${mount || '/'}`);
 +          if (completion === undefined && !res.writableEnded) recordUnconfirmedEditorProducer(`${name}: asynchronous handler without completion`);
 +        }
 +        await completion;
@@ -1777,6 +2967,57 @@ index 818e5fe..4071baa 100644
    await ensureStoreReady();
    if (!sqliteStoreEnabled()) return updateLegacyExportRecovery(input);
    return sqliteImmediateTransaction((store) => (
+diff --git a/server/plugins/upload-route-storage.ts b/server/plugins/upload-route-storage.ts
+index 9508860..eb580f3 100644
+--- a/server/plugins/upload-route-storage.ts
++++ b/server/plugins/upload-route-storage.ts
+@@ -6,6 +6,7 @@ import {
+ } from 'node:fs/promises';
+ import { join } from 'node:path';
+ import { randomUUID } from 'node:crypto';
++import { once } from 'node:events';
+ import { pipeline } from 'node:stream/promises';
+ import {
+   deleteUploadObject, putUploadFile, r2Config, UploadTooLargeError,
+@@ -296,10 +297,11 @@ async function publishPartIfAbsent(
+     throw error;
+   }
+   const initialIdentity = uploadFileIdentity(await target.stat());
++  const writer = target.createWriteStream({ autoClose: false });
+   try {
+     await pipeline(
+       createReadStream(partPath),
+-      target.createWriteStream({ autoClose: false }),
++      writer,
+     );
+     return uploadFileIdentity(await target.stat());
+   } catch (error) {
+@@ -317,7 +319,11 @@ async function publishPartIfAbsent(
+     }
+     throw error;
+   } finally {
+-    await target.close().catch(() => {});
++    if (!writer.closed) {
++      const closed = once(writer, 'close');
++      writer.destroy();
++      await closed;
++    }
+   }
+ }
+
+diff --git a/server/plugins/upload-routes.ts b/server/plugins/upload-routes.ts
+index 90cde3d..afc9c47 100644
+--- a/server/plugins/upload-routes.ts
++++ b/server/plugins/upload-routes.ts
+@@ -258,7 +258,7 @@ export function registerUploadRoutes(
+       : requireEditorRead(req, res);
+     if (authorized) void handlePresign(req, res);
+   });
+-  server.middlewares.use('/upload', (req, res) => { void handleUpload(req, res, logger); });
++  server.middlewares.use('/upload', (req, res) => handleUpload(req, res, logger));
+   server.middlewares.use('/api/import-url', (req, res) => {
+     if (requireEditorMutation(req, res)) void handleImportUrl(req, res, logger);
+   });
 diff --git a/server/project-store-http-routes.ts b/server/project-store-http-routes.ts
 index e618bfe..b3b9f44 100644
 --- a/server/project-store-http-routes.ts

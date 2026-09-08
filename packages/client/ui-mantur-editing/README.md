@@ -64,13 +64,19 @@ Packaged mode validates the platform-specific `manifest.json` before opening a S
 
 After applying [the packaged patch](adapters/mantur-cut-packaged.patch), apply [the shutdown patch](adapters/mantur-cut-shutdown.patch) on editor tree `2a5be55239826a9e74bde5a5a5484a0f033d4da0`. It adds no public MCP tool and does not change the pinned audio finalizer. The owned render path propagates `browser.close()` failures, but Remotion 4.0.509 exposes no supported child-and-pipe close completion; an instance that acquired its render browser therefore refuses shutdown confirmation. Used unowned producers and retained save/job errors also refuse confirmation. This increment is not complete installation approval; [the shutdown decision](../../../.agents/notes/implemented/bug-fix/2026-09-08-mantur-editing-owned-shutdown.md) records verification limits.
 
+The editor pins patched image and archive dependencies without changing model or speech providers; see the [dependency security decision](../../../.agents/notes/implemented/bug-fix/2026-09-08-mantur-editor-security-dependencies.md) for scope and native verification limits.
+
 The editor checks actual semantic-vector availability through the project-store transport before index operations. Failed or malformed checks remain errors. Accepted mutations remain part of browser shutdown. Exact extension and model catalog GET requests retain their original completion promises; download and installation requests still require their own shutdown ownership.
+
+Local `/api/extract-frames` requests retain FFmpeg, FFprobe, optional Python label work and temporary-file cleanup. Partial previews do not clear failed sampling or stamping; such errors still reject shutdown. The [frame extraction decision](../../../.agents/notes/implemented/bug-fix/2026-09-08-mantur-extract-frames-shutdown.md) records real-media checks and their limits.
+
+Isolated-profile POST and PUT requests to `/upload` retain their request body, storage work and file-stream close result. Other upload routes and default profiles remain unconfirmed. The [local upload decision](../../../.agents/notes/implemented/bug-fix/2026-09-08-mantur-local-upload-shutdown.md) records supported paths and validation limits.
 
 | Shutdown layer | Fixed value |
 |---|---|
-| Editor commit | `aa893e75d5811275bfb59f8974133bf0ce4339f5` |
-| Result tree | `203f06ef3a916ee19b9948793e50178b912fd90b` |
-| Patch SHA-256 | `dd0abd932f995265aab92a31a870c854833fb889a986a83731550091079227ca` |
+| Editor commit | `2fcb4c0c734494387c78068d770709a70bda1bd9` |
+| Result tree | `889e9551f34e28a5bf8d181334f6ec6bdfd9a2b5` |
+| Patch SHA-256 | `fa4698d9794add099b012fadcb63d849c4083c4feb3b1e9dc36628b83ab90cb5` |
 
 The Host Remote resolves the Agent, coalesces concurrent opens, and launches `adapters/mantur-runtime.mjs`. It mounts the existing MCP client inside that Agent's scope. All mounted MCP clients resolve the same peer instance, preserving Agent-scoped server-name reservations. The MCP bearer remains in Host memory and the child environment. Disposal drains both connection and subprocess. The Client ignores startup responses from a Session that is no longer selected. No invariant companion is published: subprocess exit state belongs to the child handle; connection and tool-generation invariants belong to the MCP client.
 
