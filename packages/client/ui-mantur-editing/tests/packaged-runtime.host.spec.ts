@@ -72,7 +72,7 @@ export async function startEmbeddedServer(dist, options) {
   });
   return {server, port: server.address().port};
 }`)
-  const manifest = { formatVersion: 1, platform, arch, paths }
+  const manifest = { formatVersion: 2, platform, arch, paths }
   await writeFile(join(root, 'manifest.json'), JSON.stringify(manifest))
   return { root, manifest }
 }
@@ -89,7 +89,7 @@ describe('packaged editor manifest', () => {
   it('rejects mismatched versions, escaped paths and missing resources', async () => {
     const { root, manifest } = await fixture('darwin', 'arm64')
     const check = () => resolvePackagedResources(root, 'darwin', 'arm64')
-    await writeFile(join(root, 'manifest.json'), JSON.stringify({ ...manifest, formatVersion: 2 }))
+    await writeFile(join(root, 'manifest.json'), JSON.stringify({ ...manifest, formatVersion: 1 }))
     expect(check).toThrow('platform and format')
     for (const server of ['../outside', '/absolute', 'server\\outside', 'server/../outside', '']) {
       await writeFile(join(root, 'manifest.json'), JSON.stringify({ ...manifest, paths: { ...manifest.paths, server } }))

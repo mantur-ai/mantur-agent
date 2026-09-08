@@ -45,7 +45,7 @@ if (manturCutManifest.platform !== process.platform || manturCutManifest.arch !=
   throw new Error(`packaged Mantur Cut target is ${manturCutManifest.platform}-${manturCutManifest.arch}, expected ${process.platform}-${process.arch}`)
 }
 await verifyProgramManifest(manturCutRoot, manturCutManifest)
-for (const file of ['BUILD_INFO.json', 'THIRD_PARTY_PACKAGES.json', 'SECURITY/npm-audit.json', 'SOURCE/source.json', 'SOURCE/patches/mantur-cut.patch', 'SOURCE/patches/mantur-cut-packaged.patch', 'SOURCE_OFFER_REVIEW.txt', 'whisper-cli/LICENSE.whisper.cpp']) {
+for (const file of ['BUILD_INFO.json', 'THIRD_PARTY_PACKAGES.json', 'SECURITY/npm-audit.json', 'SOURCE/source.json', 'SOURCE/patches/mantur-cut.patch', 'SOURCE/patches/mantur-cut-packaged.patch', 'SOURCE/patches/mantur-cut-shutdown.patch', 'SOURCE_OFFER_REVIEW.txt', 'whisper-cli/LICENSE.whisper.cpp']) {
   if (!existsSync(join(manturCutRoot, file))) throw new Error(`packaged Mantur Cut source or license record is missing: ${file}`)
 }
 for (const path of [manturCutManifest.paths.whisperCli, manturCutManifest.paths.whisperServer]) {

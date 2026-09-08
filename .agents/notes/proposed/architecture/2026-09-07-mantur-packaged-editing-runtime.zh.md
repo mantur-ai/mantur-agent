@@ -10,9 +10,9 @@ Status: proposed
 
 ## 提案
 
-打包既有 OpenChatCut 生产前端和内嵌服务，依次应用固定漫途补丁与独立宿主集成补丁。桌面端向发布 profile 提供只读资源根目录和 Electron 可执行文件。打包模式要求目标平台清单；开发模式保持显式配置。子进程使用 Electron 的 Node 模式，不另行下载 Node 分发包。
+打包既有 OpenChatCut 生产前端和内嵌服务，依次应用固定漫途基础、宿主集成与退出三层补丁。桌面端向发布 profile 提供只读资源根目录和 Electron 可执行文件。打包模式要求目标平台清单；开发模式保持显式配置。子进程使用 Electron 的 Node 模式，不另行下载 Node 分发包。
 
-资源清单使用 formatVersion 1、platform 和 arch、构建方维护的来源身份，以及 server、web、remotionBundle、browserExecutable、ffmpeg、ffprobe、compositor、whisperCli 和 whisperServer 九个相对路径。服务导出 startEmbeddedServer，接受明确的漫途随机端口和父源选项。web 目录包含 index.html 与 mantur-theme.mjs。每个引用资源必须存在且位于包内。构建准备负责哈希、明确的生产依赖闭包和许可材料；运行时不获取缺失资源。
+资源清单使用 formatVersion 2、platform 和 arch、全部三层补丁摘要及最终结果树，以及 server、web、remotionBundle、browserExecutable、ffmpeg、ffprobe、compositor、whisperCli 和 whisperServer 九个相对路径。版本 1 会被拒绝，支持退出管理的 Host 因此不能复用旧的两层资源格式。服务导出 startEmbeddedServer，接受明确的漫途随机端口和父源选项。web 目录包含 index.html 与 mantur-theme.mjs。每个引用资源必须存在且位于包内。构建准备负责哈希、明确的生产依赖闭包和许可材料；运行时不获取缺失资源。
 
 子进程将 OPENCHATCUT_WHISPER_CLI 设为校验后的 CLI 路径。上游原生 ASR 在 CLI 同目录查找 whisper-server(.exe)，因此清单必须声明同一个相邻文件。漫途 iframe 未暴露上游桌面推理 preload；打包这些程序不代表已启用或验证原生转写。接通原生推理需要独立实现和验收，不能替换提供方来代替。
 

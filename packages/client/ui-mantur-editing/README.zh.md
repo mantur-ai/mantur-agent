@@ -46,7 +46,7 @@ kind: "package-reference"
 | `stopTimeoutMs` | 必填 | 关闭确认及子进程和管道结束的最长等待；超时只报错，不强杀 |
 | `toolCallTimeoutMs` | 必填 | 单次剪辑工具调用及每次编辑器排空请求的最长时间 |
 
-打包模式在打开会话前校验目标平台的 `manifest.json`；`./packaged-resources` 导出供安装包冒烟复用相同资源检查。缺少资源、不支持的目标或越出安装目录的路径会报错；运行时不会下载替代资源或启动 Vite。生产入口只将需要写入的 Remotion bundle 和 compositor 复制到会话私有目录，并将临时文件置于其中。正常退出在 HTTP 关闭后删除该目录，Host 随后等待子进程结束。排空或关闭失败会保留私有运行文件，并拒绝退出成功。持久工程、素材和导出目录保留。资源字段及尚未完成的分发检查见[打包运行提案](../../../.agents/notes/proposed/architecture/2026-09-07-mantur-packaged-editing-runtime.zh.md)。
+打包模式在打开会话前校验目标平台的 `manifest.json`。格式版本 2 标识应用全部三层编辑器补丁后构建的资源；支持退出管理的运行时拒绝版本 1，不复用旧资源。`./packaged-resources` 导出供安装包冒烟复用相同资源检查。缺少资源、不支持的目标或越出安装目录的路径会报错；运行时不会下载替代资源或启动 Vite。生产入口只将需要写入的 Remotion bundle 和 compositor 复制到会话私有目录，并将临时文件置于其中。正常退出在 HTTP 关闭后删除该目录，Host 随后等待子进程结束。排空或关闭失败会保留私有运行文件，并拒绝退出成功。持久工程、素材和导出目录保留。资源字段及尚未完成的分发检查见[打包运行提案](../../../.agents/notes/proposed/architecture/2026-09-07-mantur-packaged-editing-runtime.zh.md)。
 
 “项目素材”浏览当前 Agent 目录及子目录。兼容素材直接引用原文件；必要的兼容性转换另存文件，不修改原片。`import_asset` 与 `import_folder` 使用同一接口。隐藏目录、`node_modules` 及项目的 `剪辑` 目录不参与浏览和批量导入。刷新可读取新增文件；丢失的源文件保留离线状态，直到用户选择替代文件。移除素材池条目或引用记录不删除原文件。
 

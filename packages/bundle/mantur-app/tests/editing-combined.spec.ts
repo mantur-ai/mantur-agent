@@ -160,7 +160,7 @@ export async function createServer() {
     try { await ctx.fiber.dispose() } finally {
       // Failed fixtures retain their owner; only this test's captured child is force-cleaned.
       for (const state of childClosures) if (!state.closed) {
-        const closed = new Promise<void>(resolve => state.child.once('close', () => resolve()))
+        const closed = new Promise<void>((resolve) => { state.child.once('close', () => { resolve() }) })
         state.child.kill('SIGKILL')
         await closed
       }

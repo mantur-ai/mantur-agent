@@ -18,6 +18,8 @@ Native MCP closure follows the editor acknowledgement. A real MCP GET SSE handle
 
 The third editor patch owns this behavior above the frozen base and packaged patches. No dependencies, audio finalizer or public MCP protocol change. The integration records exact media children at owned spawn sites; it does not scan machine processes. The owned Remotion wrapper preserves browser-close failures and records actual browser acquisition. Remotion 4.0.509 supplies no supported process-and-pipe close evidence, so acquisition prevents successful shutdown even if its close promise resolves.
 
+Desktop source configuration and resource manifests use format version 2 for the three-patch program. The builder checks each patch digest and intermediate Git tree, records the shutdown-patched final tree and all three source patches, and changes the distribution identifier with the complete source configuration. The packaged runtime rejects the older two-layer manifest version before opening a Session; older resource evidence does not validate this program.
+
 ## Alternatives considered
 
 **Kill after a grace period.** This establishes termination but cannot establish that accepted writes, renderer descendants or paid jobs completed.

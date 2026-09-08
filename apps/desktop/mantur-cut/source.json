@@ -1,5 +1,5 @@
 {
-  "formatVersion": 1,
+  "formatVersion": 2,
   "repository": "https://github.com/0xsline/OpenChatCut.git",
   "version": "0.2.14",
   "upstreamCommit": "19cba6e1a70a3e589545ce02de975f6494c918f6",
@@ -26,6 +26,11 @@
       "file": "mantur-cut-packaged.patch",
       "sha256": "306fc97449c6fbff0abab4b754e7d4095739709f9787201341be53c3e7ad0728",
       "resultTree": "2a5be55239826a9e74bde5a5a5484a0f033d4da0"
+    },
+    {
+      "file": "mantur-cut-shutdown.patch",
+      "sha256": "dd0abd932f995265aab92a31a870c854833fb889a986a83731550091079227ca",
+      "resultTree": "203f06ef3a916ee19b9948793e50178b912fd90b"
     }
   ],
   "targets": {

@@ -43,7 +43,7 @@ interface TargetSource {
 }
 
 interface SourceConfig {
-  formatVersion: 1
+  formatVersion: 2
   repository: string
   version: string
   upstreamCommit: string
@@ -60,12 +60,12 @@ interface SourceConfig {
   remotionRendererIntegrity: string
   ffmpegStaticVersion: string
   ffmpegStaticIntegrity: string
-  patches: [PatchSource, PatchSource]
+  patches: [PatchSource, PatchSource, PatchSource]
   targets: Record<ManturCutTarget, TargetSource>
 }
 
 export interface ProgramManifest {
-  formatVersion: 1
+  formatVersion: 2
   platform: TargetSource['platform']
   arch: TargetSource['arch']
   source: {
@@ -73,6 +73,7 @@ export interface ProgramManifest {
     patchedTree: string
     basePatchSha256: string
     runtimePatchSha256: string
+    shutdownPatchSha256: string
   }
   paths: {
     server: string
@@ -91,22 +92,23 @@ export interface ProgramManifest {
 export function parseProgramManifest(value: unknown): ProgramManifest {
   const manifest = object(value, 'Mantur Cut program manifest')
   exactKeys(manifest, ['arch', 'formatVersion', 'paths', 'platform', 'source'], 'Mantur Cut program manifest')
-  if (manifest.formatVersion !== 1) throw new Error('Mantur Cut program manifest formatVersion must be 1')
+  if (manifest.formatVersion !== 2) throw new Error('Mantur Cut program manifest formatVersion must be 2')
   const platform = string(manifest.platform, 'Mantur Cut program manifest platform')
   const arch = string(manifest.arch, 'Mantur Cut program manifest arch')
   if (platform !== 'darwin' && platform !== 'win32') throw new Error('Mantur Cut program manifest platform is unsupported')
   if (arch !== 'arm64' && arch !== 'x64') throw new Error('Mantur Cut program manifest arch is unsupported')
   const source = object(manifest.source, 'Mantur Cut program manifest source')
-  exactKeys(source, ['basePatchSha256', 'patchedTree', 'runtimePatchSha256', 'upstreamCommit'], 'Mantur Cut program manifest source')
+  exactKeys(source, ['basePatchSha256', 'patchedTree', 'runtimePatchSha256', 'shutdownPatchSha256', 'upstreamCommit'], 'Mantur Cut program manifest source')
   const paths = object(manifest.paths, 'Mantur Cut program manifest paths')
   exactKeys(paths, ['browserExecutable', 'compositor', 'ffmpeg', 'ffprobe', 'remotionBundle', 'server', 'web', 'whisperCli', 'whisperServer'], 'Mantur Cut program manifest paths')
   return {
-    formatVersion: 1, platform, arch,
+    formatVersion: 2, platform, arch,
     source: {
       upstreamCommit: gitObject(source.upstreamCommit, 'Mantur Cut program manifest upstreamCommit'),
       patchedTree: gitObject(source.patchedTree, 'Mantur Cut program manifest patchedTree'),
       basePatchSha256: digest(source.basePatchSha256, 'Mantur Cut program manifest basePatchSha256'),
       runtimePatchSha256: digest(source.runtimePatchSha256, 'Mantur Cut program manifest runtimePatchSha256'),
+      shutdownPatchSha256: digest(source.shutdownPatchSha256, 'Mantur Cut program manifest shutdownPatchSha256'),
     },
     paths: {
       server: string(paths.server, 'Mantur Cut program manifest server'),
@@ -200,12 +202,12 @@ function targetSource(value: unknown, subject: string): TargetSource {
 export function parseSourceConfig(value: unknown): SourceConfig {
   const config = object(value, 'Mantur Cut source config')
   exactKeys(config, ['cmakeMacArchiveSha256', 'cmakeVersion', 'electronVersion', 'embeddedNodeVersion', 'ffmpegStaticIntegrity', 'ffmpegStaticVersion', 'formatVersion', 'patches', 'remotionRendererIntegrity', 'remotionVersion', 'repository', 'targets', 'upstreamCommit', 'upstreamTree', 'version', 'whisperCommit', 'whisperRepository', 'whisperTree', 'whisperVersion'], 'Mantur Cut source config')
-  if (config.formatVersion !== 1) throw new Error('Mantur Cut source config formatVersion must be 1')
-  if (!Array.isArray(config.patches) || config.patches.length !== 2) throw new Error('Mantur Cut source config must pin the base and runtime patches')
+  if (config.formatVersion !== 2) throw new Error('Mantur Cut source config formatVersion must be 2')
+  if (!Array.isArray(config.patches) || config.patches.length !== 3) throw new Error('Mantur Cut source config must pin the base, runtime and shutdown patches')
   const targetRows = object(config.targets, 'Mantur Cut source config targets')
   exactKeys(targetRows, ['darwin-arm64', 'darwin-x64', 'win32-x64'], 'Mantur Cut source config targets')
   return {
-    formatVersion: 1,
+    formatVersion: 2,
     repository: string(config.repository, 'Mantur Cut source config repository'),
     version: string(config.version, 'Mantur Cut source config version'),
     upstreamCommit: gitObject(config.upstreamCommit, 'Mantur Cut source config upstreamCommit'),
@@ -222,7 +224,7 @@ export function parseSourceConfig(value: unknown): SourceConfig {
     remotionRendererIntegrity: string(config.remotionRendererIntegrity, 'Mantur Cut source config remotionRendererIntegrity'),
     ffmpegStaticVersion: string(config.ffmpegStaticVersion, 'Mantur Cut source config ffmpegStaticVersion'),
     ffmpegStaticIntegrity: string(config.ffmpegStaticIntegrity, 'Mantur Cut source config ffmpegStaticIntegrity'),
-    patches: [patchSource(config.patches[0], 'Mantur Cut base patch'), patchSource(config.patches[1], 'Mantur Cut runtime patch')],
+    patches: [patchSource(config.patches[0], 'Mantur Cut base patch'), patchSource(config.patches[1], 'Mantur Cut runtime patch'), patchSource(config.patches[2], 'Mantur Cut shutdown patch')],
     targets: {
       'darwin-arm64': targetSource(targetRows['darwin-arm64'], 'Mantur Cut darwin-arm64 target'),
       'darwin-x64': targetSource(targetRows['darwin-x64'], 'Mantur Cut darwin-x64 target'),
@@ -462,6 +464,7 @@ async function copyProductionProgram(source: string, staging: string, auditRepor
   await cp(sourceConfigPath, join(staging, 'SOURCE/source.json'))
   await cp(resolve(patchRoot, 'mantur-cut.patch'), join(staging, 'SOURCE/patches/mantur-cut.patch'))
   await cp(resolve(patchRoot, 'mantur-cut-packaged.patch'), join(staging, 'SOURCE/patches/mantur-cut-packaged.patch'))
+  await cp(resolve(patchRoot, 'mantur-cut-shutdown.patch'), join(staging, 'SOURCE/patches/mantur-cut-shutdown.patch'))
   await mkdir(join(staging, 'SECURITY'), { recursive: true })
   await cp(auditReport, join(staging, 'SECURITY/npm-audit.json'))
   return paths
@@ -547,7 +550,7 @@ async function writeBuildInformation(
       repository: config.repository,
       version: config.version,
       upstreamCommit: config.upstreamCommit,
-      patchedTree: config.patches[1].resultTree,
+      patchedTree: config.patches[2].resultTree,
     },
     runtime: { electronVersion: config.electronVersion, embeddedNodeVersion: config.embeddedNodeVersion, nodeLaunch: 'ELECTRON_RUN_AS_NODE=1' },
     dependencies: {
@@ -571,7 +574,7 @@ async function writeBuildInformation(
     },
   }
   await writeFile(join(resourceRoot, 'BUILD_INFO.json'), `${JSON.stringify(information, null, 2)}\n`)
-  const review = `Mantur Cut distribution review\n\nThis resource contains modified OpenChatCut ${config.version} from ${config.repository} at ${config.upstreamCommit}. OpenChatCut declares AGPL-3.0-or-later. SOURCE/source.json and SOURCE/patches contain the exact source identity and both applied patches. A public distribution must make the complete corresponding source and build instructions available to every recipient under the applicable license terms.\n\nRemotion ${config.remotionVersion} uses its own LICENSE.md terms. The distributor must confirm that the legal entity is eligible for the free license or obtain the required company license, and must confirm that this embedded modified editor is an allowed use. This build does not accept either outcome.\n\nThe runtime includes ffmpeg-static ${config.ffmpegStaticVersion} under GPL-3.0-or-later, ${target.ffprobePackage} under ${target.ffprobeLicense}, whisper.cpp ${config.whisperVersion} at ${config.whisperCommit} under MIT, and Chrome Headless Shell ${target.chromeVersion} with its bundled LICENSE.headless_shell. THIRD_PARTY_PACKAGES.json inventories installed production packages and the license files retained beside them. SECURITY/npm-audit.json records the production dependency audit used for this build. Public release remains blocked until the source-delivery method, Remotion eligibility, GPL/LGPL obligations, notices, security findings, and binary redistribution terms are approved for this exact patched tree.\n`
+  const review = `Mantur Cut distribution review\n\nThis resource contains modified OpenChatCut ${config.version} from ${config.repository} at ${config.upstreamCommit}. OpenChatCut declares AGPL-3.0-or-later. SOURCE/source.json and SOURCE/patches contain the exact source identity and all three applied patches. A public distribution must make the complete corresponding source and build instructions available to every recipient under the applicable license terms.\n\nRemotion ${config.remotionVersion} uses its own LICENSE.md terms. The distributor must confirm that the legal entity is eligible for the free license or obtain the required company license, and must confirm that this embedded modified editor is an allowed use. This build does not accept either outcome.\n\nThe runtime includes ffmpeg-static ${config.ffmpegStaticVersion} under GPL-3.0-or-later, ${target.ffprobePackage} under ${target.ffprobeLicense}, whisper.cpp ${config.whisperVersion} at ${config.whisperCommit} under MIT, and Chrome Headless Shell ${target.chromeVersion} with its bundled LICENSE.headless_shell. THIRD_PARTY_PACKAGES.json inventories installed production packages and the license files retained beside them. SECURITY/npm-audit.json records the production dependency audit used for this build. Public release remains blocked until the source-delivery method, Remotion eligibility, GPL/LGPL obligations, notices, security findings, and binary redistribution terms are approved for this exact patched tree.\n`
   await writeFile(join(resourceRoot, 'SOURCE_OFFER_REVIEW.txt'), review)
 }
 
@@ -658,14 +661,15 @@ async function prepare(targetKey: ManturCutTarget, cacheDir: string, outputDir: 
     const paths = await copyProductionProgram(source, staging, auditReport, targetKey, target)
     if (await fileSha256(join(staging, paths.ffmpeg)) !== target.ffmpegSha256) throw new Error(`Mantur Cut FFmpeg binary does not match ${targetKey}`)
     const manifest: ProgramManifest = {
-      formatVersion: 1,
+      formatVersion: 2,
       platform: target.platform,
       arch: target.arch,
       source: {
         upstreamCommit: config.upstreamCommit,
-        patchedTree: config.patches[1].resultTree,
+        patchedTree: config.patches[2].resultTree,
         basePatchSha256: config.patches[0].sha256,
         runtimePatchSha256: config.patches[1].sha256,
+        shutdownPatchSha256: config.patches[2].sha256,
       },
       paths,
     }

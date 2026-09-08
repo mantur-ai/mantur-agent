@@ -37,7 +37,7 @@ pnpm run desktop:dist:mac:arm64
 pnpm run desktop:smoke
 ```
 
-Each `desktop:dist:*` command first prepares the matching Mantur Cut resource tree from pinned OpenChatCut and whisper.cpp commits. It verifies both Mantur patch digests and resulting Git trees, package-lock integrities, downloaded archive hashes, and the requested native target. The package carries the embedded server, built editor, Remotion bundle and compositor, Chrome Headless Shell, FFmpeg, ffprobe, Whisper CLI and server, exact source records, retained license files, and a production dependency audit. No packaged runtime downloads a missing executable or falls back to a developer checkout.
+Each `desktop:dist:*` command first prepares the matching Mantur Cut resource tree from pinned OpenChatCut and whisper.cpp commits. It verifies the base, packaged-runtime and shutdown patch digests and resulting Git trees, package-lock integrities, downloaded archive hashes, and the requested native target. Source configuration and runtime manifests require format version 2; older two-layer resources are rejected. The manifest records all three patch digests and the final shutdown-patched tree. The package carries the embedded server, built editor, Remotion bundle and compositor, Chrome Headless Shell, FFmpeg, ffprobe, Whisper CLI and server, exact source records including all three patches, retained license files, and a production dependency audit. No packaged runtime downloads a missing executable or falls back to a developer checkout.
 
 Chrome for Testing download URLs place the version in the directory and use `chrome-headless-shell-<platform>.zip` as the archive name. Local cache filenames additionally contain the pinned version.
 

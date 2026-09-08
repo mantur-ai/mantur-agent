@@ -16,7 +16,7 @@ export function resolvePackagedResources(root, platform = process.platform, arch
   if (!isAbsolute(root)) throw new Error('Packaged editor resource root must be absolute')
   const canonical = realpathSync(root)
   const manifest = JSON.parse(readFileSync(join(canonical, 'manifest.json'), 'utf8'))
-  if (manifest?.formatVersion !== 1 || manifest.platform !== platform || manifest.arch !== arch
+  if (manifest?.formatVersion !== 2 || manifest.platform !== platform || manifest.arch !== arch
     || !['darwin-arm64', 'darwin-x64', 'win32-x64'].includes(`${platform}-${arch}`)) {
     throw new Error('Packaged editor manifest does not match this platform and format')
   }
