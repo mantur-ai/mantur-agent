@@ -7,14 +7,21 @@ import type { SessionId } from '@deepseek-ai/dsh-session'
 import { afterEach, expect, it, vi } from 'vitest'
 import { editingDirectories, startEditor, type EditorProcess, type EditorRuntime, type RuntimeConfig } from '../src/runtime.ts'
 
+type Spawn = (executable: string, args: string[], options: { cwd?: string; env?: NodeJS.ProcessEnv }) => FakeChild
+
 const harness = vi.hoisted(() => ({
-  spawn: vi.fn(),
+  spawn: vi.fn<Spawn>(),
+  packaged: vi.fn(() => ({})),
   writeError: undefined as NodeJS.ErrnoException | undefined,
 }))
 
 vi.mock('node:child_process', async importOriginal => ({
   ...await importOriginal<typeof import('node:child_process')>(),
   spawn: harness.spawn,
+}))
+
+vi.mock('@deepseek-ai/dsh-client-ui-mantur-editing/packaged-resources', () => ({
+  resolvePackagedResources: harness.packaged,
 }))
 
 vi.mock('node:fs/promises', async (importOriginal) => {
@@ -44,6 +51,7 @@ const runtimes: EditorRuntime[] = []
 afterEach(async () => {
   vi.useRealTimers()
   harness.spawn.mockReset()
+  harness.packaged.mockClear()
   harness.writeError = undefined
   await Promise.allSettled(runtimes.splice(0).map(runtime => runtime.dispose()))
   await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true })))
@@ -126,6 +134,28 @@ it('preserves an existing private settings file', async () => {
   await ready(value, pending)
 })
 
+it('launches the packaged adapter from the private engine directory', async () => {
+  const value = child((message) => {
+    if ((message as { type?: string }).type === 'mantur-cut:drain') finishPhase(value, 'drain')
+    else if ((message as { type?: string }).type === 'mantur-cut:stop') {
+      finishPhase(value, 'stop')
+      value.emit('close', 0, null)
+    }
+  })
+  harness.spawn.mockReturnValue(value)
+  const runtimeConfig = { ...await config(), runtimeMode: 'packaged' as const }
+  const pending = startEditor(runtimeConfig, await temp(), 'packaged' as SessionId, 'http://127.0.0.1:5298')
+  await spawned(pending)
+  const runtime = await ready(value, pending)
+  const [executable, args, options] = harness.spawn.mock.calls[0]!
+  expect(harness.packaged).toHaveBeenCalledWith(runtimeConfig.editorRoot)
+  expect(executable).toBe(process.execPath)
+  expect(args[0]).toContain('mantur-production-runtime.mjs')
+  expect(options.cwd).toContain('/工程')
+  expect(options.env).toMatchObject({ ELECTRON_RUN_AS_NODE: '1', MANTUR_CUT_RESOURCES: runtimeConfig.editorRoot })
+  await runtime.dispose()
+})
+
 it('validates startup messages and redacts startup diagnostics', async () => {
   let index = 0
   for (const message of [
@@ -192,6 +222,18 @@ it('rejects malformed, failed, disconnected and throwing shutdown phases', async
   await expect(runtime.drainForShutdown()).rejects.toThrow('IPC disconnected')
 })
 
+it('reports a shutdown phase deadline', async () => {
+  const hanging = child()
+  harness.spawn.mockReturnValue(hanging)
+  const waiting = startEditor({ ...await config(), toolCallTimeoutMs: 60_000 }, await temp(), 'phase-timeout' as SessionId, 'http://127.0.0.1:5298')
+  await spawned(waiting)
+  const hangingRuntime = await ready(hanging, waiting)
+  vi.useFakeTimers()
+  const deadline = expect(hangingRuntime.drainForShutdown()).rejects.toThrow('timed out')
+  await vi.advanceTimersByTimeAsync(60_000)
+  await deadline
+})
+
 it('reports exit, process failure, close failure and close timeout independently', async () => {
   const exited = child()
   harness.spawn.mockReturnValueOnce(exited)
@@ -247,8 +289,7 @@ it('reports startup and cleanup failures together', async () => {
   harness.spawn.mockReturnValueOnce(value)
   const pending = startEditor(await config(), await temp(), 'double-failure' as SessionId, 'http://127.0.0.1:5298')
   await spawned(pending)
-  value.emit('error', new Error('startup failure'))
-  value.emit('close', 1, null)
+  value.emit('message', { type: 'mantur-cut:startup-result', error: 'startup failure' })
   await expect(pending).rejects.toThrow('startup failure')
 })
 
