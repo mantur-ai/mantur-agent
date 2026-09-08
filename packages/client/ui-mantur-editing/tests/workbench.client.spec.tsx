@@ -60,11 +60,11 @@ describe('Session editor workbench', () => {
     expect(props.openWorkspace).not.toHaveBeenCalled()
   })
 
-  it('shows startup failures without using a previous or external editor', async () => {
+  it.each([[new Error('Directory is unavailable'), 'Directory is unavailable'], ['plain failure', 'plain failure']] as const)('shows startup failure %p without using a previous or external editor', async (failure, message) => {
     const props = propsFor()
-    props.openWorkspace = async () => { throw new Error('Directory is unavailable') }
+    props.openWorkspace = async () => { throw failure }
     const view = render(<Workbench {...props} />)
-    expect((await view.findByRole('alert')).textContent).toContain('Directory is unavailable')
+    expect((await view.findByRole('alert')).textContent).toContain(message)
     expect(view.queryByTitle(en.title)).toBeNull()
   })
 
@@ -77,6 +77,19 @@ describe('Session editor workbench', () => {
     expect((await view.findByTitle(en.title)).getAttribute('src')).toContain(':5300/')
     await act(async () => { first(workspace) })
     expect(view.getByTitle(en.title).getAttribute('src')).toContain(':5300/')
+  })
+
+  it('ignores a previous Session failure that arrives after switching', async () => {
+    const props = propsFor()
+    let rejectFirst!: (error: unknown) => void
+    props.openWorkspace = id => id === 'session-a'
+      ? new Promise((_resolve, reject) => { rejectFirst = reject })
+      : Promise.resolve({ ...workspace, editorUrl: 'http://127.0.0.1:5300/' })
+    const view = render(<Workbench {...props} />)
+    view.rerender(<Workbench {...props} useSessions={select => select({ current: 'session-b' as SessionId } as never)} />)
+    expect((await view.findByTitle(en.title)).getAttribute('src')).toContain(':5300/')
+    await act(async () => { rejectFirst(new Error('stale failure')) })
+    expect(view.queryByRole('alert')).toBeNull()
   })
 
   it('shows loading until the selected Session runtime is ready', async () => {

@@ -313,7 +313,6 @@ export function startConnection(
             ctx.logger.error(`${label}: expired HTTP generation did not close within ${GENERATION_CLOSE_TIMEOUT_MS}ms — reconnect stopped; reload the plugin or restart the Host to retry`)
             return
           }
-          if (!ownsGeneration(generation)) return
           generationDown(generation)
         })()
       }
@@ -334,14 +333,11 @@ export function startConnection(
       attemptSettled = true
       if (!quiesced) {
         closeFailures.push(new Error(`${label}: failed generation closure is unconfirmed`))
-        if (isCurrent(generation)) {
-          client = undefined
-          clientClosed = undefined
-        }
+        client = undefined
+        clientClosed = undefined
         ctx.logger.error(`${label}: failed generation did not close within ${GENERATION_CLOSE_TIMEOUT_MS}ms — reconnect stopped to avoid overlapping server processes; reload the plugin or restart the Host to retry`)
         return
       }
-      if (!isCurrent(generation)) return
       generationDown(generation)
       return
     }
@@ -407,10 +403,6 @@ export function startConnection(
         await stopAccepting()
         if (beforeClose) await withinShutdownBudget(beforeClose())
         disposed = true
-        if (reconnectTimer !== undefined) {
-          clearTimeout(reconnectTimer)
-          reconnectTimer = undefined
-        }
         const current = client
         const currentClosed = clientClosed
         client = undefined

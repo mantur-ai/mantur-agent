@@ -922,6 +922,29 @@ describe('tool execution', () => {
     expect(result.content[0]).toEqual({ type: 'text', text: '{"key":"value"}' })
   })
 
+  it('retains an abort that arrives while a legacy result is returned', async () => {
+    const controller = new AbortController()
+    const reason = new Error('stop after remote result')
+    const failures: unknown[] = []
+    const client = createMockClient([{ name: 'legacy-aborted', inputSchema: { type: 'object' } }])
+    client.callTool.mockImplementation(async () => {
+      controller.abort(reason)
+      return { toolResult: 'completed remotely' }
+    })
+
+    await syncTools(client as never, ctx, {
+      ...defaultOpts,
+      runTool: work => work((error) => { failures.push(error) }),
+    }, new Map())
+    const result = await ctx.tools.execute({
+      signal: controller.signal,
+      callId: ToolCallId('legacy-aborted'), name: 'mcp__srv__legacy-aborted', arguments: {},
+    })
+
+    expect(result.isError).toBe(true)
+    expect(failures).toEqual([reason])
+  })
+
   it('preserves structuredContent on a successful legacy result', async () => {
     const client = createMockClient([{ name: 'legacy-structured', inputSchema: { type: 'object' } }])
     client.callTool.mockResolvedValue({

@@ -10,10 +10,12 @@ import ManturEditing, { Config } from '../src/index.ts'
 
 const harness = vi.hoisted(() => ({
   start: vi.fn<typeof startEditor>(), connect: vi.fn<() => void | Promise<void>>(), drain: vi.fn<() => void | Promise<void>>(),
+  disconnect: vi.fn<() => void | Promise<void>>(),
   scopes: [] as unknown[],
   stopped: [] as ReturnType<typeof vi.fn>[], connections: [] as ConnectionHandle[],
 }))
 vi.mock('../src/runtime.ts', () => ({ startEditor: harness.start }))
+vi.mock('@deepseek-ai/dsh-client-ui-mantur-editing/packaged-resources', () => ({ resolvePackagedResources: vi.fn() }))
 vi.mock('@deepseek-ai/dsh-mcp-client', () => ({
   connectMcpServer(ctx: Context, _config: unknown, beforeClose: () => Promise<void>) {
     harness.scopes.push(scopeOf(ctx))
@@ -22,7 +24,7 @@ vi.mock('@deepseek-ai/dsh-mcp-client', () => ({
     const handle: ConnectionHandle = {
       ready: Promise.resolve().then(() => harness.connect()).then(() => ({})),
       stopAccepting: () => draining ??= Promise.resolve().then(() => harness.drain()),
-      dispose: () => disposal ??= (async () => { await handle.stopAccepting(); await beforeClose() })(),
+      dispose: () => disposal ??= (async () => { await handle.stopAccepting(); await harness.disconnect(); await beforeClose() })(),
     }
     ctx.effect(() => () => handle.dispose(), 'fixture MCP shutdown')
     harness.connections.push(handle)
@@ -32,7 +34,7 @@ vi.mock('@deepseek-ai/dsh-mcp-client', () => ({
 const contexts: Context[] = []
 afterEach(async () => {
   await Promise.all(contexts.splice(0).map(ctx => ctx.fiber.dispose()))
-  harness.start.mockReset(); harness.connect.mockReset(); harness.drain.mockReset()
+  harness.start.mockReset(); harness.connect.mockReset(); harness.drain.mockReset(); harness.disconnect.mockReset()
   harness.scopes.length = 0; harness.stopped.length = 0; harness.connections.length = 0
 })
 const config: Config = { runtimeMode: 'development', editorRoot: '/editor', nodeExecutable: '/node', startupTimeoutMs: 1000, stopTimeoutMs: 1000, toolCallTimeoutMs: 1000 }
@@ -58,10 +60,12 @@ async function setup() {
   ctx.provide('tools', {} as never)
   ctx.provide('webServer', { port: 5298 } as never)
   await ctx.plugin(SystemPrompt, { includeHarnessIdentity: false })
-  harness.start.mockImplementation(async (_config, cwd, id) => {
+  harness.start.mockImplementation(async (_config, cwd, id, _parentOrigin, acquired) => {
     const dispose = vi.fn(async () => {})
     harness.stopped.push(dispose)
-    return { workspace: { editorUrl: 'http://127.0.0.1:5300/', directory: `${cwd}/${id}` }, token: 'host-secret', dispose, drainForShutdown: async () => {}, assertRunning() {} }
+    const runtime = { workspace: { editorUrl: 'http://127.0.0.1:5300/', directory: `${cwd}/${id}` }, token: 'host-secret', dispose, drainForShutdown: async () => {}, assertRunning() {} }
+    acquired?.(runtime)
+    return runtime
   })
   const fiber = ctx.plugin(ManturEditing, config)
   await fiber.await()
@@ -99,7 +103,33 @@ it('rejects a different browser origin before creating directories or tools', as
   const { agent } = makeAgent('a')
   await expect(ctx.manturEditing.open(agent, 'http://127.0.0.1:9999')).rejects.toThrow('local Mantur origin')
   await expect(ctx.manturEditing.open(agent, 'https://example.com')).rejects.toThrow('local Mantur origin')
+  await expect(ctx.manturEditing.open(agent, 'http://localhost')).rejects.toThrow('local Mantur origin')
+  await expect(ctx.manturEditing.open(agent, 'http://localhost:5298/')).rejects.toThrow('local Mantur origin')
   expect(harness.start).not.toHaveBeenCalled()
+})
+
+it('accepts every loopback spelling and stops a runtime that exits before reuse', async () => {
+  const { ctx, makeAgent } = await setup()
+  const localhost = makeAgent('localhost')
+  await expect(ctx.manturEditing.open(localhost.agent, 'http://localhost:5298')).resolves.toBeDefined()
+  const ipv6 = makeAgent('ipv6')
+  await expect(ctx.manturEditing.open(ipv6.agent, 'http://[::1]:5298')).resolves.toBeDefined()
+  const failed = makeAgent('failed')
+  const start = harness.start.getMockImplementation()!
+  harness.start.mockImplementationOnce(async (...args) => {
+    const runtime = await start(...args)
+    runtime.assertRunning = () => { throw new Error('editor exited') }
+    return runtime
+  })
+  await expect(ctx.manturEditing.open(failed.agent, 'http://127.0.0.1:5298')).rejects.toThrow('editor exited')
+  expect(harness.stopped.at(-1)).toHaveBeenCalledOnce()
+})
+
+it('validates packaged configuration during construction', () => {
+  const ctx = new Context()
+  contexts.push(ctx)
+  ctx.provide('typert', {} as never)
+  expect(() => new ManturEditing(ctx, { ...config, runtimeMode: 'packaged' })).not.toThrow()
 })
 
 it('lets an explicit retry start again after failure', async () => {
@@ -199,4 +229,13 @@ it('retains an editor cleanup failure and refuses future opens after repeated sh
   expect(ctx.manturEditing.stopForShutdown()).toBe(stopping)
   await expect(ctx.manturEditing.open(agent, 'http://127.0.0.1:5298')).rejects.toThrow('shutting down')
   expect(harness.stopped[0]).toHaveBeenCalledOnce()
+})
+
+it('does not stop the editor process when MCP disconnection is unconfirmed', async () => {
+  const { ctx, makeAgent } = await setup()
+  const { agent } = makeAgent('disconnect-failed')
+  await ctx.manturEditing.open(agent, 'http://127.0.0.1:5298')
+  harness.disconnect.mockRejectedValueOnce(new Error('MCP close is unconfirmed'))
+  await expect(ctx.manturEditing.stopForShutdown()).rejects.toThrow('installation is blocked')
+  expect(harness.stopped[0]).not.toHaveBeenCalled()
 })

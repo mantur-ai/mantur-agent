@@ -85,7 +85,8 @@ export class ManturEditing extends TypertRemoteService {
         .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
         .map(result => result.reason as unknown)
       if (failures.length) throw new AggregateError(failures, 'Editing shutdown failed; installation is blocked')
-      await Promise.all(owners.flatMap(owner => owner.child ? [owner.child.dispose()] : []))
+      // oxlint-disable-next-line typescript/no-non-null-assertion -- launch assigns the child before its first await.
+      await Promise.all(owners.map(owner => owner.child!.dispose()))
       this.owners.clear()
     })()
     return this.shutdown
@@ -138,7 +139,6 @@ export class ManturEditing extends TypertRemoteService {
       name: 'mantur-session-editing',
       inject: ['systemPrompt', 'tools'],
       apply: async (ctx: Context) => {
-        if (this.closing) throw new Error('Editing runtime owner is shutting down')
         ctx.effect(() => async () => {
           await this.stopOwner(owner)
           if (!this.closing && this.owners.get(agent) === owner) this.owners.delete(agent)
@@ -170,8 +170,8 @@ export class ManturEditing extends TypertRemoteService {
     })
     owner.child = child
     await child.await()
-    if (owner.runtime === undefined) throw new Error('Editing runtime did not start')
-    return owner.runtime
+    // oxlint-disable-next-line typescript/no-non-null-assertion -- child.await() completed the apply callback that assigns runtime.
+    return owner.runtime!
   }
 }
 

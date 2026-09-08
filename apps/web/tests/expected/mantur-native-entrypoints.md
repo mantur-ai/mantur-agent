@@ -20,11 +20,11 @@
 
 ## Guide after Skip
 
-- dialog "爽文短剧剧本创作":
-  - heading "爽文短剧剧本创作" [level=2]
+- dialog "短剧编剧":
+  - heading "短剧编剧" [level=2]
   - button "关闭引导":
     - img
-  - paragraph: 从创意到分集剧本。
+  - paragraph: 尚未安装此技能。安装后可添加到当前对话。
   - button "登录后安装"
 
 ## Marketplace after login

@@ -181,32 +181,32 @@ export async function startEditor(
   try {
     const editorUrl = await new Promise<string>((resolve, reject) => {
       const timer = setTimeout(() => { reject(new Error('Editing runtime startup timed out')) }, config.startupTimeoutMs)
-      const finish = (error?: Error, url?: string) => {
+      const finish = (result: { error: Error } | { url: string }) => {
         clearTimeout(timer)
         child.off('message', receive)
-        if (error) reject(error)
-        else if (url) resolve(url)
+        if ('error' in result) reject(result.error)
+        else resolve(result.url)
       }
       const receive = (message: unknown) => {
         if (typeof message === 'object' && message !== null && 'type' in message && message.type === 'mantur-cut:startup-result') {
           const detail = 'error' in message && typeof message.error === 'string' ? message.error : 'Editing runtime startup failed'
-          finish(new Error(detail.replaceAll(token, '[redacted]')))
+          finish({ error: new Error(detail.replaceAll(token, '[redacted]')) })
           return
         }
         if (typeof message !== 'object' || message === null || !('type' in message) || message.type !== 'mantur-cut:ready' || !('port' in message)) return
         const port = message.port
-        if (typeof port !== 'number' || !Number.isInteger(port) || port < 1 || port > 65535) { finish(new Error('Invalid editor ready message')); return }
-        finish(undefined, `http://127.0.0.1:${port}/`)
+        if (typeof port !== 'number' || !Number.isInteger(port) || port < 1 || port > 65535) { finish({ error: new Error('Invalid editor ready message') }); return }
+        finish({ url: `http://127.0.0.1:${port}/` })
       }
       child.on('message', receive)
-      void done.then((error) => { finish(error) })
+      void done.then((error) => { finish({ error }) })
     })
     return { ...owned, workspace: { editorUrl, directory: paths.directory }, token }
   } catch (error) {
     // oxlint-disable-next-line typescript/no-unnecessary-condition -- The child close event can arrive while startup is awaited.
     try { if (!closed) await dispose() }
     catch (cleanupError) {
-      throw new AggregateError([error, cleanupError], `Editing startup and shutdown both failed: ${error instanceof Error ? error.message : String(error)}`)
+      throw new AggregateError([error, cleanupError], `Editing startup and shutdown both failed: ${(error as Error).message}`)
     }
     throw error
   }
