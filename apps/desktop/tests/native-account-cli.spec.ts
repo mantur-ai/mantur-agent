@@ -78,7 +78,7 @@ describe.skipIf(cliPackage === undefined && cliTarball === undefined || process.
     }
   })
 
-  it('runs the real balance command after native password activation, without a CLI login or ambient API key', async () => {
+  it('runs the real balance command after browser code exchange, without a CLI login or ambient API key', async () => {
     const b = await nativeBrokerBench((_request, response) => {
       response.setHeader('Content-Type', 'application/json')
       response.end(JSON.stringify({ email: 'broker@example.com', balance: 9 }))

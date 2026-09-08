@@ -8,12 +8,13 @@
   "scripts": {
     "bundle": "tsdown",
     "dev": "tsx watch --clear-screen=false --include \"src/**/*\" --include \"resources/**/*\" --include package.json --include tsconfig.json --include tsdown.config.ts scripts/dev.ts",
-    "pack": "pnpm run prepare:mantur-cut && electron-builder --dir --publish never",
+    "pack": "pnpm run prepare:cli && pnpm run prepare:mantur-cut && electron-builder --dir --publish never",
     "prepare:mantur-cut": "tsx ../../scripts/mantur-cut-distribution.ts",
-    "dist:mac:arm64": "pnpm run prepare:mantur-cut -- --target darwin-arm64 && electron-builder --mac zip --arm64 --publish never && tsx ../../scripts/create-macos-dmg.ts --arch arm64",
-    "dist:mac:x64": "pnpm run prepare:mantur-cut -- --target darwin-x64 && electron-builder --mac zip --x64 --publish never && tsx ../../scripts/create-macos-dmg.ts --arch x64",
-    "dist:win:x64": "pnpm run prepare:mantur-cut -- --target win32-x64 && electron-builder --win nsis --x64 --publish never",
-    "smoke:packaged": "tsx scripts/smoke-packaged.ts"
+    "dist:mac:arm64": "pnpm run prepare:cli && pnpm run prepare:mantur-cut -- --target darwin-arm64 && electron-builder --mac zip --arm64 --publish never && tsx ../../scripts/create-macos-dmg.ts --arch arm64",
+    "dist:mac:x64": "pnpm run prepare:cli && pnpm run prepare:mantur-cut -- --target darwin-x64 && electron-builder --mac zip --x64 --publish never && tsx ../../scripts/create-macos-dmg.ts --arch x64",
+    "dist:win:x64": "pnpm run prepare:cli && pnpm run prepare:mantur-cut -- --target win32-x64 && electron-builder --win nsis --x64 --publish never",
+    "smoke:packaged": "tsx scripts/smoke-packaged.ts",
+    "prepare:cli": "tsx scripts/prepare-cli.ts"
   },
   "license": "MIT",
   "dependencies": {
@@ -66,6 +67,10 @@
       {
         "from": ".generated/mantur-cut",
         "to": "mantur-cut"
+      },
+      {
+        "from": ".generated/mantur-cli",
+        "to": "mantur-cli"
       }
     ],
     "publish": [

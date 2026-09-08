@@ -1,11 +1,12 @@
-/** Profile-local native login orchestration; passwords are transient, and only confirmed activation enables requests. */
-import { assertNever } from '@deepseek-ai/dsh-util-values'
+/** Main-owned browser login, finite exchange recovery and exact device-grant cancellation. */
+import { randomBytes } from 'node:crypto'
+import { NativeBrowserCallback, NativeBrowserCallbackFailure } from './browser-callback.ts'
 import type { NativeAccountSnapshot } from '@deepseek-ai/dsh-authorization-manturhub/types'
 import { NativeAccountAccess, type NativeRevocationResult } from './access.ts'
 import {
-  NativeHttpClient, NativeHttpFailure, type NativeAttemptId, type NativePollResult,
+  NativeHttpClient, NativeHttpFailure, type NativeAttemptId, type NativeActiveResult,
 } from './http.ts'
-import { createNativeSecrets, type NativeActiveMetadata, type NativeMetadata, type NativeSecrets } from './protocol.ts'
+import { createNativeSecrets, type NativeRequestId, type NativeSecrets } from './protocol.ts'
 import { NativeAccountStore, type NativeRecord } from './store.ts'
 
 /** Fixed operation rejection; diagnostic payloads never include passwords or backend response text. */
@@ -20,6 +21,16 @@ export interface NativeControllerOptions {
   readonly platform: NativeSecrets['platform']
   readonly now: () => number
   readonly openBrowser: (url: string) => Promise<void>
+  readonly requestTimeoutMs: number
+  readonly onAuthorized?: () => void
+}
+
+interface BrowserAttempt {
+  readonly abort: AbortController
+  readonly callback: NativeBrowserCallback
+  readonly requestId: NativeRequestId
+  done: Promise<void>
+  timer?: ReturnType<typeof setTimeout>
 }
 
 interface ForegroundOperation {
@@ -34,6 +45,7 @@ export class NativeAccountController {
   private phase: NativeAccountSnapshot['phase'] = 'idle'
   private failure: NativeAccountSnapshot['failure']
   private foreground: ForegroundOperation | undefined
+  private browser: BrowserAttempt | undefined
   private cancellation: Promise<void> | undefined
   private closing = false
   private closed: Promise<void> | undefined
@@ -64,9 +76,9 @@ export class NativeAccountController {
       authenticated: current?.phase === 'active' && !locallyBlocked && account !== undefined && !expired,
       skipped: this.store.skipped(),
       pendingRevocations: records.filter(record => record.phase === 'pending-cancel' || record.phase === 'pending-revoke').length,
-      ...(account === undefined ? {} : { account: { email: account.email, expiresAt: account.expiresAt } }),
+      ...(account === undefined ? {} : { account: { displayName: account.displayName, expiresAt: account.expiresAt } }),
       ...(attempt === undefined || current?.phase !== 'pending' ? {} : { attempt: {
-        userCode: attempt.userCode, verificationUrl: attempt.verificationUrl, expiresAt: attempt.expiresAt,
+        expiresAt: attempt.expiresAt, ...(current.metadata.exchangeStarted === true ? { exchangePending: true as const } : {}),
       } }),
       ...(failure === undefined ? {} : { failure: { ...failure } }),
     }
@@ -79,7 +91,7 @@ export class NativeAccountController {
     return () => { this.listeners.delete(listener) }
   }
 
-  /** Recover the saved attempt or validate the saved device online; an offline failure is not an expiry. */
+  /** Validate the active generation or retry an already sealed exchange before its original attempt deadline. */
   refresh(): Promise<void> {
     return this.perform(async (signal) => {
       const record = this.current()
@@ -95,11 +107,13 @@ export class NativeAccountController {
         try {
           await this.access.withCredential(signal, async (secrets, lifetime) => {
             const session = await this.http.session(secrets, lifetime)
-            if (session.credential_id !== metadata.id || session.expires_at !== metadata.expiresAt) throw new NativeHttpFailure('protocol')
+            if (session.grant_id !== metadata.id || session.grant_generation !== metadata.generation
+              || session.credential_expires_at !== metadata.expiresAt || session.account.id !== metadata.accountId
+              || session.policy_key.id !== metadata.policyKeyId) throw new NativeHttpFailure('protocol')
           })
         } catch (error) {
           if (error instanceof NativeHttpFailure && error.code !== undefined
-            && ['CREDENTIAL_INVALID', 'CREDENTIAL_REVOKED', 'CREDENTIAL_EXPIRED', 'ACCOUNT_DISABLED'].includes(error.code)) {
+            && ['INVALID_GRANT', 'GRANT_REVOKED', 'GRANT_EXPIRED', 'GRANT_SUPERSEDED', 'ACCOUNT_DISABLED', 'POLICY_KEY_INACTIVE'].includes(error.code)) {
             await this.access.disable(record.requestId)
           }
           throw error
@@ -107,60 +121,87 @@ export class NativeAccountController {
         this.phase = 'signed-in'
         return
       }
-      const saved = await this.pending(signal)
-      if (saved.metadata.credential !== undefined) {
-        await this.activate(saved.record, saved.secrets,
-          { attempt: saved.metadata.attempt, credential: saved.metadata.credential }, signal)
-      } else {
-        const progress = await this.http.poll(saved.secrets, saved.metadata.attempt.id, signal)
-        await this.progress(saved.record, saved.secrets, saved.metadata.attempt, progress, signal)
+      if (record.metadata.exchangeStarted === true) { await this.exchange(record, signal); return }
+      if (this.browser?.requestId === record.requestId) {
+        if (record.metadata.attempt === undefined) throw new NativeAccountFailure('resume-required')
+        this.phase = 'authorizing'
+        return
       }
+      await this.access.disable(record.requestId)
+      await this.access.retryRevocations()
+      throw new NativeAccountFailure('resume-required')
     })
   }
 
-  /** Open the allowlisted same-deployment authorization page in the OS browser; browser OAuth never enters the renderer. */
+  /** Open a new browser attempt, or retry the same create request while its owned listener is still alive. */
   startBrowser(): Promise<void> {
     return this.perform(async (signal) => {
-      const saved = await this.pending(signal)
-      if (saved.metadata.credential !== undefined) throw new NativeAccountFailure('resume-required')
-      signal.throwIfAborted()
-      try { await this.options.openBrowser(saved.metadata.attempt.verificationUrl) }
-      catch { throw new NativeAccountFailure('browser') }
-      signal.throwIfAborted()
-      this.phase = 'authorizing'
+      let record = this.current()
+      if (record?.phase === 'active') throw new NativeAccountFailure('already-signed-in')
+      if (record !== undefined && (this.browser?.requestId !== record.requestId || record.metadata.exchangeStarted)) {
+        throw new NativeAccountFailure('resume-required')
+      }
+      if (record === undefined) {
+        const state = randomBytes(32).toString('base64url')
+        const abort = new AbortController()
+        const callback = await NativeBrowserCallback.open({ state, issuer: this.http.origin,
+          signal: abort.signal, requestTimeoutMs: this.options.requestTimeoutMs })
+        try {
+          signal.throwIfAborted()
+          const secrets = createNativeSecrets({ deviceInstanceId: this.store.deviceInstanceId, origin: this.http.origin,
+            environment: this.options.environment, deviceName: this.options.deviceName, platform: this.options.platform,
+            state, redirectUri: callback.redirectUri })
+          await this.store.savePending(secrets, () => { signal.throwIfAborted() })
+          record = this.current()
+          if (record === undefined) throw new NativeAccountFailure('storage')
+          const browser: BrowserAttempt = { abort, callback, requestId: record.requestId, done: Promise.resolve() }
+          this.browser = browser
+          browser.done = this.receiveCallback(browser).catch(() => {
+            if (!this.closing && !browser.abort.signal.aborted) {
+              this.phase = 'failed'
+              this.failure = { kind: 'local' }
+              this.notify()
+            }
+          })
+        } catch (error) {
+          abort.abort()
+          await callback.close()
+          throw error
+        }
+      }
+      const secrets = await this.store.secrets(record.requestId, 'authorize')
+      const receipt = await this.http.create(secrets, signal)
+      const attempt = { id: receipt.attempt_id, expiresAt: receipt.attempt_expires_at }
+      const previous = record.metadata.attempt
+      if (previous !== undefined && (previous.id !== attempt.id || previous.expiresAt !== attempt.expiresAt)) {
+        throw new NativeHttpFailure('protocol')
+      }
+      this.store.saveMetadata(record.requestId, { ...record.metadata, attempt })
+      const browser = this.browser
+      if (browser === undefined) throw new NativeAccountFailure('resume-required')
+      if (attempt.expiresAt <= this.options.now()) throw new NativeAccountFailure('expired')
+      if (browser.timer === undefined) {
+        browser.timer = setTimeout(() => { void this.expireBrowser(browser) }, attempt.expiresAt - this.options.now())
+        browser.timer.unref()
+      }
+      await this.openBrowser(receipt.authorization_uri, signal)
     })
   }
 
-  /** Reopen the saved, unexpired authorization page without creating or replaying an attempt. */
+  /** Reopen only the same live authorization; the renderer never receives its state-bearing URL. */
   reopenBrowser(): Promise<void> {
     return this.perform(async (signal) => {
       const record = this.current()
       const attempt = record?.metadata.attempt
-      if (record?.phase !== 'pending' || attempt === undefined || record.metadata.credential !== undefined) throw new NativeAccountFailure('resume-required')
+      if (record?.phase !== 'pending' || attempt === undefined || record.metadata.exchangeStarted
+        || this.browser?.requestId !== record.requestId) throw new NativeAccountFailure('resume-required')
       if (attempt.expiresAt <= this.options.now()) throw new NativeAccountFailure('expired')
-      signal.throwIfAborted()
-      try { await this.options.openBrowser(attempt.verificationUrl) }
-      catch { throw new NativeAccountFailure('browser') }
-      signal.throwIfAborted()
-      this.phase = 'authorizing'
+      const secrets = await this.store.secrets(record.requestId, 'authorize')
+      const url = new URL('/auth/client', this.http.origin)
+      url.search = new URLSearchParams({ attempt_id: attempt.id, state: secrets.state, iss: this.http.origin }).toString()
+      await this.openBrowser(url.href, signal)
     })
   }
-
-  /** Submit explicit password consent once, persist ready metadata, then activate the exact pre-sealed grant. */
-  password(credentials: { email: string; password: string; consent: true }): Promise<void> {
-    return this.perform(async (signal) => {
-      const saved = await this.pending(signal)
-      if (saved.metadata.credential !== undefined) throw new NativeAccountFailure('resume-required')
-      const ready = await this.http.password(saved.secrets, saved.metadata.attempt.id, credentials, signal)
-      const metadata = { attempt: saved.metadata.attempt,
-        credential: { id: ready.credential_id, email: ready.account.email, expiresAt: ready.expires_at } }
-      this.store.saveMetadata(saved.record.requestId, metadata)
-      await this.activate(saved.record, saved.secrets, metadata, signal)
-    })
-  }
-
-  /** Poll on the caller's explicit two-second schedule; no passwords, registrations or unknown network outcomes are retried here. */
-  poll(): Promise<void> { return this.refresh() }
 
   /** Persist Skip before cancelling local provisioning; model credentials, projects and drafts remain untouched. */
   skip(): Promise<void> {
@@ -175,6 +216,7 @@ export class NativeAccountController {
     if (this.cancellation !== undefined) return this.cancellation
     const foreground = this.foreground
     foreground?.abort.abort()
+    const browser = this.browser
     const record = this.current()
     let disabled: Promise<void>
     try { disabled = record === undefined ? Promise.resolve() : this.access.disable(record.requestId) }
@@ -184,11 +226,12 @@ export class NativeAccountController {
       this.notify()
       throw new NativeAccountFailure('logout-storage')
     }
+    browser?.abort.abort()
     this.phase = 'signed-out'
     this.failure = undefined
     const operation = (async () => {
       try {
-        await Promise.all([disabled, foreground?.done])
+        await Promise.all([disabled, foreground?.done, browser?.done])
         await this.access.retryRevocations()
       } finally {
         this.cancellation = undefined
@@ -200,24 +243,17 @@ export class NativeAccountController {
     return operation
   }
 
+  /** Disable the old local identity before opening an explicit browser authorization for another account. */
+  async switchAccount(): Promise<void> {
+    await this.signOut()
+    await this.startBrowser()
+  }
+
   /** Retry retained remote cleanup without reviving an account or replacing a newer login. */
   async retryRevocations(): Promise<NativeRevocationResult> {
     this.requireOpen()
     try { return await this.access.retryRevocations() }
     finally { this.notify() }
-  }
-
-  /** Request a registration code without creating an authorization attempt or persisting form values. */
-  sendCode(email: string): Promise<{ ok: true; expiresInSec: number }> {
-    return this.perform(signal => this.http.sendCode(email, signal))
-  }
-
-  /** Register a pending account; activation and login remain separate explicit operations. */
-  async register(input: { email: string; password: string; code: string; invite_code?: string }): Promise<void> {
-    await this.perform(async (signal) => {
-      await this.http.register(input, signal)
-      this.phase = 'pending-activation'
-    })
   }
 
   /** Run a Host-only credentialed operation through complete response-body cleanup. */
@@ -232,69 +268,100 @@ export class NativeAccountController {
     this.closing = true
     this.listeners.clear()
     this.foreground?.abort.abort()
+    this.browser?.abort.abort()
     this.closed ??= Promise.allSettled([
       this.access.close(),
+      ...(this.browser === undefined ? [] : [this.browser.done]),
       ...(this.foreground === undefined ? [] : [this.foreground.done]),
       ...(this.cancellation === undefined ? [] : [this.cancellation]),
     ]).then(() => this.store.close())
     return this.closed
   }
 
-  private async pending(signal: AbortSignal) {
-    let record = this.current()
-    if (record?.phase === 'active') throw new NativeAccountFailure('already-signed-in')
-    if (record === undefined) {
-      const secrets = createNativeSecrets({ deviceInstanceId: this.store.deviceInstanceId, origin: this.http.origin,
-        environment: this.options.environment, deviceName: this.options.deviceName, platform: this.options.platform })
-      await this.store.savePending(secrets, () => { signal.throwIfAborted() })
-      record = this.current()
-      if (record === undefined) throw new NativeAccountFailure('storage')
+  private async openBrowser(url: string, signal: AbortSignal): Promise<void> {
+    signal.throwIfAborted()
+    try { await this.options.openBrowser(url) }
+    catch { throw new NativeAccountFailure('browser') }
+    signal.throwIfAborted()
+    this.phase = 'authorizing'
+  }
+
+  private async receiveCallback(browser: BrowserAttempt): Promise<void> {
+    try {
+      const code = await browser.callback.code
+      while (this.foreground !== undefined) await this.foreground.done
+      browser.abort.signal.throwIfAborted()
+      await this.perform(async (signal) => {
+        const lifetime = AbortSignal.any([signal, browser.abort.signal])
+        const record = this.current()
+        if (record?.requestId !== browser.requestId || record.phase !== 'pending') throw new NativeAccountFailure('cancelled')
+        if (record.metadata.attempt === undefined || record.metadata.attempt.expiresAt <= this.options.now()) {
+          throw new NativeAccountFailure('expired')
+        }
+        await this.store.saveExchange(record.requestId, code, () => { lifetime.throwIfAborted() })
+        const saved = this.current()
+        if (saved === undefined) throw new NativeAccountFailure('storage')
+        await this.exchange(saved, lifetime)
+      })
+    } catch (error) {
+      if (!browser.abort.signal.aborted && !this.closing) {
+        if (error instanceof NativeBrowserCallbackFailure) {
+          await this.access.disable(browser.requestId)
+          this.phase = 'failed'
+          this.failure = { kind: error.kind }
+        }
+        this.notify()
+      }
+    } finally {
+      if (browser.timer !== undefined) clearTimeout(browser.timer)
+      await browser.callback.close()
+      if (this.browser === browser) this.browser = undefined
+    }
+  }
+
+  private async expireBrowser(browser: BrowserAttempt): Promise<void> {
+    if (this.browser !== browser || this.closing) return
+    try {
+      await this.access.disable(browser.requestId)
+      browser.abort.abort()
+      this.phase = 'failed'
+      this.failure = { kind: 'expired' }
+      this.notify()
+    } catch {
+      browser.abort.abort()
+      this.phase = 'failed'
+      this.failure = { kind: 'logout-storage' }
+      this.notify()
+    }
+  }
+
+  private async exchange(record: NativeRecord, signal: AbortSignal): Promise<void> {
+    const attempt = record.metadata.attempt
+    if (attempt === undefined || !record.metadata.exchangeStarted) throw new NativeAccountFailure('storage')
+    if (attempt.expiresAt <= this.options.now()) {
+      await this.access.disable(record.requestId)
+      throw new NativeAccountFailure('expired')
     }
     const secrets = await this.store.secrets(record.requestId, 'authorize')
     signal.throwIfAborted()
-    const receipt = await this.http.create(secrets, signal)
-    const attempt = { id: receipt.attempt_id, userCode: receipt.user_code,
-      verificationUrl: receipt.verification_uri_complete, expiresAt: receipt.attempt_expires_at }
-    const previous = record.metadata.attempt
-    if (previous !== undefined && (previous.id !== attempt.id || previous.expiresAt !== attempt.expiresAt
-      || previous.userCode !== attempt.userCode || previous.verificationUrl !== attempt.verificationUrl)) {
-      throw new NativeHttpFailure('protocol')
+    let active: NativeActiveResult
+    try { active = await this.http.exchange(secrets, attempt.id as NativeAttemptId, signal) }
+    catch (error) {
+      if (error instanceof NativeHttpFailure && error.code !== undefined
+        && ['GRANT_SUPERSEDED', 'GRANT_REVOKED', 'GRANT_EXPIRED', 'INVALID_GRANT', 'CODE_EXPIRED',
+          'CODE_ALREADY_USED', 'ATTEMPT_EXPIRED', 'ATTEMPT_CANCELLED', 'ATTEMPT_DENIED',
+          'ACCOUNT_DISABLED', 'POLICY_KEY_INACTIVE'].includes(error.code)) await this.access.disable(record.requestId)
+      throw error
     }
-    const metadata = { ...record.metadata, attempt }
-    this.store.saveMetadata(record.requestId, metadata)
-    this.phase = 'authorizing'
-    return { record, secrets, metadata }
-  }
-
-  private async progress(record: NativeRecord, secrets: NativeSecrets, attempt: NonNullable<NativeMetadata['attempt']>,
-    progress: NativePollResult, signal: AbortSignal): Promise<void> {
-    switch (progress.status) {
-      case 'pending': this.phase = 'authorizing'; return
-      case 'pending_activation': this.phase = 'pending-activation'; return
-      case 'link_required': this.phase = 'link-required'; return
-      case 'ready': case 'active': {
-        const metadata = { attempt, credential: { id: progress.credential_id,
-          email: progress.account.email, expiresAt: progress.credential_expires_at } }
-        this.store.saveMetadata(record.requestId, metadata)
-        await this.activate(record, secrets, metadata, signal)
-        return
-      }
-      case 'denied': case 'cancelled':
-        await this.access.disable(record.requestId)
-        this.phase = 'signed-out'
-        throw new NativeAccountFailure(progress.reason)
-      default: return assertNever(progress)
-    }
-  }
-
-  private async activate(record: NativeRecord, secrets: NativeSecrets, metadata: NativeActiveMetadata, signal: AbortSignal): Promise<void> {
+    if (attempt.expiresAt <= this.options.now()) throw new NativeAccountFailure('expired')
+    if (active.credential_expires_at <= this.options.now()) throw new NativeHttpFailure('protocol')
     signal.throwIfAborted()
-    const active = await this.http.activate(secrets, metadata.attempt.id as NativeAttemptId, signal)
-    if (active.credential_id !== metadata.credential.id || active.expires_at !== metadata.credential.expiresAt
-      || active.expires_at <= this.options.now()) throw new NativeHttpFailure('protocol')
-    signal.throwIfAborted()
-    this.store.activate(record.requestId, metadata)
+    this.store.activate(record.requestId, { attempt, credential: { id: active.grant_id,
+      generation: active.grant_generation, accountId: active.account.id, displayName: active.account.display_name,
+      policyKeyId: active.policy_key.id, expiresAt: active.credential_expires_at } })
     this.phase = 'signed-in'
+    try { this.options.onAuthorized?.() }
+    catch { console.warn('Native account window activation failed') }
   }
 
   private current(): NativeRecord | undefined {

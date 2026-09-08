@@ -30,6 +30,8 @@ constructor 身份或模块状态必须共享的导出列入 `peerRequiredHostEx
 
 Client bundle 使用的 workspace import、纯类型 import、模块扩充、`dsh.client.inject`、invariant companion 和仅有元数据的现存 peer 只属于 `devDependencies`。Host 运行时导入的普通第三方包属于 `dependencies`；其他第三方关系保持原区段。Workspace 引用使用 `workspace:^`。
 
+剪辑 Host 导入的 `connectMcpServer` 属于 peer-required，因为模块本地的服务器名称预留必须在同一 Agent 的 MCP 客户端之间共享。其公开 `./types` 入口单独打包为 `lib/types.js`；发布该入口不会发布 `lib/types/client/` 下的私有浏览器编译中间文件。Manifest 门禁要求包含该 bundle，publint 检查其已发布的相对导入闭包。
+
 部分开发期关系只存在于 `dsh.client.inject` 或 TypeScript project reference 中。策略的 `configurationOnlyDevDependencies` 表只列出这些已评审的依赖边，并将它们保留在 `devDependencies` 中。
 
 验证器读取源码 manifest 和源码文件，因此可以在没有已构建 `lib/` 的干净工作树上运行。每个被选中的 Host face 都必须存在 `src/index.ts`。未分类的 Host 运行期导出属于策略违规，会阻止 `--fix` 的全部写入；维护者必须审查该导出，并选择分类该导出、修改源码关系或修改选包范围。源码安全检查通过后，`--fix` 只执行分类所确定的区段与范围变更，并删除失效的 peer 元数据。

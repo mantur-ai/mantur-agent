@@ -20,6 +20,7 @@ const replySchema = z.strictObject({ type: z.literal('fixture:reply'), id: z.str
 /** Shared real Main/child fixture; commands selects the real Loader and shell consumer composition. */
 export async function hostFixture(
   api: (request: IncomingMessage, response: ServerResponse) => void, expectCleanupFailure = false, commands = false,
+  environment: NodeJS.ProcessEnv = {},
 ) {
   const backend = await nativeBrokerBench(api)
   const root = await mkdtemp(join(tmpdir(), 'mantur-native-host-'))
@@ -31,7 +32,7 @@ export async function hostFixture(
   }) : { command: process.execPath, args: [fileURLToPath(new URL('./fixtures/native-account-child.ts', import.meta.url))], env: {} }
   const child = spawn(launch.command, launch.args, {
     stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
-    cwd: root, env: { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, ...launch.env },
+    cwd: root, env: { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, ...launch.env, ...environment },
   })
   const closed = new Promise<void>((resolve) => { child.once('close', () => { resolve() }) })
   onTestFinished(async () => { if (child.exitCode === null && child.signalCode === null) child.kill(); await closed })
@@ -68,7 +69,7 @@ export async function hostFixture(
   })
   const configured = Promise.withResolvers<NativeAccountController>()
   const host = new NativeAccountHost({ child, userData: root, cipher: nativeTestCipher(), deviceName: 'Isolated native Host',
-    platform: process.platform === 'win32' ? 'windows' : 'macos', openBrowser: async () => { throw new Error('No browser in this fixture') },
+    platform: process.platform === 'win32' ? 'windows' : 'macos', openBrowser: backend.openBrowser,
     onController: (controller) => { if (controller !== undefined) configured.resolve(controller) }, onSnapshot: () => {} })
   const active = new Set<string>()
   const send = (kind: string, fields: object = {}) => {
@@ -97,6 +98,9 @@ export async function hostFixture(
   expect((await send('init', { config: { origin: backend.origin, environment: 'test', environmentLabel: 'Isolated',
     requestTimeoutMs: 10_000, maxResponseBytes: 16_384, leaseMs: 60_000, revocationRetryMs: 60_000 } }).result).ok).toBe(true)
   const controller = await configured.promise
-  const login = (): Promise<void> => controller.password({ email: 'broker@example.com', password: backend.password, consent: true })
+  const login = async (): Promise<void> => {
+    await controller.startBrowser()
+    await expect.poll(() => controller.getSnapshot().authenticated).toBe(true)
+  }
   return { backend, root, child, controller, host, send, release, login, nativeRequests, nativeTimings }
 }

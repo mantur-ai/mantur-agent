@@ -15,6 +15,7 @@ import { installDirectoryPickerBridge } from './directory-picker-bridge.ts'
 import { NativeAccountHost } from './auth/host.ts'
 import type { NativeAccountController } from './auth/controller.ts'
 import { installNativeAccountBridge } from './auth/ipc.ts'
+import { embeddedCliEnvironment, prepareEmbeddedCli } from './embedded-cli.ts'
 import {
   canResetProjectionCache,
   initializeDesktopPaths,
@@ -175,13 +176,19 @@ async function startupRecovery(error: unknown): Promise<'reset-cache' | 'show-lo
 async function launch(): Promise<void> {
   const window = createWindow()
   await prepareDesktopPaths(paths)
+  if (process.platform !== 'darwin' && process.platform !== 'win32') throw new Error('Native account requires macOS or Windows')
+  const cliBin = await prepareEmbeddedCli({
+    resourceRoot: app.isPackaged ? join(process.resourcesPath, 'mantur-cli')
+      : fileURLToPath(new URL('../.generated/mantur-cli', import.meta.url)),
+    userData: paths.userData, executable: process.execPath, platform: process.platform,
+  })
   while (!quitting) {
     serviceUrl = undefined
     service = startDesktopService({
       electronExecutable: process.execPath,
       cwd: paths.launchRoot,
       environment: {
-        ...process.env,
+        ...embeddedCliEnvironment(cliBin, process.env),
         DSH_HOME: paths.dshHome,
         DSH_MANTUR_PROJECTS_ROOT: join(app.getPath('documents'), '漫途项目'),
         DSH_MANTUR_NATIVE_ACCOUNT: '1',
@@ -194,10 +201,16 @@ async function launch(): Promise<void> {
       logPath: paths.logPath,
       mirrorOutput: !app.isPackaged,
     })
-    if (process.platform !== 'darwin' && process.platform !== 'win32') throw new Error('Native account requires macOS or Windows')
     accountHost = new NativeAccountHost({ child: service.child, userData: paths.userData, cipher: safeStorage,
       deviceName: `${APP_NAME} — ${hostname()}`, platform: process.platform === 'darwin' ? 'macos' : 'windows',
-      openBrowser: url => shell.openExternal(url), onController: (controller) => { nativeAccount = controller },
+      openBrowser: url => shell.openExternal(url),
+      onAuthorized: () => {
+        if (mainWindow === undefined || mainWindow.isDestroyed()) return
+        if (mainWindow.isMinimized()) mainWindow.restore()
+        mainWindow.show()
+        mainWindow.focus()
+      },
+      onController: (controller) => { nativeAccount = controller },
       onSnapshot: () => { accountBridge.publish() },
     })
     service.child.once('exit', (code, signal) => {

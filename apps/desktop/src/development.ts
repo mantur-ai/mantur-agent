@@ -70,6 +70,11 @@ export function desktopDevelopmentStages(): DesktopDevelopmentStage[] {
       args: [packageBin('tsdown', 'tsdown')],
     },
     {
+      label: 'embedded CLI',
+      command: process.execPath,
+      args: ['--import', 'tsx/esm', 'scripts/prepare-cli.ts'],
+    },
+    {
       label: 'Electron',
       command: electronExecutable(),
       args: ['.'],

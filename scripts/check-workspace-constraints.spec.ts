@@ -2,6 +2,7 @@
 
 import { describe, expect, it } from 'vitest'
 import manturManifest from '../packages/bundle/mantur-app/package.json' with { type: 'json' }
+import editingManifest from '../packages/client/ui-mantur-editing/package.json' with { type: 'json' }
 import {
   checkExperimentalDependencyIsolation,
   checkExperimentalManifest,
@@ -79,6 +80,19 @@ describe('experimental workspace constraints', () => {
 })
 
 describe('package payload constraints', () => {
+  it('ships the bundled editing types entry without private browser compiler output', () => {
+    const manifest = { ...editingManifest, dsh: {} }
+    const workspace: WorkspaceManifest = { dir: 'packages/client/ui-mantur-editing', manifest }
+    expect(checkWorkspaceManifest(workspace)).toEqual([])
+    for (const files of [
+      editingManifest.files.filter(file => file !== 'lib/types.js'),
+      [...editingManifest.files, 'lib/types/**/*.js'],
+    ]) {
+      expect(checkWorkspaceManifest({ ...workspace, manifest: { ...manifest, files } }))
+        .toEqual([expect.stringContaining('package.json files must be')])
+    }
+  })
+
   it('requires both Mantur update entries and rejects an unrelated published artifact', () => {
     const workspace: WorkspaceManifest = { dir: 'packages/bundle/mantur-app', manifest: manturManifest }
     expect(checkWorkspaceManifest(workspace)).toEqual([])

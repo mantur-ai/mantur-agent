@@ -3,6 +3,13 @@ import type { NativeAccountProblem } from '@deepseek-ai/dsh-authorization-mantur
 
 /** Chinese native-account dictionary. */
 export const nativeZh = {
+  nativeSwitchAccount: '切换账号',
+  nativeResumeExchange: '重试确认授权',
+  nativePolicyInactive: '默认调用 Key 已失效，请在漫途网站检查账号设置。',
+  nativeAccountIneligible: '此账号无法授权客户端，请在网页切换为创作账号。',
+  nativeBrowserDescription: '在浏览器中登录并授权，完成后自动返回漫途 Agent。',
+  nativeBrowserTitle: '等待网页授权',
+  nativeBrowserWaiting: '请在浏览器中确认授权。完成后将自动返回客户端。',
   nativeDescription: '在这里登录，继续你的漫剧创作。',
   nativeModelNote: '模型服务需单独配置，登录账号不代表已配置模型或获得额度。',
   nativeChecking: '正在检查登录状态…',
@@ -73,6 +80,13 @@ export const nativeZh = {
 
 /** English native-account dictionary. */
 export const nativeEn = {
+  nativeSwitchAccount: 'Switch account',
+  nativeResumeExchange: 'Retry authorization confirmation',
+  nativePolicyInactive: 'The default calling Key is inactive. Check your account settings on the Mantur website.',
+  nativeAccountIneligible: 'This account cannot authorize the client. Switch to a creator account in your browser.',
+  nativeBrowserDescription: 'Sign in and authorize in your browser, then return automatically to Mantur Agent.',
+  nativeBrowserTitle: 'Waiting for browser authorization',
+  nativeBrowserWaiting: 'Confirm authorization in your browser. The client will return automatically when it is complete.',
   nativeDescription: 'Sign in here and continue creating your animated story.',
   nativeModelNote: 'Configure model services separately. Account sign-in does not configure a model or include credits.',
   nativeChecking: 'Checking sign-in status…',
@@ -127,7 +141,10 @@ export const nativeEn = {
 
 const failures: Readonly<Record<string, keyof typeof nativeZh | undefined>> = {
   network: 'nativeNetworkError', transport: 'nativeUnavailable', unavailable: 'nativeUnavailable',
-  browser: 'nativeBrowserFailure',
+  browser: 'nativeBrowserFailure', denied: 'nativeCancelled',
+  GRANT_SUPERSEDED: 'nativeRevoked', GRANT_REVOKED: 'nativeRevoked', INVALID_GRANT: 'nativeRevoked',
+  GRANT_EXPIRED: 'nativeExpired', CODE_EXPIRED: 'nativeAttemptExpired',
+  POLICY_KEY_INACTIVE: 'nativePolicyInactive', ACCOUNT_NOT_ELIGIBLE: 'nativeAccountIneligible',
   local: 'nativeLocalFailure', storage: 'nativeLocalFailure', 'logout-storage': 'nativeLogoutStorage',
   expired: 'nativeAttemptExpired', INVALID_CREDENTIALS: 'nativeInvalidCredentials',
   'credential-expired': 'nativeExpired',

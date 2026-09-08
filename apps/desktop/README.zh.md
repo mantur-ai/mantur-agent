@@ -53,6 +53,8 @@ macOS x64 命令必须在 Intel Mac 上运行，Windows 命令必须在 x64 Wind
 
 smoke 会从解包应用自己的依赖目录启动 `dsh`，把打印出的进程 token 换成会话 cookie，并要求带品牌标题的 Web 页面返回 HTTP 200。它还会校验 Mantur Cut manifest 中的每条路径，以 `--help` 启动包内 Whisper CLI 与 server，要求源码、许可证、构建及安全记录齐全，并检查 updater 依赖与 GitHub release 配置。它使用空的临时 Harness home，避免开发者数据影响包检查结果。
 
+smoke 还会检查内置 CLI 的固定来源记录、包版本、许可证和依赖入口，创建真实的配置目录内启动脚本，并要求 `manturhub --version` 使用包内 Electron 可执行文件返回 `0.11.0`。启动脚本关闭 CLI 和技能更新检查。缺少资源直接失败，不搜索全局 CLI。该检查不会创建账号授权尝试，也不验证浏览器授权、Main 的操作系统存储，或以 macOS 结果证明 Windows 行为。
+
 ## 发布已签名的 macOS release
 
 手动触发的 `Desktop release` GitHub Actions 工作流会在原生 macOS runner 上分别构建 arm64 与 x64。两个任务都会使用 Developer ID Application 身份签名应用、提交 Apple notarization，并验证签名、Gatekeeper 评估与 stapled ticket；它们还会在产物进入组装步骤前运行 packaged smoke。
@@ -80,7 +82,11 @@ smoke 会从解包应用自己的依赖目录启动 `dsh`，把打印出的进�
 
 打包后的 Main 将 `resources/mantur-cut` 和自身可执行文件提供给漫途剪辑 profile。首次打开工作台才以 Electron 的 Node 模式启动编辑器，不创建第二个 Electron 窗口。安装包必须包含清单声明的生产服务、静态前端与目标平台渲染二进制；不完整的编辑器包会明确报错。开发模式不继承这一打包选择。会话可写目录和待完成的分发检查见[剪辑运行服务](../../packages/client/ui-mantur-editing/README.zh.md)。
 
-Main 持有操作系统加密的原生账号存储，并校验来自当前本地主 frame 的账号操作。桌面启动显式选择漫途 provider 的 `desktop-managed` 身份。Host API 响应通过逐请求 loopback broker 流式传输，仅 Main 向上游发送设备 bearer。命令描述文件保持私有，直至 consumer 确认整棵进程树清理完成。退出登录会取消已接受的流与命令，但保留加密的远端清理记录，直到 HTTP 204 或原始到期时间。
+Main 持有 browser-account-v2 授权及操作系统加密的 profile 存储。登录按钮打开所配置 issuer 的普通网站登录与同意页。Main 注册精确的 `127.0.0.1` 回调，校验 state 与 issuer，加密保存一次性 code，再使用 PKCE 和设备证明交换授权。只有确认的 grant 元数据才能启用登录及唤回窗口。renderer 不接收包含 state 的 URL 或凭据。
+
+交换恢复在 attempt 到期前复用原始加密请求。进程重启后尚未收到 code 的 attempt 会取消，不注册新端口。退出登录立即阻止本地调用，并保留加密的取消或撤销资料，直到服务端 HTTP 204 或 grant 绝对期限结束；结果未知的交换保留九十天上界。浏览器账号存储使用版本 2，拒绝其他非空格式且不重写数据。
+
+[内置 CLI 输入](cli-runtime/README.zh.md)由审核过的归档和独立 npm 锁文件组成。开发与打包都会准备 `mantur-cli` 资源。Main 创建 profile 本地启动器，将它置于受监督 Host 的 PATH 首位，并使用自身 Electron 可执行文件的 Node 模式。缺少资源时启动失败。命令使用 broker-v2 描述文件；只有 Main 向上游附加设备 bearer。运行时不会安装或寻找全局 CLI。
 
 永久应用标识为 `ai.mantur.agent`。Electron 就绪前，载体会在操作系统的应用数据根目录下设置稳定的 `mantur-agent` 用户数据目录。其 `harness` 子目录是已安装应用使用的唯一 `DSH_HOME`，因此 `~/.dsh` 中的 CLI 或开发数据不会影响桌面启动。子进程从应用自有的中性目录启动，并把 stdout、stderr、恢复与 updater 诊断追加到同一用户数据根下的 `logs/harness.log`。
 
@@ -105,7 +111,7 @@ macOS Intel、macOS Apple Silicon 与 Windows 使用同一个更新控制器。m
 - 主应用依赖固定版本及其验证范围见[桌面依赖安全决策](../../.agents/notes/implemented/bug-fix/2026-09-08-mantur-main-app-security.zh.md)。
 - 将 Whisper 可执行文件打入安装包并启动，只能证明其原生文件及相邻动态库能在目标平台加载，不能让内嵌工作台直接具备本地转写能力。Mantur iframe 尚未安装 OpenChatCut 的桌面推理 preload，因此编辑器的原生 ASR adapter 当前会返回不可用。
 - 构建出内部安装包不等于获得分发批准。OpenChatCut 的 AGPL 源码交付义务、Remotion 的实体与用途条款、FFmpeg 与 ffprobe 的 GPL/LGPL 义务、需保留的 notice、二进制再分发条款及全部生产依赖审计发现，都必须针对精确补丁 tree 完成审核后才能公开发布。
-- 原生账号 Main、preload、provider、表单与 Bash、PowerShell、PTY 消费方已在源码中连接。表单提供注册、浏览器授权、持久跳过和精确到期状态，不发布设备 bearer。广场登录路由、打包 CLI 调用和原生操作系统验收仍未完成。Loopback IPC、模拟 preload 浏览器测试和固定 CLI 测试不能证明完整原生登录已可用；[接入提案](../../.agents/notes/proposed/architecture/2026-09-07-desktop-native-account-identity.zh.md)记录剩余验收条件。
+- 本地回调、加密存储、模拟 preload 和内置 CLI 测试不能证明真实网站授权。CLI 余额夹具使用受控本地响应。macOS 和 Windows 原生账号存储、浏览器返回、安装包资源、PostgreSQL 16 与经授权的测试站检查仍需分别验收；参见[浏览器授权决策](../../.agents/notes/implemented/architecture/2026-09-08-browser-account-authorization.zh.md)。
 - `Desktop package` 产物仍是未签名的内部安装包。macOS Gatekeeper 与 Windows SmartScreen 可能对这些文件显示警告；对外分发 macOS 客户端时只能使用 `Desktop release` 产物。
 - 原生图标源文件是带白色圆角底和透明外角的 1024 px PNG，Web 客户端单独使用透明 Logo。macOS 和 Windows 包会在原生构建时生成各自的平台图标格式；当前没有矢量源文件。
 - 已签名的 release 工作流只发布 macOS。Windows 在具备代码签名身份与受保护的发布路径之前不支持外部更新。

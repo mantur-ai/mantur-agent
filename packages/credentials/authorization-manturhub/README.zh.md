@@ -58,7 +58,7 @@ kind: "package-reference"
 <a id="known-limitations-and-deferred-work"></a>
 
 - 独立登录尝试只存在于当前进程中，独立退出登录仅删除本机授权。
-- 原生表单使用显式身份模式和受保护 preload。广场登录路由、打包 CLI 接入和原生操作系统验收尚未完成。本机命令测试不证明测试站已经就绪。详见[原生账号提案](../../../.agents/notes/proposed/architecture/2026-09-07-desktop-native-account-identity.zh.md)。
+- 桌面浏览器授权报告账号显示名；独立账号状态保留邮箱字段。macOS 和 Windows 原生操作系统存储、网站同意和真实账号验收仍待完成。参见[浏览器授权决策](../../../.agents/notes/implemented/architecture/2026-09-08-browser-account-authorization.zh.md)。
 
 <a id="dev-note"></a>
 ### 开发备注

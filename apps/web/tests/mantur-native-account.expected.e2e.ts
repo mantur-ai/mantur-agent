@@ -47,14 +47,18 @@ it('returns from both native marketplace entrypoints with the selected detail an
     const operations: NativeAccountAction['kind'][] = []
     await page.exposeFunction('invokeNativeAccountFixture', (action: NativeAccountAction) => {
       operations.push(action.kind)
-      if (action.kind === 'password') snapshot = { ...snapshot, phase: 'signed-in', authenticated: true,
-        account: { email: 'fixture@example.com', expiresAt: 1_999_999_999_999 } }
+      if (action.kind === 'browser') snapshot = { ...snapshot, phase: 'authorizing',
+        attempt: { expiresAt: 1_999_999_999_999 } }
       else if (action.kind !== 'refresh' && action.kind !== 'skip') throw new Error(`Unexpected native action: ${action.kind}`)
       return { ok: true, revision: ++revision, snapshot }
     })
     await page.addInitScript(() => {
       const target = window as unknown as { manturAccount: NativeAccountBridge; invokeNativeAccountFixture: NativeAccountBridge['invoke'] }
-      target.manturAccount = { invoke: action => target.invokeNativeAccountFixture(action), subscribe: () => () => {} }
+      target.manturAccount = { invoke: action => target.invokeNativeAccountFixture(action), subscribe: (listener) => {
+        const changed = (event: Event) => { listener((event as CustomEvent<unknown>).detail) }
+        window.addEventListener('native-fixture-changed', changed)
+        return () => { window.removeEventListener('native-fixture-changed', changed) }
+      } }
     })
     await page.goto(scaffold.authenticatedUrl)
     const workspaceButton = page.locator('[data-workspace-footer]').getByRole('button', { name: '选择工作区' })
@@ -82,7 +86,7 @@ it('returns from both native marketplace entrypoints with the selected detail an
     const project = await workspaceButton.innerText()
     const model = await page.getByRole('button', { name: '选择模型' }).innerText()
     const permission = await page.getByRole('button', { name: /访问模式/ }).innerText()
-    const detail = page.getByRole('dialog', { name: skill.name, exact: true })
+    let detail = page.getByRole('dialog', { name: '短剧编剧', exact: true })
     const account = page.getByRole('dialog', { name: '登录漫途账号', exact: true })
     const expectDetailFocus = (name: string) => expect.poll(() => detail.getByRole('button', { name, exact: true })
       .evaluate(element => document.activeElement === element)).toBe(true)
@@ -103,6 +107,7 @@ it('returns from both native marketplace entrypoints with the selected detail an
     await expectDetailFocus('登录后安装')
     captures.push(`## Guide after Skip\n\n${await detail.ariaSnapshot()}`)
     await detail.getByRole('button', { name: '关闭引导' }).click()
+    detail = page.getByRole('dialog', { name: skill.name, exact: true })
     await page.getByRole('button', { name: '技能广场', exact: true }).click()
     await page.locator('article').getByRole('button', { name: /爽文短剧剧本创作/ }).click()
     await detail.getByRole('button', { name: '登录后安装' }).click()
@@ -110,9 +115,14 @@ it('returns from both native marketplace entrypoints with the selected detail an
     await detail.getByRole('button', { name: '登录后安装' }).waitFor()
     await expectDetailFocus('登录后安装')
     await detail.getByRole('button', { name: '登录后安装' }).click()
-    await account.getByLabel('邮箱', { exact: true }).fill('fixture@example.com')
-    await account.getByLabel('密码', { exact: true }).fill('Fixture-only password')
-    await account.getByRole('button', { name: '登录', exact: true }).click()
+    await account.getByRole('button', { name: '登录漫途账号', exact: true }).click()
+    await account.getByRole('heading', { name: '等待网页授权' }).waitFor()
+    expect(await detail.count()).toBe(0)
+    snapshot = { phase: 'signed-in', authenticated: true, busy: false, skipped: true, pendingRevocations: 0,
+      account: { displayName: 'Fixture creator', expiresAt: 1_999_999_999_999 } }
+    await page.evaluate((publication) => {
+      window.dispatchEvent(new CustomEvent('native-fixture-changed', { detail: publication }))
+    }, { revision: ++revision, snapshot })
     await detail.getByRole('button', { name: '安装技能', exact: true }).waitFor()
     await expectDetailFocus('安装技能')
     expect(await account.count()).toBe(0)
@@ -127,12 +137,13 @@ it('returns from both native marketplace entrypoints with the selected detail an
     await session?.dispose()
     expect(await page.getByRole('button', { name: '选择模型' }).innerText()).toBe(model)
     expect(await page.getByRole('button', { name: /访问模式/ }).innerText()).toBe(permission)
+    detail = page.getByRole('dialog', { name: '短剧编剧', exact: true })
     await page.getByRole('button', { name: '短剧编剧', exact: true }).click()
-    await detail.getByRole('button', { name: '安装并使用' }).waitFor()
+    await detail.getByRole('button', { name: '安装后使用' }).waitFor()
     expect(legacy).not.toHaveBeenCalled()
     expect(requests.every(request => request === 'GET /api/v1/skills' || request === 'GET /api/v1/skills/short-drama')).toBe(true)
     expect(prompts).toBe(0)
-    expect(operations).toEqual(['refresh', 'skip', 'password'])
+    expect(operations).toEqual(['refresh', 'skip', 'browser'])
     expect(console.pageErrors).toEqual([])
     await mkdir(images, { recursive: true })
     await page.screenshot({ path: join(images, 'native-entrypoints.png') })
@@ -160,7 +171,7 @@ function luminance(rgb: string): number {
     .reduce((sum, channel, index) => sum + channel * [0.2126, 0.7152, 0.0722][index]!, 0)
 }
 
-it('renders native registration and browser waiting at minimum size, then keeps Skip across renderer reload', async () => {
+it('renders browser authorization failure and waiting at minimum size, then keeps Skip across renderer reload', async () => {
   const catalog = createServer((_request, response) => {
     response.writeHead(200, { 'content-type': 'application/json' })
     response.end(JSON.stringify({ skills: [], recipes: [] }))
@@ -187,19 +198,20 @@ it('renders native registration and browser waiting at minimum size, then keeps 
     await page.exposeFunction('invokeNativeAccountFixture', (request: NativeAccountAction) => {
       operations.push(request.kind)
       let ok = true
-      let codeExpirySeconds: number | undefined
       switch (request.kind) {
-        case 'snapshot': case 'refresh': case 'poll': case 'reopen-browser': case 'retry-revocations': break
-        case 'send-code': codeExpirySeconds = 600; break
-        case 'register': state = { ...state, phase: 'pending-activation', failure: undefined }; break
-        case 'browser': state = { ...state, phase: 'authorizing', failure: undefined, attempt: {
-          userCode: 'ABCD-EFGH', verificationUrl: 'https://fixture.invalid/auth/agent?user_code=ABCD-EFGH', expiresAt: Date.now() + 600_000,
-        } }; break
-        case 'password': state = { ...state, phase: 'failed', failure: { kind: 'remote', code: 'INVALID_CREDENTIALS' } }; ok = false; break
+        case 'snapshot': case 'refresh': case 'reopen-browser': case 'retry-revocations': break
+        case 'switch-account': case 'browser':
+          if (operations.filter(kind => kind === 'browser').length === 1) {
+            state = { ...state, phase: 'failed', failure: { kind: 'network' } }
+            ok = false
+          } else {
+            state = { ...state, phase: 'authorizing', failure: undefined, attempt: { expiresAt: Date.now() + 600_000 } }
+          }
+          break
         case 'skip': case 'sign-out': state = { phase: 'signed-out', busy: false, authenticated: false,
           skipped: request.kind === 'skip' || state.skipped, pendingRevocations: 0 }; break
       }
-      return { ok, revision: ++revision, snapshot: state, ...(codeExpirySeconds === undefined ? {} : { codeExpirySeconds }) }
+      return { ok, revision: ++revision, snapshot: state }
     })
     await page.addInitScript(() => {
       const target = window as unknown as { manturAccount: NativeAccountBridge; invokeNativeAccountFixture: NativeAccountBridge['invoke'] }
@@ -212,15 +224,11 @@ it('renders native registration and browser waiting at minimum size, then keeps 
     captures.push(`## Login\n\n${await captureStableAria(page, 'section[aria-labelledby]', scaffold.workspaceCwd)}`)
     await page.screenshot({ path: join(images, 'login-1280.png') })
     await page.setViewportSize({ width: 880, height: 600 })
-    await page.getByLabel('邮箱', { exact: true }).focus()
-    await page.keyboard.press('Tab')
-    expect(await page.getByLabel('密码', { exact: true }).evaluate(element => document.activeElement === element)).toBe(true)
-    await page.getByLabel('邮箱', { exact: true }).fill('fixture@example.com')
-    await page.getByLabel('密码', { exact: true }).fill('Fixture-only password')
-    await page.getByRole('button', { name: '登录', exact: true }).click()
+    await page.getByRole('button', { name: '登录漫途账号', exact: true }).focus()
+    await page.keyboard.press('Enter')
     await page.getByRole('alert').waitFor()
-    expect(await page.getByRole('alert').innerText()).toBe('账号或登录凭据不正确，请检查后重试。')
-    expect(await page.getByRole('button', { name: '重新检查登录状态' }).count()).toBe(0)
+    expect(await page.getByRole('alert').innerText()).toBe('暂时无法连接漫途，请检查网络后重试。')
+    expect(await page.getByRole('button', { name: '重新检查登录状态' }).count()).toBe(1)
     await page.getByRole('button', { name: '暂时跳过' }).scrollIntoViewIfNeeded()
     await page.screenshot({ path: join(images, 'login-error-880.png') })
     for (const theme of ['light', 'dark'] as const) {
@@ -236,37 +244,14 @@ it('renders native registration and browser waiting at minimum size, then keeps 
       await page.screenshot({ path: join(images, `login-error-${theme}-880.png`) })
     }
     await page.emulateMedia({ colorScheme: 'light' })
-    await page.getByRole('button', { name: '注册账号', exact: true }).click()
-    await page.getByRole('heading', { name: '注册漫途账号' }).waitFor()
-    await page.getByLabel('邮箱', { exact: true }).fill('fixture-new@example.com')
-    await page.getByLabel('密码', { exact: true }).fill('Fixture-only new password')
-    await page.getByRole('button', { name: '发送验证码' }).click()
-    await page.getByText('验证码已发送，请查收邮件。', { exact: true }).waitFor()
-    await page.getByRole('button', { name: '有邀请码？' }).click()
-    await page.getByLabel('邀请码（选填）').fill('fixture-invite')
-    await page.getByRole('button', { name: '注册账号', exact: true }).click()
-    await page.getByText('请输入邮箱验证码。', { exact: true }).waitFor()
-    captures.push(`## Registration validation\n\n${await captureStableAria(page, 'section[aria-labelledby]', scaffold.workspaceCwd)}`)
-    await page.getByRole('button', { name: '暂时跳过' }).scrollIntoViewIfNeeded()
-    expect(await page.getByRole('button', { name: '暂时跳过' }).evaluate((element) => {
-      const rect = element.getBoundingClientRect()
-      return rect.top >= 0 && rect.bottom <= innerHeight && rect.left >= 0 && rect.right <= innerWidth
-    })).toBe(true)
-    await page.screenshot({ path: join(images, 'registration-expanded-880.png') })
-    await page.getByRole('heading', { name: '注册漫途账号' }).scrollIntoViewIfNeeded()
-    expect(await page.getByRole('heading', { name: '注册漫途账号' }).isVisible()).toBe(true)
-    await page.getByRole('button', { name: '暂时跳过' }).scrollIntoViewIfNeeded()
-    await page.getByLabel('邮箱验证码').fill('123456')
-    await page.getByRole('button', { name: '注册账号', exact: true }).click()
-    await page.getByRole('heading', { name: '注册申请已提交' }).waitFor()
+    await page.getByRole('button', { name: '登录漫途账号', exact: true }).click()
+    await page.getByRole('heading', { name: '等待网页授权' }).waitFor()
     expect(await page.getByText('已登录', { exact: true }).count()).toBe(0)
-    await page.getByRole('button', { name: '返回登录' }).click()
-    await page.getByRole('button', { name: '使用 Google 登录' }).click()
-    await page.getByRole('heading', { name: '完成 Google 登录' }).waitFor()
-    captures.push(`## Google waiting\n\n${await captureStableAria(page, 'section[aria-labelledby]', scaffold.workspaceCwd)}`)
-    await page.screenshot({ path: join(images, 'google-waiting-880.png') })
+    expect(await page.locator('input').count()).toBe(0)
+    captures.push(`## Browser waiting\n\n${await captureStableAria(page, 'section[aria-labelledby]', scaffold.workspaceCwd)}`)
+    await page.screenshot({ path: join(images, 'browser-waiting-880.png') })
     await page.getByRole('button', { name: '重新打开授权页' }).click()
-    expect(operations.filter(kind => kind === 'browser')).toHaveLength(1)
+    expect(operations.filter(kind => kind === 'browser')).toHaveLength(2)
     expect(operations.filter(kind => kind === 'reopen-browser')).toHaveLength(1)
     await page.getByRole('button', { name: '取消登录' }).click()
     await page.getByRole('button', { name: '暂时跳过' }).click()
@@ -278,7 +263,7 @@ it('renders native registration and browser waiting at minimum size, then keeps 
     await page.getByRole('button', { name: '设置', exact: true }).click()
     await page.getByRole('dialog', { name: '设置', exact: true }).getByRole('button', { name: '漫途账号', exact: true }).click()
     await page.getByRole('heading', { name: '登录漫途账号' }).waitFor()
-    expect(await page.getByRole('button', { name: '使用 Google 登录' }).count()).toBe(1)
+    expect(await page.getByRole('button', { name: '登录漫途账号', exact: true }).count()).toBe(1)
     expect(console.pageErrors).toEqual([])
     await compareOrRefreshGolden(expected, captures.join('\n\n'), webSnapshotMode())
   } catch (error) {

@@ -424,7 +424,7 @@ export class ManturHubAuthorization extends TypertRemoteService {
         const snapshot = await this.nativeConnection().status()
         if (!snapshot.authenticated) return { status: 'signed-out' }
         if (snapshot.account === undefined) throw new Error('Native account metadata is missing')
-        return { status: 'signed-in', account: { email: snapshot.account.email } }
+        return { status: 'signed-in', account: { displayName: snapshot.account.displayName } }
       }
       const grant = parseGrant(await this.ctx.credentials.readRecord(this.config.active.credential))
       return grant === undefined

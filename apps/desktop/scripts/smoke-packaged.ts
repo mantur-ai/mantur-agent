@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { startDesktopService } from '../src/runtime.ts'
 import { parseProgramManifest, verifyProgramManifest } from '../../../scripts/mantur-cut-distribution.ts'
+import { smokeEmbeddedCli } from '../../../scripts/desktop-embedded-cli-smoke.ts'
 
 const desktopRoot = resolve(import.meta.dirname, '..')
 
@@ -64,6 +65,18 @@ for (const expected of ['provider: github', 'owner: mantur-ai', 'repo: mantur-ha
   }
 }
 const dshHome = mkdtempSync(join(tmpdir(), 'mantur-agent-desktop-smoke-'))
+try {
+  await smokeEmbeddedCli({
+    resourceRoot: join(packaged.nativeResourcesRoot, 'mantur-cli'),
+    userData: dshHome,
+    executable: packaged.electronExecutable,
+    platform: process.platform === 'darwin' ? 'darwin' : 'win32',
+  })
+  console.log('desktop packaged CLI smoke: 0.11.0 through the profile-local launcher')
+} catch (error) {
+  rmSync(dshHome, { recursive: true, force: true })
+  throw error
+}
 const launchRoot = join(dshHome, 'launch-root')
 const logPath = join(dshHome, 'harness.log')
 mkdirSync(launchRoot)
@@ -77,6 +90,8 @@ const service = startDesktopService({
     ...process.env,
     DSH_HOME: dshHome,
     DSH_TELEMETRY_DISABLED: '1',
+    DSH_MANTUR_NATIVE_ACCOUNT: '0',
+    DSH_MANTUR_UPDATE_IPC: '0',
     NODE_PATH: '',
   },
 })

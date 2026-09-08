@@ -11,8 +11,8 @@ const scopeId = z.uuid().transform(value => value as ScopeId)
 const snapshotSchema = z.strictObject({
   phase: z.enum(['idle', 'signed-out', 'authorizing', 'signed-in', 'pending-activation', 'link-required', 'failed']),
   busy: z.boolean(), authenticated: z.boolean(), skipped: z.boolean(), pendingRevocations: z.number().int().nonnegative(),
-  account: z.strictObject({ email: z.email(), expiresAt: z.number().int().positive() }).optional(),
-  attempt: z.strictObject({ userCode: z.string(), verificationUrl: z.url(), expiresAt: z.number().int().positive() }).optional(),
+  account: z.strictObject({ displayName: z.string(), expiresAt: z.number().int().positive() }).optional(),
+  attempt: z.strictObject({ expiresAt: z.number().int().positive(), exchangePending: z.literal(true).optional() }).optional(),
   failure: z.strictObject({ kind: z.string(), code: z.string().optional(), retryAfterMs: z.number().nonnegative().optional() }).optional(),
 })
 const descriptorSchema = z.strictObject({

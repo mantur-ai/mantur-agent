@@ -30,6 +30,8 @@ An export whose constructor identity or module state must be shared appears in `
 
 Workspace imports used by the Client bundle, type-only imports, module augmentations, `dsh.client.inject`, invariant companions, and existing metadata-only peers belong only in `devDependencies`. Ordinary third-party packages imported by the Host runtime belong in `dependencies`; other third-party relationships keep their declared section. Workspace references use `workspace:^`.
 
+The editing Host imports `connectMcpServer` as peer-required because its module-local server-name reservations must be shared across an Agent's MCP clients. Its public `./types` entry is a separate `lib/types.js` bundle; publishing that entry does not publish the private browser compiler output beneath `lib/types/client/`. The manifest gate requires the bundle, and publint checks its published relative-import closure.
+
 Some development relationships exist only in `dsh.client.inject` or TypeScript project references. The policy's `configurationOnlyDevDependencies` table names only those reviewed edges and keeps them in `devDependencies`.
 
 The verifier reads source manifests and source files, so it runs on a clean tree without built `lib/`. Every selected Host face must have `src/index.ts`. An unclassified Host runtime export is a policy violation that blocks all `--fix` writes; a maintainer must review the export and classify it, change the source relationship, or change the package selection. Once source safety passes, `--fix` performs only the section and range changes implied by the classification and removes stale peer metadata.

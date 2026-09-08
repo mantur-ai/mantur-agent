@@ -145,8 +145,7 @@ export class NativeAccountAccess {
           if (record.metadata.attempt === undefined) {
             const receipt = await this.http.create(secrets, this.shutdown.signal)
             const metadata = { ...record.metadata, attempt: {
-              id: receipt.attempt_id, userCode: receipt.user_code,
-              verificationUrl: receipt.verification_uri_complete, expiresAt: receipt.attempt_expires_at,
+              id: receipt.attempt_id, expiresAt: receipt.attempt_expires_at,
             } }
             this.store.saveMetadata(record.requestId, metadata)
             record = { ...record, metadata }
@@ -170,8 +169,10 @@ export class NativeAccountAccess {
   }
 
   private expired(record: NativeRecord): boolean {
-    // Ready metadata is persisted before activation, so an uncertain activation keeps the original grant's full lifetime.
-    const deadline = record.metadata.credential?.expiresAt ?? record.metadata.attempt?.expiresAt
+    // A lost token response can leave a 90-day grant; attempt expiry alone cannot confirm its revocation.
+    const attemptExpiry = record.metadata.attempt?.expiresAt
+    const deadline = record.metadata.credential?.expiresAt ?? (attemptExpiry === undefined ? undefined
+      : attemptExpiry + (record.metadata.exchangeStarted === true ? 90 * 86_400_000 : 0))
     return deadline !== undefined && deadline <= this.now()
   }
 

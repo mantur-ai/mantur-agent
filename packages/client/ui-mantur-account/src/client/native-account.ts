@@ -12,19 +12,19 @@ const timestamp = z.number().refine(value => !Number.isNaN(new Date(value).getTi
 const snapshot = z.strictObject({
   phase: z.enum(['idle', 'signed-out', 'authorizing', 'signed-in', 'pending-activation', 'link-required', 'failed']),
   busy: z.boolean(), authenticated: z.boolean(), skipped: z.boolean(), pendingRevocations: z.number().int().nonnegative(),
-  account: z.strictObject({ email: z.email(), expiresAt: timestamp }).optional(),
-  attempt: z.strictObject({ userCode: z.string(), verificationUrl: z.url(), expiresAt: timestamp }).optional(),
+  account: z.strictObject({ displayName: z.string(), expiresAt: timestamp }).optional(),
+  attempt: z.strictObject({ expiresAt: timestamp, exchangePending: z.literal(true).optional() }).optional(),
   failure: problem.optional(),
 }).refine(value => !value.authenticated || value.account !== undefined) satisfies z.ZodType<NativeAccountSnapshot>
 const publication = z.strictObject({ revision: z.number().int().nonnegative(), snapshot }) satisfies z.ZodType<NativeAccountPublication>
 const reply = z.strictObject({ ok: z.boolean(), revision: z.number().int().nonnegative(), snapshot: snapshot.optional(),
-  failure: problem.optional(), codeExpirySeconds: z.number().int().positive().optional() }) satisfies z.ZodType<NativeAccountReply>
+  failure: problem.optional() }) satisfies z.ZodType<NativeAccountReply>
 
 declare global {
   interface Window { manturAccount?: NativeAccountBridge }
 }
 
-/** Secret-free render data; submitted form values are never copied into this store. */
+/** Public Main metadata and the current renderer operation. */
 export interface NativeAccountViewState {
   readonly snapshot?: NativeAccountSnapshot | undefined
   readonly operation?: NativeAccountAction['kind'] | undefined
@@ -32,27 +32,25 @@ export interface NativeAccountViewState {
   readonly online: boolean
 }
 
-/** A form may clear its transient inputs after success without retaining the original request. */
+/** Completion of one explicit account action. */
 export interface NativeAccountOutcome {
   readonly ok: boolean
-  readonly codeExpirySeconds?: number
 }
 
-/** Own the preload listener, one UI operation and the protocol's two-second poll schedule. */
+/** Own the preload listener and one UI operation; Main owns callback and expiry lifetimes. */
 export class NativeAccountClient {
   /** Latest accepted Main metadata and local IPC status. */
   readonly store = createSnapshotStore<NativeAccountViewState>({ online: navigator.onLine })
   private revision = -1
   private sequence = 0
   private disposed = false
-  private timer: number | undefined
 
   /** @param bridge - Explicit desktop capability; absence is an error, never a request to use legacy credentials. */
   constructor(private readonly bridge: NativeAccountBridge | undefined) {}
 
   /**
    * Subscribe before requesting state, so a late initial reply cannot replace a newer event.
-   * @returns listener and timer cleanup; Main retains ownership across a renderer reload.
+   * @returns listener cleanup; Main retains ownership across a renderer reload.
    */
   connect(): () => void {
     const unsubscribe = this.bridge?.subscribe((value) => {
@@ -72,7 +70,6 @@ export class NativeAccountClient {
     return () => {
       this.disposed = true
       ++this.sequence
-      this.clearTimer()
       unsubscribe?.()
       window.removeEventListener('online', online)
       window.removeEventListener('offline', online)
@@ -80,9 +77,9 @@ export class NativeAccountClient {
   }
 
   /**
-   * Submit one explicit action. Skip and cancellation supersede a pending form request.
+   * Submit one explicit action. Skip and cancellation supersede a pending authorization request.
    * @param action - Fixed Main operation; never retained in the observable state.
-   * @returns success and, only for a successful code request, its server-confirmed lifetime.
+   * @returns whether Main accepted the action.
    */
   async run(action: NativeAccountAction): Promise<NativeAccountOutcome> {
     if (this.disposed) return { ok: false }
@@ -91,7 +88,6 @@ export class NativeAccountClient {
     if ((before.operation !== undefined || before.snapshot?.busy === true) && !cancelling) return { ok: false }
     if (this.bridge === undefined) { this.fail({ kind: 'unavailable' }); return { ok: false } }
     const sequence = ++this.sequence
-    this.clearTimer()
     this.store.set({ ...before, operation: action.kind, failure: undefined })
     try {
       const parsed = reply.safeParse(await this.bridge.invoke(action))
@@ -107,7 +103,7 @@ export class NativeAccountClient {
         this.fail(result.snapshot?.failure ?? result.failure ?? { kind: 'protocol' })
         return { ok: false }
       }
-      return { ok: true, ...(result.codeExpirySeconds === undefined ? {} : { codeExpirySeconds: result.codeExpirySeconds }) }
+      return { ok: true }
     } catch {
       // IPC rejection details may contain internal paths; only the fixed classification reaches the view.
       if (sequence === this.sequence) this.fail({ kind: 'transport' })
@@ -115,7 +111,6 @@ export class NativeAccountClient {
     } finally {
       if (sequence === this.sequence) {
         this.store.set({ ...this.store.getSnapshot(), operation: undefined })
-        this.schedulePoll()
       }
     }
   }
@@ -124,24 +119,10 @@ export class NativeAccountClient {
     if (this.disposed || value.revision <= this.revision) return
     this.revision = value.revision
     this.store.set({ ...this.store.getSnapshot(), snapshot: value.snapshot, failure: value.snapshot.failure })
-    if (this.store.getSnapshot().operation === undefined) { this.clearTimer(); this.schedulePoll() }
   }
 
   private fail(failure: NativeAccountProblem): void {
-    if (!this.disposed) { this.clearTimer(); this.store.set({ ...this.store.getSnapshot(), failure }) }
+    if (!this.disposed) { this.store.set({ ...this.store.getSnapshot(), failure }) }
   }
 
-  private schedulePoll(): void {
-    const state = this.store.getSnapshot()
-    const current = state.snapshot
-    if (state.failure !== undefined || current?.busy === true || current?.attempt === undefined
-      || (current.phase !== 'authorizing' && current.phase !== 'link-required')) return
-    if (current.attempt.expiresAt <= Date.now()) { this.fail({ kind: 'expired' }); return }
-    this.timer = window.setTimeout(() => { this.timer = undefined; void this.run({ kind: 'poll' }) }, 2_000)
-  }
-
-  private clearTimer(): void {
-    if (this.timer !== undefined) window.clearTimeout(this.timer)
-    this.timer = undefined
-  }
 }

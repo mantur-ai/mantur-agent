@@ -57,7 +57,7 @@ Authorization does not alter model request prefixes or cache reuse.
 <a id="known-limitations-and-deferred-work"></a>
 
 - Standalone login attempts are process-local; standalone sign-out removes only the local grant.
-- Native forms consume the explicit identity mode and guarded preload. Marketplace login routing, packaged CLI integration and native OS acceptance remain incomplete. Loopback command tests do not establish test-site readiness. See the [native account proposal](../../../.agents/notes/proposed/architecture/2026-09-07-desktop-native-account-identity.md).
+- Desktop browser authorization reports an account display name; standalone account status retains its email field. Native macOS and Windows OS storage, website consent and real-account acceptance remain pending. See the [browser authorization decision](../../../.agents/notes/implemented/architecture/2026-09-08-browser-account-authorization.md).
 
 <a id="dev-note"></a>
 ### Dev Note

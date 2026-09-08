@@ -4615,7 +4615,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ManturAccount',
-    declaration: 'export interface ManturAccount {\n    readonly email: string;\n}',
+    declaration: 'export type ManturAccount = {\n    readonly email: string;\n} | {\n    readonly displayName: string;\n};',
   },
   {
     name: 'ManturAccountStatus',

@@ -12,9 +12,7 @@ export type ManturIdentityMode = 'standalone' | 'desktop-managed'
 export type ManturLoginAttemptId = Branded<'ManturLoginAttemptId'>
 
 /** Account fields safe to show in the Mantur client. */
-export interface ManturAccount {
-  readonly email: string
-}
+export type ManturAccount = { readonly email: string } | { readonly displayName: string }
 
 /** Current durable ManturHub account state. */
 export type ManturAccountStatus =
@@ -51,17 +49,15 @@ export interface NativeAccountSnapshot {
   readonly authenticated: boolean
   readonly skipped: boolean
   readonly pendingRevocations: number
-  readonly account?: { readonly email: string; readonly expiresAt: number } | undefined
-  readonly attempt?: { readonly userCode: string; readonly verificationUrl: string; readonly expiresAt: number } | undefined
+  readonly account?: { readonly displayName: string; readonly expiresAt: number } | undefined
+  readonly attempt?: { readonly expiresAt: number; readonly exchangePending?: true | undefined } | undefined
   readonly failure?: NativeAccountProblem | undefined
 }
 
-/** Fixed preload operations. Passwords and registration codes live only for the submitted request. */
-export type NativeAccountAction =
-  | { readonly kind: 'snapshot' | 'refresh' | 'browser' | 'reopen-browser' | 'poll' | 'skip' | 'sign-out' | 'retry-revocations' }
-  | { readonly kind: 'password'; readonly email: string; readonly password: string; readonly consent: true }
-  | { readonly kind: 'send-code'; readonly email: string }
-  | { readonly kind: 'register'; readonly email: string; readonly password: string; readonly code: string; readonly invite_code?: string | undefined }
+/** Fixed browser-account operations; no credential, URL or account form input crosses preload. */
+export type NativeAccountAction = {
+  readonly kind: 'snapshot' | 'refresh' | 'browser' | 'reopen-browser' | 'skip' | 'sign-out' | 'switch-account' | 'retry-revocations'
+}
 
 /** Revision orders both command replies and unsolicited Main publications. */
 export interface NativeAccountPublication {
@@ -74,7 +70,6 @@ export interface NativeAccountReply {
   readonly ok: boolean
   readonly revision: number
   readonly snapshot?: NativeAccountSnapshot | undefined
-  readonly codeExpirySeconds?: number | undefined
   readonly failure?: NativeAccountProblem | undefined
 }
 

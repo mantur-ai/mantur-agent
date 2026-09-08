@@ -59,7 +59,7 @@ export class NativeAccountStore {
     this.db = new DatabaseSync(join(directory, 'account.sqlite'))
     try {
       const version = this.db.prepare('PRAGMA user_version').get()?.user_version
-      if (version !== 0 && version !== 1) throw new Error('Unsupported native account storage version')
+      if (version !== 0 && version !== 2) throw new Error('Unsupported native account storage version')
       this.db.exec('PRAGMA journal_mode=DELETE; PRAGMA synchronous=EXTRA; PRAGMA fullfsync=ON; PRAGMA secure_delete=ON;')
       if (version === 0) {
         this.db.exec(`BEGIN IMMEDIATE;
@@ -67,7 +67,7 @@ export class NativeAccountStore {
           CREATE TABLE grants (request_id TEXT PRIMARY KEY, origin TEXT NOT NULL, phase TEXT NOT NULL,
             sealed BLOB NOT NULL, metadata TEXT NOT NULL) STRICT;
           CREATE UNIQUE INDEX current_origin ON grants(origin) WHERE phase IN ('pending','active');
-          PRAGMA user_version=1;`)
+          PRAGMA user_version=2;`)
         this.db.prepare('INSERT INTO profile VALUES (1, ?, 0)').run(randomUUID())
         this.db.exec('COMMIT')
       }
@@ -109,6 +109,26 @@ export class NativeAccountStore {
       this.assertOpen()
       beforeCommit()
       this.db.prepare("INSERT INTO grants VALUES (?, ?, 'pending', ?, '{}')").run(secrets.requestId, secrets.origin, sealed)
+    })
+  }
+
+  /**
+   * Seal the accepted code and mark possible server activation before token exchange.
+   * @param requestId - the currently pending authorization attempt.
+   * @param code - exact callback code, retained for identical response-loss recovery.
+   * @param beforeCommit - cancellation check after OS encryption and before the atomic update.
+   * @returns durable completion; failure must prevent token exchange.
+   */
+  saveExchange(requestId: NativeRequestId, code: string, beforeCommit: () => void): Promise<void> {
+    return this.track(async () => {
+      const secrets = await this.secrets(requestId, 'authorize')
+      if (secrets.code !== undefined && secrets.code !== code) throw new Error('Native exchange code cannot be replaced')
+      const sealed = await this.cipher.encryptStringAsync(JSON.stringify({ ...secrets, code }))
+      const record = this.requireRecord(requestId, ['pending'])
+      if (record.metadata.attempt === undefined) throw new Error('Native exchange requires its create receipt')
+      beforeCommit()
+      this.db.prepare('UPDATE grants SET sealed=?, metadata=? WHERE request_id=?')
+        .run(sealed, JSON.stringify({ ...record.metadata, exchangeStarted: true }), requestId)
     })
   }
 

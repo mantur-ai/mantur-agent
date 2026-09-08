@@ -28,10 +28,10 @@ async function bench() {
   const cipher = nativeTestCipher()
   const store = open(root, cipher)
   const secrets = createNativeSecrets({ deviceInstanceId: store.deviceInstanceId, origin: 'https://auth.example', environment: 'test',
-    deviceName: 'Isolated acceptance device', platform: 'macos' })
+    deviceName: 'Isolated acceptance device', platform: 'macos', state: 's'.repeat(43), redirectUri: 'http://127.0.0.1:49152/oauth/mantur/callback' })
   const metadata: NativeActiveMetadata = {
-    attempt: { id: randomUUID(), userCode: 'ABCD-EFGH', verificationUrl: 'https://auth.example/auth/agent?user_code=ABCD-EFGH', expiresAt: 2_000_000_000_000 },
-    credential: { id: randomUUID(), email: 'isolated@example.com', expiresAt: 2_000_000_000_000 },
+    attempt: { id: randomUUID(), expiresAt: 2_000_000_000_000 },
+    credential: { id: randomUUID(), displayName: 'Isolated account', accountId: randomUUID(), policyKeyId: randomUUID(), generation: 1, expiresAt: 2_000_000_000_000 },
   }
   return { root, cipher, store, secrets, metadata }
 }
@@ -51,7 +51,7 @@ describe('native account storage', () => {
     for (const name of await readdir(directory)) {
       const bytes = await readFile(join(directory, name))
       expect(bytes.includes(b.secrets.credential)).toBe(false)
-      expect(bytes.includes(b.secrets.attemptToken)).toBe(false)
+      expect(bytes.includes(b.secrets.codeVerifier)).toBe(false)
     }
   })
 
@@ -153,11 +153,11 @@ describe('native account storage', () => {
     await rejected
   })
 
-  it('rejects a newer storage version instead of overwriting it', async () => {
+  it('rejects unsupported storage versions instead of overwriting them', async () => {
     const b = await bench()
     await b.store.close()
     const db = new DatabaseSync(join(b.root, 'native-account/account.sqlite'))
-    try { db.exec('PRAGMA user_version=2') } finally { db.close() }
+    try { db.exec('PRAGMA user_version=3') } finally { db.close() }
     expect(() => open(b.root, b.cipher)).toThrow('Unsupported')
   })
 
@@ -264,9 +264,9 @@ describe('native account storage', () => {
 
   it('uses full prefixed UTF-8 verifiers and independent unpadded 32-byte secrets', async () => {
     const { secrets } = await bench()
-    expect(secrets.credential).toMatch(/^mtd_v1_[A-Za-z0-9_-]{43}$/u)
-    expect(secrets.attemptToken).toMatch(/^mat_v1_[A-Za-z0-9_-]{43}$/u)
-    expect(secrets.credential.slice(7)).not.toBe(secrets.attemptToken.slice(7))
+    expect(secrets.credential).toMatch(/^mtd_v2_[A-Za-z0-9_-]{43}$/u)
+    expect(secrets.codeVerifier).toMatch(/^[A-Za-z0-9_-]{43}$/u)
+    expect(secrets.credential.slice(7)).not.toBe(secrets.codeVerifier.slice(7))
     expect(nativeVerifier(secrets.credential)).toBe(createHash('sha256').update(secrets.credential, 'utf8').digest('base64url'))
     const decodedVerifier = createHash('sha256').update(Buffer.from(secrets.credential.slice(7), 'base64url')).digest('base64url')
     expect(nativeVerifier(secrets.credential)).not.toBe(decodedVerifier)

@@ -1,5 +1,6 @@
-/** Native login state transitions with real encrypted SQLite and frozen HTTP validation, without real accounts or email. */
+/** Real loopback callback and encrypted SQLite with a controlled v2 issuer; no real website or account. */
 import { randomUUID } from 'node:crypto'
+import { z } from 'zod'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -10,8 +11,7 @@ import { NativeAccountStore } from '../src/auth/store.ts'
 import { nativeTestCipher } from './native-account-test-support.ts'
 
 const cleanup: Array<() => Promise<void>> = []
-afterEach(async () => { for (const close of cleanup.splice(0).reverse()) await close() })
-const credentials = { email: 'isolated@example.com', password: 'Isolated transient password 123!', consent: true as const }
+afterEach(async () => { for (const close of cleanup.splice(0).reverse()) await close(); vi.restoreAllMocks() })
 
 async function bench() {
   const root = await mkdtemp(join(tmpdir(), 'mantur-auth-controller-'))
@@ -19,276 +19,282 @@ async function bench() {
   const cipher = nativeTestCipher()
   const store = new NativeAccountStore(root, cipher)
   cleanup.push(() => store.close())
-  const transport = vi.fn<typeof fetch>()
-  const http = new NativeHttpClient({ origin: 'https://auth.example', environment: 'test', timeoutMs: 10_000, maxResponseBytes: 16_384 }, transport)
+  const origin = 'https://auth.example'
+  const attempt = randomUUID()
+  const expiry = new Date(Date.now() + 90 * 86_400_000).toISOString()
+  let createBody: { redirect_uri: string; state: string; device_instance_id: string } | undefined
+  const controls = { failCreate: false, failCancel: false, failExchange: false,
+    sessionCode: '', exchangeCode: '', attemptExpiry: Date.now() + 600_000 }
+  const active = () => ({ status: 'active', grant_id: attempt, grant_generation: 1,
+    device_instance_id: createBody?.device_instance_id, issuer: origin, environment: 'test',
+    credential_expires_at: expiry, account: { id: attempt, display_name: 'Test creator' },
+    authority: 'non_admin_api_key', policy_key: { id: attempt, prefix: 'test', expires_at: null } })
+  const transport = vi.fn<typeof fetch>(async (url, init) => {
+    const path = new URL(z.string().parse(url)).pathname
+    if (path === '/api/v1/client-auth/attempts') {
+      expect(store.records(origin)[0]?.phase).toMatch(/pending/u)
+      expect(cipher.encryptStringAsync).toHaveBeenCalled()
+      createBody = JSON.parse(z.string().parse(init?.body)) as typeof createBody
+      if (controls.failCreate) throw new Error('Private lost create response')
+      return Response.json({ status: 'pending', attempt_id: attempt, issuer: origin, environment: 'test',
+        authorization_uri: origin + '/auth/client?' + new URLSearchParams({
+          attempt_id: attempt, state: createBody!.state, iss: origin }).toString(),
+        attempt_expires_at: new Date(controls.attemptExpiry).toISOString(), expires_in: 600 })
+    }
+    if (path === '/api/v1/client-auth/token') {
+      expect(cipher.encryptStringAsync.mock.calls.length).toBeGreaterThanOrEqual(2)
+      if (controls.failExchange) throw new Error('Private lost exchange response')
+      if (controls.exchangeCode) return Response.json({ error: controls.exchangeCode }, { status: 409 })
+      return Response.json(active())
+    }
+    if (path === '/api/v1/client-auth/session') {
+      if (controls.sessionCode === 'network') throw new Error('Private offline')
+      if (controls.sessionCode) return Response.json({ error: controls.sessionCode }, { status: 401 })
+      return Response.json({ ...active(), last_verified_at: new Date().toISOString() })
+    }
+    if (path.endsWith('/cancel') || path.endsWith('/revoke')) {
+      if (controls.failCancel) throw new Error('Private offline cancel')
+      return new Response(null, { status: 204 })
+    }
+    throw new Error('Unexpected fixture request')
+  })
+  const http = new NativeHttpClient({ origin, environment: 'test', timeoutMs: 10_000, maxResponseBytes: 16_384 }, transport)
   const options = { environment: 'test' as const, deviceName: 'Isolated test device', platform: 'macos' as const,
-    now: () => Date.now(), openBrowser: vi.fn(async (_url: string) => {}) }
+    requestTimeoutMs: 10_000, now: () => Date.now(), openBrowser: vi.fn(async (_url: string) => {}), onAuthorized: vi.fn() }
   const controller = new NativeAccountController(store, http, options)
   cleanup.push(() => controller.close())
-  const attempt = randomUUID()
-  const credential = randomUUID()
-  const account = { id: randomUUID(), email: credentials.email, display_name: 'Isolated account' }
-  const expires = new Date(Date.now() + 90 * 86_400_000).toISOString()
-  const receipt = { status: 'pending', attempt_id: attempt, user_code: 'ABCD-EFGH', verification_uri: `${http.origin}/auth/agent`,
-    verification_uri_complete: `${http.origin}/auth/agent?user_code=ABCD-EFGH`,
-    attempt_expires_at: new Date(Date.now() + 600_000).toISOString(), expires_in: 600, poll_interval: 2 }
-  const ready = { status: 'ready', credential_id: credential, expires_at: expires, account }
-  const active = { status: 'active', credential_id: credential, expires_at: expires }
-  function queue(...values: unknown[]) { for (const value of values) transport.mockResolvedValueOnce(Response.json(value)) }
-  return { root, cipher, store, transport, http, options, controller, attempt, credential, account, expires, receipt, ready, active, queue }
+  const callbackUrl = (denied = false) => {
+    if (createBody === undefined) throw new Error('Fixture attempt not created')
+    return createBody.redirect_uri + '?' + new URLSearchParams({
+      ...(denied ? { error: 'access_denied' } : { code: 'c'.repeat(43) }), state: createBody.state, iss: origin }).toString()
+  }
+  const callback = async (denied = false) => { expect((await fetch(callbackUrl(denied))).status).toBe(204) }
+  const login = async () => {
+    await controller.startBrowser()
+    await callback()
+    await expect.poll(() => controller.getSnapshot().authenticated).toBe(true)
+    await expect.poll(() => controller.getSnapshot().busy).toBe(false)
+  }
+  return { root, store, cipher, origin, http, controls, options, controller, callback, callbackUrl, login, transport, expiry }
 }
 
-describe('native account controller', () => {
-  it('reports absolute expiry from saved metadata even while offline, without making a new request', async () => {
+describe('browser account controller', () => {
+  it('opens the browser before sign-in, seals the code before exchange, then focuses only after confirmation', async () => {
     const b = await bench()
-    b.queue(b.receipt, b.ready, b.active)
-    await b.controller.password(credentials)
-    b.transport.mockRejectedValueOnce(new Error('isolated offline check'))
-    await expect(b.controller.refresh()).rejects.toMatchObject({ kind: 'network' })
-    expect(b.controller.getSnapshot()).toMatchObject({ authenticated: true, failure: { kind: 'network' } })
-    b.options.now = () => Date.parse(b.expires)
-    expect(b.controller.getSnapshot()).toMatchObject({ phase: 'signed-out', authenticated: false,
-      failure: { kind: 'credential-expired' }, account: { expiresAt: Date.parse(b.expires) } })
-    expect(b.transport).toHaveBeenCalledTimes(4)
+    await b.controller.startBrowser()
+    expect(b.controller.getSnapshot()).toMatchObject({ authenticated: false, phase: 'authorizing' })
+    expect(b.options.onAuthorized).not.toHaveBeenCalled()
+    const before = await b.store.secrets(b.store.records(b.origin)[0]!.requestId, 'authorize')
+    expect(JSON.stringify(b.controller.getSnapshot())).not.toContain(before.state)
+    await b.callback()
+    await expect.poll(() => b.controller.getSnapshot().authenticated).toBe(true)
+    expect(b.options.onAuthorized).toHaveBeenCalledOnce()
+    expect(b.controller.getSnapshot().account?.displayName).toBe('Test creator')
+    const bytes = await readFile(join(b.root, 'native-account/account.sqlite'))
+    for (const secret of [before.state, before.codeVerifier, before.credential, 'c'.repeat(43)]) expect(bytes.includes(secret)).toBe(false)
   })
 
-  it('reopens only the same unexpired browser attempt without replaying create or password', async () => {
+  it('keeps a live listener for reopening the same browser URL without a second create', async () => {
     const b = await bench()
     await expect(b.controller.reopenBrowser()).rejects.toMatchObject({ kind: 'resume-required' })
-    b.queue(b.receipt)
     await b.controller.startBrowser()
     await b.controller.reopenBrowser()
-    expect(b.options.openBrowser.mock.calls).toEqual([[b.receipt.verification_uri_complete], [b.receipt.verification_uri_complete]])
+    expect(b.options.openBrowser.mock.calls[0]).toEqual(b.options.openBrowser.mock.calls[1])
     expect(b.transport).toHaveBeenCalledOnce()
-    b.options.now = () => Date.parse(b.receipt.attempt_expires_at) + 1
-    await expect(b.controller.reopenBrowser()).rejects.toMatchObject({ kind: 'expired' })
-    expect(b.transport).toHaveBeenCalledOnce()
-    expect(b.options.openBrowser).toHaveBeenCalledTimes(2)
-  })
-
-  it('reports browser-open failure without leaking OS details or creating a replacement attempt', async () => {
-    const b = await bench()
-    b.queue(b.receipt)
-    b.options.openBrowser.mockRejectedValueOnce(new Error('private OS details'))
-    await expect(b.controller.startBrowser()).rejects.toMatchObject({ kind: 'browser' })
-    expect(b.controller.getSnapshot()).toMatchObject({ failure: { kind: 'browser' } })
-    b.options.openBrowser.mockRejectedValueOnce(new Error('other private detail'))
-    await expect(b.controller.reopenBrowser()).rejects.toMatchObject({ kind: 'browser' })
-    expect(b.transport).toHaveBeenCalledOnce()
-    expect(JSON.stringify(b.controller.getSnapshot())).not.toContain('private')
-  })
-
-  it('publishes locally blocked authority and a persistence error when logout cannot be saved, then permits an explicit retry', async () => {
-    const b = await bench()
-    b.queue(b.receipt, b.ready, b.active)
-    await b.controller.password(credentials)
-    const changed = vi.fn()
-    b.controller.subscribe(changed)
-    const write = vi.spyOn(b.store, 'disable').mockImplementationOnce(() => { throw new Error('Isolated logout write failure') })
-    try {
-      expect(() => b.controller.signOut()).toThrow('logout-storage')
-      expect(() => b.controller.withCredential(new AbortController().signal, async () => {})).toThrow('signed out')
-      expect(b.controller.getSnapshot()).toMatchObject({ authenticated: false, phase: 'failed', failure: { kind: 'logout-storage' } })
-      expect(b.store.records(b.http.origin)).toMatchObject([{ phase: 'active' }])
-      expect(b.transport).toHaveBeenCalledTimes(3)
-      expect(changed).toHaveBeenCalledOnce()
-    } finally { write.mockRestore() }
-    b.transport.mockResolvedValueOnce(new Response(null, { status: 204 }))
     await b.controller.signOut()
-    expect(b.controller.getSnapshot()).toMatchObject({ authenticated: false, phase: 'signed-out', pendingRevocations: 0 })
-    expect(b.controller.getSnapshot().failure).toBeUndefined()
-    expect(b.store.records(b.http.origin)).toEqual([])
+    await expect(fetch(b.callbackUrl())).rejects.toThrow()
+    expect(b.controller.getSnapshot()).toMatchObject({ authenticated: false, pendingRevocations: 0 })
   })
 
-  it('commits OS-sealed secrets before create and ready metadata before activation, without publishing a premature sign-in', async () => {
+  it('recovers lost create with the original request and original listener without browser or identity fallback', async () => {
     const b = await bench()
-    const activating = Promise.withResolvers<undefined>()
-    const release = Promise.withResolvers<Response>()
-    b.transport.mockImplementationOnce(async () => {
-      expect(b.store.records(b.http.origin)).toMatchObject([{ phase: 'pending', metadata: {} }])
-      expect(b.cipher.encryptStringAsync).toHaveBeenCalledOnce()
-      return Response.json(b.receipt)
-    }).mockResolvedValueOnce(Response.json(b.ready))
-      .mockImplementationOnce(() => { activating.resolve(undefined); return release.promise })
-    const login = b.controller.password(credentials)
-    try {
-      await activating.promise
-      expect(b.controller.getSnapshot()).toMatchObject({ phase: 'authorizing', busy: true,
-        account: { email: credentials.email, expiresAt: Date.parse(b.expires) } })
-      expect(b.store.records(b.http.origin)).toMatchObject([{ phase: 'pending', metadata: { credential: { id: b.credential } } }])
-      expect(() => b.controller.withCredential(new AbortController().signal, async () => {})).toThrow('signed out')
-      release.resolve(Response.json(b.active))
-      await login
-    } finally { release.resolve(Response.json(b.active)); await login }
-    expect(b.controller.getSnapshot()).toMatchObject({ phase: 'signed-in', busy: false, pendingRevocations: 0 })
-    expect(JSON.stringify(b.controller.getSnapshot())).not.toContain(credentials.password)
-    const bytes = await readFile(join(b.root, 'native-account/account.sqlite'))
-    expect(bytes.includes(credentials.password)).toBe(false)
-    expect(b.transport).toHaveBeenCalledTimes(3)
-  })
-
-  it('authorizes no network call when OS encryption fails', async () => {
-    const b = await bench()
-    b.cipher.isAsyncEncryptionAvailable.mockResolvedValueOnce(false)
-    await expect(b.controller.password(credentials)).rejects.toMatchObject({ kind: 'local' })
-    expect(b.transport).not.toHaveBeenCalled()
-    expect(b.store.records(b.http.origin)).toEqual([])
-    expect(b.controller.getSnapshot()).toMatchObject({ phase: 'failed', failure: { kind: 'local' } })
-  })
-
-  it('recovers a lost create response with the original request and then polls without replaying a password', async () => {
-    const b = await bench()
-    b.transport.mockRejectedValueOnce(new Error('isolated lost create response'))
-    await expect(b.controller.password(credentials)).rejects.toMatchObject({ kind: 'network' })
-    const id = b.store.records(b.http.origin)[0]?.requestId
-    b.queue(b.receipt, { status: 'ready', next_action: 'activate', credential_id: b.credential,
-      credential_expires_at: b.expires, account: b.account }, b.active)
-    await b.controller.refresh()
-    expect(b.transport.mock.calls[0]?.[1]?.body).toBe(b.transport.mock.calls[1]?.[1]?.body)
-    expect(b.store.records(b.http.origin)).toMatchObject([{ requestId: id, phase: 'active' }])
-    expect(b.transport.mock.calls.some(([url]) => typeof url === 'string' && url.endsWith('/password'))).toBe(false)
-  })
-
-  it('recovers a lost activation response after process restart using the same sealed grant and original expiry', async () => {
-    const b = await bench()
-    b.queue(b.receipt, b.ready)
-    b.transport.mockRejectedValueOnce(new Error('isolated lost activation response'))
-    await expect(b.controller.password(credentials)).rejects.toMatchObject({ kind: 'network' })
-    expect(b.store.records(b.http.origin)[0]?.phase).toBe('pending')
-    const originalBearer = new Headers(b.transport.mock.calls[2]?.[1]?.headers).get('Authorization')
-    await b.controller.close()
-    const restoredStore = new NativeAccountStore(b.root, b.cipher)
-    cleanup.push(() => restoredStore.close())
-    const restored = new NativeAccountController(restoredStore, b.http, b.options)
-    cleanup.push(() => restored.close())
-    b.queue(b.receipt, b.active)
-    await restored.refresh()
-    expect(restored.getSnapshot()).toMatchObject({ phase: 'signed-in', account: { expiresAt: Date.parse(b.expires) } })
-    expect(new Headers(b.transport.mock.calls[4]?.[1]?.headers).get('Authorization')).toBe(originalBearer)
-    expect(b.transport.mock.calls.filter(([url]) => typeof url === 'string' && url.endsWith('/password'))).toHaveLength(1)
-  })
-
-  it('persists Skip while encryption is still pending and prevents any later attempt creation', async () => {
-    const b = await bench()
-    const entered = Promise.withResolvers<undefined>()
-    const release = Promise.withResolvers<Buffer>()
-    b.cipher.encryptStringAsync.mockImplementationOnce(() => { entered.resolve(undefined); return release.promise })
-    const start = b.controller.startBrowser()
-    const rejected = expect(start).rejects.toMatchObject({ kind: 'cancelled' })
-    try {
-      await entered.promise
-      const skip = b.controller.skip()
-      expect(b.store.skipped()).toBe(true)
-      release.resolve(Buffer.from('never committed after cancellation'))
-      await skip
-    } finally { release.resolve(Buffer.from('never committed')); await rejected }
-    expect(b.store.records(b.http.origin)).toEqual([])
-    expect(b.transport).not.toHaveBeenCalled()
+    b.controls.failCreate = true
+    await expect(b.controller.startBrowser()).rejects.toMatchObject({ kind: 'network' })
+    const original = b.transport.mock.calls[0]?.[1]?.body
+    await expect(b.controller.refresh()).rejects.toMatchObject({ kind: 'resume-required' })
+    expect(b.transport).toHaveBeenCalledOnce()
     expect(b.options.openBrowser).not.toHaveBeenCalled()
-    expect(b.controller.getSnapshot()).toMatchObject({ phase: 'signed-out', skipped: true, busy: false })
-  })
-
-  it('cancels a racing activation locally and keeps the full encrypted grant lifetime when remote cancellation is offline', async () => {
-    const b = await bench()
-    b.queue(b.receipt, b.ready)
-    const entered = Promise.withResolvers<undefined>()
-    b.transport.mockImplementationOnce(async (_url, init) => new Promise((_resolve, reject) => {
-      const signal = init?.signal
-      if (signal === undefined || signal === null) throw new Error('Expected cancellation signal')
-      signal.addEventListener('abort', () => { reject(new Error('isolated abort')) }, { once: true })
-      entered.resolve(undefined)
-    })).mockRejectedValueOnce(new Error('isolated offline cancellation'))
-    const login = b.controller.password(credentials)
-    const rejected = expect(login).rejects.toMatchObject({ kind: 'cancelled' })
-    try { await entered.promise; await b.controller.signOut() }
-    finally { await b.controller.close(); await rejected }
-    const restored = new NativeAccountStore(b.root, b.cipher)
-    cleanup.push(() => restored.close())
-    expect(restored.records(b.http.origin)).toMatchObject([{ phase: 'pending-cancel',
-      metadata: { credential: { expiresAt: Date.parse(b.expires) } } }])
-    expect(b.transport.mock.calls[3]?.[0]).toBe(`${b.http.origin}/api/v1/native/auth/attempts/${b.attempt}/cancel`)
-  })
-
-  it.each([
-    ['pending', 'authorizing'], ['ready', 'signed-in'], ['active', 'signed-in'],
-    ['pending_activation', 'pending-activation'], ['link_required', 'link-required'],
-    ['denied', 'failed'], ['cancelled', 'failed'],
-  ] as const)('projects the %s server state without guessing activation', async (status, phase) => {
-    const b = await bench()
-    b.queue(b.receipt)
+    b.controls.failCreate = false
     await b.controller.startBrowser()
-    const progress = status === 'ready' || status === 'active'
-      ? { status, next_action: status === 'ready' ? 'activate' : 'none', credential_id: b.credential,
-        credential_expires_at: b.expires, account: b.account }
-      : status === 'pending' ? { status, next_action: 'wait_for_user', expires_in: 590 }
-        : status === 'pending_activation' ? { status, next_action: 'wait_for_activation' }
-          : status === 'link_required' ? { status, next_action: 'verify_existing_account_in_browser' }
-            : { status, next_action: 'none', reason: 'ATTEMPT_CANCELLED' }
-    b.queue(b.receipt, progress)
-    if (status === 'ready' || status === 'active') b.queue(b.active)
-    if (status === 'denied' || status === 'cancelled') await expect(b.controller.poll()).rejects.toThrow()
-    else await b.controller.poll()
-    expect(b.controller.getSnapshot().phase).toBe(phase)
+    expect(b.transport.mock.calls[1]?.[1]?.body).toBe(original)
     expect(b.options.openBrowser).toHaveBeenCalledOnce()
-    expect(b.options.openBrowser).toHaveBeenCalledWith(b.receipt.verification_uri_complete)
+    await b.callback()
+    await expect.poll(() => b.controller.getSnapshot().authenticated).toBe(true)
   })
 
-  it('rejects a changed receipt on recovery instead of accepting a renewed attempt deadline', async () => {
+  it('retries an exact encrypted exchange after response loss and process restart', async () => {
     const b = await bench()
-    b.queue(b.receipt)
+    b.controls.failExchange = true
     await b.controller.startBrowser()
-    b.queue({ ...b.receipt, attempt_expires_at: new Date(Date.parse(b.receipt.attempt_expires_at) + 1_000).toISOString() })
-    await expect(b.controller.refresh()).rejects.toMatchObject({ kind: 'protocol' })
-    expect(b.store.records(b.http.origin)[0]?.metadata.attempt?.expiresAt).toBe(Date.parse(b.receipt.attempt_expires_at))
+    await b.callback()
+    await expect.poll(() => b.controller.getSnapshot().failure?.kind).toBe('network')
+    expect(b.controller.getSnapshot().authenticated).toBe(false)
+    const request = b.transport.mock.calls.find(([url]) => z.string().parse(url).endsWith('/token'))?.[1]
+    await b.controller.close()
+    const store = new NativeAccountStore(b.root, b.cipher)
+    cleanup.push(() => store.close())
+    const restored = new NativeAccountController(store, b.http, b.options)
+    cleanup.push(() => restored.close())
+    b.controls.failExchange = false
+    await restored.refresh()
+    const recovery = b.transport.mock.calls.filter(([url]) => z.string().parse(url).endsWith('/token')).at(-1)?.[1]
+    expect(recovery?.body).toBe(request?.body)
+    expect(recovery?.headers).toEqual(request?.headers)
+    expect(restored.getSnapshot().authenticated).toBe(true)
+    expect(b.options.openBrowser).toHaveBeenCalledOnce()
   })
 
-  it('distinguishes offline validation from a revoked device and blocks local use after an authoritative rejection', async () => {
+  it('cancels an interrupted no-code attempt after restart instead of silently registering another port', async () => {
     const b = await bench()
-    b.queue(b.receipt, b.ready, b.active)
-    await b.controller.password(credentials)
-    b.transport.mockRejectedValueOnce(new Error('isolated offline validation'))
+    await b.controller.startBrowser()
+    const original = b.store.records(b.origin)[0]!.requestId
+    await b.controller.close()
+    const store = new NativeAccountStore(b.root, b.cipher)
+    cleanup.push(() => store.close())
+    const restored = new NativeAccountController(store, b.http, b.options)
+    cleanup.push(() => restored.close())
+    await expect(restored.refresh()).rejects.toMatchObject({ kind: 'resume-required' })
+    expect(store.records(b.origin)).toEqual([])
+    expect(b.transport.mock.calls.filter(([url]) => z.string().parse(url).endsWith('/attempts'))).toHaveLength(1)
+    const cancellation = b.transport.mock.calls.find(([url]) => z.string().parse(url).endsWith('/cancel'))?.[1]
+    expect(JSON.parse(z.string().parse(cancellation?.body))).toMatchObject({ request_id: original })
+    expect(b.options.openBrowser).toHaveBeenCalledOnce()
+  })
+
+  it('keeps an uncertain exchange cancellation encrypted beyond attempt expiry and rejects late callbacks', async () => {
+    const b = await bench()
+    b.controls.failExchange = true
+    await b.controller.startBrowser()
+    await b.callback()
+    await expect.poll(() => b.controller.getSnapshot().failure?.kind).toBe('network')
+    b.controls.failCancel = true
+    await b.controller.signOut()
+    const record = b.store.records(b.origin)[0]!
+    expect(record).toMatchObject({ phase: 'pending-cancel', metadata: { exchangeStarted: true } })
+    b.options.now = () => b.controls.attemptExpiry + 86_400_000
+    await b.controller.retryRevocations()
+    expect(b.store.records(b.origin)).toHaveLength(1)
+    expect(b.controller.getSnapshot().authenticated).toBe(false)
+    await expect(fetch(b.callbackUrl())).rejects.toThrow()
+    b.controls.failCancel = false
+    await b.controller.retryRevocations()
+    expect(b.store.records(b.origin)).toEqual([])
+  })
+
+  it.each(['GRANT_SUPERSEDED', 'GRANT_REVOKED', 'GRANT_EXPIRED'])('does not activate an old receipt rejected with %s', async (code) => {
+    const b = await bench()
+    b.controls.exchangeCode = code
+    await b.controller.startBrowser()
+    await b.callback()
+    await expect.poll(() => b.controller.getSnapshot().failure?.code).toBe(code)
+    expect(b.controller.getSnapshot().authenticated).toBe(false)
+    expect(b.options.onAuthorized).not.toHaveBeenCalled()
+  })
+
+  it('handles denial without exchange and prevents later callback authority', async () => {
+    const b = await bench()
+    await b.controller.startBrowser()
+    await b.callback(true)
+    await expect.poll(() => b.controller.getSnapshot().failure?.kind).toBe('denied')
+    expect(b.store.records(b.origin)[0]?.phase).toBe('pending-cancel')
+    expect(b.controller.getSnapshot().authenticated).toBe(false)
+    expect(b.transport.mock.calls.some(([url]) => z.string().parse(url).endsWith('/token'))).toBe(false)
+  })
+
+  it('expires the owned listener without requiring a renderer timer', async () => {
+    const b = await bench()
+    b.controls.attemptExpiry = Date.now() + 120
+    await b.controller.startBrowser()
+    await expect.poll(() => b.controller.getSnapshot().failure?.kind).toBe('expired')
+    expect(b.controller.getSnapshot().authenticated).toBe(false)
+    await expect(fetch(b.callbackUrl())).rejects.toThrow()
+  })
+
+  it('distinguishes offline validation from authoritative revocation and absolute grant expiry', async () => {
+    const b = await bench()
+    await b.login()
+    b.controls.sessionCode = 'network'
     await expect(b.controller.refresh()).rejects.toMatchObject({ kind: 'network' })
-    expect(b.store.records(b.http.origin)[0]?.phase).toBe('active')
-    expect(b.controller.getSnapshot()).toMatchObject({ phase: 'failed', failure: { kind: 'network' } })
-    b.transport.mockResolvedValueOnce(Response.json({ error: 'CREDENTIAL_REVOKED', message: 'never displayed' }, { status: 401 }))
+    expect(b.controller.getSnapshot().authenticated).toBe(true)
+    b.controls.sessionCode = 'GRANT_REVOKED'
     await expect(b.controller.refresh()).rejects.toMatchObject({ kind: 'remote' })
-    expect(b.store.records(b.http.origin)[0]?.phase).toBe('pending-revoke')
+    expect(b.controller.getSnapshot().authenticated).toBe(false)
     expect(() => b.controller.withCredential(new AbortController().signal, async () => {})).toThrow('signed out')
   })
 
-  it('keeps code delivery and pending registration independent of device login', async () => {
+  it('blocks local authority even when logout persistence fails, then retries the same revoke', async () => {
     const b = await bench()
-    b.queue({ ok: true, expiresInSec: 600 })
-    expect(await b.controller.sendCode(credentials.email)).toEqual({ ok: true, expiresInSec: 600 })
-    b.transport.mockResolvedValueOnce(Response.json({ ok: true, status: 'pending', tenantId: b.account.id }, { status: 201 }))
-    await b.controller.register({ email: credentials.email, password: credentials.password, code: '123456' })
-    expect(b.controller.getSnapshot()).toMatchObject({ phase: 'pending-activation' })
-    expect(b.store.records(b.http.origin)).toEqual([])
-    expect(b.cipher.encryptStringAsync).not.toHaveBeenCalled()
+    await b.login()
+    vi.spyOn(b.store, 'disable').mockImplementationOnce(() => { throw new Error('Private disk failure') })
+    expect(() => b.controller.signOut()).toThrow('logout-storage')
+    expect(b.controller.getSnapshot()).toMatchObject({ authenticated: false, failure: { kind: 'logout-storage' } })
+    await b.controller.signOut()
+    expect(b.store.records(b.origin)).toEqual([])
   })
 
-  it('closes before an OS operation finishes without late state delivery, a leaked handle or a first network request', async () => {
+  it('joins a cancelled token request and never activates its late success', async () => {
+    const b = await bench()
+    const original = b.transport.getMockImplementation()!
+    const entered = Promise.withResolvers<AbortSignal>()
+    const release = Promise.withResolvers<Response>()
+    b.transport.mockImplementation(async (url, init) => {
+      if (z.string().parse(url).endsWith('/token')) {
+        entered.resolve(init!.signal!)
+        return release.promise
+      }
+      return original(url, init)
+    })
+    await b.controller.startBrowser()
+    await b.callback()
+    const signal = await entered.promise
+    const complete = vi.fn()
+    const logout = b.controller.signOut().then(complete)
+    expect(signal.aborted).toBe(true)
+    await Promise.resolve()
+    expect(complete).not.toHaveBeenCalled()
+    release.resolve(Response.json({ status: 'ignored after cancellation' }))
+    await logout
+    expect(b.controller.getSnapshot().authenticated).toBe(false)
+    expect(b.options.onAuthorized).not.toHaveBeenCalled()
+    expect(b.store.records(b.origin)).toEqual([])
+  })
+
+  it('waits for old command cleanup before opening a switched account authorization', async () => {
+    const b = await bench()
+    await b.login()
+    const entered = Promise.withResolvers<AbortSignal>()
+    const release = Promise.withResolvers<undefined>()
+    const using = b.controller.withCredential(new AbortController().signal, async (_secrets, signal) => {
+      entered.resolve(signal)
+      await release.promise
+    })
+    const rejected = expect(using).rejects.toMatchObject({ name: 'AbortError' })
+    const signal = await entered.promise
+    const changing = b.controller.switchAccount()
+    expect(signal.aborted).toBe(true)
+    expect(b.controller.getSnapshot().authenticated).toBe(false)
+    expect(b.options.openBrowser).toHaveBeenCalledOnce()
+    release.resolve(undefined)
+    await rejected
+    await changing
+    expect(b.options.openBrowser).toHaveBeenCalledTimes(2)
+    expect(b.controller.getSnapshot()).toMatchObject({ authenticated: false, phase: 'authorizing' })
+  })
+
+  it('persists Skip during OS encryption and prevents the first network request after cancellation', async () => {
     const b = await bench()
     const entered = Promise.withResolvers<undefined>()
     const release = Promise.withResolvers<Buffer>()
     b.cipher.encryptStringAsync.mockImplementationOnce(() => { entered.resolve(undefined); return release.promise })
-    const listener = vi.fn()
-    b.controller.subscribe(listener)
     const start = b.controller.startBrowser()
     const rejected = expect(start).rejects.toMatchObject({ kind: 'cancelled' })
-    try {
-      await entered.promise
-      const closed = vi.fn()
-      const closing = b.controller.close().then(closed)
-      const calls = listener.mock.calls.length
-      await Promise.resolve()
-      expect(closed).not.toHaveBeenCalled()
-      release.resolve(Buffer.from('never committed'))
-      await closing
-      expect(listener).toHaveBeenCalledTimes(calls)
-      expect(closed).toHaveBeenCalledOnce()
-      expect(() => b.controller.getSnapshot()).toThrow('closing')
-    } finally { release.resolve(Buffer.from('never committed')); await rejected }
+    await entered.promise
+    const skip = b.controller.skip()
+    release.resolve(Buffer.from('not committed'))
+    await skip
+    await rejected
+    expect(b.store.skipped()).toBe(true)
+    expect(b.store.records(b.origin)).toEqual([])
     expect(b.transport).not.toHaveBeenCalled()
   })
 })

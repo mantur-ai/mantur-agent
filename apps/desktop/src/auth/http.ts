@@ -1,4 +1,4 @@
-/** Host-only HTTP projection of native-account-v1 FROZEN 2026-09-07.1; no provider or identity fallback. */
+/** Host-only HTTP projection of browser-account-v2 FROZEN 2026-09-08.3; no provider or identity fallback. */
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import { z } from 'zod'
 import { nativeVerifier, type NativeDeviceId, type NativeSecrets } from './protocol.ts'
@@ -14,53 +14,34 @@ const attemptId = z.uuid().transform(value => value as NativeAttemptId)
 const credentialId = z.uuid().transform(value => value as NativeCredentialId)
 const accountId = z.uuid().transform(value => value as NativeAccountId)
 const timestamp = z.iso.datetime({ offset: true }).transform(value => Date.parse(value))
-const account = z.object({ id: accountId, email: z.email(), display_name: z.string() })
-const receipt = z.object({
-  attempt_id: attemptId, user_code: z.string().regex(/^[A-Z0-9]{4}-[A-Z0-9]{4}$/u),
-  verification_uri: z.url(), verification_uri_complete: z.url(), attempt_expires_at: timestamp,
-  expires_in: z.literal(600), poll_interval: z.literal(2), status: z.literal('pending'),
+const account = z.strictObject({ id: accountId, display_name: z.string() })
+const receipt = z.strictObject({
+  attempt_id: attemptId, authorization_uri: z.url(), issuer: z.url(), environment: z.enum(['production', 'test']),
+  attempt_expires_at: timestamp, expires_in: z.literal(600), status: z.literal('pending'),
 })
-const grant = { credential_id: credentialId, credential_expires_at: timestamp, account }
-const terminalReason = z.enum([
-  'ACCOUNT_DISABLED', 'PENDING_ACTIVATION', 'ATTEMPT_CANCELLED', 'ATTEMPT_EXPIRED', 'DENIED', 'CANCELLED',
-  'OAUTH_CANCELLED', 'OAUTH_STATE_INVALID', 'OAUTH_STATE_REPLAYED', 'OAUTH_PROVIDER_ERROR', 'EMAIL_NOT_VERIFIED',
-  'CONSENT_REQUIRED', 'LINK_REAUTH_REQUIRED', 'LINK_CONFIRMATION_REQUIRED',
-])
-const poll = z.discriminatedUnion('status', [
-  z.object({ status: z.literal('pending'), next_action: z.literal('wait_for_user'), expires_in: z.number().int().nonnegative() }),
-  z.object({ status: z.literal('ready'), next_action: z.literal('activate'), ...grant }),
-  z.object({ status: z.literal('active'), next_action: z.literal('none'), ...grant }),
-  z.object({ status: z.literal('pending_activation'), next_action: z.literal('wait_for_activation') }),
-  z.object({ status: z.literal('link_required'), next_action: z.literal('verify_existing_account_in_browser') }),
-  z.object({ status: z.literal('denied'), next_action: z.literal('none'), reason: terminalReason }),
-  z.object({ status: z.literal('cancelled'), next_action: z.literal('none'), reason: terminalReason }),
-])
-const ready = z.object({ status: z.literal('ready'), credential_id: credentialId, expires_at: timestamp, account })
-const active = z.object({ status: z.literal('active'), credential_id: credentialId, expires_at: timestamp })
-const session = active.extend({
-  device_instance_id: z.uuid().transform(value => value as NativeDeviceId), client_id: z.literal('mantur-agent'), account,
-  issued_at: timestamp, last_used_at: timestamp,
+const active = z.strictObject({
+  status: z.literal('active'), grant_id: credentialId, grant_generation: z.number().int().positive(),
+  device_instance_id: z.uuid().transform(value => value as NativeDeviceId),
+  issuer: z.url(), environment: z.enum(['production', 'test']), credential_expires_at: timestamp, account,
+  authority: z.literal('non_admin_api_key'),
+  policy_key: z.strictObject({ id: z.uuid(), prefix: z.string(), expires_at: timestamp.nullable() }),
 })
+const session = active.extend({ last_verified_at: timestamp })
 const errorCode = z.enum([
-  'INVALID_REQUEST', 'INVALID_CLIENT', 'INVALID_DEVICE', 'IDEMPOTENCY_CONFLICT', 'RATE_LIMITED', 'AUTH_UNAVAILABLE',
-  'CONSENT_REQUIRED', 'INVALID_CREDENTIALS', 'INVALID_ATTEMPT', 'PENDING_ACTIVATION', 'ACCOUNT_DISABLED',
-  'ATTEMPT_FINALIZED', 'ATTEMPT_EXPIRED', 'ATTEMPT_CANCELLED', 'PROTOCOL_STATE_INVALID',
-  'CREDENTIAL_INVALID', 'CREDENTIAL_REVOKED', 'CREDENTIAL_EXPIRED',
-  'INVALID_EMAIL', 'EMAIL_TAKEN', 'SMTP_ERROR', 'WEAK_PASSWORD', 'INVALID_CODE', 'CODE_MISMATCH', 'INVALID_INVITE_CODE',
+  'INVALID_REQUEST', 'INVALID_CLIENT', 'INVALID_DEVICE', 'INVALID_PLATFORM', 'INVALID_STATE', 'INVALID_PKCE',
+  'INVALID_REDIRECT_URI', 'IDEMPOTENCY_CONFLICT', 'RATE_LIMITED', 'AUTH_UNAVAILABLE', 'CONSENT_REQUIRED',
+  'ACCOUNT_DISABLED', 'ACCOUNT_NOT_ELIGIBLE', 'ATTEMPT_FINALIZED', 'ATTEMPT_EXPIRED', 'ATTEMPT_CANCELLED',
+  'ATTEMPT_DENIED', 'ATTEMPT_NOT_FOUND', 'INVALID_DEVICE_PROOF', 'INVALID_CODE', 'INVALID_GRANT',
+  'GRANT_REVOKED', 'GRANT_EXPIRED', 'GRANT_SUPERSEDED', 'CODE_ALREADY_USED', 'CODE_EXPIRED', 'ISSUER_MISMATCH',
+  'POLICY_KEY_INACTIVE', 'DEFAULT_KEY_REQUIRED', 'DEFAULT_KEY_PROVISIONING_UNAVAILABLE',
 ])
-const errorEnvelope = z.object({
-  error: errorCode,
-  retry_after_ms: z.number().int().nonnegative().optional(),
-  retryAfterMs: z.number().int().nonnegative().optional(),
-})
+const errorEnvelope = z.object({ error: errorCode, retry_after_ms: z.number().int().nonnegative().optional() })
 
-/** Immutable create receipt. Current authorization state is read separately through poll. */
+/** Immutable create receipt; browser navigation alone cannot activate a device grant. */
 export type NativeAttemptReceipt = z.infer<typeof receipt>
-/** Exhaustive states accepted from the frozen poll endpoint. */
-export type NativePollResult = z.infer<typeof poll>
-/** Confirmed ready grant; provisioning does not activate it. */
-export type NativeReadyResult = z.infer<typeof ready>
-/** Online validation response; its original expiry is authoritative. */
+/** Confirmed device grant generation with a fixed policy Key and absolute expiry. */
+export type NativeActiveResult = z.infer<typeof active>
+/** Online validation response; its original expiry and generation remain authoritative. */
 export type NativeSessionResult = z.infer<typeof session>
 
 /** Fixed diagnostics exclude passwords, secrets, provider messages and transport exception text. */
@@ -69,7 +50,7 @@ export class NativeHttpFailure extends Error {
    * @param kind - local transport, cancellation, invalid protocol or recognized remote rejection.
    * @param status - HTTP status when a response exists.
    * @param code - recognized server code, never arbitrary response text.
-   * @param retryAfterMs - server-provided registration/native throttling delay.
+   * @param retryAfterMs - server-provided authorization throttling delay.
    */
   constructor(
     readonly kind: 'network' | 'cancelled' | 'protocol' | 'remote',
@@ -122,87 +103,92 @@ export class NativeHttpClient {
   }
 
   /**
-   * Submit only verifiers, using the complete previously persisted request after response loss.
-   * @param secrets - OS-committed pending material; the owner must save it before calling.
-   * @param signal - lifetime of the current operation.
-   * @returns immutable receipt with a same-origin, allowlisted browser URL.
+   * Register the pre-sealed browser attempt, replaying identical fields after response loss.
+   * @param secrets - OS-committed pending material from this exact deployment.
+   * @param signal - current operation lifetime.
+   * @returns immutable receipt whose authorization URL has been checked field by field.
    */
   async create(secrets: NativeSecrets, signal: AbortSignal): Promise<NativeAttemptReceipt> {
     this.requireDeployment(secrets)
-    const result = await this.request('/api/v1/native/auth/attempts', 'POST', receipt, [200, 201], signal, {
+    this.requireRedirect(secrets.redirectUri)
+    const result = await this.request('/api/v1/client-auth/attempts', 'POST', receipt, [200, 201], signal, {
       request_id: secrets.requestId, client_id: 'mantur-agent', device_instance_id: secrets.deviceInstanceId,
       device_name: secrets.deviceName, platform: secrets.platform, credential_verifier: nativeVerifier(secrets.credential),
-      attempt_token_verifier: nativeVerifier(secrets.attemptToken),
+      state: secrets.state, code_challenge: nativeVerifier(secrets.codeVerifier), code_challenge_method: 'S256',
+      redirect_uri: secrets.redirectUri,
     })
-    const base = new URL(result.verification_uri)
-    const complete = new URL(result.verification_uri_complete)
-    if (base.href !== `${this.origin}/auth/agent`
-      || complete.origin !== this.origin || complete.pathname !== '/auth/agent' || complete.hash !== ''
-      || complete.username !== '' || complete.password !== ''
-      || complete.searchParams.size !== 1 || complete.searchParams.get('user_code') !== result.user_code) {
+    this.requireIssuer(result)
+    const url = new URL(result.authorization_uri)
+    if (url.origin !== this.origin || url.pathname !== '/auth/client' || url.hash !== ''
+      || url.username !== '' || url.password !== '' || url.searchParams.size !== 3
+      || url.searchParams.getAll('attempt_id').length !== 1 || url.searchParams.get('attempt_id') !== result.attempt_id
+      || url.searchParams.getAll('state').length !== 1 || url.searchParams.get('state') !== secrets.state
+      || url.searchParams.getAll('iss').length !== 1 || url.searchParams.get('iss') !== this.origin) {
       throw new NativeHttpFailure('protocol')
     }
     return result
   }
 
   /**
-   * Verify a password once; this call never retries or stores its input.
-   * @param secrets - saved pending material from this deployment.
-   * @param id - attempt selected by its immutable create receipt.
-   * @param credentials - transient renderer form values, including explicit consent.
-   * @param signal - originating UI operation lifetime.
-   * @returns ready grant, not an active local account.
+   * Exchange or recover the exact sealed request; no new request ID or credential is generated here.
+   * @param secrets - saved code, state, verifier, redirect and device proof.
+   * @param id - original server attempt identity.
+   * @param signal - foreground operation lifetime.
+   * @returns current server-confirmed grant generation, never a raw bearer or platform Key.
    */
-  password(secrets: NativeSecrets, id: NativeAttemptId,
-    credentials: { email: string; password: string; consent: true }, signal: AbortSignal): Promise<NativeReadyResult> {
-    return this.request(`/api/v1/native/auth/attempts/${id}/password`, 'POST', ready, [200], signal, credentials, this.attemptHeaders(secrets))
+  async exchange(secrets: NativeSecrets, id: NativeAttemptId, signal: AbortSignal): Promise<NativeActiveResult> {
+    if (secrets.code === undefined) throw new NativeHttpFailure('protocol')
+    this.requireRedirect(secrets.redirectUri)
+    const result = await this.request('/api/v1/client-auth/token', 'POST', active, [200], signal, {
+      exchange_request_id: secrets.exchangeRequestId, attempt_id: id, client_id: 'mantur-agent',
+      device_instance_id: secrets.deviceInstanceId, code: secrets.code, state: secrets.state,
+      code_verifier: secrets.codeVerifier, redirect_uri: secrets.redirectUri, issuer: this.origin,
+    }, this.credentialHeaders(secrets))
+    this.requireGrant(result, secrets)
+    return result
   }
 
-  /** Read the exact server state without retrying or converting unknown states to pending. */
-  poll(secrets: NativeSecrets, id: NativeAttemptId, signal: AbortSignal): Promise<NativePollResult> {
-    return this.request(`/api/v1/native/auth/attempts/${id}/poll`, 'POST', poll, [200], signal, undefined, this.attemptHeaders(secrets))
-  }
-
-  /** Cancel only this attempt, including a possibly active grant after a lost activation response. */
+  /** Cancel the exact attempt; the server may revoke only the generation produced by that attempt. */
   cancel(secrets: NativeSecrets, id: NativeAttemptId, signal: AbortSignal): Promise<void> {
-    return this.request(`/api/v1/native/auth/attempts/${id}/cancel`, 'POST', z.undefined(), [204], signal, undefined, this.attemptHeaders(secrets))
-  }
-
-  /** Prove possession of the pre-stored grant without returning its bearer. */
-  activate(secrets: NativeSecrets, id: NativeAttemptId, signal: AbortSignal): Promise<z.infer<typeof active>> {
-    return this.request('/api/v1/native/auth/credentials/activate', 'POST', active, [200], signal, { attempt_id: id }, this.credentialHeaders(secrets))
+    return this.request(`/api/v1/client-auth/attempts/${id}/cancel`, 'POST', z.undefined(), [204], signal, {
+      request_id: secrets.requestId, client_id: 'mantur-agent', device_instance_id: secrets.deviceInstanceId,
+      state: secrets.state, issuer: this.origin,
+    }, this.credentialHeaders(secrets))
   }
 
   /** Validate this profile's exact device online; network failure never means expiry. */
   async session(secrets: NativeSecrets, signal: AbortSignal): Promise<NativeSessionResult> {
-    const result = await this.request('/api/v1/native/session', 'GET', session, [200], signal, undefined, this.credentialHeaders(secrets))
-    if (result.device_instance_id !== secrets.deviceInstanceId || result.expires_at <= result.issued_at) throw new NativeHttpFailure('protocol')
+    const result = await this.request('/api/v1/client-auth/session', 'GET', session, [200], signal, undefined,
+      { ...this.credentialHeaders(secrets), 'X-Mantur-Client': 'desktop' })
+    this.requireGrant(result, secrets)
     return result
   }
 
-  /** Confirm remote revocation only on 204; the owner retains encrypted material on every other outcome. */
+  /** Confirm remote revocation only on 204; retain encrypted material on every other outcome. */
   revoke(secrets: NativeSecrets, signal: AbortSignal): Promise<void> {
-    return this.request('/api/v1/native/session/revoke', 'POST', z.undefined(), [204], signal, undefined, this.credentialHeaders(secrets))
-  }
-
-  /** Send a public registration code; the response owns code expiry, not an invented resend cooldown. */
-  sendCode(email: string, signal: AbortSignal): Promise<{ ok: true; expiresInSec: number }> {
-    return this.request('/api/v1/auth/send-code', 'POST', z.object({ ok: z.literal(true), expiresInSec: z.number().int().positive() }),
-      [200], signal, { email, purpose: 'register' })
-  }
-
-  /** Register a pending account without a Cookie, grant, automatic login or password persistence. */
-  register(input: { email: string; password: string; code: string; invite_code?: string }, signal: AbortSignal): Promise<{ ok: true; status: 'pending'; tenantId: NativeAccountId }> {
-    return this.request('/api/v1/auth/register', 'POST', z.object({ ok: z.literal(true), status: z.literal('pending'), tenantId: accountId }), [201], signal, input)
+    return this.request('/api/v1/client-auth/grants/revoke', 'POST', z.undefined(), [204], signal, {
+      request_id: secrets.requestId, device_instance_id: secrets.deviceInstanceId, issuer: this.origin,
+    }, this.credentialHeaders(secrets))
   }
 
   private requireDeployment(secrets: NativeSecrets): void {
-    if (secrets.origin !== this.origin || secrets.environment !== this.options.environment) throw new Error('Native account belongs to a different deployment')
+    if (secrets.origin !== this.origin || secrets.environment !== this.options.environment) throw new NativeHttpFailure('protocol')
   }
 
-  private attemptHeaders(secrets: NativeSecrets): Record<string, string> {
-    this.requireDeployment(secrets)
-    return { 'X-Mantur-Attempt': secrets.attemptToken }
+  private requireIssuer(result: { issuer: string; environment: string }): void {
+    if (result.issuer !== this.origin || result.environment !== this.options.environment) throw new NativeHttpFailure('protocol')
+  }
+
+  private requireGrant(result: NativeActiveResult, secrets: NativeSecrets): void {
+    this.requireIssuer(result)
+    if (result.device_instance_id !== secrets.deviceInstanceId) throw new NativeHttpFailure('protocol')
+  }
+
+  private requireRedirect(value: string): void {
+    const url = new URL(value)
+    if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || url.port === ''
+      || url.username !== '' || url.password !== '' || url.pathname !== '/oauth/mantur/callback'
+      || url.search !== '' || url.hash !== '' || url.href !== value) throw new NativeHttpFailure('protocol')
   }
 
   private credentialHeaders(secrets: NativeSecrets): Record<string, string> {
@@ -232,7 +218,7 @@ export class NativeHttpClient {
       const failure = errorEnvelope.safeParse(value)
       if (!failure.success) throw new NativeHttpFailure('protocol', response.status)
       throw new NativeHttpFailure('remote', response.status, failure.data.error,
-        failure.data.retry_after_ms ?? failure.data.retryAfterMs)
+        failure.data.retry_after_ms)
     }
     const result = schema.safeParse(value)
     if (!result.success) throw new NativeHttpFailure('protocol', response.status)
