@@ -63,7 +63,7 @@ describe('Session editing directories', () => {
   })
 })
 
-async function fixture(listen: string, drain = '', close = ''): Promise<RuntimeConfig> {
+async function fixture(listen: string, drain = '', close = '', transportClose = ''): Promise<RuntimeConfig> {
   const editorRoot = await temp()
   const vite = join(editorRoot, 'node_modules/vite/dist/node')
   await mkdir(vite, { recursive: true })
@@ -77,7 +77,7 @@ export async function createServer() {
     res.end('ready');
     if (req.url === '/exit') setImmediate(() => process.exit(0));
   });
-  httpServer.manturShutdown = { stopForShutdown: async () => { ${drain} } };
+  httpServer.manturShutdown = { stopForShutdown: async () => { ${drain} }, finishTransportShutdown: async () => { ${transportClose} } };
   const listen = httpServer.listen.bind(httpServer);
   httpServer.listen = async (...args) => { ${listen} listen(...args); };
   return { config: { server: {}, inlineConfig: { server: {} } }, httpServer, close: async () => {
@@ -164,4 +164,16 @@ const timer=setInterval(()=>{if(existsSync('release-pipe.txt')){clearInterval(ti
   } finally { await writeFile(join(config.editorRoot, 'release-pipe.txt'), 'release') }
   await stopping
   expect(child.isClosed).toBe(true)
+})
+
+it('retains a transport completion failure and leaves HTTP open after a successful save drain', async () => {
+  const config = await fixture('', '', '', "throw new Error('native stream tail failed');")
+  const runtime = await startEditor(config, await temp(), 'transport-failure' as SessionId, 'http://127.0.0.1:5298')
+  await runtime.drainForShutdown()
+  const stopping = runtime.dispose()
+  await expect(stopping).rejects.toThrow('native stream tail failed')
+  expect(runtime.dispose()).toBe(stopping)
+  expect(children.at(-1)!.isClosed).toBe(false)
+  expect((await fetch(runtime.workspace.editorUrl)).status).toBe(200)
+  await expect(readFile(join(config.editorRoot, 'closed.txt'))).rejects.toMatchObject({ code: 'ENOENT' })
 })

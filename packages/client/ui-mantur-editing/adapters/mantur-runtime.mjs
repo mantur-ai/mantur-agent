@@ -27,7 +27,13 @@ installRuntimeShutdown({
     if (!owner || typeof owner.stopForShutdown !== 'function') throw new Error('Editor does not expose its authoritative shutdown owner')
     await owner.stopForShutdown()
   },
-  close: async () => { await (await acquisition).close() },
+  close: async () => {
+    const server = await acquisition
+    const owner = server.httpServer?.manturShutdown
+    if (!owner || typeof owner.finishTransportShutdown !== 'function') throw new Error('Editor does not expose its transport shutdown owner')
+    await owner.finishTransportShutdown()
+    await server.close()
+  },
 })
 const server = await acquisition
 // Vite treats port 0 as its default port. Bind the exposed HTTP server directly

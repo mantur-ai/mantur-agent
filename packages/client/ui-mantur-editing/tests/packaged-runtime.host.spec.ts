@@ -51,7 +51,7 @@ async function fixture(platform = process.platform, arch = process.arch) {
   }
   await writeFile(join(root, paths.server), `import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 export async function startEmbeddedServer(dist, options) {
   assert.equal(options.port, 0);
   const server = createServer((req, res) => res.end(JSON.stringify({
@@ -62,10 +62,11 @@ export async function startEmbeddedServer(dist, options) {
     whisperCli: process.env.OPENCHATCUT_WHISPER_CLI,
     parentOrigin: options.parentOrigin, dist,
   })));
-  server.manturShutdown = { stopForShutdown: async () => {} };
+  server.manturShutdown = { stopForShutdown: async () => {}, finishTransportShutdown: async () => { await writeFile('transport-closed.txt', 'confirmed'); } };
   await new Promise(resolve => server.listen(options.port, '127.0.0.1', resolve));
   const close = server.close.bind(server);
   server.close = callback => close(async error => {
+    assert.equal(await readFile('transport-closed.txt', 'utf8'), 'confirmed');
     await writeFile('shutdown.txt', 'HTTP closed');
     callback(error);
   });

@@ -60,7 +60,7 @@ Packaged mode validates the platform-specific `manifest.json` before opening a S
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-`ctx.manturEditing.stopForShutdown()` freezes new opens and native MCP executions, retains opening and opened owners, and waits for accepted responses and attachment writes. The editor then freezes browser input, drains accepted browser work and its late jobs, saves project and run state through the existing authenticated poll/result channel, and confirms durable browser unregistration. Native transport closure follows that acknowledgement; the Host then requires the actual editor child `close`, including its pipes. Repeated calls retain the original success or failure. Timeouts leave work running and reject; the coordinator must keep Agent services, HTTP and the editor page alive until this promise settles.
+`ctx.manturEditing.stopForShutdown()` freezes new opens and native MCP executions, retains opening and opened owners, and waits for accepted responses and attachment writes. The editor then freezes browser input, drains accepted browser work and its late jobs, saves project and run state through the existing authenticated poll/result channel, and confirms durable browser unregistration. Native transport closure follows that acknowledgement. MCP GET streams and DELETE handlers retain their original promises separately from save callbacks; the adapters await `finishTransportShutdown()` after the Host closes its drained MCP client and before closing HTTP. The Host then requires the actual editor child `close`, including its pipes. Repeated calls retain the original success or failure. Timeouts leave work running and reject; the coordinator must keep Agent services, HTTP and the editor page alive until this promise settles.
 
 After applying [the packaged patch](adapters/mantur-cut-packaged.patch), apply [the shutdown patch](adapters/mantur-cut-shutdown.patch) on editor tree `2a5be55239826a9e74bde5a5a5484a0f033d4da0`. It adds no public MCP tool and does not change the pinned audio finalizer. The owned render path propagates `browser.close()` failures, but Remotion 4.0.509 exposes no supported child-and-pipe close completion; an instance that acquired its render browser therefore refuses shutdown confirmation. Used unowned producers and retained save/job errors also refuse confirmation. This increment is not complete installation approval; [the shutdown decision](../../../.agents/notes/implemented/bug-fix/2026-09-08-mantur-editing-owned-shutdown.md) records verification limits.
 
@@ -68,9 +68,9 @@ The editor checks actual semantic-vector availability through the project-store 
 
 | Shutdown layer | Fixed value |
 |---|---|
-| Editor commit | `08950ed125145b67c0835777a958992baeb377d9` |
-| Result tree | `078f8d3f343cafd003276ac10ea57fcb1ed7d47a` |
-| Patch SHA-256 | `78ca03afd9a2afee5525af43c11d9713e87b7ff3e812b314755fd7d9226441df` |
+| Editor commit | `aa893e75d5811275bfb59f8974133bf0ce4339f5` |
+| Result tree | `203f06ef3a916ee19b9948793e50178b912fd90b` |
+| Patch SHA-256 | `dd0abd932f995265aab92a31a870c854833fb889a986a83731550091079227ca` |
 
 The Host Remote resolves the Agent, coalesces concurrent opens, and launches `adapters/mantur-runtime.mjs`. It mounts the existing MCP client inside that Agent's scope. All mounted MCP clients resolve the same peer instance, preserving Agent-scoped server-name reservations. The MCP bearer remains in Host memory and the child environment. Disposal drains both connection and subprocess. The Client ignores startup responses from a Session that is no longer selected. No invariant companion is published: subprocess exit state belongs to the child handle; connection and tool-generation invariants belong to the MCP client.
 

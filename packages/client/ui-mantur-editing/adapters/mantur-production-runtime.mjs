@@ -28,6 +28,9 @@ const shutdown = installRuntimeShutdown({
     await owner.stopForShutdown()
   },
   close: async () => {
+    const owner = server?.manturShutdown
+    if (!owner || typeof owner.finishTransportShutdown !== 'function') throw new Error('Editor does not expose its transport shutdown owner')
+    await owner.finishTransportShutdown()
     await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
     if (temporary) await rm(temporary, { recursive: true })
   },

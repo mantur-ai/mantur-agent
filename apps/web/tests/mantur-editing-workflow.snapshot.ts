@@ -39,7 +39,7 @@ export async function createServer() {
     upstream.on('error', error => { outgoing.writeHead(502).end(error.message); });
     incoming.pipe(upstream);
   });
-  httpServer.manturShutdown = { stopForShutdown: async () => {} };
+  httpServer.manturShutdown = { stopForShutdown: async () => {}, finishTransportShutdown: async () => {} };
   return { config: { server: {}, inlineConfig: { server: {} } }, httpServer,
     close: async () => {
       await new Promise(resolve => { httpServer.close(resolve); httpServer.closeAllConnections(); });

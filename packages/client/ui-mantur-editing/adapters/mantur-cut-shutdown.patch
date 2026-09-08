@@ -23,7 +23,7 @@ index 7f373b1..3813420 100644
    app.use('/media/uploads', uploadsMiddleware());
    if (mantur) {
 diff --git a/package.json b/package.json
-index 69a1f6b..4c8093d 100644
+index 69a1f6b..cc56b05 100644
 --- a/package.json
 +++ b/package.json
 @@ -33,7 +33,7 @@
@@ -41,7 +41,7 @@ index 69a1f6b..4c8093d 100644
      "verify:sqlite-migration": "tsx server/storage/sqlite-store.verify.ts && tsx server/storage/sqlite-migration-http.verify.ts && tsx server/plugins/project-store-export-recovery-sqlite.verify.ts && tsx src/export/serverExportRecovery.verify.ts",
 -    "verify:extract-audio": "tsx server/plugins/extract-audio.verify.ts"
 +    "verify:extract-audio": "tsx server/plugins/extract-audio.verify.ts",
-+    "verify:mantur-shutdown": "node --import tsx server/plugins/generation-shutdown.verify.ts && node --import tsx server/plugins/project-shutdown.verify.ts && node --import tsx server/external-agent/broker-shutdown.verify.ts && node --import tsx server/plugins/mantur-shutdown.verify.ts && node --import tsx src/agent/external-shutdown.verify.ts && node remotion/render-shutdown.verify.mjs && node --import tsx src/media/semantic-search/vectorCapability.verify.ts"
++    "verify:mantur-shutdown": "node --import tsx server/plugins/generation-shutdown.verify.ts && node --import tsx server/plugins/project-shutdown.verify.ts && node --import tsx server/external-agent/broker-shutdown.verify.ts && node --import tsx server/plugins/mantur-shutdown.verify.ts && node --import tsx src/agent/external-shutdown.verify.ts && node remotion/render-shutdown.verify.mjs && node --import tsx src/media/semantic-search/vectorCapability.verify.ts && node --import tsx server/plugins/mcp-transport-shutdown.verify.ts"
    },
    "dependencies": {
      "@ai-sdk/alibaba": "^2.0.16",
@@ -1100,11 +1100,12 @@ index a4ab905..24a6670 100644
  }
 diff --git a/server/plugins/mantur-shutdown.ts b/server/plugins/mantur-shutdown.ts
 new file mode 100644
-index 0000000..49d99c8
+index 0000000..b3555d8
 --- /dev/null
 +++ b/server/plugins/mantur-shutdown.ts
-@@ -0,0 +1,152 @@
+@@ -0,0 +1,165 @@
 +import type { IncomingMessage, ServerResponse } from 'node:http';
++import { ShutdownWork } from '../../shared/shutdown-work.ts';
 +import { Server } from 'node:http';
 +import type { Connect, Plugin, ViteDevServer } from 'vite';
 +import {
@@ -1123,7 +1124,7 @@ index 0000000..49d99c8
 +declare module 'node:http' {
 +  interface Server {
 +    /** Actual shared editor owner, consumed by the development and packaged Host adapters. */
-+    manturShutdown?: { stopForShutdown(): Promise<void> };
++    manturShutdown?: { stopForShutdown(): Promise<void>; finishTransportShutdown(): Promise<void> };
 +  }
 +}
 +
@@ -1162,6 +1163,8 @@ index 0000000..49d99c8
 +export class ManturEditorShutdown {
 +  private phase: 'open' | 'preparing' | 'draining' | 'sealed' = 'open';
 +  private stopping: Promise<void> | undefined;
++  private readonly transports = new ShutdownWork('Editor MCP transport closure');
++  private transportClosing: Promise<void> | undefined;
 +
 +  plugin(): Plugin {
 +    return {
@@ -1204,6 +1207,14 @@ index 0000000..49d99c8
 +    return this.stopping;
 +  }
 +
++  /** After the Host closes its drained MCP client, await the original GET/DELETE handlers before HTTP closure. */
++  finishTransportShutdown(): Promise<void> {
++    return this.transportClosing ??= (async () => {
++      await this.stopForShutdown();
++      await this.transports.stop();
++    })();
++  }
++
 +  /** Preserve each route's original promise, including work after its HTTP response is sent. */
 +  ownPlugin(plugin: Plugin): Plugin {
 +    const configure = plugin.configureServer;
@@ -1233,13 +1244,15 @@ index 0000000..49d99c8
 +    return (req, res, next) => {
 +      const pathname = requestPath(mount, req);
 +      // The Host closes its native transport after the editor acknowledges durable shutdown.
-+      if (this.phase === 'sealed' && pathname === '/api/external-mcp/mcp' && req.method === 'DELETE') return handler(req, res, next);
++      const transport = name === 'openchatcut-external-agent' && pathname === '/api/external-mcp/mcp'
++        && (req.method === 'GET' || req.method === 'DELETE');
++      const transportDelete = transport && req.method === 'DELETE';
 +      const callback = callbackRoute(pathname, req);
-+      if (this.phase === 'sealed' || this.phase === 'draining' && !callback
++      if (this.phase === 'sealed' && !transportDelete || this.phase === 'draining' && !callback
 +        || this.phase === 'preparing' && name === 'openchatcut-external-agent' && !callback) {
 +        refuse(res); return;
 +      }
-+      const work = callback ? editorCallbacks : editorRequests;
++      const work = transport ? this.transports : callback ? editorCallbacks : editorRequests;
 +      const operation = work.admit(async () => {
 +        let delegated = false;
 +        // Connect types handlers as returning void; feature routes may return their actual async work.
@@ -1385,6 +1398,142 @@ index 0000000..776f92b
 +    assert.equal((await fetch(`${url}/api/external-mcp/mcp`, { method: 'DELETE' })).status, 200, 'native close remains available after editor acknowledgement');
 +    assert.strictEqual(stopping, owner.stopForShutdown());
 +  } finally {
++    await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
++    await rm(root, { recursive: true, force: true });
++  }
++}
+diff --git a/server/plugins/mcp-transport-shutdown.verify.ts b/server/plugins/mcp-transport-shutdown.verify.ts
+new file mode 100644
+index 0000000..e179075
+--- /dev/null
++++ b/server/plugins/mcp-transport-shutdown.verify.ts
+@@ -0,0 +1,130 @@
++import assert from 'node:assert/strict';
++import { randomUUID } from 'node:crypto';
++import { spawn } from 'node:child_process';
++import { createServer } from 'node:http';
++import { mkdtemp, rm } from 'node:fs/promises';
++import { tmpdir } from 'node:os';
++import { join } from 'node:path';
++import { setImmediate as tick } from 'node:timers/promises';
++import { fileURLToPath } from 'node:url';
++import type { Plugin, ViteDevServer } from 'vite';
++import { Client } from '@modelcontextprotocol/sdk/client/index.js';
++import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
++
++const scenario = process.argv[2];
++if (!scenario) {
++  for (const name of ['accepted', 'save-failure', 'stream-failure', 'delete-failure']) {
++    await new Promise<void>((resolve, reject) => {
++      const child = spawn(process.execPath, ['--import', 'tsx', fileURLToPath(import.meta.url), name], { stdio: 'inherit' });
++      child.once('error', reject);
++      child.once('close', (code, signal) => code === 0 && signal === null ? resolve() : reject(new Error(`${name}: ${code}/${signal}`)));
++    });
++  }
++  console.log('MCP shutdown: real SDK SSE, late save, stream completion and retained failures passed');
++} else {
++  const root = await mkdtemp(join(tmpdir(), 'mantur-mcp-stream-'));
++  process.env.OPENCHATCUT_DATA_DIR = root;
++  process.env.MANTUR_CUT_DRAIN_TIMEOUT_MS = '3000';
++  process.env.OPENCHATCUT_MCP_TOKEN = randomUUID();
++  const { createMiniConnect } = await import('../../desktop/mini-connect.ts');
++  const { ManturEditorShutdown } = await import('./mantur-shutdown.ts');
++  const { externalAgentPlugin } = await import('./external-agent.ts');
++  const broker = await import('../external-agent/broker.ts');
++  const app = createMiniConnect(() => {});
++  const server = createServer((req, res) => app.handle(req, res));
++  const client = new Client({ name: 'shutdown-regression', version: '1' });
++  const saveRelease = Promise.withResolvers<void>();
++  const streamEntered = Promise.withResolvers<void>();
++  const streamEnded = Promise.withResolvers<void>();
++  const streamRelease = Promise.withResolvers<void>();
++  const owner = new ManturEditorShutdown();
++  const deadline = async <T>(work: Promise<T>): Promise<T> => {
++    let timer: ReturnType<typeof setTimeout>;
++    try {
++      return await Promise.race([work, new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('drain is waiting on the live MCP stream')), 1500); })]);
++    } finally { clearTimeout(timer!); }
++  };
++  try {
++    const mount = async (plugin: Plugin) => {
++      const hook = plugin.configureServer!;
++      const configure = typeof hook === 'function' ? hook : hook.handler;
++      await configure.call({} as never, { middlewares: app, httpServer: server, config: { logger: { error() {} } } } as unknown as ViteDevServer);
++    };
++    await mount(owner.plugin());
++    const native = externalAgentPlugin();
++    const hook = native.configureServer!;
++    const configure = typeof hook === 'function' ? hook : hook.handler;
++    await mount(owner.ownPlugin({ ...native, configureServer(s) {
++      const middlewares = new Proxy(s.middlewares, { get(target, key, receiver) {
++        if (key !== 'use') return Reflect.get(target, key, receiver);
++        return (path: string, handler: (req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse, next: (error?: unknown) => void) => unknown) => target.use(path, async (req, res, next) => {
++          const get = path === '/api/external-mcp/mcp' && req.method === 'GET';
++          const deleting = path === '/api/external-mcp/mcp' && req.method === 'DELETE';
++          if (get) streamEntered.resolve();
++          await handler(req, res, next);
++          if (get) {
++            streamEnded.resolve(); await streamRelease.promise;
++            if (scenario === 'stream-failure') throw new Error('late native stream completion failed');
++          }
++          if (deleting) {
++            await streamRelease.promise;
++            if (scenario === 'delete-failure') throw new Error('late native DELETE completion failed');
++          }
++        });
++      } });
++      return configure.call(this, new Proxy(s, { get: (target, key, receiver) => key === 'middlewares' ? middlewares : Reflect.get(target, key, receiver) }));
++    } }));
++    await mount(owner.ownPlugin({ name: 'openchatcut-project-store', configureServer(s) {
++      s.middlewares.use('/api/project-store/test-save', async (_req, res) => {
++        res.end('accepted'); await saveRelease.promise;
++        if (scenario === 'save-failure') throw new Error('late save failed');
++      });
++    } }));
++    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
++    const address = server.address(); assert(address && typeof address !== 'string');
++    const origin = `http://127.0.0.1:${address.port}`;
++    const transport = new StreamableHTTPClientTransport(new URL('/api/external-mcp/mcp', origin), {
++      requestInit: { headers: { Authorization: `Bearer ${process.env.OPENCHATCUT_MCP_TOKEN}` } },
++    });
++    await client.connect(transport);
++    await deadline(streamEntered.promise);
++    assert((await client.listTools()).tools.length > 0);
++    assert.equal((await fetch(`${origin}/api/project-store/test-save`, { method: 'POST' })).status, 200);
++    const capability = broker.registerEditor('project', 'editor', 'revision', []);
++    const stopping = owner.stopForShutdown();
++    const observed = stopping.then(() => ({ ok: true as const }), error => ({ ok: false as const, error }));
++    const poll = () => broker.nextEditorCall('project', 'editor', 'revision', AbortSignal.timeout(3000), capability);
++    for (const phase of ['freeze', 'flush']) {
++      const call = await poll(); assert.equal(call?.arguments.phase, phase);
++      assert.equal(broker.settleEditorCall(call!.id, 'applied', { phase }, capability), true);
++    }
++    await broker.unregisterEditor('project', 'editor', capability);
++    let drained = false; void observed.then(() => { drained = true; });
++    await tick(); assert.equal(drained, false, 'the late save remains owned while SSE is open');
++    saveRelease.resolve();
++    const result = await deadline(observed);
++    assert.equal(result.ok, scenario !== 'save-failure');
++    if (!result.ok) {
++      assert.match(String(result.error), /callbacks failed/);
++      assert.strictEqual(stopping, owner.stopForShutdown());
++    } else {
++      assert.equal((await fetch(`${origin}/api/project-store/test-save`, { method: 'POST' })).status, 503);
++      if (scenario === 'delete-failure') await transport.terminateSession();
++      await client.close();
++      await deadline(streamEnded.promise);
++      const closing = owner.finishTransportShutdown();
++      assert.strictEqual(closing, owner.finishTransportShutdown());
++      const closed = closing.then(() => ({ ok: true as const }), error => ({ ok: false as const, error }));
++      let finished = false; void closed.then(() => { finished = true; });
++      await tick(); assert.equal(finished, false, 'client close does not discard the original GET handler tail');
++      streamRelease.resolve();
++      const final = await deadline(closed);
++      assert.equal(final.ok, scenario !== 'stream-failure' && scenario !== 'delete-failure');
++      if (!final.ok) assert.match(String(final.error), /MCP transport closure failed/);
++    }
++  } finally {
++    saveRelease.resolve(); streamRelease.resolve(); await client.close();
 +    await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
 +    await rm(root, { recursive: true, force: true });
 +  }
