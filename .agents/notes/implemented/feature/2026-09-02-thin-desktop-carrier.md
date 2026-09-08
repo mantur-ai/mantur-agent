@@ -36,6 +36,8 @@ The macOS release workflow uses protected GitHub environment secrets to sign and
 
 The unpacked application contains more files than the macOS runner's open-file limit permits `@electron/osx-sign` to inspect concurrently. The workspace pins a dependency patch that preserves its depth-first signing order while reading one directory child at a time. A dependency upgrade must retain this bound or prove the complete unpacked application can be signed on the release runner before removing the patch.
 
+The embedded Mantur Cut production dependency tree is copied after its upstream build completes. Packaging removes package-manager executable directories and build cache directories from that staged tree before dependency inventory and signing. These files are not runtime inputs; retaining them increases the signing surface and can expose cached binary files whose prior signatures do not meet the release timestamp policy.
+
 ## Alternatives considered
 
 **Embed Harness Host and replace HTTP with Electron IPC.** Rejected because it creates a desktop-specific application assembly and transport, duplicates existing Web authentication and lifecycle behavior, and requires a larger upstream divergence before one-click installation proves demand for those changes.

@@ -465,7 +465,7 @@ async function copyProductionProgram(source: string, staging: string, auditRepor
   await cp(join(source, 'public/whisper-cli', targetKey), join(staging, 'whisper-cli', targetKey), { recursive: true })
   await cp(join(source, '.cache/whisper-cli/whisper.cpp/LICENSE'), join(staging, 'whisper-cli/LICENSE.whisper.cpp'))
   await cp(join(source, 'node_modules'), join(staging, 'runtime/node_modules'), { recursive: true })
-  await removePackageBinLinks(join(staging, 'runtime/node_modules'))
+  await removePackageRuntimeResidue(join(staging, 'runtime/node_modules'))
   await cp(join(source, 'package.json'), join(staging, 'package.json'))
   await cp(join(source, 'package-lock.json'), join(staging, 'package-lock.json'))
   await cp(join(source, 'LICENSE'), join(staging, 'LICENSE'))
@@ -480,12 +480,13 @@ async function copyProductionProgram(source: string, staging: string, auditRepor
   return paths
 }
 
-async function removePackageBinLinks(directory: string): Promise<void> {
+/** Remove package-manager executables and build caches from a staged runtime dependency tree. */
+export async function removePackageRuntimeResidue(directory: string): Promise<void> {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue
     const child = join(directory, entry.name)
-    if (entry.name === '.bin') await rm(child, { recursive: true, force: true })
-    else await removePackageBinLinks(child)
+    if (entry.name === '.bin' || entry.name === '.cache') await rm(child, { recursive: true, force: true })
+    else await removePackageRuntimeResidue(child)
   }
 }
 
