@@ -267,6 +267,14 @@ Host service registering the ManturHub authorization flow and account Remote.
 @Remote identityMode(): ManturIdentityMode
 
 /**
+ * Freeze native command identity and brokered API admission, then join trees, leases and IPC cleanup.
+ * The parent must keep IPC connected until this operation completes.
+ * @returns the same completion on every call; retained cleanup failures reject.
+ * @throws when this provider has no initialized desktop-managed connection, including standalone mode.
+ */
+stopNativeForShutdown(): Promise<void>
+
+/**
  * Send a Host-only GET to this account provider's configured deployment.
  *
  * The method accepts only root-relative paths so a stored grant cannot be

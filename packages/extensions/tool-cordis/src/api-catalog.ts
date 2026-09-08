@@ -111,6 +111,26 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [],
       },
       {
+        signature: 'quiesceForShutdown(): Promise<void>',
+        description: 'Freeze admission and stop drivers while keeping published sessions available to admitted Host requests.',
+        parameters: [],
+        returns: 'completion after drivers and startup work settle; writer closure still requires stopForShutdown.',
+      },
+      {
+        signature: 'stopForShutdown(): Promise<readonly AgentShutdownCheckpoint[]>',
+        description: 'Freeze admission, join owned startup and teardown, and verify closed writer offsets. This covers agent-loop ownership only; the Host must separately stop other producers.',
+        parameters: [],
+        returns: 'immutable checkpoints after all owned work settles; repeated calls share the result.',
+        throws: ['if any writer or owned cleanup failed, including a previously closed writer.'],
+      },
+      {
+        signature: 'verifyShutdown(): Promise<readonly AgentShutdownCheckpoint[]>',
+        description: 'Recheck sealed writers after the Host has joined every other producer. Requires an existing shutdown; waits for its completion without starting one.',
+        parameters: [],
+        returns: 'the original immutable checkpoints after a fresh seal check.',
+        throws: ['if shutdown has not started, failed, or a subsequent append was attempted.'],
+      },
+      {
         signature: 'async create(id: SessionId, options: AgentOptions = {}, meta: Pick<SessionHeader, \'cwd\'> = {}): Promise<Agent>',
         description: 'Create an agent and session under one caller-supplied identity, owned by the accessing fiber. Constructor-driven config calls mint a fresh combined id before entering this boundary. When a persistence backend is mounted, the session\'s durable identity and any seed are stored before publication.',
         parameters: [{ name: 'id', description: 'shared agent/session identity.' }, { name: 'options', description: 'concrete loop options.' }, { name: 'meta', description: 'optional fresh-session workspace metadata.' }],
@@ -135,6 +155,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     summary: 'Registry over the deployment\'s agent presets.',
     description: 'Registry over the deployment\'s agent presets.\n\nDiscovery is unmemoized: `list()` and `resolve()` re-read the roots on every call so a preset authored while the process runs is visible immediately, and a preset deleted underneath a picker disappears from the next read.',
     methods: [
+      {
+        signature: 'stopForShutdown(): Promise<void>',
+        description: 'Freeze composition and authoring admission before the Host enumerates installed owners. Standing plugin trees remain installed for their individual shutdown operations.',
+        parameters: [],
+        returns: 'once admitted operations settle; operation failures retain their original callers.',
+      },
       {
         signature: 'async list(): Promise<AgentPreset[]>',
         description: 'Every preset the configured roots currently supply.',
@@ -287,6 +313,17 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Register the agent-creation factory (the loop calls this on construction, effect-scoped). A traced Cordis service is canonicalized to its concrete target; each create/resume call is then traced through that caller\'s context so ownership follows the caller without stacking proxy layers. Throws if a factory is already registered. Returns the disposer; on dispose the factory slot is cleared.',
         parameters: [{ name: 'factory', description: 'the loop-owned factory {@link create}/{@link resume} delegate to.' }],
         returns: 'the disposer that clears the factory slot. The exact Cordis effect disposer (single-shot): composite (generator) effects may yield it directly — exact identity nests the teardown in order.',
+      },
+      {
+        signature: 'freezeAdmission(): void',
+        description: 'Permanently close agent creation, publication, and live inbox mutation admission for Host shutdown.',
+        parameters: [],
+      },
+      {
+        signature: 'assertAdmission(): void',
+        description: 'Reject work after Host shutdown has frozen admission. Drivers check this before accepting input or starting maintenance.',
+        parameters: [],
+        throws: ['when this registry has been frozen for shutdown.'],
       },
       {
         signature: 'async create(options: CreateAgentOptions): Promise<AgentHandle>',
@@ -967,6 +1004,19 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'goalRoundDriver',
+    summary: 'Explicit shutdown of the installed automatic goal-round producer.',
+    description: 'Explicit shutdown of the installed automatic goal-round producer.',
+    methods: [
+      {
+        signature: 'stopForShutdown(): Promise<void>',
+        description: 'Freeze scheduling, disarm goals, and join owned driver tasks and admitted rounds.',
+        parameters: [],
+        returns: 'completion after the producer becomes quiescent.',
+      },
+    ],
+  },
+  {
     key: 'goals',
     summary: 'Goal service (`ctx.goals`) backed exclusively by the owning session log.',
     description: 'Goal service (`ctx.goals`) backed exclusively by the owning session log.',
@@ -1248,6 +1298,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the configured identity mode.',
       },
       {
+        signature: 'stopNativeForShutdown(): Promise<void>',
+        description: 'Freeze native command identity and brokered API admission, then join trees, leases and IPC cleanup. The parent must keep IPC connected until this operation completes.',
+        parameters: [],
+        returns: 'the same completion on every call; retained cleanup failures reject.',
+        throws: ['when this provider has no initialized desktop-managed connection, including standalone mode.'],
+      },
+      {
         signature: 'async request(pathname: string, options: ManturHubRequestOptions): Promise<Response | undefined>',
         description: 'Send a Host-only GET to this account provider\'s configured deployment.\n\nThe method accepts only root-relative paths so a stored grant cannot be forwarded to another origin. It is intentionally not a browser Remote.',
         parameters: [{ name: 'pathname', description: 'root-relative ManturHub API path.' }, { name: 'options', description: 'authentication, headers, cancellation, and redirect policy.' }],
@@ -1288,6 +1345,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     summary: 'Runtime and tools share the exact Agent identity resolved by the authenticated Remote gateway.',
     description: 'Runtime and tools share the exact Agent identity resolved by the authenticated Remote gateway.',
     methods: [
+      {
+        signature: 'stopForShutdown(): Promise<void>',
+        description: 'Refuse new opens and MCP executions, then drain every acquired or opening editor before releasing its scope. The Host must retain accepted execution signals, its model and attachment services, HTTP and editor windows until completion.',
+        parameters: [],
+        returns: 'The retained shutdown result; failed or unconfirmed work rejects and prevents installation.',
+      },
       {
         signature: '@Remote(\'open\') async open(agent: Agent, parentOrigin: string): Promise<EditingWorkspace>',
         description: 'Open the Session\'s workspace and connect its tools only to that Agent.',
@@ -1680,6 +1743,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [{ name: 'meta', description: 'the stored session header (identity witness).' }, { name: 'inheritedEventCount', description: 'exact inherited prefix length for projection initialization and identity.' }, { name: 'events', description: 'the session\'s complete log, in seq order.' }],
         returns: 'the projection cut at the log end.',
       },
+      {
+        signature: 'stopForShutdown(): Promise<void>',
+        description: 'Freeze checkpoint producers and join live-session writes and cold-read write-back. Derived-cache write failures retain their existing caller or warning behavior.',
+        parameters: [],
+        returns: 'completion after admitted writes settle; the storage owner closes the domain.',
+      },
     ],
   },
   {
@@ -1988,6 +2057,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Log-backed title fold plus asynchronous fallback generation.',
     methods: [
       {
+        signature: 'stopForShutdown(): Promise<void>',
+        description: 'Freeze title writes and provider registration, abort generation, and join admitted work.',
+        parameters: [],
+        returns: 'completion after original provider calls settle, including providers that ignore cancellation.',
+      },
+      {
         signature: 'get(session: Session): SessionTitleSnapshot | undefined',
         description: 'Read the latest folded title from one live or replayed session.',
         parameters: [{ name: 'session', description: 'session whose log is the title source of truth.' }],
@@ -2019,6 +2094,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     summary: 'Abstract settings service.',
     description: 'Abstract settings service. Providers implement raw-document storage (`load`/`persist`) and push external changes through Settings.publish; the base class owns namespace registration, resolution, validation, change detection, and the `settings/updated` commit event.',
     methods: [
+      {
+        signature: 'stopForShutdown(): Promise<void>',
+        description: 'Stop a ready provider\'s writes and watcher starts, then join admitted operation chains. Queued writes not yet started reject through their original caller promises.',
+        parameters: [],
+        returns: 'completion after write queues and started watcher callbacks settle.',
+      },
       {
         signature: 'abstract readonly writable: boolean',
         description: 'Whether update may persist through this provider.',
@@ -2278,6 +2359,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [],
         returns: 'resolution after every unit is released.',
       },
+      {
+        signature: 'stopForShutdown(): Promise<void>',
+        description: 'Freeze domain opens and join admitted allocation, writes, and unit cleanup.',
+        parameters: [],
+        returns: 'completion after all owned domains close; cleanup failures reject.',
+      },
     ],
   },
   {
@@ -2355,7 +2442,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: '@Remote(\'prompt\') async prompt(request: SubagentPromptRequest, signal: AbortSignal): Promise<SubagentPromptReceipt>',
-        description: 'Deliver one browser-authored message to a continuable child through the exact live direct parent, retaining the caller-minted request identity and validated browser zone on the accepted message. Success identifies the message the child\'s FIFO inbox accepted; later execution is independent of this call. Image parts are admitted and persisted through the attachment store before delivery, and the child\'s model must accept image input.',
+        description: 'Deliver one browser-authored message to a continuable child through the exact live direct parent, retaining the caller-minted request identity and validated browser zone on the accepted message. Success identifies the message the child\'s FIFO inbox accepted; later execution is independent of this call. Image parts are admitted and persisted through the attachment store before delivery, and the child\'s model must accept image input. Shutdown freezes this entry and joins admitted attachment saves before completing.',
         parameters: [{ name: 'request', description: 'durable address, minted identity, content, and optional browser zone.' }, { name: 'signal', description: 'carrier cancellation, owning the call until inbox acceptance.' }],
         returns: 'the accepted message\'s inbox identity.',
         throws: ['{RemoteError} `gateway/bad-request`, `subagent/attachment-invalid`, `subagent/invalid-time-zone`, `subagent/parent-unavailable`, `subagent/not-resumable`, `subagent/unauthorized`, `subagent/delivery-unavailable`, `gateway/cancelled`, or `gateway/internal`.'],
@@ -2390,6 +2477,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Establish a published child on the named provider. Capability and semantic checks run before delegation. Provider ownership lasts until its promise fulfills; a rejection therefore has no run for the caller to dispose and emits no run lifecycle events. Post-publication turn and infrastructure failures settle through the returned run.',
         parameters: [{ name: 'name', description: 'the provider to use.' }, { name: 'request', description: 'child label, prompt, parent, signal, and optional capabilities.' }],
         returns: 'the published holder-owned run.',
+      },
+      {
+        signature: 'stopForShutdown(): Promise<void>',
+        description: 'Freeze provider registration and delegation; join starts, runs, continuations, and lifecycle listeners. The Host must begin agent-loop shutdown first so child disposal preserves queued input. Reuses each provider\'s disposal; provider removal does not release this ownership.',
+        parameters: [],
+        returns: 'one shared promise after all owned work settles.',
+        throws: ['an aggregate retaining provider, listener, and cleanup failures, including removed runs.'],
       },
     ],
   },
@@ -2478,6 +2572,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     summary: 'In-process registry for replaceable PTY backends and exact-Agent sessions.',
     description: 'In-process registry for replaceable PTY backends and exact-Agent sessions.',
     methods: [
+      {
+        signature: 'stopForShutdown(): Promise<void>',
+        description: 'Freeze terminal admission and await pending setup rollback and every owned close. Cleanup failures remain observable after ordinary teardown removes their records.',
+        parameters: [],
+        returns: 'one shared completion; rejects if any owned cleanup failed.',
+      },
       {
         signature: 'registerBackend(backend: TerminalBackend): () => void',
         description: 'Register one backend type for this effect scope.',
@@ -2743,6 +2843,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'disposer removing this source and cancelling its active streams.',
       },
       {
+        signature: 'stopForShutdown(): Promise<void>',
+        description: 'Freeze requests, cancel stream observation, and join original invocations and iterator cleanup. Admitted unary calls retain their caller signal; shutdown does not replay or cancel remote work.',
+        parameters: [],
+        returns: 'completion after owned calls settle; retained iterator cleanup failures reject.',
+      },
+      {
         signature: 'async invoke(request: InvokeRemoteRequest): Promise<unknown>',
         description: 'Invoke one live Remote method through strict generated reflection or SRC markers.',
         parameters: [{ name: 'request', description: 'decoded endpoint and exact named wire arguments.' }],
@@ -2849,6 +2955,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Register a raw-HTML index transform, the escape hatch for markup no IndexInjection row expresses: renderIndex applies taps in registration order after rendering the structured rows.',
         parameters: [{ name: 'transform', description: 'pure html-to-html function.' }],
         returns: 'the disposer removing the transform.',
+      },
+      {
+        signature: 'stopForShutdown(): Promise<void>',
+        description: 'Close admission and sockets, then join original HTTP and upgrade handlers.',
+        parameters: [],
+        returns: 'completion after handlers settle; transport or observer cleanup failures reject.',
       },
       {
         signature: 'applyIndexTaps(html: string): string',
@@ -3568,6 +3680,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'AgentSetupCommit',
     declaration: 'export interface AgentSetupCommit {\n    commit(): void;\n}',
+  },
+  {
+    name: 'AgentShutdownCheckpoint',
+    declaration: 'export interface AgentShutdownCheckpoint {\n    readonly sessionId: SessionId;\n    readonly nextSeq: SessionLogOffset;\n}',
   },
   {
     name: 'AgentStatus',
@@ -5003,7 +5119,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'Session',
-    declaration: 'export class Session {\n    get surface(): SessionSurface;\n    readonly header: SessionHeader;\n    readonly inheritedEventCount: SessionLogOffset;\n    get id(): SessionId;\n    readonly firstLiveSeq: SessionLogOffset;\n    static create(id: SessionId, seed?: readonly SessionEvent[], header?: SessionHeader, inheritedEventCount?: SessionLogOffset): Session;\n    static fromRestore(id: SessionId, seed: readonly SessionEvent[], header: SessionHeader, inheritedEventCount: SessionLogOffset): Session;\n    eventAt(seq: SessionSeq): SessionEvent | undefined;\n    snapshotEvents(fromSeq: SessionLogOffset = SessionLogOffset(0), toSeqExclusive: SessionLogOffset = this.seq): readonly SessionEvent[];\n    ownEvents(): readonly SessionEvent[];\n    isOwnSeq(seq: SessionSeq): boolean;\n    get seq(): SessionLogOffset;\n    append<T extends SessionEventType>(type: T, data: SessionEventMap[T], ...opts: T extends SurfaceEventType ? [\n        opts: SurfaceIntent\n    ] : [\n    ]): SessionEvent<T>;\n    requestHeader(): EpochHeader | undefined;\n    requestContext(): RequestContext | undefined;\n    deriveMessages(): Message[];\n    deriveEventMessage(event: SessionEvent): Message | null;\n}',
+    declaration: 'export class Session {\n    get surface(): SessionSurface;\n    readonly header: SessionHeader;\n    readonly inheritedEventCount: SessionLogOffset;\n    get id(): SessionId;\n    readonly firstLiveSeq: SessionLogOffset;\n    static create(id: SessionId, seed?: readonly SessionEvent[], header?: SessionHeader, inheritedEventCount?: SessionLogOffset): Session;\n    static fromRestore(id: SessionId, seed: readonly SessionEvent[], header: SessionHeader, inheritedEventCount: SessionLogOffset): Session;\n    eventAt(seq: SessionSeq): SessionEvent | undefined;\n    snapshotEvents(fromSeq: SessionLogOffset = SessionLogOffset(0), toSeqExclusive: SessionLogOffset = this.seq): readonly SessionEvent[];\n    ownEvents(): readonly SessionEvent[];\n    isOwnSeq(seq: SessionSeq): boolean;\n    get seq(): SessionLogOffset;\n    seal(): SessionLogOffset;\n    append<T extends SessionEventType>(type: T, data: SessionEventMap[T], ...opts: T extends SurfaceEventType ? [\n        opts: SurfaceIntent\n    ] : [\n    ]): SessionEvent<T>;\n    requestHeader(): EpochHeader | undefined;\n    requestContext(): RequestContext | undefined;\n    deriveMessages(): Message[];\n    deriveEventMessage(event: SessionEvent): Message | null;\n}',
   },
   {
     name: 'SessionAccess',
@@ -5711,7 +5827,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SubagentRuntime',
-    declaration: 'export class SubagentRuntime extends TypertRemoteService {\n    constructor(ctx: Context);\n    async startContinuable(spec: ContinuableStartSpec): Promise<ContinuableStart>;\n    async sendMessage(sender: Agent, targetId: SessionId, content: ContentBlock[], options: SubagentSendMessageOptions): Promise<MessageId>;\n    interrupt(targetSessionId: SessionId, authority: SubagentInterruptAuthority): void;\n    async drainContinuableDescendants(parents: readonly Agent[]): Promise<void>;\n    async drainContinuableChildren(parent: Agent, childIds: readonly SessionId[]): Promise<void>;\n    listChildren(parentSessionId: SessionId, signal?: AbortSignal): Promise<SubagentListEntry[]>;\n    listDescendants(rootSessionId: SessionId, signal?: AbortSignal): Promise<SubagentDescendantListEntry[]>;\n    @Remote(\'list\')\n    async remoteExportList(parentSessionId: SessionId, signal: AbortSignal): Promise<SubagentCatalog>;\n    @Remote(\'prompt\')\n    async prompt(request: SubagentPromptRequest, signal: AbortSignal): Promise<SubagentPromptReceipt>;\n    @Remote(\'interruptByParent\')\n    interruptByParent(childSessionId: SessionId, parentSessionId: SessionId, mode: \'continuable\'): SubagentInterruptReceipt;\n    registerProvider(provider: SubagentProvider): () => void;\n    getProvider(name: string): SubagentProvider | undefined;\n    list(): string[];\n    async start(name: string, request: SubagentStartRequest): Promise<SubagentRun>;\n}',
+    declaration: 'export class SubagentRuntime extends TypertRemoteService {\n    constructor(ctx: Context);\n    async startContinuable(spec: ContinuableStartSpec): Promise<ContinuableStart>;\n    async sendMessage(sender: Agent, targetId: SessionId, content: ContentBlock[], options: SubagentSendMessageOptions): Promise<MessageId>;\n    interrupt(targetSessionId: SessionId, authority: SubagentInterruptAuthority): void;\n    async drainContinuableDescendants(parents: readonly Agent[]): Promise<void>;\n    async drainContinuableChildren(parent: Agent, childIds: readonly SessionId[]): Promise<void>;\n    listChildren(parentSessionId: SessionId, signal?: AbortSignal): Promise<SubagentListEntry[]>;\n    listDescendants(rootSessionId: SessionId, signal?: AbortSignal): Promise<SubagentDescendantListEntry[]>;\n    @Remote(\'list\')\n    async remoteExportList(parentSessionId: SessionId, signal: AbortSignal): Promise<SubagentCatalog>;\n    @Remote(\'prompt\')\n    async prompt(request: SubagentPromptRequest, signal: AbortSignal): Promise<SubagentPromptReceipt>;\n    @Remote(\'interruptByParent\')\n    interruptByParent(childSessionId: SessionId, parentSessionId: SessionId, mode: \'continuable\'): SubagentInterruptReceipt;\n    registerProvider(provider: SubagentProvider): () => void;\n    getProvider(name: string): SubagentProvider | undefined;\n    list(): string[];\n    async start(name: string, request: SubagentStartRequest): Promise<SubagentRun>;\n    stopForShutdown(): Promise<void>;\n}',
   },
   {
     name: 'SubagentSendMessageOptions',

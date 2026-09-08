@@ -61,6 +61,8 @@ session.deriveMessages()         // the derived model history
 
 逻辑 `SessionHeader.isSeeded` 字段报告是否存在 fork 历史，而不公开位置整数。`Session.inheritedEventCount` 保留经过校验的精确 `SessionLogOffset`；`ownEvents()` 返回从该切点开始的事件，`isOwnSeq(seq)` 只接受已存在且由 child 拥有的位置。底层带 seed 构造必须显式提供 `seed` 与 `inheritedEventCount`，因为构造 seed 可以在继承前缀之后包含 child 自有的设置事件。
 
+`session.seal()` 永久拒绝后续追加并返回最终排他事件偏移。事件正在发布时不能封存。被拒绝的晚到追加不会改变日志，但会使后续封存验证失败，即使调用方捕获了异常。封存前必须先停止生产方；封存本身不会写入存储。
+
 ### 刷新持久状态
 
 `ctx.sessions.flush(session)` 分发需等待完成的持久性检查点：每个持久化监听器都会刷新，调用在所有监听器结算后完成。需要立即持久性屏障的生产方应等待它，而不是假定写后刷新已完成。

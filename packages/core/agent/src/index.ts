@@ -250,6 +250,7 @@ interface FactorySlot {
 export class AgentRegistry extends Service {
   private store = new Map<SessionId, AgentEntry>()
   private factory: FactorySlot | undefined
+  private admissionOpen = true
   private readonly initiators = new AsyncLocalStorage<Agent | undefined>()
   private readonly initiatorRuns = new AsyncLocalStorage<InitiatorRun>()
   private initiatorState: 'active' | 'closing' | 'disposed' = 'active'
@@ -388,6 +389,26 @@ export class AgentRegistry extends Service {
     return this.factory
   }
 
+  /** Permanently close agent creation, publication, and live inbox mutation admission for Host shutdown. */
+  freezeAdmission(): void {
+    this.admissionOpen = false
+    for (const agent of this.list()) agent.inbox.freezeAdmission()
+  }
+
+  /** Whether this registry still admits new work and publications. */
+  get acceptingWork(): boolean {
+    return this.admissionOpen
+  }
+
+  /**
+   * Reject work after Host shutdown has frozen admission.
+   * Drivers check this before accepting input or starting maintenance.
+   * @throws when this registry has been frozen for shutdown.
+   */
+  assertAdmission(): void {
+    if (!this.admissionOpen) throw new Error('agent admission is closed for shutdown')
+  }
+
   /**
    * Create and publish a new agent through the registered factory.
    * Distinct from {@link register} (which records an already-constructed
@@ -398,6 +419,7 @@ export class AgentRegistry extends Service {
    * @returns the handle after setup, rollback-covered publication, and loop start complete.
    */
   async create(options: CreateAgentOptions): Promise<AgentHandle> {
+    this.assertAdmission()
     const ownerCtx = this.ctx
     // Re-trace a Service-backed factory through the accessing context
     // explicitly. This preserves AgentLoop's dependency origin while binding
@@ -417,6 +439,7 @@ export class AgentRegistry extends Service {
    * @returns the handle after setup, rollback-covered publication, and loop start complete.
    */
   async resume(options: ResumeAgentOptions): Promise<AgentHandle> {
+    this.assertAdmission()
     const ownerCtx = this.ctx
     const { target } = this.requireFactory()
     const receiver = getTraceable(ownerCtx, target)
@@ -467,6 +490,7 @@ export class AgentRegistry extends Service {
    *   that creation dispatch unwinds.
    */
   enter(agent: Agent, owner: Agent | undefined): () => void {
+    this.assertAdmission()
     const id = agent.id
     if (id !== agent.session.id) {
       throw new Error(`agent id "${id}" does not match session id "${agent.session.id}"`)

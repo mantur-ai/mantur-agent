@@ -72,6 +72,13 @@ Dynamic Plugin registry and Host-half lifecycle.
 
 ```ts cordis-catalog
 /**
+ * Close activation and invocation admission, cancel pending approvals, and join admitted calls and normal plugin retraction.
+ * Arbitrary background work and operating-system descendants remain unverified after any activation.
+ * @returns completion of managed work; retained retraction failures reject every call.
+ */
+stopForShutdown(): Promise<void>
+
+/**
  * Define a new Plugin's first Package or append a Package to an existing Plugin.
  * @param request - Session ownership, Plugin selection, metadata, and source code.
  * @returns Host-minted Plugin and Package identities with declared-half metadata.

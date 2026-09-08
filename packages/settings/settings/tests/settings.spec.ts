@@ -590,7 +590,7 @@ describe('third review regressions', () => {
     expect(watcher).not.toHaveBeenCalled()
   })
 
-  it('waits for an in-flight watch invocation at service dispose', async () => {
+  it.each([false, true])('waits for an in-flight watch invocation (explicit shutdown: %s)', async (explicit) => {
     const { ctx, provider, fiber } = await boot()
     const scope = ctx.settings.register('ui-theme', ThemeSchema)
     let release: (() => void) | undefined
@@ -602,7 +602,7 @@ describe('third review regressions', () => {
     provider.pushExternal({ 'ui-theme': { theme: 'light' } })
     await vi.waitFor(() => { expect(release).toBeDefined() })
     let disposed = false
-    const disposal = fiber.dispose().then(() => { disposed = true })
+    const disposal = (explicit ? provider.stopForShutdown() : fiber.dispose()).then(() => { disposed = true })
     await new Promise(resolve => setTimeout(resolve, 15))
     expect(disposed).toBe(false)
     release!()

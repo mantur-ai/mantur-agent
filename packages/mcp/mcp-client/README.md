@@ -122,9 +122,17 @@ This section explains the design decisions behind the bridge and points at the c
 
 ### Lifecycle and sync
 
-`apply` resolves the reconnect policy, reserves the `serverName` inside the current registration scope, starts the supervisor, and awaits the initial connection plus discovery. Independent Agent scopes may reuse the same namespace because their tools and transports are isolated; a duplicate inside one scope fails at load. The supervisor serializes every sync — initial, notification, and reconnect — through one queue so two syncs can never interleave their dispose-previous/register-next swap. Disposal cancels pending reconnects, closes the live client, waits for the in-flight attempt and queued syncs to quiesce, and unregisters the current generation. The [auto-reconnect Agent Note](../../../.agents/notes/implemented/feature/2026-08-06-mcp-client-auto-reconnect.md) owns the reconnect decision.
+`apply` resolves the reconnect policy, reserves the `serverName` inside the current registration scope, starts the supervisor, and awaits the initial connection plus discovery. Independent Agent scopes may reuse the same namespace because their tools and transports are isolated; a duplicate inside one scope fails at load. The supervisor serializes every sync — initial, notification, and reconnect — through one queue so two syncs can never interleave their dispose-previous/register-next swap. The [auto-reconnect Agent Note](../../../.agents/notes/implemented/feature/2026-08-06-mcp-client-auto-reconnect.md) owns the reconnect decision.
 
 The supervisor listens for `notifications/tools/list_changed` and queues a re-sync; a fetch-phase failure keeps the previous generation registered, while a registration conflict rolls back the attempted generation. Each outage shares one attempt budget: after `maxAttempts` consecutive failures the tools are unregistered and reconnection stops, and a connection that stays up past `maxDelayMs` resets the budget.
+
+### Owned shutdown
+
+`connectMcpServer(ctx, config, beforeClose?)` mounts the same scoped connection and returns its readiness and shutdown handle. `stopAccepting()` synchronously rejects new executions and stops reconnects, then waits for accepted calls and their result-image writes without aborting their signals or invalidating their generation. Callers must keep the Agent, model-capability and attachment services available until this wait finishes.
+
+`dispose()` drains accepted calls, awaits the optional remote-owner `beforeClose`, closes the transport, and waits for connection and synchronization work before unregistering tools. Scoped disposal releases the namespace only after successful cleanup. Each shutdown phase uses `toolCallTimeoutMs`; transport closure retains the existing five-second limit and requires both the close promise and close notification. Repeated calls retain the original result. Execution, cancellation, attachment-storage, owner-drain and transport-cleanup failures reject shutdown; a timed-out drain does not cancel remote work or authorize installation. Capability and invalid-image refusals remain ordinary text results.
+
+HTTP transport closure cannot establish that a remote editor saved its project or finished a paid job. That application supplies the prerequisite through the existing connection; the MCP bridge adds no alternate protocol and never replays tool calls. The [owned shutdown decision](../../../.agents/notes/implemented/bug-fix/2026-09-07-mcp-owned-shutdown.md) records the failure and ownership guarantees.
 
 ### Tool execution internals
 
@@ -191,7 +199,7 @@ Append-only; newly visible content follows the reusable request prefix and does 
 These limits describe what you cannot do with this plugin and when it needs operational attention. They are current package constraints, not a comparison with other MCP clients or a task backlog.
 
 - **Tools are the only bridged MCP capability** — Resources and Prompts have no harness consumer mechanism and are deferred.
-- **Startup and discovery timeouts are inherited from the MCP SDK** — the plugin exposes no connection or discovery timeout; each `initialize` and paginated `tools/list` request uses the SDK's 60-second request default, so an unresponsive server or cursor chain can delay both activation and teardown while the initial synchronization settles.
+- **Startup and discovery timeouts are inherited from the MCP SDK** — the plugin exposes no connection or discovery timeout; each `initialize` and paginated `tools/list` request uses the SDK's 60-second request default, so an unresponsive server or cursor chain can delay activation. Shutdown rejects when its own wait expires instead of claiming synchronization finished.
 - **HTTP recovery recognizes session expiry only** — an established session's SDK HTTP 404 triggers fresh initialization after local close; other HTTP request errors do not trigger the supervisor. Local close cannot prove that an uncertain remote mutation was rolled back.
 - **Image is the only durable rich-result bridge** — PNG, JPEG, WebP, and GIF enter Native context after exact capability proof. Audio and embedded-resource payloads remain execution-local with explicit diagnostics, while resource links preserve only their name and URI as text.
 - **Unsupported MCP output schemas are not enforced** — `structuredContent` falls back to `JsonValue` when the advertised schema uses vocabulary outside the harness subset.
@@ -206,7 +214,7 @@ These limits describe what you cannot do with this plugin and when it needs oper
 This Dev Note is working context for maintainers: open design questions and directions that are not decided. It is explicitly non-authoritative — shipped behavior, limits, and accepted rationale live in the sections above, the package code, and the linked Agent Notes.
 
 - The public-name algorithm is a v1 contract pinned by tests; changing it after release would break session history and permission rules.
-- An explicit DSH-owned connection and discovery timeout is an open direction; the SDK's 60-second default bounds startup and teardown.
+- An explicit DSH-owned connection and discovery timeout is an open direction; the SDK's 60-second default bounds each startup request.
 - Bridging MCP Resources needs a harness-side injection decision (system prompt, on demand, or model-triggered); bridging Prompts needs a prompt-template concept the harness lacks.
 - The pinned MCP SDK is still evolving; a breaking upstream change requires updating the bridge.
 

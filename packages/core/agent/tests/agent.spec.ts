@@ -1,4 +1,4 @@
-import { describe, expect, expectTypeOf, it } from 'vitest'
+import { describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { Context, Service, symbols } from '@deepseek-ai/cordis'
 import { createUserMessage, freezeMessage } from '@deepseek-ai/dsh-llm'
 import { Session, SessionId, type UserMessage } from '@deepseek-ai/dsh-session'
@@ -39,6 +39,47 @@ function stubAgent(rawId: string, overrides: Partial<Agent> = {}): Agent {
 }
 
 describe('Inbox', () => {
+  it('reports both failures if a partial claim cannot be restored', () => {
+    const session = Session.create(SessionId('failed-claim-restore'))
+    const inbox = new Inbox(session, { inserted: () => {}, discarded: () => {}, claimed: () => {} })
+    inbox.append('next-step', createUserMessage({ content: [{ type: 'text', text: 'step' }], source: { kind: 'user' } }))
+    inbox.append('next-turn', createUserMessage({ content: [{ type: 'text', text: 'turn' }], source: { kind: 'user' } }))
+    const append = session.append.bind(session)
+    const failure = new Error('claim write failed')
+    const restoration = new Error('restoration write failed')
+    const spy = vi.spyOn(session, 'append').mockImplementationOnce(append)
+      .mockImplementationOnce(() => { throw failure }).mockImplementationOnce(() => { throw restoration })
+    try {
+      expect(() => inbox.claim('next-turn', 1)).toThrow(new AggregateError([failure, restoration], 'inbox claim and restoration failed'))
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('restores the first queue if claiming the second queue fails before execution', () => {
+    const session = Session.create(SessionId('partial-claim'))
+    const claimed = vi.fn()
+    const inbox = new Inbox(session, { inserted: () => {}, discarded: () => {}, claimed })
+    const step = createUserMessage({ content: [{ type: 'text', text: 'step' }], source: { kind: 'user' } })
+    const turn = createUserMessage({ content: [{ type: 'text', text: 'turn' }], source: { kind: 'user' } })
+    inbox.append('next-step', step)
+    inbox.append('next-turn', turn)
+    const append = session.append.bind(session)
+    const failure = new Error('second claim append failed')
+    const spy = vi.spyOn(session, 'append').mockImplementationOnce(append).mockImplementationOnce(() => { throw failure })
+    try {
+      expect(() => inbox.claim('next-turn', 1)).toThrow(failure)
+      expect(inbox.nextStep).toEqual([step])
+      expect(inbox.nextTurn).toEqual([turn])
+      expect(claimed).not.toHaveBeenCalled()
+      const replay = new Inbox(session, { inserted: () => {}, discarded: () => {}, claimed: () => {} })
+      expect(replay.nextStep).toEqual([step])
+      expect(replay.nextTurn).toEqual([turn])
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
   it('rejects an invalid durable splice during reconstruction', () => {
     const session = Session.create(SessionId('invalid-inbox-replay'))
     session.append('agent/inbox/spliced', {
@@ -360,6 +401,82 @@ describe('explicit cancellation contract', () => {
 })
 
 describe('AgentRegistry factory seam', () => {
+  it('freezes live inbox producers while retaining an unexecuted claim for restoration', async () => {
+    const ctx = new Context()
+    const fiber = await ctx.plugin(AgentRegistry)
+    const agent = stubAgent('frozen-inbox')
+    const detach = ctx.agents.enter(agent, undefined)
+    const first = createUserMessage({ content: [{ type: 'text', text: 'claimed' }], source: { kind: 'user' } })
+    const later = createUserMessage({ content: [{ type: 'text', text: 'queued' }], source: { kind: 'user' } })
+    agent.inbox.append('next-turn', first)
+    const claim = agent.inbox.claim('next-turn', 1)
+    agent.inbox.append('next-turn', later)
+    try {
+      ctx.agents.freezeAdmission()
+      const before = agent.session.snapshotEvents()
+      for (const mutate of [
+        () => { agent.inbox.append('next-step', first) },
+        () => { agent.inbox.prepend('next-turn', first) },
+        () => agent.inbox.replace(later.id, first),
+        () => agent.inbox.remove(later.id),
+        () => { agent.inbox.clear() },
+        () => agent.inbox.splice('next-turn', 0, 1, []),
+        () => agent.inbox.claim('next-turn', 2),
+      ]) expect(mutate).toThrow('inbox admission is closed for shutdown')
+      expect(agent.session.snapshotEvents()).toEqual(before)
+      expect(agent.inbox.nextTurn).toEqual([later])
+      claim.restore()
+      expect(agent.inbox.nextTurn).toEqual([first, later])
+      expect(() => { claim.restore() }).toThrow('already been restored')
+    } finally {
+      detach()
+      await fiber.dispose()
+    }
+  })
+
+  it('rejects new creation, resume and direct publication after admission freezes', async () => {
+    const ctx = new Context()
+    const fiber = await ctx.plugin(AgentRegistry)
+    const { factory, calls } = stubFactory()
+    ctx.agents.setFactory(factory)
+    try {
+      expect(() => { ctx.agents.assertAdmission() }).not.toThrow()
+      ctx.agents.freezeAdmission()
+      ctx.agents.freezeAdmission()
+      await expect(ctx.agents.create({ sessionId: SessionId('closed-create') })).rejects.toThrow('admission is closed')
+      await expect(ctx.agents.resume({ resumeSessionId: SessionId('closed-resume') })).rejects.toThrow('admission is closed')
+      expect(() => ctx.agents.enter(stubAgent('closed-enter'), undefined)).toThrow('admission is closed')
+      expect(calls).toEqual({ create: [], resume: [] })
+      expect(ctx.agents.list()).toEqual([])
+    } finally {
+      await fiber.dispose()
+    }
+  })
+
+  it('refuses publication by a factory that passed admission before the freeze', async () => {
+    const ctx = new Context()
+    const fiber = await ctx.plugin(AgentRegistry)
+    const publication = Promise.withResolvers<undefined>()
+    const { factory } = stubFactory()
+    factory.createAgent = async (_owner, options) => {
+      await publication.promise
+      const agent = stubAgent(options.sessionId)
+      ctx.agents.enter(agent, undefined)
+      return { agent, dispose: async () => {} }
+    }
+    ctx.agents.setFactory(factory)
+    try {
+      const pending = ctx.agents.create({ sessionId: SessionId('late-create') })
+      ctx.agents.freezeAdmission()
+      publication.resolve(undefined)
+      await expect(pending).rejects.toThrow('admission is closed')
+      expect(ctx.agents.list()).toEqual([])
+    } finally {
+      publication.resolve(undefined)
+      await fiber.dispose()
+    }
+  })
+
   function stubFactory() {
     const calls: {
       create: Array<{ ownerCtx: Context; options: CreateAgentOptions }>

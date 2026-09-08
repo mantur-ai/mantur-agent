@@ -486,6 +486,7 @@ it('reports standalone identity without requiring a native connection', async ()
   transport()
   const { account } = await bootNative(false, { identity: 'standalone' })
   expect(account.identityMode()).toBe('standalone')
+  await expect(account.stopNativeForShutdown()).rejects.toThrow('requires an initialized desktop-managed provider')
 })
 
 it('does not consult standalone credentials when native connection construction fails', async () => {
@@ -531,4 +532,61 @@ it('unblocks and releases owned resources when a case fails before normal cleanu
   expect(Object.getOwnPropertyDescriptor(process, 'connected')).toEqual(originalConnected)
   expect(process.listeners('message')).toEqual(originalMessages)
   expect(process.listeners('disconnect')).toEqual(originalDisconnects)
+})
+
+it.each([false, true])('joins native command tree and lease receipt before explicit shutdown (failed receipt: %s)', async (failedReceipt) => {
+  const ipc = transport()
+  ipc.handle((frame) => { ipc.reply(frame, frame.type.endsWith('open-scope') ? authorized() : undefined) })
+  const { ctx, account } = await bootNative(true)
+  const spec = { argv: [process.execPath, '-e', 'setInterval(() => {}, 1000)'], cwd: process.cwd(), graceMs: 100,
+    stdio: { stdin: 'ignore' as const, stdout: { maxBytes: 4096 }, stderr: { maxBytes: 4096 } } }
+  const command = await ctx.commandScopes.spawn(spec)
+  const receipt = Promise.withResolvers<Frame>()
+  ipc.handle((frame) => { receipt.resolve(frame) })
+  const stopping = account.stopNativeForShutdown()
+  let settled = false
+  void stopping.then(() => { settled = true }, () => { settled = true })
+  expect(account.stopNativeForShutdown()).toBe(stopping)
+  const frame = await receipt.promise
+  expect(frame.type).toBe('mantur:account:close-scope')
+  await command.done
+  expect(await command.waitForExit()).toBe(true)
+  expect(settled).toBe(false)
+  await expect(ctx.commandScopes.spawn(spec)).rejects.toThrow('Required command identity provider')
+  ipc.reply(frame, undefined, !failedReceipt)
+  if (failedReceipt) {
+    await expect(stopping).rejects.toThrow('Native account shutdown failed')
+    await expect(account.stopNativeForShutdown()).rejects.toThrow('Native account shutdown failed')
+    await expect(command.cleanup).rejects.toThrow()
+  } else {
+    await stopping
+    await command.cleanup
+  }
+  expect(account.identityMode()).toBe('desktop-managed')
+})
+
+it('joins native API body cancellation through the explicit provider shutdown consumer', async () => {
+  const ipc = transport()
+  ipc.handle((frame) => { ipc.reply(frame, frame.type.endsWith('open-scope') ? authorized() : undefined) })
+  const { account } = await bootNative()
+  const entered = Promise.withResolvers<undefined>()
+  const release = Promise.withResolvers<undefined>()
+  unblockers.push(() => { release.resolve(undefined) })
+  const body = new ReadableStream<Uint8Array>({
+    async cancel() { entered.resolve(undefined); await release.promise },
+  })
+  brokerFetch(async () => new Response(body))
+  const response = await account.request('/api/v1/me', { authenticated: true })
+  expect(response).toBeInstanceOf(Response)
+  const stopping = account.stopNativeForShutdown()
+  let settled = false
+  void stopping.then(() => { settled = true }, () => { settled = true })
+  await entered.promise
+  await expect(account.request('/api/v1/me', { authenticated: true })).rejects.toThrow('Native account connection is closing')
+  expect(settled).toBe(false)
+  expect(ipc.frames.filter(frame => frame.type.endsWith('close-scope'))).toHaveLength(0)
+  release.resolve(undefined)
+  await stopping
+  expect(body.locked).toBe(false)
+  expect(ipc.frames.filter(frame => frame.type.endsWith('close-scope'))).toHaveLength(1)
 })

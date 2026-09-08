@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-安装包中的桌面客户端使用包内资源目录和 Electron 可执行文件启用 `ui-mantur-editing`。开发 profile 显式选择 `runtimeMode: development` 并提供下表运行参数。选择剪辑通过已认证的 Remote 网关打开当前会话的编辑器。会话顶部也提供剪辑入口，便于收起工作台或刷新页面后重新打开已有会话的工程。没有选择会话或工作目录时显示明确提示。收起工作台保留当前会话的编辑器页面和原生 Agent 绑定，再次展开可继续同一编辑草稿。卸载 Agent 或 Host 会释放运行实例。
+安装包中的桌面客户端使用包内资源目录和 Electron 可执行文件启用 `ui-mantur-editing`。开发 profile 显式选择 `runtimeMode: development` 并提供下表运行参数。选择剪辑通过已认证的 Remote 网关打开当前会话的编辑器。会话顶部也提供剪辑入口，便于收起工作台或刷新页面后重新打开已有会话的工程。没有选择会话或工作目录时显示明确提示。收起工作台保留当前会话的编辑器页面和原生 Agent 绑定，再次展开可继续同一编辑草稿。卸载 Agent 或 Host 请求相同的受检查退出流程；排空结果未确认时保留所属实例。
 
 每个会话使用 `<cwd>/剪辑/<session-id>/`：`工程/` 保存工程和运行状态，`素材/` 保存导入媒体，`导出/` 是默认成片目录。Host 从已解析 Agent 的 Session header 读取 `cwd`，浏览器不能指定其他目录。会话目录拒绝路径穿越和符号链接，重新打开保留已有文件。同一项目内的不同会话也使用独立编辑进程和工具作用域。
 
@@ -43,10 +43,10 @@ kind: "package-reference"
 | `editorRoot` | 必填 | 已准备源码或包内资源目录的绝对路径 |
 | `nodeExecutable` | 必填 | 开发模式使用 Node 绝对路径；打包模式使用已安装 Electron 可执行文件 |
 | `startupTimeoutMs` | 必填 | 编辑器启动最长等待时间 |
-| `stopTimeoutMs` | 必填 | 强制停止前的退出宽限时间 |
-| `toolCallTimeoutMs` | 必填 | 单次剪辑工具调用最长时间 |
+| `stopTimeoutMs` | 必填 | 关闭确认及子进程和管道结束的最长等待；超时只报错，不强杀 |
+| `toolCallTimeoutMs` | 必填 | 单次剪辑工具调用及每次编辑器排空请求的最长时间 |
 
-打包模式在打开会话前校验目标平台的 `manifest.json`；`./packaged-resources` 导出供安装包冒烟复用相同资源检查。缺少资源、不支持的目标或越出安装目录的路径会报错；运行时不会下载替代资源或启动 Vite。生产入口只将需要写入的 Remotion bundle 和 compositor 复制到会话私有目录，并将临时文件置于其中。正常退出在 HTTP 关闭后删除该目录，Host 随后等待子进程结束。强制终止可能保留私有运行文件。持久工程、素材和导出目录保留。资源字段及尚未完成的分发检查见[打包运行提案](../../../.agents/notes/proposed/architecture/2026-09-07-mantur-packaged-editing-runtime.zh.md)。
+打包模式在打开会话前校验目标平台的 `manifest.json`；`./packaged-resources` 导出供安装包冒烟复用相同资源检查。缺少资源、不支持的目标或越出安装目录的路径会报错；运行时不会下载替代资源或启动 Vite。生产入口只将需要写入的 Remotion bundle 和 compositor 复制到会话私有目录，并将临时文件置于其中。正常退出在 HTTP 关闭后删除该目录，Host 随后等待子进程结束。排空或关闭失败会保留私有运行文件，并拒绝退出成功。持久工程、素材和导出目录保留。资源字段及尚未完成的分发检查见[打包运行提案](../../../.agents/notes/proposed/architecture/2026-09-07-mantur-packaged-editing-runtime.zh.md)。
 
 “项目素材”浏览当前 Agent 目录及子目录。兼容素材直接引用原文件；必要的兼容性转换另存文件，不修改原片。`import_asset` 与 `import_folder` 使用同一接口。隐藏目录、`node_modules` 及项目的 `剪辑` 目录不参与浏览和批量导入。刷新可读取新增文件；丢失的源文件保留离线状态，直到用户选择替代文件。移除素材池条目或引用记录不删除原文件。
 
@@ -59,6 +59,18 @@ Agent 导入本地文件在手动模式下保留单次确认，素材先加入�
 
 <details>
 <summary>实现细节 — 点击展开</summary>
+
+`ctx.manturEditing.stopForShutdown()` 停止接收新的打开请求及原生 MCP 调用，保留正在启动和已经打开的实例，等待已接受的响应与附件写入。随后编辑器冻结浏览器输入，等待已接受的浏览器工作及其后续提交的任务，通过现有认证的 poll/result 通道保存工程和运行状态，并确认浏览器注销已经持久化。原生传输在该确认之后关闭。MCP GET 长连接及 DELETE 处理器的原始 Promise 与保存回调分别保留；Host 关闭已排空的 MCP 客户端后，适配器等待 `finishTransportShutdown()`，随后才关闭 HTTP。Host 最终必须收到编辑器子进程的实际 `close`，包括管道结束。重复调用保留原有成功或失败。超时保留运行中的工作并报错；协调器必须在此 Promise 完成前保持 Agent 服务、HTTP 和编辑器页面可用。
+
+应用[打包补丁](adapters/mantur-cut-packaged.patch)得到编辑器树 `2a5be55239826a9e74bde5a5a5484a0f033d4da0` 后，再应用[退出补丁](adapters/mantur-cut-shutdown.patch)。退出补丁不增加公开 MCP 工具，也不修改固定的音频收尾流程。受管理的渲染路径传播 `browser.close()` 失败，但 Remotion 4.0.509 没有提供受支持的子进程及管道完整关闭确认；实际取得渲染浏览器的实例因此拒绝退出确认。使用过尚未接入排空的工作来源，或保留有保存及任务错误时，也拒绝确认。该增量不代表完整安装许可；[退出决策](../../../.agents/notes/implemented/bug-fix/2026-09-08-mantur-editing-owned-shutdown.zh.md)记录验证限制。
+
+编辑器通过工程存储通道确认实际语义向量可用性后才执行索引操作；检查失败或响应无效仍然报错。已接受的修改纳入浏览器退出等待。扩展与模型目录的指定 GET 请求保留原始完成 Promise；下载及安装请求仍须具备自己的退出管理。
+
+| 退出补丁层 | 固定值 |
+|---|---|
+| 编辑器提交 | `aa893e75d5811275bfb59f8974133bf0ce4339f5` |
+| 结果树 | `203f06ef3a916ee19b9948793e50178b912fd90b` |
+| 补丁 SHA-256 | `dd0abd932f995265aab92a31a870c854833fb889a986a83731550091079227ca` |
 
 Host Remote 解析 Agent，合并并发打开请求，并启动 `adapters/mantur-runtime.mjs`。既有 MCP 客户端挂载于该 Agent 作用域。所有挂载的 MCP 客户端解析到同一 peer 实例，保留 Agent 作用域内的服务器名称预留。MCP bearer 只存在于 Host 内存和子进程环境。卸载等待连接与子进程退出。Client 忽略已切走会话的启动结果。本包不发布 invariant companion：退出状态由子进程句柄直接持有，连接和工具版本约束由 MCP 客户端负责。
 

@@ -11,6 +11,8 @@ English | [中文](README.zh.md)
 
 `dsh-agent-presets` composes each agent session from one preset: a directory holding a single `agent.cordis.yml` that names the plugins the session runs with. A session that names a preset gets that preset's tools, prompt sections, and skills, while every other session keeps its own, so one process can run several differently composed agents at once. The package maintains the preset roster: it lists every preset the configured roots supply — shipped ones and your own under `<dshHome>/.agent-presets` — shows a reason when a preset cannot start a session, and lets you create new presets by copying existing ones. The default preset is a setting you can override per deployment or per user, and a session can switch to a different preset only while it has produced nothing. A preset is as privileged as the plugins it names, so a preset you author carries the same trust as shell access.
 
+`stopForShutdown()` freezes new composition, selection, inheritance, and authoring calls and joins admitted operations. Existing standing plugin trees remain installed: the Host enumerates `livePresetMounts(ctx.fiber)` after this drain and stops their owners separately, including superseded generations. This method settles operations without replacing their caller-visible outcomes; it does not close plugin owners or produce an installation receipt.
+
 ## Table of Contents
 
 - [Use this package](#use-this-package)

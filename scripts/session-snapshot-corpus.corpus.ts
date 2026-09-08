@@ -22,11 +22,13 @@ const snapshotAdapters = [
   'apps/web/tests/mantur-brand.snapshot.ts',
   'apps/web/tests/mantur-editing-workflow.snapshot.ts',
   'apps/web/tests/mcp-http-recovery.snapshot.ts',
+  'apps/web/tests/mcp-shutdown.snapshot.ts',
   'apps/web/tests/message-feedback-protocol.snapshot.ts',
   'apps/web/tests/minimal-preset.snapshot.ts',
   'snapshots/acp/acp.snapshot.ts',
   'snapshots/sdk/sdk.snapshot.ts',
   'snapshots/session/headless.snapshot.ts',
+  'snapshots/web/update-save.snapshot.ts',
 ] as const
 
 interface Scenario {

@@ -479,6 +479,14 @@ declare class Session {
   /** The next event's sequence number — always the log length (the `seq = log.length` contiguity contract). */
   get seq(): SessionLogOffset;
   /**
+   * Permanently close append admission and capture the exclusive final event offset.
+   * A late append invalidates subsequent seal verification even when its caller catches the error.
+   * The caller must stop producers before sealing and separately prove storage durability.
+   * @returns the stable exclusive final event offset.
+   * @throws if publication is in progress or any append was attempted after sealing.
+   */
+  seal(): SessionLogOffset;
+  /**
    * Append one typed event to the log and synchronously notify observers via
    * the store-owned, module-private publication hooks. The hot path never blocks
    * on I/O — persistence plugins buffer asynchronously. Once the event enters

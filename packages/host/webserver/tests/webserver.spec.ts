@@ -7,11 +7,12 @@
 
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { once } from 'node:events'
-import { connect } from 'node:net'
+import { connect, Socket } from 'node:net'
+import { IncomingMessage, ServerResponse, type Server } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
@@ -97,6 +98,105 @@ async function upgrade(port: number, path: string): Promise<ReturnType<typeof co
 }
 
 describe('real Loader composition', () => {
+  it('keeps disposal pending after socket closure until the admitted HTTP handler finishes', async () => {
+    const loaded = await loadComposition()
+    const server = loaded.webServer
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    server.register({ kind: 'exact', path: '/held', handler: async () => {
+      entered.resolve(undefined)
+      await release.promise
+    } })
+    const client = request(server.port, '/held').catch((error: unknown) => error)
+    await entered.promise
+    let stopped = false
+    const stopping = loaded.fiber.dispose().then(() => { stopped = true })
+    try {
+      await client
+      await new Promise<void>(resolve => setImmediate(resolve))
+      expect(stopped).toBe(false)
+    } finally {
+      release.resolve(undefined)
+      await stopping
+      await client
+    }
+  })
+
+  it('joins an upgrade handler after its socket closes and freezes later dispatch', async () => {
+    const loaded = await loadComposition()
+    const server = loaded.webServer
+    const release = Promise.withResolvers<undefined>()
+    server.registerUpgrade({ path: '/held-upgrade', handler: async (_req, socket) => {
+      socket.write('HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: dsh-test\r\n\r\n')
+      await release.promise
+    } })
+    const client = await upgrade(server.port, '/held-upgrade')
+    const closed = once(client, 'close')
+    const stopping = server.stopForShutdown()
+    expect(server.stopForShutdown()).toBe(stopping)
+    let stopped = false
+    void stopping.then(() => { stopped = true })
+    try {
+      await closed
+      await new Promise<void>(resolve => setImmediate(resolve))
+      expect(stopped).toBe(false)
+      expect(() => server.register({ kind: 'exact', path: '/late', handler: () => {} })).toThrow('admission is closed')
+      expect(() => server.registerUpgrade({ path: '/late', handler: () => {} })).toThrow('admission is closed')
+      expect(() => server.registerFallback(() => {})).toThrow('admission is closed')
+      expect(() => server.tapIndex(html => html)).toThrow('admission is closed')
+      // Exercise already-dispatched Node callbacks after the listener closes.
+      const raw = (server as unknown as { server: Server }).server
+      const req = new IncomingMessage(new Socket())
+      const res = new ServerResponse(req)
+      const socket = new Socket()
+      raw.emit('request', req, res)
+      raw.emit('upgrade', req, socket, Buffer.alloc(0))
+      expect(res.destroyed).toBe(true)
+      expect(socket.destroyed).toBe(true)
+      req.destroy()
+    } finally {
+      release.resolve(undefined)
+      await stopping
+      client.destroy()
+    }
+  })
+
+  it('retains a close-callback failure after the listener closes', async () => {
+    const loaded = await loadComposition()
+    const server = loaded.webServer
+    const raw = (server as unknown as { server: Server }).server
+    const close = raw.close.bind(raw)
+    const failure = new Error('listener close failed')
+    const spy = vi.spyOn(raw, 'close').mockImplementation(callback => close(() => callback?.(failure)))
+    try {
+      const stopping = server.stopForShutdown()
+      expect(server.stopForShutdown()).toBe(stopping)
+      await expect(stopping).rejects.toMatchObject({ errors: [failure] })
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('retains a request error-observer failure after its handler leaves the pending set', async () => {
+    const loaded = await loadComposition()
+    const server = loaded.webServer
+    const failure = new Error('request error observer failed')
+    const entered = Promise.withResolvers<undefined>()
+    const owned = server as unknown as { ctx: Context }
+    const spy = vi.spyOn(owned.ctx.logger, 'warn').mockImplementation(() => { entered.resolve(undefined); throw failure })
+    server.register({ kind: 'exact', path: '/error-observer', handler: () => { throw new Error('request failed') } })
+    const client = request(server.port, '/error-observer').catch((error: unknown) => error)
+    try {
+      await entered.promise
+      await new Promise<void>(resolve => setImmediate(resolve))
+      await expect(server.stopForShutdown()).rejects.toMatchObject({ errors: [failure] })
+      await client
+    } finally {
+      spy.mockRestore()
+      await client
+    }
+  })
+
   it('applies gzip only to eligible socket-backed HTTP responses', { timeout: 60_000 }, async () => {
     expect(HttpServer.Config({ host: '127.0.0.1', port: 0 })).toEqual({
       host: '127.0.0.1',

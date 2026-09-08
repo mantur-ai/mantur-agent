@@ -145,6 +145,7 @@ function textAt(content: readonly ContentBlock[], index = 0): string {
 }
 
 const defaultOpts: ToolBridgeOptions = {
+  runTool: work => work(() => {}),
   isCurrent: () => true,
   registrationFailure: 'contain',
   serverName: 'srv',

@@ -10,7 +10,7 @@ import type { SubagentCapabilities, SubagentProvider, SubagentResult, SubagentRu
 import type { WorkflowMeta, WorkflowResult, WorkflowResultInfo, WorkflowRun, WorkflowRunInfo } from '@deepseek-ai/dsh-workflow'
 import * as workerEngineModule from '../src/index.ts'
 import WorkerThreadWorkflowEngine, { type Config } from '../src/index.ts'
-import { workerSpawnEnv } from '../src/host.ts'
+import { WorkerRun, workerSpawnEnv } from '../src/host.ts'
 import { HostToWorkerType, WorkerToHostType } from '../src/protocol.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
@@ -1493,4 +1493,105 @@ describe('dsh-workflow-worker-thread', { timeout: 120_000 }, () => {
       expect(unwrapped).toBe(WorkerThreadWorkflowEngine)
     })
   })
+  describe('shutdown proof', () => {
+    it('joins child disposal beyond the ordinary grace and freezes new runs', async () => {
+      const { ctx, parent, provider } = await setup({ manual: true, config: { disposeGraceMs: 20 } })
+      const gate = Promise.withResolvers<undefined>()
+      const entered = Promise.withResolvers<undefined>()
+      const start = provider.start.bind(provider)
+      vi.spyOn(provider, 'start').mockImplementation(async (request) => {
+        const child = await start(request)
+        return { ...child, dispose: async () => { entered.resolve(undefined); await gate.promise; await child.dispose() } }
+      })
+      const engine = ctx.workflowEngine as WorkerThreadWorkflowEngine
+      const handle = engine.start({ ...scripted('await agent("child"); return null'), parent }) as WorkerRun
+      let stopped = false
+      let completion: Promise<void> | undefined
+      try {
+        await waitFor(() => { expect(provider.runs).toHaveLength(1) })
+        completion = engine.stopForShutdown()
+        void completion.then(() => { stopped = true })
+        expect(engine.stopForShutdown()).toBe(completion)
+        expect(() => engine.start({ ...scripted('return null'), parent })).toThrow('admission is closed')
+        await entered.promise
+        await handle.dispose()
+        expect(stopped).toBe(false)
+        expect(provider.runs[0]!.disposed).toBe(false)
+        gate.resolve(undefined)
+        await completion
+        expect(provider.runs[0]!.disposed).toBe(true)
+        expect(handle.stopForShutdown()).toBe(handle.stopForShutdown())
+      } finally {
+        gate.resolve(undefined)
+        await completion
+        await handle.dispose()
+        await ctx.fiber.dispose()
+      }
+    })
+
+    it('retains child cleanup failure after the completed run releases its records', async () => {
+      const { ctx, parent, provider } = await setup()
+      const start = provider.start.bind(provider)
+      vi.spyOn(provider, 'start').mockImplementation(async (request) => {
+        const child = await start(request)
+        return { ...child, dispose: async () => { await child.dispose(); throw new Error('child cleanup failed') } }
+      })
+      const engine = ctx.workflowEngine as WorkerThreadWorkflowEngine
+      const handle = engine.start({ ...scripted('return await agent("child")'), parent }) as WorkerRun
+      try {
+        await handle.result
+        await handle.dispose()
+        expect(await handle.released).toHaveLength(1)
+        await expect(engine.stopForShutdown()).rejects.toThrow('workflow engine shutdown failed')
+        await expect(handle.stopForShutdown()).rejects.toThrow('workflow shutdown failed')
+      } finally {
+        await handle.dispose()
+        await ctx.fiber.dispose()
+      }
+    })
+
+    it('joins a late provider result and preserves its rejected rollback', async () => {
+      const { ctx, parent, provider } = await setup({ config: { disposeGraceMs: 20 } })
+      const started = Promise.withResolvers<undefined>()
+      const gate = Promise.withResolvers<SubagentRun>()
+      vi.spyOn(provider, 'start').mockImplementation(() => { started.resolve(undefined); return gate.promise })
+      const engine = ctx.workflowEngine as WorkerThreadWorkflowEngine
+      const handle = engine.start({ ...scripted('return await agent("child")'), parent }) as WorkerRun
+      let completion: Promise<unknown> | undefined
+      const child: SubagentRun = {
+        id: SessionId('late-shutdown-child'), localAgent: undefined,
+        result: Promise.resolve(text('late')),
+        dispose: () => Promise.reject(new Error('late cleanup failed')),
+      }
+      try {
+        await started.promise
+        completion = engine.stopForShutdown().catch((error: unknown) => error)
+        await handle.dispose()
+        gate.resolve(child)
+        expect(await completion).toBeInstanceOf(AggregateError)
+      } finally {
+        gate.resolve(child)
+        await completion
+        await handle.dispose()
+        await ctx.fiber.dispose()
+      }
+    })
+
+    it('retains a thread termination failure instead of returning a shutdown receipt', async () => {
+      const { ctx, parent } = await setup()
+      const engine = ctx.workflowEngine as WorkerThreadWorkflowEngine
+      const handle = engine.start({ ...scripted('return null'), parent }) as WorkerRun
+      const worker = (handle as unknown as { worker: Worker }).worker
+      const terminate = vi.spyOn(worker, 'terminate').mockRejectedValueOnce(new Error('thread termination failed'))
+      try {
+        await handle.result
+        await expect(engine.stopForShutdown()).rejects.toThrow('workflow engine shutdown failed')
+      } finally {
+        terminate.mockRestore()
+        await worker.terminate()
+        await ctx.fiber.dispose()
+      }
+    })
+  })
+
 })

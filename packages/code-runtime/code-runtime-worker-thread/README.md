@@ -52,6 +52,12 @@ Every field is validated and defaulted at load; there are no other tunables. The
 
 A successful run returns the program's lossless-JSON completion value as `result.value` and the text it printed, in order, as `result.logs`. Top-level `await` and `return` work, and the program can call the host-provided binding functions (PTC mode exposes one `tools` object) as ordinary async calls.
 
+### Shutdown ownership
+
+`stopForShutdown()` freezes new runs and joins worker termination, pipe drain, and every admitted Host binding, including calls the program did not await. A returned program outcome does not prove those bindings have completed. Termination failure returns an `exception` result and remains recorded so every shutdown call rejects. A binding that never settles prevents shutdown completion. This operation covers worker threads and Host binding calls; OS processes spawned directly by program code still require deployment-level cleanup.
+
+`hasStartedPrograms` and `hasStartedWorkerPrograms(ctx)` retain worker-start history for the entire Host root, including removed and isolated providers. Parsing failures and pre-aborted requests do not start workers. Stopping or replacing a provider cannot clear execution history.
+
 ### Containment, not a security boundary
 
 A program runs with authority comparable to the bash tool: it can reach Node APIs, and the backend deliberately does not promise isolation from the host. What it does provide is containment — a separate isolate, an empty environment (no ambient credentials, no inherited loader flags), a configurable heap cap, and hard termination that also stops a hot synchronous loop. OS processes a program spawns survive `terminate()` and need deployment-level cleanup.

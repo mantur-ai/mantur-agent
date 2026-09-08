@@ -96,11 +96,13 @@ export type LifecycleEmitter = {
  * or — for provider removal, which fires from a disposer — breaking teardown.
  * @param ctx - the service's own context, owning dispatch and the logger.
  * @param carrier - resolve the scoped dispatch carrier for one delegating parent.
+ * @param track - retain listener completion and failures for service shutdown.
  * @returns the emitter both observers and the provider registry publish through.
  */
 export function createLifecycleEmitter(
   ctx: Context,
   carrier: (parent: Agent) => object,
+  track: (work: Promise<void>) => void,
 ): LifecycleEmitter {
   return (
     name: 'subagent/start' | 'subagent/end' | 'subagent/provider-removed',
@@ -113,10 +115,13 @@ export function createLifecycleEmitter(
     for (const callback of ctx.events.dispatch('emit', dispatchArgs)) {
       try {
         const returned: unknown = callback(info)
-        void Promise.resolve(returned).catch((error: unknown) => {
+        track(Promise.resolve(returned).then(() => {}, (error: unknown) => {
           ctx.logger.warn(`subagent: ${name} listener rejected: ${renderThrown(error)}`)
-        })
+          throw error
+        }))
       } catch (error: unknown) {
+        // oxlint-disable-next-line typescript/prefer-promise-reject-errors -- Preserve arbitrary listener failures in the shutdown ledger.
+        track(Promise.reject(error))
         ctx.logger.warn(`subagent: ${name} listener threw: ${renderThrown(error)}`)
       }
     }

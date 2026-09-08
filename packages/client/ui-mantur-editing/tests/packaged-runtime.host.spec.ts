@@ -2,16 +2,34 @@
 import { mkdtemp, mkdir, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { ChildProcess } from 'node:child_process'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { resolvePackagedResources } from '../adapters/mantur-packaged-resources.mjs'
 import { startEditor, type EditorRuntime, type RuntimeConfig } from '../src/runtime.ts'
+
+const children = vi.hoisted(() => [] as Array<{ child: ChildProcess; closed: Promise<void>; isClosed: boolean }>)
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:child_process')>()
+  return { ...actual, spawn: (...args: Parameters<typeof actual.spawn>) => {
+    const child = actual.spawn(...args)
+    const entry = { child, closed: Promise.resolve(), isClosed: false }
+    entry.closed = new Promise(resolve => child.once('close', () => { entry.isClosed = true; resolve() }))
+    children.push(entry)
+    return child
+  } }
+})
 
 const roots: string[] = []
 const running = new Set<EditorRuntime>()
 afterEach(async () => {
   const results = await Promise.allSettled([...running].map(runtime => runtime.dispose()))
   running.clear()
+  // Negative shutdown cases leave work alive; this cleanup is test-owned, never an installation result.
+  for (const entry of children.splice(0)) {
+    if (!entry.isClosed) entry.child.kill('SIGKILL')
+    await entry.closed
+  }
   await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true })))
   for (const result of results) if (result.status === 'rejected') throw result.reason
 })
@@ -33,7 +51,7 @@ async function fixture(platform = process.platform, arch = process.arch) {
   }
   await writeFile(join(root, paths.server), `import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 export async function startEmbeddedServer(dist, options) {
   assert.equal(options.port, 0);
   const server = createServer((req, res) => res.end(JSON.stringify({
@@ -44,9 +62,11 @@ export async function startEmbeddedServer(dist, options) {
     whisperCli: process.env.OPENCHATCUT_WHISPER_CLI,
     parentOrigin: options.parentOrigin, dist,
   })));
+  server.manturShutdown = { stopForShutdown: async () => {}, finishTransportShutdown: async () => { await writeFile('transport-closed.txt', 'confirmed'); } };
   await new Promise(resolve => server.listen(options.port, '127.0.0.1', resolve));
   const close = server.close.bind(server);
   server.close = callback => close(async error => {
+    assert.equal(await readFile('transport-closed.txt', 'utf8'), 'confirmed');
     await writeFile('shutdown.txt', 'HTTP closed');
     callback(error);
   });
@@ -159,13 +179,13 @@ describe.skipIf(!['darwin-arm64', 'darwin-x64', 'win32-x64'].includes(`${process
     expect(await readdir(project)).toEqual([])
   })
 
-  it('reports a failed server import and removes only its private runtime directory', async () => {
+  it('reports failed startup and retains its unconfirmed private runtime for diagnosis', async () => {
     const { root } = await fixture()
     await writeFile(join(root, 'server/embedded-server.mjs'), "throw new Error('production server import failed')")
     const project = await temporary()
     await expect(startEditor({ runtimeMode: 'packaged', editorRoot: root, nodeExecutable: process.execPath,
       startupTimeoutMs: 5000, stopTimeoutMs: 3000, toolCallTimeoutMs: 1000 }, project, 'one' as SessionId, 'http://127.0.0.1:5298')).rejects.toThrow('production server import failed')
-    expect(await readdir(join(project, '剪辑/one/工程'))).toEqual(['settings.env'])
+    expect((await readdir(join(project, '剪辑/one/工程'))).some(file => file.startsWith('.mantur-runtime-'))).toBe(true)
     expect(await readdir(join(project, '剪辑/one/素材'))).toEqual([])
     expect(await readdir(join(project, '剪辑/one/导出'))).toEqual([])
   })
@@ -183,7 +203,7 @@ describe.skipIf(!['darwin-arm64', 'darwin-x64', 'win32-x64'].includes(`${process
     await expect(fetch(runtime.workspace.editorUrl)).rejects.toThrow()
   })
 
-  it('reports a shutdown deadline even after the forced child close', async () => {
+  it('reports a shutdown deadline without force-killing the unconfirmed child', async () => {
     const { root } = await fixture()
     const serverFile = join(root, 'server/embedded-server.mjs')
     const source = await readFile(serverFile, 'utf8')
@@ -193,9 +213,11 @@ describe.skipIf(!['darwin-arm64', 'darwin-x64', 'win32-x64'].includes(`${process
     running.add(runtime)
     const response = await fetch(runtime.workspace.editorUrl)
     const { pid } = await response.json() as { pid: number }
-    await expect(runtime.dispose()).rejects.toThrow('shutdown before its deadline')
-    running.delete(runtime)
-    expect(() => process.kill(pid, 0)).toThrow()
+    const stopping = runtime.dispose()
+    try { await expect(stopping).rejects.toThrow('timed out') }
+    finally { running.delete(runtime) }
+    expect(runtime.dispose()).toBe(stopping)
+    expect(() => process.kill(pid, 0)).not.toThrow()
     await expect(fetch(runtime.workspace.editorUrl)).rejects.toThrow()
   })
 })

@@ -32,6 +32,8 @@ kind: "package-reference"
 
 原生 provider 注册到 [command-scopes](../../shell/command-scopes/README.zh.md)。Bash、PowerShell 和持久终端在分配进程前准备身份，仅在完整进程树清理后确认释放。未登录命令收到显式桌面托管模式和空描述文件路径，覆盖调用方的陈旧环境值。
 
+`stopNativeForShutdown()` 是连接 effect 使用的显式原生提供者清理操作。它撤销命令身份、停止命令注册并关闭 broker API 的接纳，同时等待实际命令/PTY 清理、API 响应体取消和 lease 回执。Main 必须保持 IPC 连通直到完成。重复调用返回同一结果，包括清理失败；standalone 或未初始化的提供者会拒绝该操作。它不证明独立授权、调用方拥有的未认证请求、会话持久性或整个 Host 已停止。
+
 独立设备登录会拒绝来自其他 origin 的验证地址。会话缺少 `interval` 或 `expires_in` 时使用 5 秒与 600 秒。`slow_down` 会给当前轮询间隔增加 5 秒；拒绝与过期会在不写入凭据的情况下结束本次尝试。
 
 <a id="model-experience"></a>

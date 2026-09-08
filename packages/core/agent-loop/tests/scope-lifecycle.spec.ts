@@ -61,6 +61,19 @@ function disposeCurrentLifecycle(ownerCtx: Context): void {
 }
 
 describe('agent scope lifecycle', () => {
+  it('cancels a fresh acquisition without persistence before it publishes', async () => {
+    const ctx = await harness()
+    const abort = new AbortController()
+    try {
+      const creating = ctx.agentLoop.createAgent(ctx, { sessionId: SessionId('cancel-no-writer'), signal: abort.signal })
+      abort.abort(new Error('cancel fresh acquisition'))
+      await expect(creating).rejects.toThrow('cancel fresh acquisition')
+      expect(ctx.agents.list()).toEqual([])
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('rejects an already-aborted creation signal before publishing either object', async () => {
     const ctx = await harness()
     const reason = new Error('cancelled before creation')

@@ -170,6 +170,64 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })))
 })
 
+describe('Host checkpoint shutdown', () => {
+  it('clears dirty checkpoint timers before the storage owner closes', async () => {
+    const { ctx, cache } = await harness()
+    const armed = ctx.sessions.create(SessionId('shutdown-armed'))
+    const clean = ctx.sessions.create(SessionId('shutdown-clean'))
+    await Promise.all([cache.write(armed), cache.write(clean)])
+    vi.useFakeTimers()
+    mark(armed, ['armed'])
+    mark(clean, ['clean'])
+    await cache.write(clean)
+    await cache.stopForShutdown()
+    const write = vi.spyOn(cache, 'write')
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(write).not.toHaveBeenCalled()
+    vi.useRealTimers()
+  })
+
+  it.each([false, true])('joins cold write-back and refuses new producers (write failure: %s)', async (fails) => {
+    const { ctx, cache, root } = await harness()
+    const table = ctx.storageDomain.get(projectionCacheDomainSpec.name)!.table('sessions')
+    const originalPut = table.put.bind(table)
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const failure = new Error('cold checkpoint failed')
+    const warn = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => {})
+    const put = vi.spyOn(table, 'put').mockImplementation(async (...args) => {
+      entered.resolve(undefined)
+      await release.promise
+      if (fails) throw failure
+      await originalPut(...args)
+    })
+    const meta = headerOf(SessionId('held-cold'))
+    cache.coldSnapshot(meta, SessionLogOffset(0), [])
+    await entered.promise
+    const stopping = cache.stopForShutdown()
+    expect(cache.stopForShutdown()).toBe(stopping)
+    let stopped = false
+    void stopping.then(() => { stopped = true })
+    try {
+      await new Promise<void>(resolve => setImmediate(resolve))
+      expect(stopped).toBe(false)
+      expect(() => cache.coldSnapshot(meta, SessionLogOffset(0), [])).toThrow('admission is closed')
+      const late = ctx.sessions.create(SessionId('late-cache'))
+      mark(late, ['late'])
+      await expect(cache.write(late)).rejects.toThrow('admission is closed')
+      release.resolve(undefined)
+      await stopping
+      expect(put).toHaveBeenCalledTimes(1)
+      if (fails) expect(warn).toHaveBeenCalledWith(expect.stringContaining('cold checkpoint failed'))
+      else expect(await storedRecord(root, meta.id)).toBeDefined()
+    } finally {
+      release.resolve(undefined)
+      await stopping
+      put.mockRestore()
+    }
+  })
+})
+
 describe('SessionProjectionCache write policy', () => {
   it('writes a durable checkpoint at turn/end (mandatory point)', async () => {
     const { ctx, root } = await harness()
@@ -223,7 +281,13 @@ describe('SessionProjectionCache write policy', () => {
       expect(write).toHaveBeenCalledTimes(2)
       await enteredFlush.promise
       expect(flush).toHaveBeenCalledTimes(1)
+      const stopping = ctx.sessionProjectionCache.stopForShutdown()
+      let stopped = false
+      void stopping.then(() => { stopped = true })
+      await new Promise<void>(resolve => setImmediate(resolve))
+      expect(stopped).toBe(false)
       firstFlush.resolve(undefined)
+      await stopping
       await Promise.all(write.mock.results.map(async (call) => { await call.value }))
       expect((await storedRows(root, session.id))?.['cache-test/marks'])
         .toEqual({ ver: 1, seq: end.seq, val: { marks: ['newer'] } })

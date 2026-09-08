@@ -67,7 +67,7 @@ async function boot(config: ConstructorParameters<typeof FileSettingsProvider>[1
 }
 
 describe('writer-lock failure cleanup', () => {
-  it('skips publication when an in-flight document create completes during teardown', async () => {
+  it.each([false, true])('joins an in-flight document create without publication (explicit shutdown: %s)', async (explicit) => {
     const dir = await tempDir()
     const path = join(dir, 'settings.yaml')
     const ctx = new Context()
@@ -88,12 +88,13 @@ describe('writer-lock failure cleanup', () => {
     const preparing = settings.prepareDocument()
     await started
     let disposed = false
-    const disposing = fiber.dispose()
+    const disposing = explicit ? settings.stopForShutdown() : fiber.dispose()
     void disposing.then(() => { disposed = true })
     await vi.waitFor(() => {
       expect((settings as unknown as { closed: boolean }).closed).toBe(true)
     })
     expect(disposed).toBe(false)
+    await expect(settings.prepareDocument()).rejects.toThrow('admission is closed')
     releaseCreate()
     await expect(preparing).resolves.toBe(path)
     await disposing

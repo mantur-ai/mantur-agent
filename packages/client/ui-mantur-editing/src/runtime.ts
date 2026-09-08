@@ -19,20 +19,26 @@ export interface RuntimeConfig {
   nodeExecutable: string
   /** Maximum wait for the editor's ready handshake. */
   startupTimeoutMs: number
-  /** Grace period before killing an editor that has not stopped. */
+  /** Maximum wait for editor close acknowledgement and subprocess pipes. */
   stopTimeoutMs: number
-  /** Maximum duration of one editing tool invocation. */
+  /** Maximum duration of one editing tool invocation or editor drain request. */
   toolCallTimeoutMs: number
 }
 
-/** Active editor, with credentials confined to the Host process. */
-export interface EditorRuntime {
-  workspace: EditingWorkspace
-  token: string
-  /** Stop the subprocess and await exit. @returns Completed teardown. */
+/** Acquired process, retained by its Host owner even if startup later fails. */
+export interface EditorProcess {
+  /** Freeze editor jobs and drain authoritative work over the owning IPC channel. @returns The retained drain result. */
+  drainForShutdown(): Promise<void>
+  /** Stop the drained subprocess and await close, including pipes. @returns The retained teardown result. */
   dispose(): Promise<void>
   /** Reject use after an unexpected subprocess exit. */
   assertRunning(): void
+}
+
+/** Ready editor, with credentials confined to the Host process. */
+export interface EditorRuntime extends EditorProcess {
+  workspace: EditingWorkspace
+  token: string
 }
 
 /**
@@ -64,15 +70,17 @@ export async function editingDirectories(
 }
 
 /**
- * Launch one isolated editor; startup failure always stops and drains the child.
+ * Launch one isolated editor; unconfirmed startup cleanup retains the acquired process owner.
  * @param config - Validated deployment settings.
  * @param cwd - Session working directory.
  * @param sessionId - Session owning the runtime and files.
  * @param parentOrigin - Exact authenticated Mantur browser origin.
+ * @param acquired - Receives the process owner before awaiting readiness, including on later startup failure.
  * @returns Ready runtime with an idempotent teardown.
  */
 export async function startEditor(
   config: RuntimeConfig, cwd: string | undefined, sessionId: SessionId, parentOrigin: string,
+  acquired?: (process: EditorProcess) => void,
 ): Promise<EditorRuntime> {
   if (config.runtimeMode === 'packaged') resolvePackagedResources(config.editorRoot)
   const paths = await editingDirectories(cwd, sessionId)
@@ -94,11 +102,13 @@ export async function startEditor(
       OPENCHATCUT_MCP_TOKEN: token, MANTUR_CUT_MEDIA_DIR: paths.media, MANTUR_CUT_EXPORT_DIR: paths.exports,
       MANTUR_CUT_PROJECT_DIR: paths.project,
       MANTUR_CUT_PARENT_ORIGIN: parentOrigin,
+      MANTUR_CUT_DRAIN_TIMEOUT_MS: String(config.toolCallTimeoutMs), MANTUR_CUT_STOP_TIMEOUT_MS: String(config.stopTimeoutMs),
     },
     stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
   })
   let failure: Error | undefined
   let exited = false
+  let closed = false
   let cleanExit = false
   let diagnostic = ''
   // Node's spawn overload does not preserve the pipe type when an IPC descriptor is present.
@@ -106,31 +116,68 @@ export async function startEditor(
   stderr.on('data', (chunk: Buffer) => { diagnostic = (diagnostic + chunk.toString()).slice(-8192) })
   const done = new Promise<Error>((resolve) => {
     child.once('error', (error) => { failure = error })
+    child.once('exit', () => { exited = true })
     child.once('close', (code, signal) => {
-      cleanExit = code === 0 && signal === null
+      cleanExit = code === 0 && signal === null && failure === undefined
       failure ??= new Error(`Editing runtime exited (${signal ?? String(code)}): ${diagnostic.replaceAll(token, '[redacted]')}`)
       exited = true
+      closed = true
       resolve(failure)
     })
   })
-  let disposal: Promise<void> | undefined
-  const dispose = () => disposal ??= (async () => {
-    if (exited) return
-    let stopError: Error | undefined
-    if (config.runtimeMode === 'packaged' && child.connected) child.send({ type: 'mantur-cut:stop' }, (error) => {
-      if (error && !exited) { stopError = error; child.kill('SIGKILL') }
+  function phase(request: 'drain' | 'stop', timeoutMs: number): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (exited || failure) { reject(failure ?? new Error('Editing runtime exited before shutdown completed')); return }
+      let settled = false
+      const finish = (error?: Error) => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        child.off('message', receive)
+        if (error) reject(error)
+        else resolve()
+      }
+      const receive = (message: unknown) => {
+        if (typeof message !== 'object' || message === null || !('type' in message)
+          || message.type !== `mantur-cut:${request}-result`) return
+        if ('ok' in message && message.ok === true) finish()
+        else {
+          const detail = 'error' in message && typeof message.error === 'string' ? message.error : 'Invalid editor shutdown result'
+          finish(new Error(detail.replaceAll(token, '[redacted]')))
+        }
+      }
+      const timer = setTimeout(() => {
+        finish(new Error(`Editing runtime ${request} timed out; completion is unconfirmed`))
+      }, timeoutMs)
+      child.on('message', receive)
+      void done.then((error) => { finish(error) })
+      if (!child.connected) { finish(new Error('Editing runtime IPC disconnected before shutdown completed')); return }
+      try { child.send({ type: `mantur-cut:${request}` }, (error) => { if (error) finish(error) }) }
+      catch (error) { finish(error instanceof Error ? error : new Error(String(error))) }
     })
-    else child.kill('SIGTERM')
-    const timer = setTimeout(() => {
-      stopError = new Error('Editing runtime did not complete shutdown before its deadline')
-      child.kill('SIGKILL')
-    }, config.stopTimeoutMs)
-    const exitFailure = await done.finally(() => { clearTimeout(timer) })
-    if (config.runtimeMode === 'packaged') {
-      if (stopError) throw stopError
+  }
+  let draining: Promise<void> | undefined
+  let disposal: Promise<void> | undefined
+  const drainForShutdown = () => draining ??= phase('drain', config.toolCallTimeoutMs)
+  const dispose = () => disposal ??= (async () => {
+    await drainForShutdown()
+    await phase('stop', config.stopTimeoutMs)
+    let timer: NodeJS.Timeout | undefined
+    try {
+      const exitFailure = await Promise.race([
+        done,
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(() => { reject(new Error('Editing runtime close timed out; process or pipes remain unconfirmed')) }, config.stopTimeoutMs)
+        }),
+      ])
       if (!cleanExit) throw exitFailure
-    }
+    } finally { clearTimeout(timer) }
   })()
+  const owned: EditorProcess = {
+    drainForShutdown, dispose,
+    assertRunning() { if (exited || failure) throw failure ?? new Error('Editing runtime exited') },
+  }
+  acquired?.(owned)
   try {
     const editorUrl = await new Promise<string>((resolve, reject) => {
       const timer = setTimeout(() => { reject(new Error('Editing runtime startup timed out')) }, config.startupTimeoutMs)
@@ -141,6 +188,11 @@ export async function startEditor(
         else if (url) resolve(url)
       }
       const receive = (message: unknown) => {
+        if (typeof message === 'object' && message !== null && 'type' in message && message.type === 'mantur-cut:startup-result') {
+          const detail = 'error' in message && typeof message.error === 'string' ? message.error : 'Editing runtime startup failed'
+          finish(new Error(detail.replaceAll(token, '[redacted]')))
+          return
+        }
         if (typeof message !== 'object' || message === null || !('type' in message) || message.type !== 'mantur-cut:ready' || !('port' in message)) return
         const port = message.port
         if (typeof port !== 'number' || !Number.isInteger(port) || port < 1 || port > 65535) { finish(new Error('Invalid editor ready message')); return }
@@ -149,12 +201,13 @@ export async function startEditor(
       child.on('message', receive)
       void done.then((error) => { finish(error) })
     })
-    return { workspace: { editorUrl, directory: paths.directory }, token, dispose,
-      assertRunning() { if (exited) throw failure ?? new Error('Editing runtime stopped') },
-    }
+    return { ...owned, workspace: { editorUrl, directory: paths.directory }, token }
   } catch (error) {
-    try { await dispose() }
-    catch (cleanupError) { throw new AggregateError([error, cleanupError], 'Editing startup and shutdown both failed') }
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- The child close event can arrive while startup is awaited.
+    try { if (!closed) await dispose() }
+    catch (cleanupError) {
+      throw new AggregateError([error, cleanupError], `Editing startup and shutdown both failed: ${error instanceof Error ? error.message : String(error)}`)
+    }
     throw error
   }
 }

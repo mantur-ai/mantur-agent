@@ -306,6 +306,7 @@ export class SessionTitleService extends Service {
   private readonly work = new Map<Session, SessionTitleWorkState>()
   private readonly lifetime = new AbortController()
   private readonly inFlight = new Set<Promise<unknown>>()
+  private shutdown: Promise<void> | undefined
 
   constructor(ctx: Context, config: Config) {
     super(ctx, 'sessionTitle')
@@ -323,17 +324,7 @@ export class SessionTitleService extends Service {
     }
     this.config = deepFreeze({ ...value })
 
-    ctx.effect(() => async () => {
-      this.lifetime.abort(new Error('session-title service disposed'))
-      if (this.registration !== undefined) this.registration.closing = true
-      this.registration = undefined
-      for (const state of this.work.values()) {
-        delete state.pending
-        state.active?.controller.abort(new Error('session-title service disposed'))
-      }
-      await this.drain(this.inFlight)
-      this.work.clear()
-    }, 'sessionTitle lifecycle')
+    ctx.effect(() => () => this.stopForShutdown(), 'sessionTitle lifecycle')
 
     ctx.sessionProjections.register(titleProjectionDefinition)
 
@@ -375,6 +366,25 @@ export class SessionTitleService extends Service {
       state.active?.controller.abort(new Error('session disposed during title generation'))
       this.work.delete(session)
     })
+  }
+
+  /**
+   * Freeze title writes and provider registration, abort generation, and join admitted work.
+   * @returns completion after original provider calls settle, including providers that ignore cancellation.
+   */
+  stopForShutdown(): Promise<void> {
+    this.shutdown ??= (async () => {
+      this.lifetime.abort(new Error('session-title service disposed'))
+      if (this.registration !== undefined) this.registration.closing = true
+      this.registration = undefined
+      for (const state of this.work.values()) {
+        delete state.pending
+        state.active?.controller.abort(new Error('session-title service disposed'))
+      }
+      await this.drain(this.inFlight)
+      this.work.clear()
+    })()
+    return this.shutdown
   }
 
   /**
@@ -468,6 +478,7 @@ export class SessionTitleService extends Service {
    * @returns exact Cordis effect disposer, which settles after active calls quiesce.
    */
   register(provider: SessionTitleProvider): () => Promise<void> {
+    this.assertServiceActive()
     this.validateProvider(provider)
     if (this.registration !== undefined) {
       throw new Error(`session-title provider "${this.registration.provider.id}" is already registered`)

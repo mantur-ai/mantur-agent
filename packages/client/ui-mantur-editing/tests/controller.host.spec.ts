@@ -2,23 +2,38 @@ import { Context } from '@deepseek-ai/cordis'
 import { createScope, scopeOf } from '@deepseek-ai/dsh-scope'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { SessionId } from '@deepseek-ai/dsh-session'
+import type { ConnectionHandle } from '@deepseek-ai/dsh-mcp-client'
+import type { startEditor } from '../src/runtime.ts'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import { afterEach, expect, it, vi } from 'vitest'
 import ManturEditing, { Config } from '../src/index.ts'
 
-const harness = vi.hoisted(() => ({ start: vi.fn(), connect: vi.fn(), scopes: [] as unknown[], stopped: [] as ReturnType<typeof vi.fn>[] }))
+const harness = vi.hoisted(() => ({
+  start: vi.fn<typeof startEditor>(), connect: vi.fn<() => void | Promise<void>>(), drain: vi.fn<() => void | Promise<void>>(),
+  scopes: [] as unknown[],
+  stopped: [] as ReturnType<typeof vi.fn>[], connections: [] as ConnectionHandle[],
+}))
 vi.mock('../src/runtime.ts', () => ({ startEditor: harness.start }))
 vi.mock('@deepseek-ai/dsh-mcp-client', () => ({
-  name: 'mcp-client', Config: undefined, inject: [],
-  async apply(ctx: Context) {
+  connectMcpServer(ctx: Context, _config: unknown, beforeClose: () => Promise<void>) {
     harness.scopes.push(scopeOf(ctx))
-    await harness.connect()
+    let draining: Promise<void> | undefined
+    let disposal: Promise<void> | undefined
+    const handle: ConnectionHandle = {
+      ready: Promise.resolve().then(() => harness.connect()).then(() => ({})),
+      stopAccepting: () => draining ??= Promise.resolve().then(() => harness.drain()),
+      dispose: () => disposal ??= (async () => { await handle.stopAccepting(); await beforeClose() })(),
+    }
+    ctx.effect(() => () => handle.dispose(), 'fixture MCP shutdown')
+    harness.connections.push(handle)
+    return handle
   },
 }))
 const contexts: Context[] = []
 afterEach(async () => {
   await Promise.all(contexts.splice(0).map(ctx => ctx.fiber.dispose()))
-  harness.start.mockReset(); harness.connect.mockReset(); harness.scopes.length = 0; harness.stopped.length = 0
+  harness.start.mockReset(); harness.connect.mockReset(); harness.drain.mockReset()
+  harness.scopes.length = 0; harness.stopped.length = 0; harness.connections.length = 0
 })
 const config: Config = { runtimeMode: 'development', editorRoot: '/editor', nodeExecutable: '/node', startupTimeoutMs: 1000, stopTimeoutMs: 1000, toolCallTimeoutMs: 1000 }
 
@@ -43,10 +58,10 @@ async function setup() {
   ctx.provide('tools', {} as never)
   ctx.provide('webServer', { port: 5298 } as never)
   await ctx.plugin(SystemPrompt, { includeHarnessIdentity: false })
-  harness.start.mockImplementation(async (_config: Config, cwd: string, id: SessionId) => {
+  harness.start.mockImplementation(async (_config, cwd, id) => {
     const dispose = vi.fn(async () => {})
     harness.stopped.push(dispose)
-    return { workspace: { editorUrl: 'http://127.0.0.1:5300/', directory: `${cwd}/${id}` }, token: 'host-secret', dispose, assertRunning() {} }
+    return { workspace: { editorUrl: 'http://127.0.0.1:5300/', directory: `${cwd}/${id}` }, token: 'host-secret', dispose, drainForShutdown: async () => {}, assertRunning() {} }
   })
   const fiber = ctx.plugin(ManturEditing, config)
   await fiber.await()
@@ -128,4 +143,60 @@ it('does not publish guidance when native MCP startup fails', async () => {
   expect(harness.stopped[0]).toHaveBeenCalledOnce()
   await ctx.manturEditing.open(agent, 'http://127.0.0.1:5298')
   expect(await editingSections(ctx, key)).toHaveLength(1)
+})
+
+it('freezes new opens and waits for every accepted connection before closing its editors', async () => {
+  const { ctx, makeAgent } = await setup()
+  const first = makeAgent('first'); const second = makeAgent('second')
+  await ctx.manturEditing.open(first.agent, 'http://127.0.0.1:5298')
+  await ctx.manturEditing.open(second.agent, 'http://127.0.0.1:5298')
+  const done: PromiseWithResolvers<void> = Promise.withResolvers()
+  harness.drain.mockReturnValueOnce(done.promise).mockResolvedValueOnce(undefined)
+  const stopping = ctx.manturEditing.stopForShutdown()
+  expect(ctx.manturEditing.stopForShutdown()).toBe(stopping)
+  try {
+    await expect(ctx.manturEditing.open(first.agent, 'http://127.0.0.1:5298')).rejects.toThrow('shutting down')
+    await expect.poll(() => harness.drain.mock.calls.length).toBe(2)
+    expect(harness.stopped.every(stop => stop.mock.calls.length === 0)).toBe(true)
+    done.resolve()
+    await stopping
+    expect(harness.stopped.every(stop => stop.mock.calls.length === 1)).toBe(true)
+  } finally { done.resolve(); await stopping }
+})
+
+it('includes an opening editor in shutdown and stops its newly mounted MCP connection', async () => {
+  const { ctx, makeAgent } = await setup()
+  const started: PromiseWithResolvers<void> = Promise.withResolvers()
+  const resume: PromiseWithResolvers<void> = Promise.withResolvers()
+  const start = harness.start.getMockImplementation()!
+  harness.start.mockImplementation(async (...args) => {
+    started.resolve()
+    await resume.promise
+    return start(...args)
+  })
+  const { agent } = makeAgent('opening')
+  const open = ctx.manturEditing.open(agent, 'http://127.0.0.1:5298')
+  const refused = expect(open).rejects.toThrow('shutting down')
+  await started.promise
+  const stopping = ctx.manturEditing.stopForShutdown()
+  try {
+    expect(harness.stopped).toHaveLength(0)
+    resume.resolve()
+    await refused
+    await stopping
+    expect(harness.drain).toHaveBeenCalledOnce()
+    expect(harness.stopped[0]).toHaveBeenCalledOnce()
+  } finally { resume.resolve(); await refused; await stopping }
+})
+
+it('retains an editor cleanup failure and refuses future opens after repeated shutdown', async () => {
+  const { ctx, makeAgent } = await setup()
+  const { agent } = makeAgent('cleanup-failed')
+  await ctx.manturEditing.open(agent, 'http://127.0.0.1:5298')
+  harness.stopped[0]!.mockRejectedValue(new Error('child close is unconfirmed'))
+  const stopping = ctx.manturEditing.stopForShutdown()
+  await expect(stopping).rejects.toThrow('installation is blocked')
+  expect(ctx.manturEditing.stopForShutdown()).toBe(stopping)
+  await expect(ctx.manturEditing.open(agent, 'http://127.0.0.1:5298')).rejects.toThrow('shutting down')
+  expect(harness.stopped[0]).toHaveBeenCalledOnce()
 })
