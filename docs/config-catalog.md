@@ -433,7 +433,7 @@ export interface RuntimeConfig {
 }
 ```
 
-Source: [`packages/client/ui-mantur-editing/src/index.ts:34`](../packages/client/ui-mantur-editing/src/index.ts)
+Source: [`packages/client/ui-mantur-editing/src/index.ts:35`](../packages/client/ui-mantur-editing/src/index.ts)
 
 <a id="deepseek-aidsh-client-ui-mantur-navigation"></a>
 
