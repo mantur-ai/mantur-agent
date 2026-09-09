@@ -42,7 +42,7 @@ it('returns from both native marketplace entrypoints with the selected detail an
     const console = watchConsole(page)
     let prompts = 0
     page.on('request', (request) => { if (new URL(request.url()).pathname === '/api/session/prompt') prompts++ })
-    let snapshot: NativeAccountSnapshot = { phase: 'signed-out', busy: false, authenticated: false, skipped: true, pendingRevocations: 0 }
+    let snapshot: NativeAccountSnapshot = { phase: 'signed-out', busy: false, authenticated: false, skipped: false, pendingRevocations: 0 }
     let revision = 0
     const operations: NativeAccountAction['kind'][] = []
     await page.exposeFunction('invokeNativeAccountFixture', (action: NativeAccountAction) => {
@@ -83,6 +83,9 @@ it('returns from both native marketplace entrypoints with the selected detail an
     await page.getByRole('img', { name: 'native-reference.png' }).waitFor()
     const initialDraft = await editor.innerText()
     expect(initialDraft).toBe(draft)
+    expect(operations).not.toContain('skip')
+    expect(operations).not.toContain('browser')
+    expect(await page.getByRole('heading', { name: '登录漫途账号' }).count()).toBe(0)
     const project = await workspaceButton.innerText()
     const model = await page.getByRole('button', { name: '选择模型' }).innerText()
     const permission = await page.getByRole('button', { name: /访问模式/ }).innerText()
@@ -171,7 +174,7 @@ function luminance(rgb: string): number {
     .reduce((sum, channel, index) => sum + channel * [0.2126, 0.7152, 0.0722][index]!, 0)
 }
 
-it('renders browser authorization failure and waiting at minimum size, then keeps Skip across renderer reload', async () => {
+it('opens optional account Settings and renders browser authorization failure and waiting at minimum size', async () => {
   const catalog = createServer((_request, response) => {
     response.writeHead(200, { 'content-type': 'application/json' })
     response.end(JSON.stringify({ skills: [], recipes: [] }))
@@ -218,6 +221,8 @@ it('renders browser authorization failure and waiting at minimum size, then keep
       target.manturAccount = { invoke: action => target.invokeNativeAccountFixture(action), subscribe: () => () => {} }
     })
     await page.goto(scaffold.authenticatedUrl)
+    await page.getByRole('button', { name: '设置', exact: true }).click()
+    await page.getByRole('dialog', { name: '设置', exact: true }).getByRole('button', { name: '漫途账号', exact: true }).click()
     await page.getByRole('heading', { name: '登录漫途账号' }).waitFor()
     await mkdir(images, { recursive: true })
     const captures: string[] = []
@@ -229,15 +234,27 @@ it('renders browser authorization failure and waiting at minimum size, then keep
     await page.getByRole('alert').waitFor()
     expect(await page.getByRole('alert').innerText()).toBe('暂时无法连接漫途，请检查网络后重试。')
     expect(await page.getByRole('button', { name: '重新检查登录状态' }).count()).toBe(1)
-    await page.getByRole('button', { name: '暂时跳过' }).scrollIntoViewIfNeeded()
+    await page.getByRole('button', { name: '重新检查登录状态' }).scrollIntoViewIfNeeded()
     await page.screenshot({ path: join(images, 'login-error-880.png') })
     for (const theme of ['light', 'dark'] as const) {
       await page.emulateMedia({ colorScheme: theme })
       await expect.poll(() => page!.locator('body').getAttribute('data-ds-dark-theme')).toBe(theme === 'dark' ? '' : null)
-      const colors = await page.getByRole('alert').evaluate(element => ({
-        error: getComputedStyle(element).color,
-        background: getComputedStyle(element.closest('section')!.parentElement!).backgroundColor,
-      }))
+      const colors = await page.getByRole('alert').evaluate((element) => {
+        const layers: number[][] = []
+        for (let parent: Element | null = element; parent !== null; parent = parent.parentElement) {
+          const color = getComputedStyle(parent).backgroundColor.match(/[\d.]+/g)?.map(Number)
+          if (color === undefined || (color.length !== 3 && color.length !== 4)) throw new Error('Unsupported computed background')
+          layers.push([color[0]!, color[1]!, color[2]!, color[3] ?? 1])
+          if (layers.at(-1)![3] === 1) break
+        }
+        if (layers.at(-1)?.[3] !== 1) throw new Error('Account background has no measured opaque ancestor')
+        let background = layers.pop()!.slice(0, 3)
+        for (const color of layers.reverse()) {
+          const alpha = color[3]!
+          background = background.map((channel, index) => color[index]! * alpha + channel * (1 - alpha))
+        }
+        return { error: getComputedStyle(element).color, background: `rgb(${background.join(', ')})` }
+      })
       const contrast = (Math.max(luminance(colors.error), luminance(colors.background)) + 0.05)
         / (Math.min(luminance(colors.error), luminance(colors.background)) + 0.05)
       expect(contrast).toBeGreaterThanOrEqual(4.5)
@@ -254,8 +271,6 @@ it('renders browser authorization failure and waiting at minimum size, then keep
     expect(operations.filter(kind => kind === 'browser')).toHaveLength(2)
     expect(operations.filter(kind => kind === 'reopen-browser')).toHaveLength(1)
     await page.getByRole('button', { name: '取消登录' }).click()
-    await page.getByRole('button', { name: '暂时跳过' }).click()
-    await page.getByRole('heading', { name: '登录漫途账号' }).waitFor({ state: 'detached' })
     await page.reload()
     await page.getByRole('button', { name: '打开侧边栏', exact: true }).click()
     await page.getByRole('button', { name: '设置', exact: true }).waitFor()

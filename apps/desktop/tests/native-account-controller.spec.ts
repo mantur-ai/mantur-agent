@@ -79,6 +79,38 @@ async function bench() {
 }
 
 describe('browser account controller', () => {
+  it('retains a receipt-less cancelled attempt after a failed retry and releases busy state until confirmed cancellation', async () => {
+    const b = await bench()
+    b.controls.failCreate = true
+    await expect(b.controller.startBrowser()).rejects.toMatchObject({ kind: 'network' })
+    await b.controller.skip()
+    expect(b.store.records(b.origin)).toMatchObject([{ phase: 'pending-cancel', metadata: {} }])
+    expect(b.controller.getSnapshot()).toMatchObject({ busy: false, skipped: true,
+      authenticated: false, pendingRevocations: 1 })
+    expect(b.options.openBrowser).not.toHaveBeenCalled()
+    b.controls.failCreate = false
+    expect(await b.controller.retryRevocations()).toMatchObject({ revoked: 1, failures: [] })
+    expect(b.controller.getSnapshot()).toMatchObject({ busy: false, skipped: true, pendingRevocations: 0 })
+    expect(b.store.records(b.origin)).toEqual([])
+    const creates = b.transport.mock.calls.filter(([url]) => String(url).endsWith('/client-auth/attempts'))
+    expect(creates).toHaveLength(3)
+    expect(creates[1]?.[1]?.body).toBe(creates[0]?.[1]?.body)
+    expect(creates[2]?.[1]?.body).toBe(creates[0]?.[1]?.body)
+  })
+
+  it('refreshes and skips a fresh profile without creating an attempt or requesting revocation', async () => {
+    const b = await bench()
+    await b.controller.refresh()
+    await b.controller.skip()
+    await b.controller.refresh()
+    expect(b.controller.getSnapshot()).toMatchObject({ phase: 'signed-out', busy: false,
+      authenticated: false, skipped: true, pendingRevocations: 0 })
+    expect(b.store.records(b.origin)).toEqual([])
+    expect(b.transport).not.toHaveBeenCalled()
+    expect(b.options.openBrowser).not.toHaveBeenCalled()
+    expect(b.cipher.encryptStringAsync).not.toHaveBeenCalled()
+  })
+
   it('opens the browser before sign-in, seals the code before exchange, then focuses only after confirmation', async () => {
     const b = await bench()
     await b.controller.startBrowser()
