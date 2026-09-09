@@ -99,16 +99,19 @@ describe('Mantur creation guide', () => {
     expect(screen.queryByText(zh['welcome.title'])).toBeNull()
   })
 
-  it('updates an open guide on mode change and collapses after the first message', () => {
+  it('updates the home guide on mode change and removes the mascot during chat', () => {
     const p = props()
     const view = render(guide(p))
     view.rerender(guide(props({ ...settings, mode: 'editing' })))
     expect(screen.getByText(zh['intro.editing'])).toBeTruthy()
     view.rerender(guide({ ...props(), hero: false }))
     expect(screen.queryByRole('button', { name: '短剧编剧' })).toBeNull()
-    expect(screen.getByRole('button', { name: '馒头仔' }).getAttribute('aria-expanded')).toBe('false')
-    expect(screen.getByRole('button', { name: '馒头仔' }).getAttribute('data-hero')).toBe('false')
-    expect(screen.getByRole('button', { name: '馒头仔' }).querySelector('img')?.getAttribute('src')).toBe('./mantoo-welcome@3x.png')
+    expect(screen.queryByRole('button', { name: '馒头仔' })).toBeNull()
+    expect(screen.queryByText(zh['intro.editing'])).toBeNull()
+    expect(view.container.children).toHaveLength(0)
+    view.rerender(guide(p))
+    expect(screen.getByRole('button', { name: '馒头仔' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '短剧编剧' })).toBeTruthy()
   })
 
   it.each(['script', 'production', 'editing', 'assets'] as const)('uses the approved %s artwork without changing the draft', (mode) => {

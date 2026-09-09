@@ -62,6 +62,7 @@ async function bench() {
       'conversation.hero.modes': { kind: 'single', scope: 'root' },
       'conversation.composer.guide': { kind: 'single', scope: 'session-maybe' },
       'conversation.composer.layout': { kind: 'single', scope: 'session-maybe' },
+      'conversation.composer.bar.accessory': { kind: 'single', scope: 'session-maybe' },
       'settings.general.item': { kind: 'list', scope: 'root' },
     },
   } as never, () => null)
@@ -150,7 +151,7 @@ describe('ui-mantur-navigation apply', () => {
     expect(subject.slots.entries('conversation.hero.modes')[0]?.component).toBe(CreationModes)
     expect(subject.slots.entries('conversation.composer.guide')[0]?.component).toBe(CreationGuide)
     expect(subject.slots.entries('conversation.composer.layout')[0]?.component).toBe(ManturComposerLayout)
-    expect(subject.slots.spec('conversation.composer.layout.permissions')).toEqual({ kind: 'single', scope: 'session-maybe' })
+    expect(subject.slots.spec('conversation.composer.bar.accessory.permissions')).toEqual({ kind: 'single', scope: 'session-maybe' })
     const footer = (subject.slots.entries('conversation.composer.layout')[0]!.inject as unknown as () => ManturComposerInjected)()
     const pathEntry = subject.slots.entries('settings.general.item')[0]!
     expect(pathEntry.component).toBe(ProjectPathSettings)
@@ -170,7 +171,7 @@ describe('ui-mantur-navigation apply', () => {
     expect(subject.slots.entries('conversation.composer.guide')).toEqual([])
     expect(subject.slots.entries('conversation.composer.layout')).toEqual([])
     expect(subject.slots.entries('settings.general.item')).toEqual([])
-    expect(subject.slots.spec('conversation.composer.layout.permissions')).toBeUndefined()
+    expect(subject.slots.spec('conversation.composer.bar.accessory.permissions')).toBeUndefined()
   })
 
   it('confirms persisted choices and delegates guide actions to their existing owners', async () => {

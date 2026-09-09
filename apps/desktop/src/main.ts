@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { app, BrowserWindow, dialog, ipcMain, Menu, safeStorage, shell } from 'electron'
 import electronUpdater from 'electron-updater'
 import { requestUpdateSave } from './update-save.ts'
-import { prepareDesktopUpdate } from './prepare-update.ts'
+import { prepareDesktopUpdate, saveDraftsWithPrompt } from './prepare-update.ts'
 import { DesktopDraftStorage } from './draft-storage.ts'
 import { installDraftBridge } from './draft-bridge.ts'
 import { installUpdateBridge } from './update-bridge.ts'
@@ -272,9 +272,19 @@ function startUpdates(): void {
       if (directoryPicker.isPending()) throw new Error(copy.updateDirectoryPickerPending)
       const active = service
       if (active === undefined) throw new Error(copy.updateShutdownUnavailable)
+      const window = mainWindow
+      if (window === undefined || window.isDestroyed()) throw new Error(copy.updateShutdownUnavailable)
       preparingUpdate = true
       try { await prepareDesktopUpdate({
-        saveDrafts: () => drafts.prepare(),
+        saveDrafts: () => saveDraftsWithPrompt({
+          save: () => drafts.prepare(), cancel: () => { drafts.release() },
+          show: async (signal) => {
+            await dialog.showMessageBox(window, {
+              type: 'info', title: copy.updateSavingTitle, message: copy.updateSavingMessage,
+              buttons: [copy.cancelUpdateButton], defaultId: 0, cancelId: 0, noLink: true, signal,
+            })
+          },
+        }),
         releaseDrafts: () => { drafts.release() },
         saveHost: () => requestUpdateSave({ child: active.child, timeoutMs: 30_000 }),
         closeAccount: async () => { await accountHost?.close(); accountHost = undefined },

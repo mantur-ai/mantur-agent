@@ -44,7 +44,7 @@ View 选择规则固定：有效且已注册的持久化选择优先，其次是
 
 `conversation.composer.layout` 接收所有者创建的标题、工作区与内容节点。默认顺序把工作区放在编辑器之前；产品 occupant 可以重排这些节点，而不替换控件或状态。内容节点必须在 hero 与 active 阶段保持相同的 React 位置，以保留常驻编辑器。
 
-布局可以声明 `conversation.composer.layout.permissions`，其所有者参数仅为布尔值 `disabled`。Conversation 在该声明的生命周期内贡献内部权限选择器，使用与输入区内控件相同的 input facade、权限投影、命令回调和交互锁。框架绑定的 slot 占用情况仅在替代 slot 存在贡献时隐藏输入区内选择器；移除或重建声明会恢复或移动控件，不改变 Session 权限值。布局的展示锁包含 composer block，模型选择的锁定规则不变。
+产品可以占用输入卡内部、编辑器上方的 `conversation.composer.bar.accessory`，并声明子 slot `conversation.composer.bar.accessory.permissions`，所有者参数为布尔值 `disabled`。Conversation 在该声明的生命周期内提供现有权限选择器，沿用工具栏控件的输入状态、权限投影、命令回调与交互锁。slot 占用情况保证选择器只有一个；移除或重建附加区不改变 Session 权限值。输入框提供包含阻止状态的展示锁，模型选择的锁定规则不变。
 
 Session 首次绑定或缓存的 Session 成为 current 时，shell 会在渲染前读取持久化 View 偏好，激活已注册的偏好 View 或 Chat fallback，并在后续 tab 或 focus 选择写入 store 前先激活对应 target。blank Session 仍不渲染 `conversation.view` slot；未选中的 target 不会激活。
 

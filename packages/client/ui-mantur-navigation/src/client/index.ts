@@ -19,7 +19,7 @@ import type { ReferenceInsert } from '@deepseek-ai/dsh-client-ui-conversation/cl
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { GUIDE_NAMESPACE, type CreationMode, type GuideSettings } from '../guide-settings.ts'
 import { CreationGuide, CreationModes, type GuidePreferencesInjected } from './CreationGuide.tsx'
-import { ManturComposerLayout } from './ManturComposerLayout.tsx'
+import { ManturComposerAccessory, ManturComposerLayout } from './ManturComposerLayout.tsx'
 import { ProjectPathSettings, type ProjectPathSettingsInjected } from './ProjectPathSettings.tsx'
 import { AutomaticProjectController } from './automatic-project.ts'
 import { en as projectEn, zh as projectZh, type ProjectKey } from './project-locales.ts'
@@ -119,11 +119,14 @@ export async function apply(ctx: Context): Promise<void> {
     }, CreationModes))
     scope.slots.inject('conversation.composer.layout', () => scope.slots.register({
       name: 'conversation.composer.layout', locale: 'projects.mantur',
-      children: { 'conversation.composer.layout.permissions': { kind: 'single', scope: 'session-maybe' } },
       inject: () => ({
         hooks: projectSettings.hooks, reloadRoot: projectSettings.reloadRoot,
       }),
     }, ManturComposerLayout))
+    scope.slots.inject('conversation.composer.bar.accessory', () => scope.slots.register({
+      name: 'conversation.composer.bar.accessory',
+      children: { 'conversation.composer.bar.accessory.permissions': { kind: 'single', scope: 'session-maybe' } },
+    }, ManturComposerAccessory))
     scope.slots.inject('conversation.composer.guide', () => scope.slots.register({
       name: 'conversation.composer.guide', locale: 'guide.mantur',
       inject: (sessionId: SessionId | undefined) => ({

@@ -84,7 +84,7 @@ export type CreationGuideProps = PropsRuntime<'conversation.composer.guide'>
 /** Render explicit preference-loading states without mounting a guessed default. */
 export function CreationGuide(props: CreationGuideProps) {
   const preferences = props.usePreferences(snapshot => snapshot)
-  if (preferences.value === undefined) return null
+  if (!props.hero || preferences.value === undefined) return null
   return <ReadyGuide {...props} preferences={preferences.value} />
 }
 

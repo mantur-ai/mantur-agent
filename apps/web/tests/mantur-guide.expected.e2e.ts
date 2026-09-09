@@ -301,6 +301,9 @@ it('preserves a live draft, attachments and controls while changing modes and ad
     await page.getByRole('button', { name: '馒头仔', exact: true }).click()
     expect(await composerPositions()).toEqual(openPositions)
     const editor = page.locator('[contenteditable="true"]').first()
+    await page.getByRole('button', { name: /访问模式/ }).focus()
+    await page.keyboard.press('Tab')
+    expect(await editor.evaluate(element => document.activeElement === element)).toBe(true)
     await editor.fill('保留这个故事和参考图 ')
     await editor.evaluate((element) => {
       const bytes = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a5FkAAAAASUVORK5CYII='), char => char.charCodeAt(0))
@@ -313,13 +316,15 @@ it('preserves a live draft, attachments and controls while changing modes and ad
     const model = await page.getByRole('button', { name: '选择模型' }).innerText()
     const permission = await page.getByRole('button', { name: /访问模式/ }).innerText()
     expect(await page.getByRole('button', { name: /访问模式/ }).count()).toBe(1)
-    expect(await page.locator('[data-composer-card]').getByRole('button', { name: /访问模式/ }).count()).toBe(0)
-    expect(await page.locator('[data-workspace-footer]').getByRole('button', { name: /访问模式/ }).count()).toBe(1)
+    expect(await page.locator('[data-composer-card]').getByRole('button', { name: /访问模式/ }).count()).toBe(1)
+    expect(await page.locator('[data-workspace-footer]').getByRole('button', { name: /访问模式/ }).count()).toBe(0)
+    expect(await page.getByRole('button', { name: /访问模式/ }).evaluate((element) => {
+      const editor = element.closest('[data-composer-card]')!.querySelector('[data-composer-input]')!
+      return element.getBoundingClientRect().bottom <= editor.getBoundingClientRect().top
+    })).toBe(true)
     await page.getByRole('button', { name: '发送消息', exact: true }).focus()
     await page.keyboard.press('Tab')
     expect(await workspaceButton.evaluate(element => document.activeElement === element)).toBe(true)
-    await page.keyboard.press('Tab')
-    expect(await page.getByRole('button', { name: /访问模式/ }).evaluate(element => document.activeElement === element)).toBe(true)
     expect(await workspaceButton.evaluate((element) => {
       const card = document.querySelector('[data-composer-card]')!.getBoundingClientRect()
       const footer = element.closest('[data-workspace-footer]')!.getBoundingClientRect()

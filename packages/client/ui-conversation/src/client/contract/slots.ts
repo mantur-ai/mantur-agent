@@ -135,8 +135,10 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       scope: 'session-maybe'
       owner: { hero: boolean; disabled: boolean; heading: ReactNode; workspace: ReactNode; content: ReactNode }
     }
-    /** Permission control declared by an alternate composer layout; otherwise rendered inline. */
-    'conversation.composer.layout.permissions': { kind: 'single'; scope: 'session-maybe'; owner: { disabled: boolean } }
+    /** Product controls above the editor inside the resident composer card. */
+    'conversation.composer.bar.accessory': { kind: 'single'; scope: 'session-maybe'; owner: { disabled: boolean } }
+    /** Permission control declared by a composer accessory; otherwise rendered in the toolbar. */
+    'conversation.composer.bar.accessory.permissions': { kind: 'single'; scope: 'session-maybe'; owner: { disabled: boolean } }
     /** Agent-preset control staged for a New Session. */
     'conversation.hero.agentPreset': { kind: 'single'; scope: 'root'; owner: HeroAgentPresetOwnerProps }
     /** Full-width entries above the composer card. */
@@ -320,6 +322,7 @@ export type ComposerBarProps =
     | 'conversation.input.left' | 'conversation.input.plan'
     | 'conversation.input.right' | 'conversation.input.model'
     | 'conversation.composer.dock'
+    | 'conversation.composer.bar.accessory'
   >
   & InjectFace<ComposerBarInjected>
   & PropsLocale<'conversation'>

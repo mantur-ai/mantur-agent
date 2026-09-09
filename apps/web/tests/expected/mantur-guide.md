@@ -11,6 +11,7 @@
 - button "短剧编剧"
 - button "更多技能"
 - button "馒头仔" [expanded]
+- button "访问模式，当前：工作区内修改": 工作区内修改
 - textbox "描述你想要构建的内容… / 调用指令 @ 文件或对话"
 - button "指令":
   - img
@@ -22,4 +23,3 @@
   - img
   - text: workspace
   - img
-- button "访问模式，当前：工作区内修改": 工作区内修改

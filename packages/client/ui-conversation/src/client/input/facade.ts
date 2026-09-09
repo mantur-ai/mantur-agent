@@ -171,6 +171,7 @@ export class SessionInputShell implements SessionInput {
   private imageFlightSeq = 0
   /** One Session-preparation operation; its draft remains resident until handoff. */
   private preparation: AbortController | undefined
+  private submissionFailures = 0
   /** Image-only sends retained until admission settles or scope disposal releases their images. */
   private readonly imageFlights = new Map<number, {
     readonly controller: AbortController
@@ -380,6 +381,7 @@ export class SessionInputShell implements SessionInput {
       this.publish()
       void this.deps.prepareSubmit(mode, controller.signal).catch((error: unknown) => {
         if (!this.disposed && !controller.signal.aborted) {
+          this.submissionFailures += 1
           this.notify('error', error instanceof Error ? error.message : String(error))
         }
       }).finally(() => {
@@ -399,13 +401,17 @@ export class SessionInputShell implements SessionInput {
         this.commitSend(imageIds)
         void this.deps.defaultSink('', imageIds, mode, controller.signal).then((outcome) => {
           if (this.disposed || !this.imageFlights.delete(flight)) return
-          if (outcome.kind === 'success') return
+          if (outcome.kind === 'success') { this.publish(); return }
+          this.submissionFailures += 1
           this.restoreImages(imageIds)
           if (outcome.text !== undefined) this.notify('error', outcome.text)
+          this.publish()
         }, (error: unknown) => {
           if (this.disposed || !this.imageFlights.delete(flight)) return
+          this.submissionFailures += 1
           this.restoreImages(imageIds)
           this.notify('error', error instanceof Error ? error.message : String(error))
+          this.publish()
         })
       }
       return
@@ -645,6 +651,17 @@ export class SessionInputShell implements SessionInput {
     return !this.disposed && this.core.state.phase !== 'adjudicating' && this.core.state.phase !== 'submitting'
       && this.detachedDrafts.size === 0 && this.imageFlights.size === 0
   }
+
+  /**
+   * Include automatic Session preparation when deciding whether a restart can lock this editor.
+   * @returns - Whether neither submission nor a project transfer can still change the draft.
+   */
+  isRestartSettled(): boolean {
+    return this.preparation === undefined && this.isDraftSettled()
+  }
+
+  /** Number of failed submission attempts, used to reject a restart waiting on those attempts. */
+  get submissionFailureRevision(): number { return this.submissionFailures }
 
   /**
    * Capture the complete editor and selected image identities after synchronous editor updates settle.
@@ -919,6 +936,7 @@ export class SessionInputShell implements SessionInput {
   private settleDetachedFailure(attempt: SubmitAttempt, message?: string): void {
     const record = this.detachedDrafts.get(attempt.seq)
     if (record === undefined) return
+    this.submissionFailures += 1
     this.detachedDrafts.delete(attempt.seq)
     this.restoreImages(record.imageIds)
     this.failedDetached.set(attempt.seq, record)
@@ -1009,6 +1027,7 @@ export class SessionInputShell implements SessionInput {
       (error: unknown) => {
         if (this.dead(attempt)) return
         const message = error instanceof Error ? error.message : String(error)
+        this.submissionFailures += 1
         this.dispatchRun(({ type: 'adjudication-failed', attempt, message }))
       },
     )
@@ -1034,6 +1053,7 @@ export class SessionInputShell implements SessionInput {
       .then(
         (outcome) => {
           if (outcome === undefined || this.dead(attempt)) return
+          if (outcome.kind !== 'success') this.submissionFailures += 1
           if (outcome.kind === 'success' && imageIds.length > 0) {
             const submitted = new Set(imageIds)
             this.imageIds = this.imageIds.filter(id => !submitted.has(id))
@@ -1048,6 +1068,7 @@ export class SessionInputShell implements SessionInput {
         (error: unknown) => {
           if (this.dead(attempt)) return
           const message = error instanceof Error ? error.message : String(error)
+          this.submissionFailures += 1
           this.dispatchRun(({
             type: 'submit-settled', attempt, ok: false,
             draft: this.projection.clipboardText, message,

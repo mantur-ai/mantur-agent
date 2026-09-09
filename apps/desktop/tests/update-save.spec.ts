@@ -2,7 +2,7 @@
 import { ChildProcess } from 'node:child_process'
 import { afterEach, expect, it, vi } from 'vitest'
 import { requestUpdateSave } from '../src/update-save.ts'
-import { prepareDesktopUpdate } from '../src/prepare-update.ts'
+import { prepareDesktopUpdate, saveDraftsWithPrompt } from '../src/prepare-update.ts'
 
 function childFixture() {
   const child = new ChildProcess()
@@ -12,6 +12,31 @@ function childFixture() {
   return { child, send, id: () => (send.mock.calls[0]![0] as { id: string }).id }
 }
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks() })
+
+it.each(['saved', 'failed', 'cancelled'] as const)('closes the draft waiting dialog after %s and never mistakes cancellation for a save', async (outcome) => {
+  const receipt = Promise.withResolvers<undefined>()
+  const dismissed = Promise.withResolvers<undefined>()
+  let signal!: AbortSignal
+  const cancel = vi.fn(() => { receipt.reject(new Error('cancelled')) })
+  const save = vi.fn(() => receipt.promise)
+  const pending = saveDraftsWithPrompt({ save, cancel, show: (value) => {
+    signal = value
+    value.addEventListener('abort', () => { dismissed.resolve(undefined) }, { once: true })
+    return dismissed.promise
+  } })
+  const rejected = outcome === 'saved' ? undefined : expect(pending).rejects.toThrow(outcome)
+  try {
+    expect(signal.aborted).toBe(false)
+    if (outcome === 'saved') receipt.resolve(undefined)
+    else if (outcome === 'failed') receipt.reject(new Error('failed'))
+    else dismissed.resolve(undefined)
+    if (outcome === 'saved') await pending
+    else await rejected
+    expect(signal.aborted).toBe(true)
+    expect(cancel).toHaveBeenCalledTimes(outcome === 'cancelled' ? 1 : 0)
+    expect(save).toHaveBeenCalledOnce()
+  } finally { receipt.resolve(undefined); dismissed.resolve(undefined); await pending.catch(() => {}) }
+})
 
 it('accepts only the current request and removes its observers afterwards', async () => {
   const { child, id } = childFixture()

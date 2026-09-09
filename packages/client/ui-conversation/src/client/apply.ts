@@ -171,7 +171,7 @@ export function apply(ctx: Context): void {
     const persistence = new DraftPersistence(window.manturDrafts, {
       capture: ids => concreteConversation(ctx).captureDraftImages(ids),
       restore: images => concreteConversation(ctx).restoreDraftImages(images),
-    }, (error) => {
+    }, () => t('draft.restartSubmissionFailed'), (error) => {
       const message = t('draft.saveFailed', { detail: String(error) })
       inputHub.reportPersistenceError(message)
       drafts.input.notify('error', message)
@@ -283,8 +283,8 @@ export function apply(ctx: Context): void {
   }, ConversationSessionHeader)
 
   const externalPermissions: ObservableSnapshot<boolean> = {
-    getSnapshot: () => slots.entries('conversation.composer.layout.permissions').length > 0,
-    subscribe: listener => slots.subscribe('conversation.composer.layout.permissions', listener),
+    getSnapshot: () => slots.entries('conversation.composer.bar.accessory.permissions').length > 0,
+    subscribe: listener => slots.subscribe('conversation.composer.bar.accessory.permissions', listener),
   }
   const composerControls = (sessionId: SessionId | undefined): ComposerControlInjected => {
     const shell = sessionId === undefined ? drafts.input : inputHub.shell(sessionId)
@@ -300,14 +300,15 @@ export function apply(ctx: Context): void {
       hooks: { composerInput: shell.state },
     }
   }
-  slots.inject('conversation.composer.layout.permissions', () => slots.register({
-    name: 'conversation.composer.layout.permissions', locale: NS, inject: composerControls,
+  slots.inject('conversation.composer.bar.accessory.permissions', () => slots.register({
+    name: 'conversation.composer.bar.accessory.permissions', locale: NS, inject: composerControls,
   }, PermissionControl))
 
   const registerComposerBar = () => slots.register({
     name: 'conversation.composer.bar',
     locale: NS,
     children: {
+      'conversation.composer.bar.accessory': { kind: 'single', scope: 'session-maybe' },
       'conversation.input.attachments': { kind: 'single', scope: 'session-maybe' },
       'conversation.input.overlay': { kind: 'list', scope: 'session' },
       'conversation.input.left': { kind: 'list', scope: 'session' },

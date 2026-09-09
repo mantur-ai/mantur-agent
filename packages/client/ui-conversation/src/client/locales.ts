@@ -10,6 +10,7 @@ const PLAN_NEXT_ACTION_EN = 'describe your task to generate plan'
 /** Simplified Chinese dictionary (the key-set source of truth). */
 export const zh = {
   'draft.saveFailed': '草稿保存失败，暂时不能重启安装：{detail}',
+  'draft.restartSubmissionFailed': '消息提交失败，已取消重启。请检查保留的输入后再更新。',
   'draft.prepareUnavailable': '自动创建项目暂不可用，请选择已有项目。',
   'draft.policyChanged': '项目创建设置已变化，草稿已保留。',
   'draft.selectionChanged': '当前会话已切换，未发送的草稿已保留。',
@@ -167,6 +168,7 @@ export type ConversationKey = keyof typeof zh
 /** English dictionary, checked complete against the zh key set. */
 export const en = {
   'draft.saveFailed': 'Draft save failed. Restart installation is blocked: {detail}',
+  'draft.restartSubmissionFailed': 'Submission failed and restart was cancelled. Review the retained input before updating.',
   'draft.prepareUnavailable': 'Automatic project creation is unavailable. Choose an existing project.',
   'draft.policyChanged': 'Project creation settings changed. Your draft is retained.',
   'draft.selectionChanged': 'The current conversation changed. Your unsent draft is retained.',

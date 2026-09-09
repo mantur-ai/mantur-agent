@@ -146,6 +146,8 @@ root
 │  ├─ conversation.composer
 │  │  └─ conversation.approval.detail
 │  ├─ conversation.composer.bar
+│  │  ├─ conversation.composer.bar.accessory
+│  │  │  └─ conversation.composer.bar.accessory.permissions
 │  │  ├─ conversation.input.attachments
 │  │  ├─ conversation.input.plan
 │  │  └─ conversation.input.model

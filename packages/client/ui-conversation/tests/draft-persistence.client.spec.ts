@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { SessionInputShell } from '../src/client/input/facade.ts'
 import { DraftPersistence } from '../src/client/input/draft-persistence.ts'
 import type { DesktopDraftBridge, DraftCheckpoint } from '../src/client/contract/draft-persistence.ts'
+import type { DraftAttachmentId, SubmitOutcome } from '../src/client/contract/input.ts'
 
 function shell() {
   return new SessionInputShell({ actx: {} as Context, defaultSink: vi.fn(), commandImages: {
@@ -22,11 +23,162 @@ function nativeBridge() {
 const images = { capture: async () => [], restore: async () => [] }
 
 describe('native draft persistence', () => {
+  it('does not remove a saved owner attached while another draft is being captured', async () => {
+    const native = nativeBridge()
+    const previous = shell()
+    const seed = new DraftPersistence(native.bridge, images, () => 'submission failed')
+    await seed.attachDraft('session:b', previous)
+    previous.setDraft('saved B')
+    await seed.save()
+    seed.dispose(); previous.dispose()
+    const entered = Promise.withResolvers<undefined>()
+    const capture = Promise.withResolvers<never[]>()
+    const a = shell()
+    const b = shell()
+    const registry = { ...images, capture: vi.fn(images.capture) }
+    const saved = vi.spyOn(native.bridge, 'save')
+    const store = new DraftPersistence(native.bridge, registry, () => 'submission failed')
+    let pending: Promise<void> | undefined
+    try {
+      await store.attachDraft('session:a', a)
+      await store.save()
+      saved.mockClear()
+      registry.capture.mockImplementationOnce(() => { entered.resolve(undefined); return capture.promise })
+      a.setDraft('changed A')
+      pending = store.save()
+      await entered.promise
+      await store.attachDraft('session:b', b)
+      expect(b.snapshot.draft).toBe('saved B')
+      capture.resolve([])
+      await pending
+      expect(saved.mock.calls.length).toBeGreaterThan(0)
+      for (const [checkpoint] of saved.mock.calls) {
+        expect(checkpoint.drafts.some(draft => draft.owner === 'session:b')).toBe(true)
+      }
+    } finally { capture.resolve([]); await pending; store.dispose(); a.dispose(); b.dispose() }
+  })
+
+  it.each(['success', 'error', 'rejection', 'image-success'] as const)('waits for %s admission without sending again or losing another composer', async (outcome) => {
+    const admission = Promise.withResolvers<SubmitOutcome>()
+    const observed = Promise.withResolvers<undefined>()
+    const sink = vi.fn(() => admission.promise)
+    const input = new SessionInputShell({ actx: {} as Context, defaultSink: sink, commandImages: {
+      serialize: async () => [], release: () => {}, unsupportedNotice: () => 'unsupported',
+    } })
+    const other = shell()
+    const native = nativeBridge()
+    const store = new DraftPersistence(native.bridge, images, () => 'submission failed; restart cancelled')
+    let settled: Promise<unknown> | undefined
+    try {
+      await store.attachDraft('session:submitting', input)
+      await store.attachDraft('unassigned', other)
+      other.setDraft('unsent homepage draft')
+      await store.save()
+      if (outcome === 'image-success') input.addImages(['photo' as DraftAttachmentId])
+      else input.setDraft('submitted once')
+      input.submit()
+      expect(() => input.lockDraft()).toThrow('Draft submission is still in progress')
+      const isSettled = input.isRestartSettled.bind(input)
+      vi.spyOn(input, 'isRestartSettled').mockImplementation(() => { observed.resolve(undefined); return isSettled() })
+      const prepare = store.prepare()
+      settled = prepare.then(() => {}, () => {})
+      const failed = outcome === 'error' || outcome === 'rejection'
+      const result = failed ? expect(prepare).rejects.toThrow('submission failed; restart cancelled') : undefined
+      await observed.promise
+      await expect(store.prepare()).rejects.toThrow('already preparing')
+      expect(input.editor.isEditable()).toBe(true)
+      expect(sink).toHaveBeenCalledOnce()
+      if (outcome === 'rejection') admission.reject(new Error('connection lost'))
+      else admission.resolve({ kind: failed ? 'error' : 'success' })
+      if (failed) {
+        await result
+        expect(input.snapshot.draft).toBe('submitted once')
+        expect(input.editor.isEditable()).toBe(true)
+      } else {
+        expect(await prepare).toBe(native.read().revision)
+        expect(input.snapshot).toMatchObject({ draft: '', imageIds: [] })
+        expect(input.editor.isEditable()).toBe(false)
+        const saved = native.read().drafts.find(draft => draft.owner === 'unassigned')!
+        const restored = shell()
+        try {
+          restored.restoreDraft({ ...saved, imageIds: [] })
+          expect(restored.snapshot.draft).toBe('unsent homepage draft')
+        } finally { restored.dispose() }
+      }
+      expect(other.snapshot.draft).toBe('unsent homepage draft')
+      expect(sink).toHaveBeenCalledOnce()
+    } finally {
+      admission.resolve({ kind: 'success' })
+      store.release()
+      await settled
+      store.dispose(); input.dispose(); other.dispose()
+    }
+  })
+
+  it.each(['cancel', 'detach', 'attach'] as const)('cancels a waiting restart on %s without cancelling or repeating the send', async (action) => {
+    const admission = Promise.withResolvers<SubmitOutcome>()
+    const observed = Promise.withResolvers<undefined>()
+    const sink = vi.fn(() => admission.promise)
+    const input = new SessionInputShell({ actx: {} as Context, defaultSink: sink, commandImages: {
+      serialize: async () => [], release: () => {}, unsupportedNotice: () => 'unsupported',
+    } })
+    const other = shell()
+    const native = nativeBridge()
+    const store = new DraftPersistence(native.bridge, images, () => 'submission failed; restart cancelled')
+    let settled: Promise<unknown> | undefined
+    try {
+      await store.attachDraft('session:a', input)
+      input.setDraft('send once')
+      input.submit()
+      input.setDraft('next unsent message')
+      const isSettled = input.isRestartSettled.bind(input)
+      vi.spyOn(input, 'isRestartSettled').mockImplementation(() => { observed.resolve(undefined); return isSettled() })
+      const prepare = store.prepare()
+      settled = prepare.then(() => {}, () => {})
+      const rejected = expect(prepare).rejects.toThrow('cancelled')
+      await observed.promise
+      if (action === 'cancel') store.release()
+      else if (action === 'detach') store.detachDraft('session:a')
+      else await store.attachDraft('session:b', other)
+      await rejected
+      admission.resolve({ kind: 'success' })
+      await vi.waitFor(() => { expect(input.isDraftSettled()).toBe(true) })
+      expect(input.snapshot.draft).toBe('next unsent message')
+      expect(input.editor.isEditable()).toBe(true)
+      expect(sink).toHaveBeenCalledOnce()
+    } finally {
+      admission.resolve({ kind: 'success' }); store.release(); await settled
+      store.dispose(); input.dispose(); other.dispose()
+    }
+  })
+
+  it('waits for automatic project preparation before locking the unassigned draft', async () => {
+    const preparation = Promise.withResolvers<undefined>()
+    const source = new SessionInputShell({ actx: {} as Context, prepareSubmit: () => preparation.promise,
+      defaultSink: vi.fn(), commandImages: { serialize: async () => [], release: () => {}, unsupportedNotice: () => 'unsupported' } })
+    const native = nativeBridge()
+    const store = new DraftPersistence(native.bridge, images, () => 'submission failed; restart cancelled')
+    let settled: Promise<unknown> | undefined
+    try {
+      await store.attachDraft('unassigned', source)
+      source.setDraft('project draft')
+      source.submit()
+      expect(source.isDraftSettled()).toBe(true)
+      expect(source.isRestartSettled()).toBe(false)
+      const prepare = store.prepare()
+      settled = prepare.then(() => {}, () => {})
+      preparation.resolve(undefined)
+      await prepare
+      expect(source.snapshot.draft).toBe('project draft')
+      expect(source.editor.isEditable()).toBe(false)
+    } finally { preparation.resolve(undefined); store.release(); await settled; store.dispose(); source.dispose() }
+  })
+
   it.each([true, false])('does not let cancelled preparation settle or unlock a newer one (older failure: %s)', async (fails) => {
     const native = nativeBridge()
     const input = shell()
     const capture = vi.fn(async () => [])
-    const store = new DraftPersistence(native.bridge, { capture, restore: async () => [] })
+    const store = new DraftPersistence(native.bridge, { capture, restore: async () => [] }, () => 'submission failed; restart cancelled')
     const firstEntered = Promise.withResolvers<undefined>()
     const firstCapture = Promise.withResolvers<never[]>()
     const secondEntered = Promise.withResolvers<undefined>()
@@ -67,7 +219,7 @@ describe('native draft persistence', () => {
   it('uses a durable identity during automatic preparation without releasing its editor lock', async () => {
     const native = nativeBridge()
     const target = shell()
-    const store = new DraftPersistence(native.bridge, images)
+    const store = new DraftPersistence(native.bridge, images, () => 'submission failed; restart cancelled')
     const finished = Promise.withResolvers<undefined>()
     const source = new SessionInputShell({
       actx: {} as Context, defaultSink: vi.fn(),
@@ -98,7 +250,7 @@ describe('native draft persistence', () => {
     const native = nativeBridge()
     const source = shell()
     const target = shell()
-    const store = new DraftPersistence(native.bridge, images)
+    const store = new DraftPersistence(native.bridge, images, () => 'submission failed; restart cancelled')
     try {
       await store.attachDraft('unassigned', source)
       await store.attachDraft('session:target', target)
@@ -134,7 +286,7 @@ describe('native draft persistence', () => {
     const native = nativeBridge()
     const source = shell()
     const target = shell()
-    const store = new DraftPersistence(native.bridge, images)
+    const store = new DraftPersistence(native.bridge, images, () => 'submission failed; restart cancelled')
     try {
       await store.attachDraft('unassigned', source)
       await store.attachDraft('session:target', target)
@@ -180,7 +332,7 @@ describe('native draft persistence', () => {
     let resolveLoad!: (value: DraftCheckpoint) => void
     vi.spyOn(native.bridge, 'load').mockReturnValue(new Promise<DraftCheckpoint>((resolve) => { resolveLoad = resolve }))
     const input = shell()
-    const store = new DraftPersistence(native.bridge, images)
+    const store = new DraftPersistence(native.bridge, images, () => 'submission failed; restart cancelled')
     const attaching = store.attachDraft('session:a', input)
     const rejection = expect(attaching).rejects.toThrow('detached')
     store.detachDraft('session:a')
@@ -194,7 +346,7 @@ describe('native draft persistence', () => {
   it('locks mutations through save and releases them when installation is deferred', async () => {
     const input = shell()
     const native = nativeBridge()
-    const store = new DraftPersistence(native.bridge, images)
+    const store = new DraftPersistence(native.bridge, images, () => 'submission failed; restart cancelled')
     await store.attachDraft('session:a', input)
     input.setDraft('用户草稿')
     const revision = await store.prepare()
@@ -210,13 +362,13 @@ describe('native draft persistence', () => {
   it('restores from a new native instance without localStorage or an old renderer', async () => {
     const native = nativeBridge()
     const first = shell()
-    const store = new DraftPersistence(native.bridge, images)
+    const store = new DraftPersistence(native.bridge, images, () => 'submission failed; restart cancelled')
     await store.attachDraft('session:a', first)
     first.setDraft('port-independent draft')
     await store.save()
     store.dispose(); first.dispose()
     const second = shell()
-    const reopened = new DraftPersistence(native.bridge, images)
+    const reopened = new DraftPersistence(native.bridge, images, () => 'submission failed; restart cancelled')
     await reopened.attachDraft('session:a', second)
     expect(second.snapshot.draft).toBe('port-independent draft')
     reopened.dispose(); second.dispose()
@@ -225,7 +377,7 @@ describe('native draft persistence', () => {
     const first = shell()
     const second = shell()
     const native = nativeBridge()
-    const store = new DraftPersistence(native.bridge, images)
+    const store = new DraftPersistence(native.bridge, images, () => 'submission failed; restart cancelled')
     await store.attachDraft('session:a', first)
     await store.attachDraft('session:b', second)
     vi.spyOn(second, 'lockDraft').mockImplementation(() => { throw new Error('submission pending') })
@@ -239,7 +391,7 @@ describe('native draft persistence', () => {
     const native = nativeBridge()
     vi.spyOn(native.bridge, 'save').mockResolvedValue(-1)
     const input = shell()
-    const store = new DraftPersistence(native.bridge, images)
+    const store = new DraftPersistence(native.bridge, images, () => 'submission failed; restart cancelled')
     await store.attachDraft('unassigned', input)
     input.setDraft('kept')
     await expect(store.prepare()).rejects.toThrow('receipt')
@@ -251,7 +403,7 @@ describe('native draft persistence', () => {
     const native = nativeBridge()
     const source = shell()
     const target = shell()
-    const store = new DraftPersistence(native.bridge, images)
+    const store = new DraftPersistence(native.bridge, images, () => 'submission failed; restart cancelled')
     await store.attachDraft('unassigned', source)
     await store.attachDraft('session:target', target)
     source.appendReference({ source: 'skill', ref: 'script', label: '编剧', clipboardText: '/script' })
@@ -272,7 +424,7 @@ describe('native draft persistence', () => {
     const native = nativeBridge()
     const source = shell()
     const target = shell()
-    const store = new DraftPersistence(native.bridge, images)
+    const store = new DraftPersistence(native.bridge, images, () => 'submission failed; restart cancelled')
     await store.attachDraft('unassigned', source)
     await store.attachDraft('session:target', target)
     source.setDraft('must recover at destination')
