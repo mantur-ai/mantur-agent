@@ -1,0 +1,525 @@
+{
+  "schema": "workbench-fixture-v1",
+  "fixture": true,
+  "projectId": "fixture-drama-lantern",
+  "project": {
+    "name": "渡灯",
+    "label": "两集隔离验证项目",
+    "worldRules": "水墨动画世界；人物和场景保持同一美术语言。",
+    "artSpec": {
+      "positiveStyle": "水墨动画",
+      "negativeConstraints": "不复制参考图主体、文字或Logo"
+    },
+    "sourceRevision": "schema-fixture-1"
+  },
+  "mediaAllowlist": [
+    "media/character.svg",
+    "media/scene.svg",
+    "media/clip.mp4"
+  ],
+  "rows": [
+    {
+      "id": "CHAR-001-V01",
+      "name": "林舟 · 常服",
+      "kind": "image",
+      "category": "character",
+      "subtype": "character",
+      "baseAssetId": "CHAR-001-V01",
+      "variant": "V01",
+      "scopes": [
+        {
+          "episode": 1,
+          "scene": "S01"
+        },
+        {
+          "episode": 2,
+          "scene": "S02"
+        }
+      ],
+      "episode": null,
+      "scene": null,
+      "order": null,
+      "previousClipId": null,
+      "version": 1,
+      "prompt": "林舟 · 常服，水墨动画美术，明确轮廓和材质；参考图仅作为外部条件，不得作为图中内容出现。",
+      "negativePrompt": "禁止文字、水印、Logo与无授权主体复制。",
+      "references": [],
+      "source": {
+        "kind": "schema-fixture",
+        "revision": "extract-fixture-1",
+        "evidence": "演示剧本指定集场；非真实算子输出"
+      },
+      "generationPolicy": "reference_required",
+      "referenceBindings": {
+        "version": "reference-routing-v3",
+        "selected_reference_ids": [],
+        "reference_uses": []
+      },
+      "media": "media/character.svg",
+      "status": "completed",
+      "generation": {
+        "taskId": "fixture-image-CHAR-001-V01",
+        "version": 1,
+        "prompt": "林舟 · 常服，水墨动画美术，明确轮廓和材质；参考图仅作为外部条件，不得作为图中内容出现。",
+        "negativePrompt": "禁止文字、水印、Logo与无授权主体复制。",
+        "actualRequest": {
+          "prompt": "林舟 · 常服，水墨动画美术，明确轮廓和材质；参考图仅作为外部条件，不得作为图中内容出现。"
+        },
+        "provenance": "synthetic-fixture",
+        "media": "media/character.svg"
+      },
+      "needsReview": false
+    },
+    {
+      "id": "CHAR-001-V02",
+      "name": "林舟 · 雨夜披风",
+      "kind": "image",
+      "category": "character",
+      "subtype": "character",
+      "baseAssetId": "CHAR-001-V01",
+      "variant": "V02",
+      "scopes": [
+        {
+          "episode": 2,
+          "scene": "S02"
+        }
+      ],
+      "episode": null,
+      "scene": null,
+      "order": null,
+      "previousClipId": null,
+      "version": 1,
+      "prompt": "林舟 · 雨夜披风，水墨动画美术，明确轮廓和材质；参考图仅作为外部条件，不得作为图中内容出现。",
+      "negativePrompt": "禁止文字、水印、Logo与无授权主体复制。",
+      "references": [
+        {
+          "id": "CHAR-001-V01",
+          "version": 1,
+          "roles": [
+            "identity"
+          ],
+          "literal_embedding": "forbidden"
+        }
+      ],
+      "source": {
+        "kind": "schema-fixture",
+        "revision": "extract-fixture-1",
+        "evidence": "演示剧本指定集场；非真实算子输出"
+      },
+      "generationPolicy": "reference_required",
+      "referenceBindings": {
+        "version": "reference-routing-v3",
+        "selected_reference_ids": [],
+        "reference_uses": []
+      },
+      "media": null,
+      "status": "unresolved",
+      "generation": null,
+      "needsReview": false
+    },
+    {
+      "id": "CROWD-001-V01",
+      "name": "渡口行人 · 三人",
+      "kind": "image",
+      "category": "character",
+      "subtype": "crowd",
+      "baseAssetId": "CROWD-001-V01",
+      "variant": "V01",
+      "scopes": [
+        {
+          "episode": 1,
+          "scene": "S01"
+        }
+      ],
+      "episode": null,
+      "scene": null,
+      "order": null,
+      "previousClipId": null,
+      "version": 1,
+      "prompt": "渡口行人 · 三人，水墨动画美术，明确轮廓和材质；参考图仅作为外部条件，不得作为图中内容出现。",
+      "negativePrompt": "禁止文字、水印、Logo与无授权主体复制。",
+      "references": [],
+      "source": {
+        "kind": "schema-fixture",
+        "revision": "extract-fixture-1",
+        "evidence": "演示剧本指定集场；非真实算子输出"
+      },
+      "generationPolicy": "reference_required",
+      "referenceBindings": {
+        "version": "reference-routing-v3",
+        "selected_reference_ids": [],
+        "reference_uses": []
+      },
+      "media": null,
+      "status": "processing",
+      "generation": null,
+      "needsReview": false
+    },
+    {
+      "id": "SCENE-001-V01",
+      "name": "渡口 · 清晨",
+      "kind": "image",
+      "category": "scene",
+      "subtype": "scene",
+      "baseAssetId": "SCENE-001-V01",
+      "variant": "V01",
+      "scopes": [
+        {
+          "episode": 1,
+          "scene": "S01"
+        }
+      ],
+      "episode": null,
+      "scene": null,
+      "order": null,
+      "previousClipId": null,
+      "version": 1,
+      "prompt": "渡口 · 清晨，水墨动画美术，明确轮廓和材质；参考图仅作为外部条件，不得作为图中内容出现。",
+      "negativePrompt": "禁止文字、水印、Logo与无授权主体复制。",
+      "references": [],
+      "source": {
+        "kind": "schema-fixture",
+        "revision": "extract-fixture-1",
+        "evidence": "演示剧本指定集场；非真实算子输出"
+      },
+      "generationPolicy": "reference_required",
+      "referenceBindings": {
+        "version": "reference-routing-v3",
+        "selected_reference_ids": [],
+        "reference_uses": []
+      },
+      "media": "media/scene.svg",
+      "status": "completed",
+      "generation": {
+        "taskId": "fixture-image-SCENE-001-V01",
+        "version": 1,
+        "prompt": "渡口 · 清晨，水墨动画美术，明确轮廓和材质；参考图仅作为外部条件，不得作为图中内容出现。",
+        "negativePrompt": "禁止文字、水印、Logo与无授权主体复制。",
+        "actualRequest": {
+          "prompt": "渡口 · 清晨，水墨动画美术，明确轮廓和材质；参考图仅作为外部条件，不得作为图中内容出现。"
+        },
+        "provenance": "synthetic-fixture",
+        "media": "media/scene.svg"
+      },
+      "needsReview": false
+    },
+    {
+      "id": "SCENE-002-V01",
+      "name": "长街 · 雨夜",
+      "kind": "image",
+      "category": "scene",
+      "subtype": "scene",
+      "baseAssetId": "SCENE-002-V01",
+      "variant": "V01",
+      "scopes": [
+        {
+          "episode": 2,
+          "scene": "S02"
+        }
+      ],
+      "episode": null,
+      "scene": null,
+      "order": null,
+      "previousClipId": null,
+      "version": 1,
+      "prompt": "长街 · 雨夜，水墨动画美术，明确轮廓和材质；参考图仅作为外部条件，不得作为图中内容出现。",
+      "negativePrompt": "禁止文字、水印、Logo与无授权主体复制。",
+      "references": [],
+      "source": {
+        "kind": "schema-fixture",
+        "revision": "extract-fixture-1",
+        "evidence": "演示剧本指定集场；非真实算子输出"
+      },
+      "generationPolicy": "reference_required",
+      "referenceBindings": {
+        "version": "reference-routing-v3",
+        "selected_reference_ids": [],
+        "reference_uses": []
+      },
+      "media": null,
+      "status": "missing",
+      "generation": null,
+      "needsReview": false
+    },
+    {
+      "id": "PROP-001-V01",
+      "name": "铜灯 · 熄灭",
+      "kind": "image",
+      "category": "prop",
+      "subtype": "prop",
+      "baseAssetId": "PROP-001-V01",
+      "variant": "V01",
+      "scopes": [
+        {
+          "episode": 1,
+          "scene": "S01"
+        },
+        {
+          "episode": 2,
+          "scene": "S02"
+        }
+      ],
+      "episode": null,
+      "scene": null,
+      "order": null,
+      "previousClipId": null,
+      "version": 1,
+      "prompt": "铜灯 · 熄灭，水墨动画美术，明确轮廓和材质；参考图仅作为外部条件，不得作为图中内容出现。",
+      "negativePrompt": "禁止文字、水印、Logo与无授权主体复制。",
+      "references": [],
+      "source": {
+        "kind": "schema-fixture",
+        "revision": "extract-fixture-1",
+        "evidence": "演示剧本指定集场；非真实算子输出"
+      },
+      "generationPolicy": "reference_required",
+      "referenceBindings": {
+        "version": "reference-routing-v3",
+        "selected_reference_ids": [],
+        "reference_uses": []
+      },
+      "media": null,
+      "status": "failed",
+      "generation": null,
+      "needsReview": false
+    },
+    {
+      "id": "CLIP-EP01-001",
+      "name": "渡口 · 抬灯 / 01",
+      "kind": "video",
+      "category": "clip",
+      "scopes": [
+        {
+          "episode": 1,
+          "scene": "S01"
+        }
+      ],
+      "episode": 1,
+      "scene": "S01",
+      "order": 1,
+      "previousClipId": null,
+      "version": 1,
+      "prompt": "@Image1 林舟在渡口抬起铜灯，镜头缓慢推进。不要背景音乐，不要字幕。",
+      "negativePrompt": "",
+      "references": [
+        {
+          "id": "CHAR-001-V01",
+          "version": 1,
+          "roles": [
+            "identity"
+          ]
+        }
+      ],
+      "source": {
+        "kind": "schema-fixture",
+        "revision": "compile-fixture-1",
+        "evidence": "演示 EP1 S01"
+      },
+      "template": {
+        "model": "fixture-seedance-model",
+        "prompt": "@Image1 林舟在渡口抬起铜灯，镜头缓慢推进。不要背景音乐，不要字幕。",
+        "duration": 10,
+        "metadata": {
+          "content": [],
+          "resolution": "480p",
+          "ratio": "9:16",
+          "generate_audio": true,
+          "seed": -1,
+          "return_last_frame": true
+        }
+      },
+      "actualRequest": {
+        "model": "fixture-seedance-model",
+        "prompt": "@Image1 林舟在渡口抬起铜灯，镜头缓慢推进。不要背景音乐，不要字幕。",
+        "duration": 10,
+        "metadata": {
+          "content": [],
+          "resolution": "480p",
+          "ratio": "9:16",
+          "generate_audio": true,
+          "seed": -1,
+          "return_last_frame": true
+        }
+      },
+      "media": "media/clip.mp4",
+      "status": "missing_tail",
+      "generation": {
+        "taskId": "fixture-video-001",
+        "version": 1,
+        "prompt": "@Image1 林舟在渡口抬起铜灯，镜头缓慢推进。不要背景音乐，不要字幕。",
+        "negativePrompt": "",
+        "actualRequest": {
+          "model": "fixture-seedance-model",
+          "prompt": "@Image1 林舟在渡口抬起铜灯，镜头缓慢推进。不要背景音乐，不要字幕。",
+          "duration": 10,
+          "metadata": {
+            "content": [],
+            "resolution": "480p",
+            "ratio": "9:16",
+            "generate_audio": true,
+            "seed": -1,
+            "return_last_frame": true
+          }
+        },
+        "quoteId": "fixture-quote-001",
+        "provenance": "synthetic-fixture",
+        "media": "media/clip.mp4",
+        "lastFrame": null
+      },
+      "needsReview": false
+    },
+    {
+      "id": "CLIP-EP01-002",
+      "name": "渡口 · 抬灯 / 02",
+      "kind": "video",
+      "category": "clip",
+      "scopes": [
+        {
+          "episode": 1,
+          "scene": "S01"
+        }
+      ],
+      "episode": 1,
+      "scene": "S01",
+      "order": 2,
+      "previousClipId": "CLIP-EP01-001",
+      "version": 1,
+      "prompt": "@Image1 林舟在渡口抬起铜灯，镜头缓慢推进。不要背景音乐，不要字幕。",
+      "negativePrompt": "",
+      "references": [
+        {
+          "id": "CHAR-001-V01",
+          "version": 1,
+          "roles": [
+            "identity"
+          ]
+        }
+      ],
+      "source": {
+        "kind": "schema-fixture",
+        "revision": "compile-fixture-1",
+        "evidence": "演示 EP1 S01"
+      },
+      "template": {
+        "model": "fixture-seedance-model",
+        "prompt": "@Image1 林舟在渡口抬起铜灯，镜头缓慢推进。不要背景音乐，不要字幕。",
+        "duration": 10,
+        "metadata": {
+          "content": [],
+          "resolution": "480p",
+          "ratio": "9:16",
+          "generate_audio": true,
+          "seed": -1,
+          "return_last_frame": true
+        }
+      },
+      "actualRequest": null,
+      "media": null,
+      "status": "waiting_previous_tail",
+      "generation": null,
+      "needsReview": false
+    },
+    {
+      "id": "CLIP-EP02-001",
+      "name": "雨夜 · 停步 / 01",
+      "kind": "video",
+      "category": "clip",
+      "scopes": [
+        {
+          "episode": 2,
+          "scene": "S02"
+        }
+      ],
+      "episode": 2,
+      "scene": "S02",
+      "order": 1,
+      "previousClipId": null,
+      "version": 1,
+      "prompt": "@Image1 林舟在雨夜长街停步，镜头保持视线。不要背景音乐，不要字幕。",
+      "negativePrompt": "",
+      "references": [
+        {
+          "id": "CHAR-001-V02",
+          "version": 1,
+          "roles": [
+            "identity"
+          ]
+        }
+      ],
+      "source": {
+        "kind": "schema-fixture",
+        "revision": "compile-fixture-1",
+        "evidence": "演示 EP2 S02"
+      },
+      "template": {
+        "model": "fixture-seedance-model",
+        "prompt": "@Image1 林舟在雨夜长街停步，镜头保持视线。不要背景音乐，不要字幕。",
+        "duration": 10,
+        "metadata": {
+          "content": [],
+          "resolution": "480p",
+          "ratio": "9:16",
+          "generate_audio": true,
+          "seed": -1,
+          "return_last_frame": true
+        }
+      },
+      "actualRequest": null,
+      "media": null,
+      "status": "failed",
+      "generation": null,
+      "needsReview": false
+    },
+    {
+      "id": "CLIP-EP02-002",
+      "name": "雨夜 · 停步 / 02",
+      "kind": "video",
+      "category": "clip",
+      "scopes": [
+        {
+          "episode": 2,
+          "scene": "S02"
+        }
+      ],
+      "episode": 2,
+      "scene": "S02",
+      "order": 2,
+      "previousClipId": "CLIP-EP02-001",
+      "version": 1,
+      "prompt": "@Image1 林舟在雨夜长街停步，镜头保持视线。不要背景音乐，不要字幕。",
+      "negativePrompt": "",
+      "references": [
+        {
+          "id": "CHAR-001-V02",
+          "version": 1,
+          "roles": [
+            "identity"
+          ]
+        }
+      ],
+      "source": {
+        "kind": "schema-fixture",
+        "revision": "compile-fixture-1",
+        "evidence": "演示 EP2 S02"
+      },
+      "template": {
+        "model": "fixture-seedance-model",
+        "prompt": "@Image1 林舟在雨夜长街停步，镜头保持视线。不要背景音乐，不要字幕。",
+        "duration": 10,
+        "metadata": {
+          "content": [],
+          "resolution": "480p",
+          "ratio": "9:16",
+          "generate_audio": true,
+          "seed": -1,
+          "return_last_frame": true
+        }
+      },
+      "actualRequest": null,
+      "media": null,
+      "status": "waiting_previous_tail",
+      "generation": null,
+      "needsReview": false
+    }
+  ]
+}
