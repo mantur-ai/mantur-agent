@@ -22,11 +22,13 @@ const emptyState = (path: string): AssetState => ({ format: 1, path, drafts: [],
 
 /** Host service. Each write is source-CAS guarded and journals recovery before replacement. */
 export class ManturAssets extends TypertRemoteService {
-  static inject = ['typert', 'fs', 'tools']
+  static inject = ['typert', 'fs', 'tools', 'connection']
   static Config = Config
   private readonly sessions = new WeakMap<object, { source: SourcePin; stateFile: string; media: Map<string, { path: string; sha: string; type: string }> }>()
+  private readonly mediaTokens = new Map<string, { session: object; path: string; sha: string; type: string }>()
   constructor(ctx: Context, private readonly config: Config) {
     super(ctx, 'manturAssets', { namespace: 'manturAssets' })
+    ctx.effect(() => this.registerMediaRoute(ctx), 'manturAssets: media route')
     ctx.tools.register(defineTool({
       name: 'propose_asset_prompts', description: 'Record a text-only asset prompt proposal for the current requested source. This never generates media or writes a pipeline report.',
       parameters: { requestId: { type: 'string', required: true }, source: { type: 'string', required: true }, edits: { type: 'string', required: true } },
@@ -94,7 +96,53 @@ export class ManturAssets extends TypertRemoteService {
   }
   @Remote('apply') async apply(agent: Agent, requestId: string): Promise<AssetSnapshot> { const info = await this.session(agent); const source = info.source; const state = await this.readState(info.stateFile, source.path); const proposal = state.proposals.find(item => String(item.id) === requestId); if (!proposal || proposal.status !== 'proposed') throw new Error('Only an Agent proposal can be applied'); const current = await this.pin(agent, source.path); if (current.sha256 !== source.sha256 || current.version !== source.version) throw new FsError('Source changed; proposal was not applied.', 'FS_STALE_VERSION'); const text = await this.read(source.path, this.config.maxBytes); const next = report(text).replace(proposal.edits); const after = { ...await this.pin(agent, source.path), sha256: fingerprint(next) }; state.pending = { proposal: proposal.id, source: current, afterText: next, afterSha: after.sha256 }; const oldVersion = await this.stateVersion(agent); await this.writeState(agent, source, state, oldVersion); await this.ctx.fs.writeText(await this.target(agent, source.path, true), next, { kind: 'replaceIfVersion', version: current.version }); proposal.status = 'applied'; state.pending = null; state.history.push({ id: proposal.id, before: proposal.before, after: proposal.edits, beforeSha: source.sha256, afterSha: after.sha256 }); await this.writeState(agent, after, state, await this.stateVersion(agent)); return this.snapshot(agent, after) }
   @Remote('propose') async proposeRemote(agent: Agent, requestId: string, source: string, edits: PromptEdit[]): Promise<AssetProposal> { return this.propose(agent, requestId, source, edits) }
-  @Remote('media') async media(agent: Agent, id: string): Promise<AssetMedia> { const row = (await this.session(agent)).media.get(id); if (!row) throw new Error('Media has no explicit manifest binding'); return { id, name: row.path.split('/').at(-1) ?? id, url: `/api/mantur-assets.media?id=${encodeURIComponent(id)}`, kind: 'video' } }
+  @Remote('media') async media(agent: Agent, id: string): Promise<AssetMedia> {
+    const row = (await this.session(agent)).media.get(id)
+    if (!row) throw new Error('Media has no explicit manifest binding')
+    const token = randomUUID()
+    this.mediaTokens.set(token, { session: agent.session as object, ...row })
+    return { id, name: row.path.split('/').at(-1) ?? id, url: `/api/mantur-assets.media?token=${encodeURIComponent(token)}`, kind: row.type.startsWith('image/') ? 'image' : 'video' }
+  }
+  private registerMediaRoute(ctx: Context): () => void {
+    const connection = Reflect.get(ctx, 'connection') as {
+      fetch: { register: (route: { path: string; methods: readonly ('GET' | 'HEAD')[]; fetch: (request: Request) => Promise<Response> }) => () => void }
+    }
+    return connection.fetch.register({
+      path: '/api/mantur-assets.media', methods: ['GET', 'HEAD'],
+      fetch: async request => this.mediaResponse(ctx, request),
+    })
+  }
+  private async mediaResponse(ctx: Context, request: Request): Promise<Response> {
+    const token = new URL(request.url).searchParams.get('token')
+    const entry = token === null ? undefined : this.mediaTokens.get(token)
+    if (entry === undefined) return new Response('media token is invalid', { status: 404 })
+    try {
+      const target = await ctx.fs.resolve(entry.path)
+      const stat = await ctx.fs.stat(target)
+      if (stat?.type !== 'file') return new Response('media is unavailable', { status: 404 })
+      const bytes = await ctx.fs.readBytes(target, undefined, this.config.maxMediaBytes)
+      if (entry.sha !== '' && fingerprint(bytes) !== entry.sha) return new Response('media fingerprint changed', { status: 409 })
+      const type = entry.type || 'application/octet-stream'
+      const range = request.headers.get('range')
+      let start = 0; let end = bytes.byteLength - 1; let status = 200
+      if (range !== null) {
+        const match = /^bytes=(\d*)-(\d*)$/.exec(range)
+        if (!match) return new Response('invalid range', { status: 416 })
+        start = match[1] === '' ? Math.max(0, bytes.byteLength - Number(match[2]) || 0) : Number(match[1])
+        end = match[2] === '' ? end : Number(match[2])
+        if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || start > end || end >= bytes.byteLength) return new Response('range is unsatisfiable', { status: 416 })
+        status = 206
+      }
+      const body = bytes.slice(start, end + 1)
+      const headers = new Headers({ 'content-type': type, 'content-length': String(body.byteLength), 'accept-ranges': 'bytes' })
+      if (status === 206) headers.set('content-range', `bytes ${start}-${end}/${bytes.byteLength}`)
+      if (request.method === 'HEAD') return new Response(null, { status, headers })
+      return new Response(body as BodyInit, { status, headers })
+    } catch (error) {
+      if (error instanceof Error && /too large|limit/i.test(error.message)) return new Response('media exceeds the configured size limit', { status: 413 })
+      return new Response('media is unavailable', { status: 404 })
+    }
+  }
   private async propose(agent: Agent | undefined, requestId: string, source: string, edits: PromptEdit[]): Promise<AssetProposal> { if (!agent) throw new Error('Asset proposal requires an owning Agent'); const state = await this.readState((await this.session(agent)).stateFile, source); const proposal = state.proposals.find(item => String(item.id) === requestId); if (!proposal) throw new Error('Unknown asset request'); proposal.edits = edits; proposal.status = 'proposed'; await this.writeState(agent, proposal.source, state, await this.stateVersion(agent)); return proposal }
   private async snapshot(agent: Agent, source: SourcePin): Promise<AssetSnapshot> { const text = await this.read(source.path, this.config.maxBytes); const stateFile = (await this.session(agent)).stateFile; const state = await this.readState(stateFile, source.path); return { source: { ...source, sha256: fingerprint(text) }, stateVersion: await this.stateVersion(agent), state, rows: report(text).rows, projectState: null } }
   private async stateVersion(agent: Agent) { return (await this.ctx.fs.stat(await this.target(agent, (await this.session(agent)).stateFile, true)))?.version as AssetVersion | undefined ?? null }

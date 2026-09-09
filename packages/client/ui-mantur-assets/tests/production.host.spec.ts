@@ -12,13 +12,17 @@ import { expect, it } from 'vitest'
 
 const real = '/Volumes/新磁盘/dsh/青春里的甜蜜风暴2_EP31_验收_2026-09-06'
 const assets = join(real, '资产/资产提取结果/assets-report.json')
+function connection() {
+  let route: { fetch: (request: Request) => Promise<Response> } | undefined
+  return { service: { fetch: { register: (value: { fetch: (request: Request) => Promise<Response> }) => { route = value; return () => { route = undefined } } } }, get: () => route }
+}
 
 it('reads real reports, saves a guarded draft, applies a proposal, and refuses a stale source', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-assets-production-'))
   const ctx = new Context()
   try {
     await cp(assets, join(root, 'assets-report.json'))
-    ctx.provide('typert', {} as never); await ctx.plugin(SystemPrompt, { includeHarnessIdentity: false }); await ctx.plugin(Tools)
+    const transport = connection(); ctx.provide('connection', transport.service as never); ctx.provide('typert', {} as never); await ctx.plugin(SystemPrompt, { includeHarnessIdentity: false }); await ctx.plugin(Tools)
     await ctx.plugin(LocalFileSystem, { cwd: root }); await ctx.plugin(Assets, { maxBytes: 9_000_000, maxEntries: 100, maxMediaBytes: 50_000_000 })
     const agent = { ctx, session: { header: { cwd: root } } } as never
     const first = await ctx.manturAssets.load(agent, 'assets-report.json')
@@ -40,11 +44,32 @@ it('fails loudly on a malformed journal instead of replacing it with an empty st
   const ctx = new Context()
   try {
     await cp(assets, join(root, 'assets-report.json'))
-    ctx.provide('typert', {} as never); await ctx.plugin(SystemPrompt, { includeHarnessIdentity: false }); await ctx.plugin(Tools)
+    const transport = connection(); ctx.provide('connection', transport.service as never); ctx.provide('typert', {} as never); await ctx.plugin(SystemPrompt, { includeHarnessIdentity: false }); await ctx.plugin(Tools)
     await ctx.plugin(LocalFileSystem, { cwd: root }); await ctx.plugin(Assets, { maxBytes: 9_000_000, maxEntries: 100, maxMediaBytes: 50_000_000 })
     const absolute = join(root, 'assets-report.json')
     await writeFile(join(root, `.mantur-assets-${fingerprint(absolute).slice(0, 16)}.json`), '{broken')
     const agent = { ctx, session: { id: 'journal-session', header: { cwd: root } } } as never
     await expect(ctx.manturAssets.load(agent, 'assets-report.json')).rejects.toThrow(/JSON/)
+  } finally { await ctx.fiber.dispose(); await rm(root, { recursive: true, force: true }) }
+})
+
+it('serves only explicitly manifested media and rejects unknown tokens and changed bytes', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dsh-assets-media-'))
+  const ctx = new Context()
+  try {
+    const media = join(root, 'CLIP-001.mp4'); const bytes = Buffer.from('isolated-media')
+    await writeFile(media, bytes); await writeFile(join(root, 'assets-report.json'), JSON.stringify({ schema_version: '1.0', '角色资产': [], '场景资产': [], '道具资产': [] }))
+    await writeFile(join(root, 'manifest.json'), JSON.stringify([{ clip_id: 'CLIP-001', file: media, sha256: fingerprint(bytes) }]))
+    const transport = connection(); ctx.provide('connection', transport.service as never); ctx.provide('typert', {} as never); await ctx.plugin(SystemPrompt, { includeHarnessIdentity: false }); await ctx.plugin(Tools); await ctx.plugin(LocalFileSystem, { cwd: root }); await ctx.plugin(Assets, { maxBytes: 100_000, maxEntries: 10, maxMediaBytes: 100_000 })
+    const agent = { ctx, session: { id: 'media-session', header: { cwd: root } } } as never
+    await ctx.manturAssets.load(agent, 'assets-report.json', undefined, 'manifest.json')
+    const descriptor = await ctx.manturAssets.media(agent, 'CLIP-001')
+    const url = new URL(descriptor.url, 'http://127.0.0.1')
+    const route = transport.get()!
+    expect((await route.fetch(new Request(url))).status).toBe(200)
+    expect(await (await route.fetch(new Request(url))).text()).toBe('isolated-media')
+    expect((await route.fetch(new Request('http://127.0.0.1/api/mantur-assets.media?token=unknown'))).status).toBe(404)
+    await writeFile(media, 'changed')
+    expect((await route.fetch(new Request(url))).status).toBe(409)
   } finally { await ctx.fiber.dispose(); await rm(root, { recursive: true, force: true }) }
 })
