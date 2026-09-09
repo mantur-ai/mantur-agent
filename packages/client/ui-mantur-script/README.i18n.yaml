@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/client/ui-mantur-script/README.md
-README.md: cdd02b9ff12f2b23647369bada663b209d22775b
-README.zh.md: ceddfe9049127aa1481633695e2e41ffef545d96
+README.md: 196425976d39ef8d3ccc9952c279e045b3f94f2d
+README.zh.md: 04228a7b1c64e7201d3659a1fb0d3508a5a718d4

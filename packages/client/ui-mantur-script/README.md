@@ -52,12 +52,13 @@ The tool schema contributes to request headers. Each sent selection adds its pas
 
 Mounting or removing the tool changes the tool-schema request prefix. Explicit selections append to the current conversation without replacing earlier history.
 
-<a id="known-limitations-and-deferred-work"></a>
 ## Known Limitations and Deferred Work
+
+<a id="known-limitations-and-deferred-work"></a>
 
 - Drafts and previous-version comparisons live for the browser plugin lifetime; reload recovery and a durable multi-version history are not provided. The last observed version is the available restore point. Arbitrary external processes do not participate in the filesystem provider's per-target mutex. The workbench does not create files, split a document into episodes, convert screenplay formats, or select text directly from rendered Markdown. The existing Agent can create project files through its ordinary tools. Directory listing is direct rather than recursive, and exceeding a configured bound reports an error.
 
 <a id="dev-note"></a>
-## Dev Note
+### Dev Note
 
 The asset child slots declare composition locations only. Shipped profiles do not install an asset provider.
