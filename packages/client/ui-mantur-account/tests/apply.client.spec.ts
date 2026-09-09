@@ -5,9 +5,8 @@ import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
 import { resolveSlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
-import { AccountOnboarding } from '../src/client/AccountOnboarding.tsx'
 import { AccountSection } from '../src/client/AccountSection.tsx'
-import { NativeAccountOnboarding, NativeAccountSection, type NativeAccountInjected } from '../src/client/NativeAccountSurfaces.tsx'
+import { NativeAccountSection, type NativeAccountInjected } from '../src/client/NativeAccountSurfaces.tsx'
 import { apply, inject } from '../src/client/index.ts'
 import { createNativeAccountDialogStore } from '../src/client/native-dialog.ts'
 import type { NativeAccountDialogInjected } from '../src/client/NativeAccountDialog.tsx'
@@ -73,8 +72,9 @@ describe('ui-mantur-account apply', () => {
       const entry = subject.slots.entries('shell.overlay')[0]!
       const view = createNativeAccountDialogStore().create()
       const props = (entry.inject as unknown as (actions: typeof view.actions) => NativeAccountDialogInjected)(view.actions)
-      const onboarding = (subject.slots.entries('settings.onboarding')[0]!.inject as unknown as () => NativeAccountInjected)()
-      expect(props.hooks.nativeAccount).toBe(onboarding.hooks.nativeAccount)
+      const settings = (subject.slots.entries('settings.section')[0]!.inject as unknown as () => NativeAccountInjected)()
+      expect(props.hooks.nativeAccount).toBe(settings.hooks.nativeAccount)
+      expect(subject.slots.entries('settings.onboarding')).toEqual([])
       document.body.append(modal)
       expect(() => subject.ctx.bail('mantur/native-account-open')).toThrow('unavailable')
       modal.remove()
@@ -111,10 +111,9 @@ describe('ui-mantur-account apply', () => {
     const fiber = subject.ctx.plugin({ inject: [...inject], apply })
     try {
       await fiber.await()
-      const onboarding = subject.slots.entries('settings.onboarding')[0]!
-      expect(onboarding.component).toBe(NativeAccountOnboarding)
+      expect(subject.slots.entries('settings.onboarding')).toEqual([])
       expect(subject.slots.entries('settings.section')[0]!.component).toBe(NativeAccountSection)
-      const props = (onboarding.inject as unknown as () => NativeAccountInjected)()
+      const props = (subject.slots.entries('settings.section')[0]!.inject as unknown as () => NativeAccountInjected)()
       expect(resolveSlotLabel(subject.slots.entries('settings.section')[0]!.options.label)).toBe('漫途账号')
       expect(props).not.toHaveProperty('controller')
       expect(props.hooks.nativeAccount.getSnapshot().snapshot?.authenticated).toBe(false)
@@ -130,9 +129,8 @@ describe('ui-mantur-account apply', () => {
     const fiber = subject.ctx.plugin({ inject: [...inject], apply })
     try {
       await fiber.await()
-      const onboarding = subject.slots.entries('settings.onboarding')[0]!
-      expect(onboarding.component).toBe(NativeAccountOnboarding)
-      const props = (onboarding.inject as unknown as () => NativeAccountInjected)()
+      expect(subject.slots.entries('settings.onboarding')).toEqual([])
+      const props = (subject.slots.entries('settings.section')[0]!.inject as unknown as () => NativeAccountInjected)()
       expect(props.hooks.nativeAccount.getSnapshot().failure).toEqual({ kind: 'unavailable' })
     } finally { await fiber.dispose() }
   })
@@ -142,25 +140,21 @@ describe('ui-mantur-account apply', () => {
     expect(inject).toEqual(['slots', 'locale', 'remote'])
   })
 
-  it('registers login before DeepSeek setup and exposes the account Settings page', async () => {
+  it('keeps account login optional and exposes the account Settings page', async () => {
     const subject = await bench()
     const fiber = subject.ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
-    expect(subject.slots.entries('settings.onboarding')[0]).toMatchObject({
-      component: AccountOnboarding,
-      options: { id: 'mantur-account', order: -100 },
-    })
-    const onboarding = subject.slots.entries('settings.onboarding')[0]!
-    const injectOnboarding = onboarding.inject as () => {
+    expect(subject.slots.entries('settings.onboarding')).toEqual([])
+    const section = subject.slots.entries('settings.section')[0]!
+    const injectSettings = section.inject as () => {
       controller: unknown
       hooks: { account: unknown }
       t: unknown
     }
-    const injected = injectOnboarding()
+    const injected = injectSettings()
     expect(injected.controller).toBeDefined()
     expect(injected.hooks.account).toBeDefined()
     expect(typeof injected.t).toBe('function')
-    const section = subject.slots.entries('settings.section')[0]!
     expect(section).toMatchObject({
       component: AccountSection,
       options: { id: 'mantur-account', order: 5 },
