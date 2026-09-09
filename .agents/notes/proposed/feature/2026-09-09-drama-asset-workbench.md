@@ -12,13 +12,15 @@ A media workbench can misrepresent edited prompts as the requests that produced 
 
 Validate a browser-only workbench in [the isolated prototype](../../../../prototypes/drama-asset-workbench/README.md). Keep compiler output, next-revision text and submitted generation records separate. Use stable IDs, source-version comparison, correlated per-item proposals and explicit approval before applying text. Source and local-draft conflicts retain the user's draft. Failed-item retries exclude applied targets.
 
-Production integration uses the additive shell.overlay slot and the existing main session. It requires a project manifest adapter, atomic source updates, correlated result events and existing Base readback. A controlled Worker proves the isolated interaction protocol only; it is not a model or production pipeline. Preview and draft editing remain independent of login.
+Production integration reuses the script workbench's single shell and existing main session. The asset child slot awaits that owner's stable revision; this prototype registers no second shell. Integration requires a project manifest adapter, atomic source updates, correlated result events and existing Base readback. A controlled Worker proves the isolated interaction protocol only; it is not a model or production pipeline. Preview and draft editing remain independent of login.
 
 The [main-session protocol experiment](../../../../prototypes/drama-asset-workbench/evidence/main-agent-interface.md) adds document/table/row locators and source/dependency fingerprints to isolated proposal confirmation. An authorized real-project preview supplies import evidence but leaves unbound images and missing submission records unresolved. The transport, atomic source writer and real-session replay remain prerequisites.
 
+The independent sender checks the captured Session against the current selection and calls its existing conversation queue. It snapshots the envelope before awaiting delivery and returns admission only. Controlled registry tests cover changed selection, unavailable binding, failed delivery and draft edits during delivery; the real transport remains unmounted.
+
 ## Alternatives considered
 
-**Replace the conversation or details single slot.** This would remove occupied client functionality. An additive overlay preserves existing panels.
+**Replace the conversation/details slot or create another workbench shell.** This would remove occupied functionality or duplicate navigation ownership. A child of the common workbench preserves the existing panels and one visibility owner.
 
 **Treat prompt acceptance as completed editing.** Acceptance only admits inbox content. Per-item proposals and applied-version receipts distinguish delivery, execution and mutation.
 
