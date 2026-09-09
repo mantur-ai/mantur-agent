@@ -24,11 +24,15 @@ const emptyState = (path: string): AssetState => ({ format: 1, path, drafts: [],
 export class ManturAssets extends TypertRemoteService {
   static inject = ['typert', 'fs', 'tools', 'connection']
   static Config = Config
-  private readonly sessions = new WeakMap<object, { source: SourcePin; stateFile: string; media: Map<string, { path: string; sha: string; type: string }> }>()
+  private readonly sessions = new WeakMap<object, { source: SourcePin; stateFile: string; media: Map<string, { path: string; sha: string; type: string }>; tokens: Map<string, string> }>()
   private readonly mediaTokens = new Map<string, { session: object; path: string; sha: string; type: string }>()
+  private readonly disposedSessions = new WeakSet<object>()
+  private closed = false
   constructor(ctx: Context, private readonly config: Config) {
     super(ctx, 'manturAssets', { namespace: 'manturAssets' })
     ctx.effect(() => this.registerMediaRoute(ctx), 'manturAssets: media route')
+    ctx.effect(() => () => { this.closed = true; this.mediaTokens.clear() }, 'manturAssets: media tokens')
+    ctx.on('session/disposed', (session) => { this.disposedSessions.add(session); this.invalidateMedia(session) })
     ctx.tools.register(defineTool({
       name: 'propose_asset_prompts', description: 'Record a text-only asset prompt proposal for the current requested source. This never generates media or writes a pipeline report.',
       parameters: { requestId: { type: 'string', required: true }, source: { type: 'string', required: true }, edits: { type: 'string', required: true } },
@@ -43,15 +47,18 @@ export class ManturAssets extends TypertRemoteService {
     return entries.filter(item => !item.name.startsWith('.') && (item.type === 'directory' || /\.(json|png|jpe?g|webp|mp4|webm)$/i.test(item.name))).map(item => ({ path: item.target.displayPath, name: item.name, directory: item.type === 'directory' }))
   }
   @Remote('load') async load(agent: Agent, assetsPath: string, _clipsPath?: string, mediaManifest?: string): Promise<AssetSnapshot> {
+    this.assertLive(agent.session)
+    this.invalidateMedia(agent.session)
     const source = await this.pin(agent, assetsPath); const sourceText = await this.read(source.path, this.config.maxBytes)
     report(sourceText); const root = await this.ctx.fs.resolve(this.cwd(agent)); const stateFile = `${root.displayPath}/.mantur-assets-${fingerprint(source.path).slice(0, 16)}.json`
     const media = new Map<string, { path: string; sha: string; type: string }>()
     if (mediaManifest !== undefined) {
       const manifest = JSON.parse(await this.read((await this.pin(agent, mediaManifest)).path, this.config.maxBytes)) as unknown
       if (!Array.isArray(manifest)) throw new Error('Media manifest must be an array')
-      for (const item of manifest) { if (!item || typeof item !== 'object') throw new Error('Invalid media manifest row'); const row = item as Record<string, unknown>; if (typeof row.clip_id !== 'string' || typeof row.file !== 'string') throw new Error('Media manifest requires clip_id and file'); const target = await this.target(agent, row.file, true); const stat = await this.ctx.fs.stat(target); if (stat?.type !== 'file') throw new Error('Media file missing'); media.set(row.clip_id, { path: target.displayPath, sha: String(row.sha256 ?? ''), type: 'video/mp4' }) }
+      for (const item of manifest) { if (!item || typeof item !== 'object') throw new Error('Invalid media manifest row'); const row = item as Record<string, unknown>; if (typeof row.clip_id !== 'string' || typeof row.file !== 'string') throw new Error('Media manifest requires clip_id and file'); if (typeof row.sha256 !== 'string' || !/^[a-fA-F0-9]{64}$/.test(row.sha256)) throw new Error('Media manifest requires a SHA-256 digest'); const target = await this.target(agent, row.file, true); const stat = await this.ctx.fs.stat(target); if (stat?.type !== 'file') throw new Error('Media file missing'); media.set(row.clip_id, { path: target.displayPath, sha: row.sha256.toLowerCase(), type: 'video/mp4' }) }
     }
-    this.sessions.set(agent.session as object, { source, stateFile, media })
+    this.assertLive(agent.session)
+    this.sessions.set(agent.session as object, { source, stateFile, media, tokens: new Map() })
     return this.snapshot(agent, source)
   }
   @Remote('saveDraft') async saveDraft(agent: Agent, command: AssetCommand): Promise<AssetSnapshot> { const current = await this.require(agent, command.source); const snapshot = await this.snapshot(agent, current); if (snapshot.stateVersion !== command.stateVersion) throw new FsError('Asset journal changed; reload before saving.', 'FS_STALE_VERSION'); if (snapshot.state.pending !== null) throw new Error('An unfinished source write requires recovery'); const draft = { revision: (snapshot.state.drafts.at(-1)?.revision ?? 0) + 1, source: current, edits: command.edits }; snapshot.state.drafts.push(draft); await this.writeState(agent, current, snapshot.state, snapshot.stateVersion); return this.snapshot(agent, current) }
@@ -167,9 +174,13 @@ export class ManturAssets extends TypertRemoteService {
   }
   @Remote('propose') async proposeRemote(agent: Agent, requestId: string, source: string, edits: PromptEdit[]): Promise<AssetProposal> { return this.propose(agent, requestId, source, edits) }
   @Remote('media') async media(agent: Agent, id: string): Promise<AssetMedia> {
-    const row = (await this.session(agent)).media.get(id)
+    const info = await this.session(agent)
+    this.assertLive(agent.session)
+    if (this.sessions.get(agent.session) !== info) throw new Error('Media manifest changed; reload media')
+    const row = info.media.get(id)
     if (!row) throw new Error('Media has no explicit manifest binding')
-    const token = randomUUID()
+    const token = info.tokens.get(id) ?? randomUUID()
+    info.tokens.set(id, token)
     this.mediaTokens.set(token, { session: agent.session as object, ...row })
     return { id, name: row.path.split('/').at(-1) ?? id, url: `/api/mantur-assets.media?token=${encodeURIComponent(token)}`, kind: row.type.startsWith('image/') ? 'image' : 'video' }
   }
@@ -191,16 +202,26 @@ export class ManturAssets extends TypertRemoteService {
       const stat = await ctx.fs.stat(target)
       if (stat?.type !== 'file') return new Response('media is unavailable', { status: 404 })
       const bytes = await ctx.fs.readBytes(target, undefined, this.config.maxMediaBytes)
-      if (entry.sha !== '' && fingerprint(bytes) !== entry.sha) return new Response('media fingerprint changed', { status: 409 })
+      if (!this.mediaTokens.has(token ?? '') ) return new Response('media token is invalid', { status: 404 })
+      if (fingerprint(bytes) !== entry.sha) return new Response('media fingerprint changed', { status: 409 })
       const type = entry.type || 'application/octet-stream'
       const range = request.headers.get('range')
       let start = 0; let end = bytes.byteLength - 1; let status = 200
       if (range !== null) {
         const match = /^bytes=(\d*)-(\d*)$/.exec(range)
         if (!match) return new Response('invalid range', { status: 416 })
-        start = match[1] === '' ? Math.max(0, bytes.byteLength - Number(match[2]) || 0) : Number(match[1])
-        end = match[2] === '' ? end : Number(match[2])
-        if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || start > end || end >= bytes.byteLength) return new Response('range is unsatisfiable', { status: 416 })
+        const first = match[1] ?? ''; const last = match[2] ?? ''
+        if (first === '') {
+          const suffix = Number(last)
+          if (!Number.isSafeInteger(suffix) || suffix <= 0) return new Response('range is unsatisfiable', { status: 416 })
+          start = Math.max(0, bytes.byteLength - suffix)
+        } else {
+          start = Number(first)
+          const requestedEnd = last === '' ? end : Number(last)
+          if (!Number.isSafeInteger(requestedEnd) || requestedEnd < start) return new Response('range is unsatisfiable', { status: 416 })
+          end = Math.min(end, requestedEnd)
+        }
+        if (!Number.isSafeInteger(start) || start < 0 || start > end) return new Response('range is unsatisfiable', { status: 416 })
         status = 206
       }
       const body = bytes.slice(start, end + 1)
@@ -277,7 +298,15 @@ export class ManturAssets extends TypertRemoteService {
   private async read(path: string, max: number) { const target = await this.ctx.fs.resolve(path); return new TextDecoder('utf-8', { fatal: true }).decode(await this.ctx.fs.readBytes(target, undefined, max)) }
   private cwd(agent: Agent) { const cwd = agent.session.header.cwd; if (!cwd) throw new Error('Select a project directory first'); return cwd }
   private async target(agent: Agent, path: string, file: boolean) { const root = await this.ctx.fs.resolve(this.cwd(agent)); const target = await this.ctx.fs.resolve(path, { cwd: this.cwd(agent) }); if (!this.ctx.fs.contains(root, target)) throw new FsError('Asset path is outside the selected project.', 'FS_PERMISSION_DENIED'); if (file && target.displayPath.endsWith('/')) throw new Error('Asset path must be a file'); return target }
-  private async session(agent: Agent) { const found = this.sessions.get(agent.session as object); if (!found) throw new Error('Load an asset project first'); return found }
+  private assertLive(session: object) {
+    if (this.closed || this.disposedSessions.has(session)) throw new Error('Asset Session or provider is disposed')
+  }
+  private invalidateMedia(session: object) {
+    const info = this.sessions.get(session)
+    if (info) for (const token of info.tokens.values()) this.mediaTokens.delete(token)
+    this.sessions.delete(session)
+  }
+  private async session(agent: Agent) { this.assertLive(agent.session); const found = this.sessions.get(agent.session as object); if (!found) throw new Error('Load an asset project first'); return found }
   private async require(agent: Agent, source: SourcePin) { const current = await this.pin(agent, source.path); if (current.sha256 !== source.sha256 || current.version !== source.version) throw new FsError('Source changed; reload before editing.', 'FS_STALE_VERSION'); return current }
 }
 export default ManturAssets

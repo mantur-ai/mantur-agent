@@ -68,9 +68,16 @@ it('serves only explicitly manifested media and rejects unknown tokens and chang
     const route = transport.get()!
     expect((await route.fetch(new Request(url))).status).toBe(200)
     expect(await (await route.fetch(new Request(url))).text()).toBe('isolated-media')
+    expect((await route.fetch(new Request(url, { headers: { range: 'bytes=-5' } }))).status).toBe(206)
+    expect(await (await route.fetch(new Request(url, { headers: { range: 'bytes=-5' } }))).text()).toBe('media')
+    expect((await route.fetch(new Request(url, { headers: { range: 'bytes=0-999' } }))).status).toBe(206)
+    expect((await route.fetch(new Request(url, { method: 'HEAD', headers: { range: 'bytes=0-1' } }))).headers.get('content-length')).toBe('2')
+    expect((await route.fetch(new Request(url, { headers: { range: 'bytes=5-2' } }))).status).toBe(416)
     expect((await route.fetch(new Request('http://127.0.0.1/api/mantur-assets.media?token=unknown'))).status).toBe(404)
     await writeFile(media, 'changed')
     expect((await route.fetch(new Request(url))).status).toBe(409)
+    await ctx.manturAssets.load(agent, 'assets-report.json', undefined, 'manifest.json')
+    expect((await route.fetch(new Request(url))).status).toBe(404)
   } finally { await ctx.fiber.dispose(); await rm(root, { recursive: true, force: true }) }
 })
 
