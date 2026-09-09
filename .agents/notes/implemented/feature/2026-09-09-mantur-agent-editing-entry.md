@@ -10,7 +10,7 @@ The editing plugin registered native tools only after the Client opened its Remo
 
 ## Decision
 
-Register `open_editing_workbench` through the existing tool registry when the editing plugin starts. The tool has no Session, project or directory arguments. Its calling Agent selects the same runtime owner used by Remote opening; concurrent and repeated opens reuse that owner. A successful result means runtime and native MCP readiness. Project binding, draft creation, review, applied-state checks and saving remain on the editor’s original tools.
+Register `open_editing_workbench` through the existing tool registry when the editing plugin starts. The tool has no Session, project or directory arguments. Its calling Agent selects the same runtime owner used by Remote opening; concurrent and repeated opens reuse that owner. `defineTool` is an ordinary runtime dependency because each call creates an independent tool definition; the tools service remains injected through `ctx`. A successful result means runtime and native MCP readiness. Project binding, draft creation, review, applied-state checks and saving remain on the editor’s original tools.
 
 Successful results carry `sessionId`, `editorUrl` and `directory`. A single JSON text block is the native rendering; presentation metadata adds the fixed `mantur-editing-workspace` discriminator. The Host constructs the address from a validated local port, without credentials or query parameters. The bearer remains in the Host connection. Startup failures and cancellation produce ordinary tool errors; cancellation does not destroy an acquired Session runtime.
 
