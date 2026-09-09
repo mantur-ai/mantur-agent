@@ -9,11 +9,13 @@ import type {} from '@deepseek-ai/dsh-authorization-manturhub'
 import type { NativeAccountAction, NativeAccountBridge, NativeAccountReply, NativeAccountSnapshot } from '@deepseek-ai/dsh-authorization-manturhub/types'
 import { captureStableAria, compareOrRefreshGolden, launchWebScaffold, watchConsole, webSnapshotMode } from './scaffold.ts'
 import { ZH_BROWSER_LOCALE } from './support.ts'
+import { prepareBundledSkills } from '../../../scripts/mantur-skills-resources.ts'
 
 const overlay = fileURLToPath(new URL('../../../packages/bundle/mantur-app/cordis.patch.yml', import.meta.url))
 const anchor = fileURLToPath(new URL('../../../packages/bundle/mantur-app/package.json', import.meta.url))
 const expected = fileURLToPath(new URL('./expected/mantur-native-account.md', import.meta.url))
 const images = fileURLToPath(new URL('../../../.artifacts/mantur-native-account', import.meta.url))
+const bundledSource = fileURLToPath(new URL('../../desktop/mantur-skills/source.json', import.meta.url))
 
 it('returns from both native marketplace entrypoints with the selected detail and complete unsent draft intact', async () => {
   const skill = { slug: 'short-drama', name: '爽文短剧剧本创作', description: '从创意到分集剧本。',
@@ -34,6 +36,7 @@ it('returns from both native marketplace entrypoints with the selected detail an
     if (address === null || typeof address === 'string') throw new Error('Expected fixture catalog port')
     scaffold = await launchWebScaffold({ extraOverlayPath: overlay, extraInstallAnchors: [anchor],
       manturHubBaseUrl: `http://127.0.0.1:${address.port}` })
+    await prepareBundledSkills(bundledSource, join(scaffold.workspaceCwd, '.bundled-skills'))
     const mode = vi.spyOn(scaffold.ctx.manturAccount, 'identityMode').mockReturnValue('desktop-managed')
     const legacy = vi.spyOn(scaffold.ctx.manturAccount, 'startLogin')
     restoreMode = () => { mode.mockRestore(); legacy.mockRestore() }
@@ -103,12 +106,13 @@ it('returns from both native marketplace entrypoints with the selected detail an
     const project = await workspaceButton.innerText()
     const model = await page.getByRole('button', { name: '选择模型' }).innerText()
     const permission = await page.getByRole('button', { name: /访问模式/ }).innerText()
-    let detail = page.getByRole('dialog', { name: '短剧编剧', exact: true })
+    let detail = page.getByRole('dialog', { name: '剧本改编', exact: true })
     const account = page.getByRole('dialog', { name: '登录漫途账号', exact: true })
     const expectDetailFocus = (name: string) => expect.poll(() => detail.getByRole('button', { name, exact: true })
       .evaluate(element => document.activeElement === element)).toBe(true)
     const captures: string[] = []
-    await page.getByRole('button', { name: '短剧编剧', exact: true }).click()
+    await page.getByRole('button', { name: '更多技能', exact: true }).click()
+    await page.getByRole('button', { name: skill.name, exact: true }).click()
     await detail.getByRole('button', { name: '登录后安装' }).focus()
     await page.keyboard.press('Enter')
     await account.getByRole('button', { name: '返回创作' }).waitFor()
@@ -173,8 +177,9 @@ it('returns from both native marketplace entrypoints with the selected detail an
     await session?.dispose()
     expect(await page.getByRole('button', { name: '选择模型' }).innerText()).toBe(model)
     expect(await page.getByRole('button', { name: /访问模式/ }).innerText()).toBe(permission)
-    detail = page.getByRole('dialog', { name: '短剧编剧', exact: true })
-    await page.getByRole('button', { name: '短剧编剧', exact: true }).click()
+    detail = page.getByRole('dialog', { name: '剧本改编', exact: true })
+    await page.getByRole('button', { name: '更多技能', exact: true }).click()
+    await page.getByRole('button', { name: skill.name, exact: true }).click()
     await detail.getByRole('button', { name: '安装后使用' }).waitFor()
     expect(legacy).not.toHaveBeenCalled()
     expect(requests.every(request => request === 'GET /api/v1/skills' || request === 'GET /api/v1/skills/short-drama')).toBe(true)
