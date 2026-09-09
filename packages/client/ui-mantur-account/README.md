@@ -31,7 +31,7 @@ The login page presents one browser-login button and the product logo. Waiting, 
 
 #### What the model sees
 
-Account Settings and dialogs remain browser presentation; their copy and state are never included in model requests.
+Account Settings register `mantur-account` in `settings.section`; native dialogs register the same ID in `shell.overlay` and open on `mantur/native-account-open`. These entries remain browser presentation; their copy and state are never included in model requests.
 
 #### Token effect
 

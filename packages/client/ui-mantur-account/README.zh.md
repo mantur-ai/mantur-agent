@@ -32,7 +32,7 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-账号设置页和弹窗只属于浏览器呈现；其文案与状态不会进入模型请求。
+账号设置页在 `settings.section` 注册 `mantur-account`；原生弹窗以同一 ID 注册到 `shell.overlay`，由 `mantur/native-account-open` 打开。这些入口只属于浏览器呈现；其文案与状态不会进入模型请求。
 
 #### Token 影响
 
