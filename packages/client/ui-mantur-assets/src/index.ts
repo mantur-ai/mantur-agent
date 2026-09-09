@@ -143,7 +143,18 @@ export class ManturAssets extends TypertRemoteService {
       return new Response('media is unavailable', { status: 404 })
     }
   }
-  private async propose(agent: Agent | undefined, requestId: string, source: string, edits: PromptEdit[]): Promise<AssetProposal> { if (!agent) throw new Error('Asset proposal requires an owning Agent'); const state = await this.readState((await this.session(agent)).stateFile, source); const proposal = state.proposals.find(item => String(item.id) === requestId); if (!proposal) throw new Error('Unknown asset request'); proposal.edits = edits; proposal.status = 'proposed'; await this.writeState(agent, proposal.source, state, await this.stateVersion(agent)); return proposal }
+  private async propose(agent: Agent | undefined, requestId: string, source: string, edits: PromptEdit[]): Promise<AssetProposal> {
+    if (!agent) throw new Error('Asset proposal requires an owning Agent')
+    const info = await this.session(agent); const state = await this.readState(info.stateFile, source)
+    const proposal = state.proposals.find(item => String(item.id) === requestId)
+    if (!proposal || proposal.status !== 'requested') throw new Error('Unknown or completed asset request')
+    if (edits.length !== proposal.before.length || new Set(edits.map(edit => edit.key)).size !== edits.length
+      || edits.some(edit => proposal.before.every(before => before.key !== edit.key || before.fingerprint !== edit.fingerprint))) {
+      throw new Error('Agent proposal targets do not match the requested rows')
+    }
+    proposal.edits = edits; proposal.status = 'proposed'
+    await this.writeState(agent, proposal.source, state, await this.stateVersion(agent)); return proposal
+  }
   private async snapshot(agent: Agent, source: SourcePin): Promise<AssetSnapshot> { const text = await this.read(source.path, this.config.maxBytes); const stateFile = (await this.session(agent)).stateFile; const state = await this.readState(stateFile, source.path); return { source: { ...source, sha256: fingerprint(text) }, stateVersion: await this.stateVersion(agent), state, rows: report(text).rows, projectState: null } }
   private async stateVersion(agent: Agent) { return (await this.ctx.fs.stat(await this.target(agent, (await this.session(agent)).stateFile, true)))?.version as AssetVersion | undefined ?? null }
   private async writeState(agent: Agent, _source: SourcePin, state: AssetState, expected: AssetVersion | null) { const path = (await this.session(agent)).stateFile; const target = await this.target(agent, path, true); const text = JSON.stringify(state, null, 2) + '\n'; if (expected === null) await this.ctx.fs.writeText(target, text, { kind: 'createIfAbsent' }); else await this.ctx.fs.writeText(target, text, { kind: 'replaceIfVersion', version: expected }) }

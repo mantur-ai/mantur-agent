@@ -73,3 +73,24 @@ it('serves only explicitly manifested media and rejects unknown tokens and chang
     expect((await route.fetch(new Request(url))).status).toBe(409)
   } finally { await ctx.fiber.dispose(); await rm(root, { recursive: true, force: true }) }
 })
+
+it('applies a controlled Agent batch for two rows or rejects the whole batch on a source conflict', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dsh-assets-batch-')); const ctx = new Context()
+  try {
+    await cp(assets, join(root, 'assets-report.json'))
+    const transport = connection(); ctx.provide('connection', transport.service as never); ctx.provide('typert', {} as never); await ctx.plugin(SystemPrompt, { includeHarnessIdentity: false }); await ctx.plugin(Tools); await ctx.plugin(LocalFileSystem, { cwd: root }); await ctx.plugin(Assets, { maxBytes: 9_000_000, maxEntries: 100, maxMediaBytes: 50_000_000 })
+    const agent = { ctx, session: { id: 'batch-session', header: { cwd: root } } } as never
+    const loaded = await ctx.manturAssets.load(agent, 'assets-report.json'); const rows = loaded.rows.filter(row => row.table === '角色资产').slice(0, 2)
+    const edits = rows.map((row, index) => ({ key: row.key, fingerprint: row.fingerprint, prompt: `${row.prompt}，受控批量${index + 1}`, negative: row.negative }))
+    const request = await ctx.manturAssets.prepare(agent, loaded.source, edits, '受控 Agent 批量提案；不生成媒体')
+    const result = await ctx.manturAssets.proposeRemote(agent, request.requestId, request.source.path, request.edits)
+    expect(result.status).toBe('proposed')
+    const applied = await ctx.manturAssets.apply(agent, request.requestId)
+    expect(applied.rows.filter(row => rows.some(selected => selected.key === row.key)).map(row => row.prompt)).toEqual(edits.map(edit => edit.prompt))
+    const next = await ctx.manturAssets.load(agent, 'assets-report.json'); const second = next.rows.find(row => row.key === rows[0]!.key)!
+    const conflictRequest = await ctx.manturAssets.prepare(agent, next.source, [{ ...second, negative: second.negative }], '受控冲突')
+    await writeFile(join(root, 'assets-report.json'), (await readFile(join(root, 'assets-report.json'), 'utf8')).replace(second.prompt, '外部新版本'))
+    await ctx.manturAssets.proposeRemote(agent, conflictRequest.requestId, conflictRequest.source.path, conflictRequest.edits)
+    await expect(ctx.manturAssets.apply(agent, conflictRequest.requestId)).rejects.toMatchObject({ code: 'FS_STALE_VERSION' })
+  } finally { await ctx.fiber.dispose(); await rm(root, { recursive: true, force: true }) }
+})
