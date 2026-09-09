@@ -151,7 +151,7 @@ export class NativeAccountController {
           const secrets = createNativeSecrets({ deviceInstanceId: this.store.deviceInstanceId, origin: this.http.origin,
             environment: this.options.environment, deviceName: this.options.deviceName, platform: this.options.platform,
             state, redirectUri: callback.redirectUri })
-          await this.store.savePending(secrets, () => { signal.throwIfAborted() })
+          await this.sealPending(secrets, signal)
           record = this.current()
           if (record === undefined) throw new NativeAccountFailure('storage')
           const browser: BrowserAttempt = { abort, callback, requestId: record.requestId, done: Promise.resolve() }
@@ -203,7 +203,7 @@ export class NativeAccountController {
     })
   }
 
-  /** Persist Skip before cancelling local provisioning; model credentials, projects and drafts remain untouched. */
+  /** Persist Skip and cancel provisioning; pending first-write encryption does not delay Skip or commit after cancellation. */
   skip(): Promise<void> {
     this.requireOpen()
     this.store.setSkipped(true)
@@ -284,6 +284,19 @@ export class NativeAccountController {
     catch { throw new NativeAccountFailure('browser') }
     signal.throwIfAborted()
     this.phase = 'authorizing'
+  }
+
+  private async sealPending(secrets: NativeSecrets, signal: AbortSignal): Promise<void> {
+    const cancelled = Promise.withResolvers<never>()
+    const abort = (): void => { cancelled.reject(signal.reason) }
+    signal.addEventListener('abort', abort, { once: true })
+    try {
+      signal.throwIfAborted()
+      // Storage retains the OS operation for shutdown; the commit check rejects its late result.
+      await Promise.race([this.store.savePending(secrets, () => { signal.throwIfAborted() }), cancelled.promise])
+    } finally {
+      signal.removeEventListener('abort', abort)
+    }
   }
 
   private async receiveCallback(browser: BrowserAttempt): Promise<void> {

@@ -99,12 +99,13 @@ export class NativeAccountStore {
   /**
    * Seal and commit an attempt before its first network request.
    * @param secrets - fresh Host-generated material, including the complete idempotent create request fields.
-   * @param beforeCommit - originating operation's final cancellation check after OS encryption.
+   * @param beforeCommit - originating operation's cancellation check before encryption and before its result is committed.
    * @returns completion of the encrypted transaction; failure authorizes no network request.
    */
   savePending(secrets: NativeSecrets, beforeCommit: () => void): Promise<void> {
     return this.track(async () => {
       if (!await this.cipher.isAsyncEncryptionAvailable()) throw new Error('OS account encryption is unavailable')
+      beforeCommit()
       const sealed = await this.cipher.encryptStringAsync(JSON.stringify(secrets))
       this.assertOpen()
       beforeCommit()

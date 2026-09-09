@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { chromium, type Page } from 'playwright'
 import { expect, it, vi } from 'vitest'
 import type {} from '@deepseek-ai/dsh-authorization-manturhub'
-import type { NativeAccountAction, NativeAccountBridge, NativeAccountSnapshot } from '@deepseek-ai/dsh-authorization-manturhub/types'
+import type { NativeAccountAction, NativeAccountBridge, NativeAccountReply, NativeAccountSnapshot } from '@deepseek-ai/dsh-authorization-manturhub/types'
 import { captureStableAria, compareOrRefreshGolden, launchWebScaffold, watchConsole, webSnapshotMode } from './scaffold.ts'
 import { ZH_BROWSER_LOCALE } from './support.ts'
 
@@ -44,9 +44,15 @@ it('returns from both native marketplace entrypoints with the selected detail an
     page.on('request', (request) => { if (new URL(request.url()).pathname === '/api/session/prompt') prompts++ })
     let snapshot: NativeAccountSnapshot = { phase: 'signed-out', busy: false, authenticated: false, skipped: false, pendingRevocations: 0 }
     let revision = 0
+    const preparing = Promise.withResolvers<NativeAccountReply>()
+    let holdPreparation = true
     const operations: NativeAccountAction['kind'][] = []
     await page.exposeFunction('invokeNativeAccountFixture', (action: NativeAccountAction) => {
       operations.push(action.kind)
+      if (action.kind === 'browser' && holdPreparation) {
+        holdPreparation = false
+        return preparing.promise
+      }
       if (action.kind === 'browser') snapshot = { ...snapshot, phase: 'authorizing',
         attempt: { expiresAt: 1_999_999_999_999 } }
       else if (action.kind !== 'refresh' && action.kind !== 'skip') throw new Error(`Unexpected native action: ${action.kind}`)
@@ -105,9 +111,12 @@ it('returns from both native marketplace entrypoints with the selected detail an
     await detail.getByRole('button', { name: '登录后安装' }).waitFor()
     await expectDetailFocus('登录后安装')
     await detail.getByRole('button', { name: '登录后安装' }).click()
+    await account.getByRole('button', { name: '登录漫途账号', exact: true }).click()
+    await expect.poll(() => account.getByRole('button', { name: '正在准备登录…' }).isDisabled()).toBe(true)
     await account.getByRole('button', { name: '暂时跳过' }).click()
     await detail.getByRole('button', { name: '登录后安装' }).waitFor()
     await expectDetailFocus('登录后安装')
+    preparing.resolve({ ok: false, revision, failure: { kind: 'cancelled' } })
     captures.push(`## Guide after Skip\n\n${await detail.ariaSnapshot()}`)
     await detail.getByRole('button', { name: '关闭引导' }).click()
     detail = page.getByRole('dialog', { name: skill.name, exact: true })
@@ -146,7 +155,7 @@ it('returns from both native marketplace entrypoints with the selected detail an
     expect(legacy).not.toHaveBeenCalled()
     expect(requests.every(request => request === 'GET /api/v1/skills' || request === 'GET /api/v1/skills/short-drama')).toBe(true)
     expect(prompts).toBe(0)
-    expect(operations).toEqual(['refresh', 'skip', 'browser'])
+    expect(operations).toEqual(['refresh', 'browser', 'skip', 'browser'])
     expect(console.pageErrors).toEqual([])
     await mkdir(images, { recursive: true })
     await page.screenshot({ path: join(images, 'native-entrypoints.png') })

@@ -79,6 +79,26 @@ async function bench() {
 }
 
 describe('browser account controller', () => {
+  it.each(['availability', 'unavailable', 'encrypt', 'decrypt'] as const)(
+    'releases busy state after %s fails before opening the browser and accepts an explicit retry', async (stage) => {
+      const b = await bench()
+      const failure = new Error('private cipher failure detail')
+      if (stage === 'availability') b.cipher.isAsyncEncryptionAvailable.mockRejectedValueOnce(failure)
+      if (stage === 'unavailable') b.cipher.isAsyncEncryptionAvailable.mockResolvedValueOnce(false)
+      if (stage === 'encrypt') b.cipher.encryptStringAsync.mockRejectedValueOnce(failure)
+      if (stage === 'decrypt') b.cipher.decryptStringAsync.mockRejectedValueOnce(failure)
+      await expect(b.controller.startBrowser()).rejects.toMatchObject({ kind: 'local' })
+      expect(b.controller.getSnapshot()).toMatchObject({ phase: 'failed', busy: false,
+        authenticated: false, failure: { kind: 'local' } })
+      expect(JSON.stringify(b.controller.getSnapshot())).not.toContain(failure.message)
+      expect(b.transport).not.toHaveBeenCalled()
+      expect(b.options.openBrowser).not.toHaveBeenCalled()
+      await b.controller.startBrowser()
+      expect(b.options.openBrowser).toHaveBeenCalledOnce()
+      expect(b.controller.getSnapshot()).toMatchObject({ phase: 'authorizing', busy: false })
+    },
+  )
+
   it('retains a receipt-less cancelled attempt after a failed retry and releases busy state until confirmed cancellation', async () => {
     const b = await bench()
     b.controls.failCreate = true
@@ -313,18 +333,44 @@ describe('browser account controller', () => {
     expect(b.controller.getSnapshot()).toMatchObject({ authenticated: false, phase: 'authorizing' })
   })
 
-  it('persists Skip during OS encryption and prevents the first network request after cancellation', async () => {
+  it.each([
+    ['initialization', 'resolve'], ['initialization', 'reject'], ['encryption', 'resolve'], ['encryption', 'reject'],
+  ] as const)('releases Skip before OS %s can %s and prevents a late login request', async (stage, outcome) => {
     const b = await bench()
+    const saving = vi.spyOn(b.store, 'savePending')
     const entered = Promise.withResolvers<undefined>()
-    const release = Promise.withResolvers<Buffer>()
-    b.cipher.encryptStringAsync.mockImplementationOnce(() => { entered.resolve(undefined); return release.promise })
+    const release = Promise.withResolvers<undefined>()
+    if (stage === 'initialization') b.cipher.isAsyncEncryptionAvailable.mockImplementationOnce(async () => {
+      entered.resolve(undefined)
+      await release.promise
+      return true
+    })
+    else b.cipher.encryptStringAsync.mockImplementationOnce(async () => {
+      entered.resolve(undefined)
+      await release.promise
+      return Buffer.from('not committed')
+    })
     const start = b.controller.startBrowser()
     const rejected = expect(start).rejects.toMatchObject({ kind: 'cancelled' })
     await entered.promise
     const skip = b.controller.skip()
-    release.resolve(Buffer.from('not committed'))
-    await skip
-    await rejected
+    try {
+      await expect.poll(() => b.controller.getSnapshot().busy).toBe(false)
+      await skip
+      await rejected
+      await b.controller.refresh()
+      expect(b.controller.getSnapshot()).toMatchObject({ busy: false, skipped: true, authenticated: false })
+      expect(b.transport).not.toHaveBeenCalled()
+      expect(b.options.openBrowser).not.toHaveBeenCalled()
+    } finally {
+      if (outcome === 'resolve') release.resolve(undefined)
+      else release.reject(new Error('private late encryption failure'))
+      await skip
+      await rejected
+    }
+    await expect(saving.mock.results[0]!.value).rejects.toThrow()
+    if (stage === 'initialization') expect(b.cipher.encryptStringAsync).not.toHaveBeenCalled()
+    expect(b.controller.getSnapshot()).toMatchObject({ busy: false, skipped: true, authenticated: false })
     expect(b.store.skipped()).toBe(true)
     expect(b.store.records(b.origin)).toEqual([])
     expect(b.transport).not.toHaveBeenCalled()
