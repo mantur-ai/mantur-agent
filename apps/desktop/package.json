@@ -11,6 +11,7 @@
     "pack": "pnpm run prepare:cli && pnpm run prepare:mantur-cut && electron-builder --dir --publish never",
     "prepare:mantur-cut": "tsx ../../scripts/mantur-cut-distribution.ts",
     "dist:mac:arm64": "pnpm run prepare:cli && pnpm run prepare:mantur-cut -- --target darwin-arm64 && electron-builder --mac zip --arm64 --publish never && tsx ../../scripts/create-macos-dmg.ts --arch arm64",
+    "dist:mac:arm64:local": "pnpm run prepare:cli && pnpm run prepare:mantur-cut -- --target darwin-arm64 && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac zip --arm64 --publish never --config.mac.identity=- --config.mac.notarize=false --config.mac.strictVerify=true && codesign --verify --deep --strict dist/mac-arm64/漫途Agent.app && tsx ../../scripts/create-macos-dmg.ts --arch arm64",
     "dist:mac:x64": "pnpm run prepare:cli && pnpm run prepare:mantur-cut -- --target darwin-x64 && electron-builder --mac zip --x64 --publish never && tsx ../../scripts/create-macos-dmg.ts --arch x64",
     "dist:win:x64": "pnpm run prepare:cli && pnpm run prepare:mantur-cut -- --target win32-x64 && electron-builder --win nsis --x64 --publish never",
     "smoke:packaged": "tsx scripts/smoke-packaged.ts",

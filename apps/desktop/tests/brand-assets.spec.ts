@@ -5,6 +5,21 @@ import { describe, expect, it } from 'vitest'
 const root = fileURLToPath(new URL('../../..', import.meta.url))
 
 describe('Mantur desktop brand assets', () => {
+  it('signs local arm64 candidates explicitly without changing release signing', async () => {
+    const manifest = JSON.parse(await readFile(`${root}/apps/desktop/package.json`, 'utf8')) as {
+      scripts: Record<string, string>
+      build: { mac: { identity?: unknown; notarize: boolean } }
+    }
+    const script = manifest.scripts['dist:mac:arm64:local']!
+    expect(script).toContain('CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac zip --arm64 --publish never')
+    expect(script).toContain('--config.mac.identity=- --config.mac.notarize=false --config.mac.strictVerify=true')
+    expect(script).toContain('&& codesign --verify --deep --strict dist/mac-arm64/漫途Agent.app && tsx ../../scripts/create-macos-dmg.ts --arch arm64')
+    expect(script).not.toMatch(/xattr|spctl|--remove-signature/)
+    expect(manifest.scripts['dist:mac:arm64']).not.toContain('--config.mac.identity=-')
+    expect(manifest.build.mac.identity).toBeUndefined()
+    expect(manifest.build.mac.notarize).toBe(true)
+  })
+
   it('uses the rounded application icon for both native package targets', async () => {
     const manifest = JSON.parse(await readFile(`${root}/apps/desktop/package.json`, 'utf8')) as {
       scripts: { 'dist:mac:arm64': string; 'dist:mac:x64': string }
