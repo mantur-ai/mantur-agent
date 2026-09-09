@@ -238,6 +238,8 @@ interface Config {
 
 ## 浏览器 Session 目录
 
+`SkillInvocationSource` 使用 `name` 与 `form: 'instructions'` 标识用户所选的指令消息。可选的 `bundled` 来源包含精确 App 引用的 `version` 与 `digest`；普通注册表调用不包含它。[漫途广场](../../packages/skill/manturhub-marketplace/README.zh.md)负责这些 App 引用的校验与加载。
+
 `SkillListRequest` 通过 `sessionId` 指定一个 Session；`SkillListValue` 返回允许用户调用的条目，其中包含名称、描述、可选使用提示与模型调用可用性。`SessionSkillCatalog` 在不激活 Agent 的前提下读取 Session cwd 与记录的 preset。live Agent 可以提供其作用域 registry，冷 Session 则使用 preset 的 standing scope。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->

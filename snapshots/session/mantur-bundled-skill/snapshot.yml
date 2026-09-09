@@ -1,0 +1,10 @@
+version: 1
+scenario: mantur-bundled-skill
+profile: headless
+composition: mantur-bundled-skill
+recording: authored
+header:
+  class: bundled
+  pin: true
+  systemPromptSource: text-turn
+  toolSchemasSource: text-turn

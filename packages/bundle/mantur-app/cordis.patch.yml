@@ -53,6 +53,8 @@
             : undefined
     - id: mantur-marketplace
       name: '@deepseek-ai/dsh-manturhub-marketplace'
+      config:
+        bundledSkillDir: !!js process.env.DSH_BUNDLED_SKILL_DIR
     - id: mantur-projects
       name: '@deepseek-ai/dsh-mantur-projects'
       config:

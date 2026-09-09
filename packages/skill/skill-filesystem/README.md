@@ -39,6 +39,8 @@ A skill is either a directory bundle `<name>/SKILL.md` or a flat file `<name>.md
 
 The catalog and the body have separate lifecycles: discovery parses frontmatter into the catalog entry, and every load re-reads the current file, so editing a skill body needs no versioning or cache invalidation.
 
+`parseSkillText` accepts already-read Markdown and uses the same frontmatter and invocation-policy parser as filesystem discovery. Its diagnostic callback receives invalid-input reasons; the filesystem caller logs them and skips the file, while a verified bundle reader can reject loading. The parser does not perform discovery, verify a resource identity or read additional files.
+
 ### Roots and priority
 
 Default roots are scanned in this provider's rank order:

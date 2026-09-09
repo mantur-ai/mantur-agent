@@ -1,0 +1,18 @@
+{
+  "formatVersion": 1,
+  "skills": [
+    {
+      "name": "bundled-example",
+      "version": "1.0.0",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "bytes": 140,
+          "sha256": "6a75dcea2362dadf93303a0304487d70bb27e16fc3db261496b19252a8c0df25"
+        }
+      ],
+      "title": "离线示例",
+      "digest": "b12d3ed92888d71b3c2fc4038923a6be6c2105baedf40b376005dcae5da2df97"
+    }
+  ]
+}

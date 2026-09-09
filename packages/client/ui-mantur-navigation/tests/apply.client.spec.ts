@@ -29,8 +29,12 @@ vi.mock('@deepseek-ai/dsh-mantur-projects/remote', () => ({
 async function bench() {
   const ctx = new Context()
   vi.stubGlobal('sessionStorage', { getItem: () => null, setItem: vi.fn(), removeItem: vi.fn() })
+  const resolveBundled = vi.fn(async (reference: string, signal: AbortSignal) => {
+    signal.throwIfAborted()
+    return { ok: true, value: { reference } }
+  })
   const remote = new TestRemote(ctx, {
-    manturMarketplace: {}, manturAccount: {},
+    manturMarketplace: { bundled: () => ({ ok: true, value: [] }), resolveBundled }, manturAccount: {},
     manturProjects: { settings: () => ({ ok: true, value: { source: 'unconfigured' } }) },
   })
   remote.$mount = () => Promise.resolve(() => Promise.resolve())
@@ -47,6 +51,8 @@ async function bench() {
   ctx.provide('conversation', { input: { for: () => ({ appendReference, state: inputState }) } } as never)
   ctx.provide('conversationDrafts', { input: { appendReference, state: inputState }, register: () => () => {} } as never)
   ctx.provide('uiWorkspace', { pickDirectory } as never)
+  const registerSource = vi.fn<Context['inputTriggers']['registerSource']>(() => () => {})
+  ctx.provide('inputTriggers', { registerSource } as never)
   const preferences = {
     getSnapshot: vi.fn(() => ({ value: undefined as GuideSettings | undefined })), subscribe: () => () => {}, set: vi.fn(),
   }
@@ -66,10 +72,31 @@ async function bench() {
       'settings.general.item': { kind: 'list', scope: 'root' },
     },
   } as never, () => null)
-  return { ctx, remote, locale, slots, preferences, binding, appendReference, inputState, pickDirectory }
+  return { ctx, remote, locale, slots, preferences, binding, appendReference, inputState, pickDirectory, registerSource, resolveBundled }
 }
 
 describe('ui-mantur-navigation apply', () => {
+  it('serializes the selected bundled identity and rejects failed or cancelled resolution without a text fallback', async () => {
+    const subject = await bench()
+    const fiber = subject.ctx.plugin({ inject: [...inject], apply })
+    try {
+      await fiber.await()
+      const source = subject.registerSource.mock.calls.find(([entry]) => entry.name === 'mantur-bundled-skill')?.[0]
+      const codec = source?.codec
+      expect(codec).toBeDefined()
+      if (codec === undefined) throw new Error('Bundled reference codec was not registered')
+      const reference = `short-drama@1.0.0#${'a'.repeat(64)}`
+      const controller = new AbortController()
+      expect(codec.clipboardText(reference)).toBe(`/mantur-builtin:${reference}`)
+      await expect(codec.serialize(reference, controller.signal)).resolves.toBe(`/mantur-builtin:${reference}`)
+      expect(subject.resolveBundled).toHaveBeenLastCalledWith(reference, controller.signal)
+      subject.resolveBundled.mockRejectedValueOnce(new Error('Bundled identity unavailable'))
+      await expect(codec.serialize(reference, controller.signal)).rejects.toThrow('Bundled identity unavailable')
+      controller.abort(new Error('Send cancelled'))
+      await expect(codec.serialize(reference, controller.signal)).rejects.toThrow('Send cancelled')
+    } finally { await fiber.dispose() }
+  })
+
   it('maps only the retired editing preference to production and preserves dismissal', () => {
     const recommendations = { script: ['short-drama'], production: [], assets: [] }
     // Persisted input includes pre-migration and invalid values, not only the resolved settings type.
@@ -136,7 +163,7 @@ describe('ui-mantur-navigation apply', () => {
     const config = { recommendations: { script: [], production: [], assets: [] } }
     hostApply(ctx as unknown as Context, config)
     expect(register).toHaveBeenCalledWith(GUIDE_NAMESPACE, expect.anything(), { base: { ...config, mode: 'script', closed: false } })
-    expect(inject).toEqual(['slots', 'locale', 'remote', 'sessions', 'workspaces', 'conversation', 'conversationDrafts', 'uiWorkspace', 'settingsScope'])
+    expect(inject).toEqual(['slots', 'locale', 'remote', 'sessions', 'workspaces', 'conversation', 'conversationDrafts', 'uiWorkspace', 'settingsScope', 'inputTriggers'])
     expect(Object.keys(clientEntry).sort()).toEqual(['apply', 'inject'])
   })
 

@@ -3,12 +3,13 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client'
-import type { ManturMarketplaceSkill } from '@deepseek-ai/dsh-manturhub-marketplace/types'
+import type { ManturMarketplaceSkill, ManturBundledSkill } from '@deepseek-ai/dsh-manturhub-marketplace/types'
 import type { ObservableSnapshot, SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { InputState, ReferenceInsert } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import { CREATION_MODES, type CreationMode, type GuideSettings } from '../guide-settings.ts'
 import type { ManturMarketplaceState } from './store.ts'
+import type { BundledSkillsState } from './bundled-skills.ts'
 import { GUIDE_SKILL_LABELS } from './guide-locales.ts'
 import { useGuidePopover } from './useGuidePopover.ts'
 import css from './CreationGuide.module.css'
@@ -61,6 +62,7 @@ export interface CreationGuideInjected extends GuidePreferencesInjected {
   appendReference: (reference: ReferenceInsert) => boolean
   load: () => Promise<void>
   ensureCatalog: () => Promise<void>
+  loadBundled: () => Promise<void>
   openDetail: (slug: string) => Promise<void>
   closeDetail: () => void
   install: (slug: string) => Promise<boolean>
@@ -72,6 +74,7 @@ export interface CreationGuideInjected extends GuidePreferencesInjected {
     | 'skills.loginFailed' | 'skills.loginUnavailable' | 'skills.localConflict' | 'skills.noWorkspace') => string
   hooks: GuidePreferencesInjected['hooks'] & {
     marketplace: SnapshotStore<ManturMarketplaceState>
+    bundledSkills: SnapshotStore<BundledSkillsState>
     guideInput: ObservableSnapshot<InputState | undefined>
     guideNavigation: SnapshotStore<number>
   }
@@ -88,12 +91,13 @@ export function CreationGuide(props: CreationGuideProps) {
   return <ReadyGuide {...props} preferences={preferences.value} />
 }
 
-function ReadyGuide({ hero, disabled, sessionId, preferences, useMarketplace, useGuideInput,
+function ReadyGuide({ hero, disabled, sessionId, preferences, useMarketplace, useGuideInput, useBundledSkills,
   useGuideNavigation, navigationVersion, appendReference,
-  saveClosed, load, ensureCatalog, openDetail: loadDetail, closeDetail: clearDetail,
+  saveClosed, load, ensureCatalog, loadBundled, openDetail: loadDetail, closeDetail: clearDetail,
   install, startLogin, cancelLogin, marketplaceText: mt, t,
 }: CreationGuideProps & { preferences: GuideSettings }) {
   const market = useMarketplace(snapshot => snapshot)
+  const bundled = useBundledSkills(snapshot => snapshot)
   const input = useGuideInput(snapshot => snapshot)
   const navigation = useGuideNavigation(snapshot => snapshot)
   const ready = market.phase === 'ready' ? market : undefined
@@ -113,7 +117,7 @@ function ReadyGuide({ hero, disabled, sessionId, preferences, useMarketplace, us
   const operation = useRef(0)
   const previousMode = useRef(preferences.mode)
   const bubbleId = useId()
-  useEffect(() => { void ensureCatalog() }, [ensureCatalog])
+  useEffect(() => { if (more) void ensureCatalog() }, [ensureCatalog, more])
   useEffect(() => {
     if (previousMode.current === preferences.mode) return
     previousMode.current = preferences.mode
@@ -129,6 +133,7 @@ function ReadyGuide({ hero, disabled, sessionId, preferences, useMarketplace, us
   }, [sessionId, navigation])
 
   const openDetail = (slug: string): Promise<void> => {
+    setMore(false)
     ++operation.current
     setNotice(undefined)
     setDetailSlug(slug)
@@ -183,10 +188,22 @@ function ReadyGuide({ hero, disabled, sessionId, preferences, useMarketplace, us
   }
   const skills = ready?.catalog.skills ?? []
   const recommended = preferences.recommendations[preferences.mode].flatMap((slug) => {
-    const skill = skills.find(item => item.slug === slug)
+    const skill = bundled.phase === 'ready' ? bundled.skills.find(item => item.name === slug) : undefined
     return skill === undefined ? [] : [skill]
   })
-  const missingAlias = recommended.some(skill => !GUIDE_SKILL_LABELS.has(skill.slug))
+  const missingAlias = recommended.some(skill => !GUIDE_SKILL_LABELS.has(skill.name))
+  const insertBundled = (skill: ManturBundledSkill): void => {
+    const alias = GUIDE_SKILL_LABELS.get(skill.name)
+    if (alias === undefined) { setNotice(t('aliasMissing')); return }
+    const label = t(alias)
+    if (!appendReference({ source: 'mantur-bundled-skill', ref: skill.reference, label,
+      clipboardText: `/mantur-builtin:${skill.reference}` })) {
+      setNotice(t('insertFailed'))
+      return
+    }
+    setNotice(t('selected').replace('{name}', label))
+    setWelcome(false)
+  }
   const detail = detailSlug !== undefined && ready?.detail?.slug === detailSlug ? ready.detail : undefined
   useEffect(() => {
     if (ready?.loginPhase === 'starting' || loginSource.current === undefined) return
@@ -204,21 +221,25 @@ function ReadyGuide({ hero, disabled, sessionId, preferences, useMarketplace, us
     {panelVisible && <section ref={panel} className={css.bubble} id={bubbleId} aria-label={t('assistant')}
       style={panelPosition ?? { visibility: 'hidden' }}>
       <button type="button" className={css.close} onClick={close} aria-label={t('close')}>×</button>
-      <div className={css.bubbleText} tabIndex={0}>
+      <div className={css.bubbleText} tabIndex={0} onKeyDown={(event) => {
+        if (event.target !== event.currentTarget || (event.key !== 'Home' && event.key !== 'End')) return
+        event.preventDefault()
+        event.currentTarget.scrollTop = event.key === 'Home' ? 0 : event.currentTarget.scrollHeight
+      }}>
         {open && welcome && hero ? <><strong>{t('welcome.title')}</strong><p>{t('welcome.body')}</p></> : <p role={notice === undefined ? undefined : 'status'}>{intro}</p>}
       </div>
     </section>}
     <div className={css.shortcutRow} data-hero={hero}>
       {hero && <GuideSkillRail empty={recommended.length === 0} t={t}>
-        {market.phase === 'idle' || market.phase === 'loading' ? <span role="status">{mt('skills.loading')}</span>
-          : market.phase === 'failed' ? <><span role="alert">{mt('skills.failed')}</span><button type="button" onClick={() => { void load() }}>{mt('skills.retry')}</button></>
+        {bundled.phase === 'idle' || bundled.phase === 'loading' ? <span role="status">{mt('skills.loading')}</span>
+          : bundled.phase === 'failed' ? <><span role="alert">{mt('skills.failed')}</span><button type="button" onClick={() => { void loadBundled() }}>{mt('skills.retry')}</button></>
             : recommended.length === 0 ? <span className={css.empty}>{t('empty')}</span>
               : recommended.map((skill) => {
-                const label = GUIDE_SKILL_LABELS.get(skill.slug)
-                return label === undefined ? null : <button key={skill.slug} type="button" title={skill.name}
-                  aria-pressed={input?.occurrences.some(item => item.source === 'skill' && item.ref === skill.slug) ?? false}
-                  disabled={disabled || ready?.installing !== undefined}
-                  onClick={() => { if (skill.installed) insert(skill); else void openDetail(skill.slug) }}
+                const label = GUIDE_SKILL_LABELS.get(skill.name)
+                return label === undefined ? null : <button key={skill.reference} type="button" title={skill.title}
+                  aria-pressed={input?.occurrences.some(item => item.source === 'mantur-bundled-skill' && item.ref === skill.reference) ?? false}
+                  disabled={disabled}
+                  onClick={() => { insertBundled(skill) }}
                 >{t(label)}</button>
               })}
         {missingAlias && <span role="alert">{t('aliasMissing')}</span>}

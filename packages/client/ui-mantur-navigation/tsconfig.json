@@ -17,6 +17,7 @@
     { "path": "../ui-layout" },
     { "path": "../ui-mantur-account" },
     { "path": "../ui-conversation" },
+    { "path": "../ui-input-trigger" },
     { "path": "../ui-primitives" },
     { "path": "../ui-renderer" },
     { "path": "../ui-sidebar" },

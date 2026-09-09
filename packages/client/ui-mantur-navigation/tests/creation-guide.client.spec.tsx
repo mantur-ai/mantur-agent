@@ -20,6 +20,7 @@ const mt = makeTranslate(marketZh)
 const skill = { slug: 'short-drama', name: '爽文短剧剧本创作', description: '写分集剧本', category: '剧本', installed: true, version: '1.0.0', triggers: [] }
 const settings: GuideSettings = { mode: 'script', closed: false, recommendations: { script: ['short-drama', 'not-in-catalog'], production: [], assets: [] } }
 const ready: ManturMarketplaceState = { phase: 'ready', catalog: { skills: [skill], installedCount: 1, signedIn: true } }
+const reference = `${skill.slug}@${skill.version}#${'a'.repeat(64)}`
 
 function props(preferences = settings, market = ready) {
   const appendReference = vi.fn(() => true)
@@ -28,24 +29,46 @@ function props(preferences = settings, market = ready) {
     hero: true, disabled: false, sessionId: 's1', t,
     usePreferences: (select: (value: unknown) => unknown) => select({ status: 'ready', value: preferences }),
     useMarketplace: (select: (value: unknown) => unknown) => select(market),
+    useBundledSkills: (select: (value: unknown) => unknown) => select(market.phase === 'ready'
+      ? { phase: 'ready', skills: market.catalog.skills.map(item => ({ name: item.slug, title: item.name, version: item.version,
+        digest: 'a'.repeat(64), reference: `${item.slug}@${item.version}#${'a'.repeat(64)}`, source: 'app-bundled' })) }
+      : { phase: market.phase }),
     useGuideInput: (select: (value: unknown) => unknown) => select({ draft: '我的草稿', imageIds: ['image'], occurrences: [] }),
     useGuideNavigation: (select: (value: unknown) => unknown) => select(0), navigationVersion: () => 0,
     inputActions: { appendReference, submit },
     appendReference,
     saveMode: vi.fn(() => Promise.resolve(true)), saveClosed: vi.fn(() => Promise.resolve(true)),
-    load: vi.fn(), ensureCatalog: vi.fn(), openDetail: vi.fn(), closeDetail: vi.fn(),
+    load: vi.fn(), ensureCatalog: vi.fn(), loadBundled: vi.fn(), openDetail: vi.fn(), closeDetail: vi.fn(),
     install: vi.fn(() => Promise.resolve(true)), startLogin: vi.fn(), cancelLogin: vi.fn(), marketplaceText: mt,
   }
 }
 function guide(input: ReturnType<typeof props>) { return <CreationGuide {...input as unknown as CreationGuideProps} /> }
+function openOnlineSkill(): void {
+  fireEvent.click(screen.getByRole('button', { name: zh.more }))
+  fireEvent.click(screen.getByRole('button', { name: skill.name }))
+}
 
 describe('Mantur creation guide', () => {
+  it('uses the pinned offline entry while marketplace access has failed, without login or installation', () => {
+    const local = props()
+    const p = { ...props(settings, { phase: 'failed' }), useBundledSkills: local.useBundledSkills }
+    render(guide(p))
+    fireEvent.click(screen.getByRole('button', { name: '剧本改编' }))
+    expect(p.appendReference).toHaveBeenCalledWith({ source: 'mantur-bundled-skill', ref: reference,
+      label: '剧本改编', clipboardText: `/mantur-builtin:${reference}` })
+    expect(p.ensureCatalog).not.toHaveBeenCalled()
+    expect(p.install).not.toHaveBeenCalled()
+    expect(p.startLogin).not.toHaveBeenCalled()
+    expect(p.openDetail).not.toHaveBeenCalled()
+    expect(p.inputActions.submit).not.toHaveBeenCalled()
+  })
+
   it.each([false, true])('restores the requested detail action after login with signedIn=%s', (signedIn) => {
     const detail = { ...skill, installed: false, usesOperators: [] }
     const state = { phase: 'ready' as const, catalog: { skills: [detail], installedCount: 0, signedIn: false }, detail }
     const p = props(settings, state)
     const view = render(guide(p))
-    fireEvent.click(screen.getByRole('button', { name: '剧本改编' }))
+    openOnlineSkill()
     fireEvent.click(screen.getByRole('button', { name: '登录后安装' }))
     view.rerender(guide(props(settings, { ...state, loginPhase: 'starting' })))
     view.rerender(guide(props(settings, { ...state, catalog: { ...state.catalog, signedIn } })))
@@ -58,7 +81,7 @@ describe('Mantur creation guide', () => {
     const detail = { ...skill, installed: false, usesOperators: [] }
     const state = { phase: 'ready' as const, catalog: { skills: [detail], installedCount: 0, signedIn: false }, detail }
     const view = render(guide(props(settings, state)))
-    fireEvent.click(screen.getByRole('button', { name: '剧本改编' }))
+    openOnlineSkill()
     fireEvent.click(screen.getByRole('button', { name: '登录后安装' }))
     view.rerender(guide(props(settings, { ...state, loginPhase: 'starting' })))
     view.rerender(guide({ ...props(settings, { ...state, loginPhase: 'starting' }), sessionId: 's2' }))
@@ -77,7 +100,7 @@ describe('Mantur creation guide', () => {
     expect(screen.getByRole('button', { name: '剧本改编' }).getAttribute('title')).toBe(skill.name)
     expect(screen.queryByText('not-in-catalog')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: '剧本改编' }))
-    expect(p.inputActions.appendReference).toHaveBeenCalledWith({ source: 'skill', ref: skill.slug, label: '剧本改编', clipboardText: '/short-drama' })
+    expect(p.inputActions.appendReference).toHaveBeenCalledWith({ source: 'mantur-bundled-skill', ref: reference, label: '剧本改编', clipboardText: `/mantur-builtin:${reference}` })
     expect(p.openDetail).not.toHaveBeenCalled()
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(p.inputActions.submit).not.toHaveBeenCalled()
@@ -129,7 +152,7 @@ describe('Mantur creation guide', () => {
     const uninstalled = { ...skill, installed: false }
     const p = props(settings, { phase: 'ready', catalog: { skills: [uninstalled], installedCount: 0, signedIn: true } })
     const view = render(guide(p))
-    fireEvent.click(screen.getByRole('button', { name: '剧本改编' }))
+    openOnlineSkill()
     expect(p.openDetail).toHaveBeenCalledWith(skill.slug)
     expect(p.install).not.toHaveBeenCalled()
     const detailProps = props(settings, { phase: 'ready', catalog: { skills: [uninstalled], installedCount: 0, signedIn: true }, detail: { ...uninstalled, usesOperators: [] } })
@@ -151,7 +174,7 @@ describe('Mantur creation guide', () => {
     let finish!: (value: boolean) => void
     p.install.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
     const view = render(guide(p))
-    fireEvent.click(screen.getByRole('button', { name: '剧本改编' }))
+    openOnlineSkill()
     fireEvent.click(screen.getByRole('button', { name: '安装后使用' }))
     view.rerender(guide({ ...p, sessionId: 's2' }))
     finish(true)
@@ -168,14 +191,14 @@ describe('Mantur creation guide', () => {
     const pending = Promise.withResolvers<boolean>()
     p.install.mockReturnValue(pending.promise)
     render(guide(p))
-    fireEvent.click(screen.getByRole('button', { name: '剧本改编' }))
+    openOnlineSkill()
     const dialog = screen.getByRole('dialog', { name: '剧本改编' })
     expect(dialog.textContent).toContain(zh.notInstalled)
     expect(dialog.textContent).not.toContain('很长的说明')
     expect(dialog.textContent).not.toContain('完整介绍')
     fireEvent.click(screen.getByRole('button', { name: zh.close }))
     expect(p.install).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: '剧本改编' }))
+    openOnlineSkill()
     fireEvent.click(screen.getByRole('button', { name: zh.installAndUse }))
     fireEvent.click(screen.getByRole('button', { name: zh.close }))
     await act(async () => { pending.resolve(true) })
@@ -206,7 +229,7 @@ describe('Mantur creation guide', () => {
     const pending = Promise.withResolvers<boolean>()
     p.install.mockReturnValue(pending.promise)
     const view = render(guide(p))
-    fireEvent.click(screen.getByRole('button', { name: '剧本改编' }))
+    openOnlineSkill()
     fireEvent.click(screen.getByRole('button', { name: zh.installAndUse }))
     navigation += 1
     await act(async () => { pending.resolve(true) })
@@ -223,7 +246,7 @@ describe('Mantur creation guide', () => {
     const p = props(settings, { phase: 'failed' })
     const view = render(guide(p))
     fireEvent.click(screen.getByRole('button', { name: marketZh['skills.retry'] }))
-    expect(p.load).toHaveBeenCalledTimes(1)
+    expect(p.loadBundled).toHaveBeenCalledTimes(1)
     view.rerender(guide(props({ ...settings, mode: 'production' })))
     expect(screen.getByText(zh.empty)).toBeTruthy()
   })
@@ -267,7 +290,8 @@ describe('Mantur creation guide', () => {
       const p = props({ ...settings, recommendations: { ...settings.recommendations, script: [slug] } }, { phase: 'ready', catalog: { skills: [actual], installedCount: 1, signedIn: true } })
       const view = render(guide(p))
       fireEvent.click(screen.getByRole('button', { name: zh[key] }))
-      expect(p.appendReference).toHaveBeenCalledWith({ source: 'skill', ref: slug, label: zh[key], clipboardText: `/${slug}` })
+      const exact = `${slug}@${skill.version}#${'a'.repeat(64)}`
+      expect(p.appendReference).toHaveBeenCalledWith({ source: 'mantur-bundled-skill', ref: exact, label: zh[key], clipboardText: `/mantur-builtin:${exact}` })
       expect(p.inputActions.submit).not.toHaveBeenCalled()
       view.unmount()
     }
@@ -333,7 +357,7 @@ describe('Mantur creation guide', () => {
   it('reads occurrence identity, tolerates no input binding, and closes the complete Skill list', () => {
     const p = props()
     const withOccurrences = { ...p, useGuideInput: (select: (value: unknown) => unknown) => select({ occurrences: [
-      { source: 'file', ref: skill.slug }, { source: 'skill', ref: 'another' }, { source: 'skill', ref: skill.slug },
+      { source: 'file', ref: reference }, { source: 'skill', ref: skill.slug }, { source: 'mantur-bundled-skill', ref: reference },
     ] }) }
     const view = render(guide(withOccurrences))
     expect(screen.getByRole('button', { name: '剧本改编' }).getAttribute('aria-pressed')).toBe('true')
@@ -374,7 +398,7 @@ describe('Mantur creation guide', () => {
     fireEvent.click(screen.getByRole('button', { name: zh.use }))
     expect(screen.queryByRole('dialog')).toBeNull()
     view.rerender(guide(p))
-    fireEvent.click(screen.getByRole('button', { name: '剧本改编' }))
+    openOnlineSkill()
     fireEvent.click(screen.getByRole('button', { name: zh.close }))
     expect(p.closeDetail).toHaveBeenCalled()
   })
@@ -384,7 +408,7 @@ describe('Mantur creation guide', () => {
     const state = { phase: 'ready', catalog: { skills: [uninstalled], installedCount: 0, signedIn: false }, detail: { ...uninstalled, usesOperators: [] } } as const
     const p = props(settings, state)
     const view = render(guide(p))
-    fireEvent.click(screen.getByRole('button', { name: '剧本改编' }))
+    openOnlineSkill()
     fireEvent.click(screen.getByRole('button', { name: marketZh['skills.loginToInstall'] }))
     expect(p.startLogin).toHaveBeenCalledOnce()
     view.rerender(guide(props(settings, { ...state, loginPhase: 'starting' })))
@@ -414,7 +438,7 @@ describe('Mantur creation guide', () => {
     let finish!: (value: boolean) => void
     p.install.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
     const view = render(guide(p))
-    fireEvent.click(screen.getByRole('button', { name: '剧本改编' }))
+    openOnlineSkill()
     fireEvent.click(screen.getByRole('button', { name: zh.installAndUse }))
     view.rerender(guide({ ...p, sessionId: 's2' }))
     await act(async () => { finish(result) })

@@ -16,6 +16,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ReferenceInsert } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type {} from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { GUIDE_NAMESPACE, type CreationMode, type GuideSettings } from '../guide-settings.ts'
 import { CreationGuide, CreationModes, type GuidePreferencesInjected } from './CreationGuide.tsx'
@@ -29,6 +30,7 @@ import {
 } from './MarketplaceNavigation.tsx'
 import { en, zh, type ManturNavigationKey } from './locales.ts'
 import { ManturMarketplaceStore } from './store.ts'
+import { BundledSkills } from './bundled-skills.ts'
 import { NativeUpdates } from './desktop-updates.ts'
 import { DesktopUpdate } from './DesktopUpdate.tsx'
 import { en as updateEn, zh as updateZh, type UpdateKey } from './update-locales.ts'
@@ -62,7 +64,7 @@ const NS = 'navigation.mantur'
 const ABSENT_GUIDE_INPUT = { getSnapshot: () => undefined, subscribe: () => () => {} }
 
 /** Required UI services and declarations. */
-export const inject = ['slots', 'locale', 'remote', 'sessions', 'workspaces', 'conversation', 'conversationDrafts', 'uiWorkspace', 'settingsScope']
+export const inject = ['slots', 'locale', 'remote', 'sessions', 'workspaces', 'conversation', 'conversationDrafts', 'uiWorkspace', 'settingsScope', 'inputTriggers']
 
 /** Fill Mantur navigation, workspace terminology, and the root marketplace page. */
 export async function apply(ctx: Context): Promise<void> {
@@ -98,6 +100,26 @@ export async function apply(ctx: Context): Promise<void> {
       inject: () => projectSettings,
     }, ProjectPathSettings))
     const controller = new ManturMarketplaceStore(scope)
+    const bundled = new BundledSkills(async (signal) => {
+      const result = await scope.remote.manturMarketplace.bundled(signal)
+      if (!result.ok) throw new Error(result.error.message)
+      return result.value
+    })
+    scope.effect(() => () => { bundled.dispose() }, 'ui-mantur-navigation: bundled catalog')
+    scope.effect(() => scope.inputTriggers.registerSource({
+      trigger: '/', name: 'mantur-bundled-skill',
+      candidates: () => Promise.resolve([]),
+      onPick: () => { throw new Error('App-bundled Skills are selected through homepage shortcuts') },
+      codec: {
+        clipboardText: reference => `/mantur-builtin:${reference}`,
+        serialize: async (reference, signal) => {
+          const result = await scope.remote.manturMarketplace.resolveBundled(reference, signal)
+          if (!result.ok) throw new Error(result.error.message)
+          return `/mantur-builtin:${result.value.reference}`
+        },
+      },
+    }), 'ui-mantur-navigation: bundled references')
+    void bundled.load()
     const guideNavigation = createSnapshotStore(0)
     scope.effect(() => () => { controller.dispose() }, 'ui-mantur-navigation: marketplace controller')
     const preferences = scope.settingsScope.bind<GuideSettings>({ namespace: GUIDE_NAMESPACE })
@@ -139,7 +161,7 @@ export async function apply(ctx: Context): Promise<void> {
           return scope.conversation.input.for(binding.ctx).appendReference(reference)
         },
         hooks: {
-          preferences, marketplace: controller.store, guideNavigation,
+          preferences, marketplace: controller.store, guideNavigation, bundledSkills: bundled.store,
           guideInput: sessionId === undefined ? scope.conversationDrafts.input.state : (() => {
             const binding = scope.sessions.binding(sessionId)
             return binding === undefined ? ABSENT_GUIDE_INPUT : scope.conversation.input.for(binding.ctx).state
@@ -148,6 +170,7 @@ export async function apply(ctx: Context): Promise<void> {
         marketplaceText: scope.locale.bind(NS),
         load: () => controller.load(),
         ensureCatalog: () => controller.ensureSkillCatalog(),
+        loadBundled: () => bundled.load(),
         openDetail: (slug: string) => controller.openDetail(slug),
         closeDetail: () => { controller.closeDetail() },
         install: async (slug: string) => {

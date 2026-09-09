@@ -210,6 +210,9 @@ async function launch(): Promise<void> {
       environment: {
         ...embeddedCliEnvironment(cliBin, process.env),
         DSH_HOME: paths.dshHome,
+        DSH_BUNDLED_SKILL_DIR: app.isPackaged
+          ? join(process.resourcesPath, 'mantur-skills')
+          : fileURLToPath(new URL('../.generated/mantur-skills', import.meta.url)),
         DSH_MANTUR_PROJECTS_ROOT: join(app.getPath('documents'), '漫途项目'),
         DSH_MANTUR_NATIVE_ACCOUNT: '1',
         DSH_MANTUR_UPDATE_IPC: '1',
