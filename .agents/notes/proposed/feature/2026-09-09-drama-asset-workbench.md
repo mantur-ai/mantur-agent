@@ -14,6 +14,8 @@ Validate a browser-only workbench in [the isolated prototype](../../../../protot
 
 Production integration uses the additive shell.overlay slot and the existing main session. It requires a project manifest adapter, atomic source updates, correlated result events and existing Base readback. A controlled Worker proves the isolated interaction protocol only; it is not a model or production pipeline. Preview and draft editing remain independent of login.
 
+The [main-session protocol experiment](../../../../prototypes/drama-asset-workbench/evidence/main-agent-interface.md) adds document/table/row locators and source/dependency fingerprints to isolated proposal confirmation. An authorized real-project preview supplies import evidence but leaves unbound images and missing submission records unresolved. The transport, atomic source writer and real-session replay remain prerequisites.
+
 ## Alternatives considered
 
 **Replace the conversation or details single slot.** This would remove occupied client functionality. An additive overlay preserves existing panels.

@@ -122,7 +122,7 @@ export function receiveProposal(state, requestId, results) {
     seen.add(result.id);
     if (result.attempt !== target.attempt || !['queued', 'accepted'].includes(target.status)) continue;
     if (result.error !== undefined) {
-      if (result.error !== 'FIXTURE_AGENT_FAILURE') fail('UNKNOWN_AGENT_ERROR');
+      if (result.error !== (request.mode === 'main-agent-proposal-v1' ? 'AGENT_EDIT_FAILED' : 'FIXTURE_AGENT_FAILURE')) fail('UNKNOWN_AGENT_ERROR');
     } else if (!result.fields || Object.keys(result.fields).length !== 2 || !EDIT_FIELDS.every(key => typeof result.fields[key] === 'string')) fail('INVALID_PATCH');
   }
   for (const result of results) {

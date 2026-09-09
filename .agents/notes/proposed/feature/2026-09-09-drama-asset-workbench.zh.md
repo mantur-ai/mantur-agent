@@ -14,6 +14,8 @@ Status: proposed
 
 生产集成使用可叠加的 shell.overlay 插槽和现有主会话，需要项目清单适配器、源数据原子更新、关联结果事件及现有 Base 读回。受控 Worker 仅验证隔离交互协议，不代表模型或生产线。预览与草稿编辑独立于登录。
 
+[主会话协议实验](../../../../prototypes/drama-asset-workbench/evidence/main-agent-interface.md)为隔离提案确认补充文档/表/行定位及源文件、依赖指纹。获准真实项目预览提供导入证据，但未绑定图片和缺失提交记录仍未解决。传输、原子源写回与真实会话回放仍是接入前置条件。
+
 ## Alternatives considered
 
 **替换会话或详情 single 插槽。** 这会移除已有客户端功能。可叠加浮层保留已有面板。

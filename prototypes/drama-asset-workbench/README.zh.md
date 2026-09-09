@@ -26,7 +26,7 @@ python3 -m http.server 4318 --bind 127.0.0.1 --directory prototypes/drama-asset-
 ## 验证
 
 ```sh
-node --test prototypes/drama-asset-workbench/model.test.mjs
+node --test prototypes/drama-asset-workbench/model.test.mjs prototypes/drama-asset-workbench/handoff.test.mjs
 node --check prototypes/drama-asset-workbench/app.mjs
 ```
 
@@ -37,3 +37,9 @@ node --check prototypes/drama-asset-workbench/app.mjs
 真实写回需要项目源版本指纹与原子更新适配器、主会话关联提案/回执、Base 同步读回、签名 URL 安全媒体访问，以及生成前重新验证和费用批准。当前只有 `shell.overlay` 列表插槽和 `SessionController.prompt` 接收接口得到源码确认；未注册插件、未改任何现有客户端包。生产接口缺失时不能把受控通道伪装为真实主会话。
 
 [浏览器与测试证据](evidence/verification.md) 记录实际运行结果。expected-workflow.json 是无密钥受控通道快照，不是 Harness 真实 Session 回放。
+
+## 主会话协议实验
+
+[handoff.mjs](handoff.mjs) 准备仅请求文字提案的信封，并在隔离状态中验证关联的接收回执、逐项提案和明确确认。它锁定文档/表/行 ID、源文件 SHA-256、依赖版本和本地草稿修订号。宿主必须提供重新读取的源指纹；未绑定文件不能提交。受控 Worker 拒绝该协议模式。当前未安装真实传输或生产写回适配器。
+
+[接口与导入证据](evidence/main-agent-interface.md) 定义宿主接入步骤及获准本地导入中的记录缺口。私有预览保留在仓库外：43 条资产、13 个校验通过的 Clip 和三张未绑定图片。实际请求字段为空时继续保留未知状态，参数文件不能证明已提交。expected-handoff.json 保存完整合成请求信封，不是真实主会话记录。

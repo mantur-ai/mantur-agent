@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write prototypes/drama-asset-workbench/README.md
-README.md: 0dc451a4d5833ed037c194b37b81123bc8576123
-README.zh.md: 7bb4fe4c7430b8832856403d73f00c7d75299e03
+README.md: 07b3e6530a0e35ba1ab3edfd4f679ec3529a36b9
+README.zh.md: e9a9548948b60e4bda2ef87ba16e6e8276b1b527
