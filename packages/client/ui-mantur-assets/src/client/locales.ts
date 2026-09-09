@@ -1,0 +1,4 @@
+/** Localized copy for the production asset panel. */
+export const en = { assets: 'Assets', source: 'Pipeline report', load: 'Load', refresh: 'Refresh', prompt: 'Prompt', save: 'Save draft', request: 'Send proposal request', apply: 'Apply proposal', pending: 'Proposal pending', noMedia: 'No explicit media binding', actual: 'Actual request preserved', error: 'Asset operation failed' } as const
+export const zh = { assets: '资产', source: '流水线报告', load: '读取', refresh: '刷新', prompt: '提示词', save: '保存草稿', request: '发送提案请求', apply: '应用提案', pending: '提案处理中', noMedia: '未绑定明确媒体', actual: '已保留实际请求', error: '资产操作失败' } as const
+export type AssetKey = keyof typeof en

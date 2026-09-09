@@ -1,9 +1,9 @@
 /** Serializable observations and guarded commands for pipeline report editing. */
 
 /** Opaque report row identity, including its owning table. */
-export type AssetKey = string & { readonly __assetKey: unique symbol }
+export type AssetKey = string
 /** Opaque persisted proposal identity. */
-export type ProposalId = string & { readonly __proposalId: unique symbol }
+export type ProposalId = string
 /** Filesystem generation observed by the Host. */
 export type AssetVersion = import('@deepseek-ai/dsh-fs').FsVersion
 /** Source generation pinned by all editing commands. */
