@@ -70,6 +70,8 @@ After applying [the packaged patch](adapters/mantur-cut-packaged.patch), apply [
 
 The editor pins patched image and archive dependencies without changing model or speech providers; see the [dependency security decision](../../../.agents/notes/implemented/bug-fix/2026-09-08-mantur-editor-security-dependencies.md) for scope and native verification limits.
 
+Browser tool results synchronize the authoritative project revision before completing the MCP call. Synchronization failure remains an error, and cancellation or a replaced registration cannot revive success; see the [result revision decision](../../../.agents/notes/implemented/bug-fix/2026-09-09-mantur-editor-result-revision.md).
+
 The editor checks actual semantic-vector availability through the project-store transport before index operations. Failed or malformed checks remain errors. Accepted mutations remain part of browser shutdown. Exact extension and model catalog GET requests retain their original completion promises; download and installation requests still require their own shutdown ownership.
 
 Local `/api/extract-frames` requests retain FFmpeg, FFprobe, optional Python label work and temporary-file cleanup. Partial previews do not clear failed sampling or stamping; such errors still reject shutdown. The [frame extraction decision](../../../.agents/notes/implemented/bug-fix/2026-09-08-mantur-extract-frames-shutdown.md) records real-media checks and their limits.
@@ -78,9 +80,9 @@ Isolated-profile POST and PUT requests to `/upload` retain their request body, s
 
 | Shutdown layer | Fixed value |
 |---|---|
-| Editor commit | `2fcb4c0c734494387c78068d770709a70bda1bd9` |
-| Result tree | `889e9551f34e28a5bf8d181334f6ec6bdfd9a2b5` |
-| Patch SHA-256 | `fa4698d9794add099b012fadcb63d849c4083c4feb3b1e9dc36628b83ab90cb5` |
+| Editor commit | `2ee4ba5962336268d5de95b24a4fe5b09d8ba5c1` |
+| Result tree | `6f3b4ba1dbfbfbe02fcaefd80998b8f6d049c15b` |
+| Patch SHA-256 | `ed820c9fd777c305986f713be304387109003d6cb7b4fb07f0956f5865bbb9c4` |
 
 The Host Remote resolves the Agent, coalesces concurrent opens, and launches `adapters/mantur-runtime.mjs`. It mounts the existing MCP client inside that Agent's scope. All mounted MCP clients resolve the same peer instance, preserving Agent-scoped server-name reservations. The MCP bearer remains in Host memory and the child environment. Disposal drains both connection and subprocess. The Client ignores startup responses from a Session that is no longer selected. No invariant companion is published: subprocess exit state belongs to the child handle; connection and tool-generation invariants belong to the MCP client.
 

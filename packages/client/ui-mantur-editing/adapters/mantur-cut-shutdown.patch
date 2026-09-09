@@ -1,3 +1,29 @@
+diff --git a/README.md b/README.md
+index c28bd44..666627b 100644
+--- a/README.md
++++ b/README.md
+@@ -376,6 +376,8 @@ the adjacent video clips. Submit the draft for review and wait for the user to
+ approve it in OpenChatCut before reporting that the edit was applied.
+ ```
+
++An editor result reaches the external Agent only after the broker synchronizes the registered project revision. The next edit session can start immediately from the committed revision; synchronization failure returns an error, and cancelled or expired calls cannot later report success.
++
+ External agents invoke the same internal editing tools and `EditorCore` commands as the editor itself. There are no separate project formats that can drift apart, and the live timeline is not changed while an external draft is being prepared.
+
+ Mantur Cut retains an edit session's last saved draft, operations and original project revision when the session becomes stale, cancelled or failed. These records remain evidence after reload; they cannot resume, rebase or apply a terminal session. New checkpoints also include the original project document. Missing content in older records is not reconstructed. See [terminal draft persistence](MANTUR-TERMINAL-DRAFT.md) for failure ordering and verification.
+diff --git a/README_ZH.md b/README_ZH.md
+index 9679ae8..059cb75 100644
+--- a/README_ZH.md
++++ b/README_ZH.md
+@@ -370,6 +370,8 @@ claude mcp add --transport http openchatcut \
+ 再报告修改已经生效。
+ ```
+
++编辑器结果在 broker 同步项目注册版本后才返回外部 Agent，下一轮编辑会话可立即使用已提交的版本。同步失败会返回错误，已取消或超时的调用不会再返回成功。
++
+ 外部 Agent 调用的仍是编辑器内部同一套工具和 `EditorCore` 命令，不存在两套互相漂移的工程格式；外部草稿准备期间不会修改正式时间线。
+
+ ### MCP 访问保护
 diff --git a/desktop/embedded-server.ts b/desktop/embedded-server.ts
 index 7f373b1..3813420 100644
 --- a/desktop/embedded-server.ts
@@ -632,14 +658,16 @@ index 0e72452..80b33b6 100644
      },
      "node_modules/sharp/node_modules/semver": {
 diff --git a/package.json b/package.json
-index 69a1f6b..f9a25a5 100644
+index 69a1f6b..711a691 100644
 --- a/package.json
 +++ b/package.json
-@@ -33,7 +33,7 @@
+@@ -32,8 +32,8 @@
+     "verify:directory-watch": "tsx shared/directory-import.verify.ts && tsx desktop/directory-watch-errors.verify.ts && tsx desktop/directory-watch-controller.verify.ts && tsx desktop/directory-watch-import.verify.ts && tsx desktop/directory-watch.verify.ts && tsx src/media/directoryDrop.verify.ts && tsx src/media/directoryImportAsset.verify.ts && tsx src/media/useDirectoryImport.verify.ts && tsx src/media/directoryImportIntegration.verify.ts && tsx src/media/media-folder-menu.verify.ts && tsx src/media/media-pool-batch-timeline.verify.ts",
      "verify:clip-fx-export": "node src/gl/clipFxExport.verify.mjs",
      "verify:approval-policy": "tsx src/agent/approval-policy.verify.ts",
-     "verify:mcp": "tsx server/external-agent/mcp-tool-exposure.verify.ts && tsx server/external-agent/mcp.verify.ts && tsx server/external-agent/mcp-check.verify.ts",
+-    "verify:mcp": "tsx server/external-agent/mcp-tool-exposure.verify.ts && tsx server/external-agent/mcp.verify.ts && tsx server/external-agent/mcp-check.verify.ts",
 -    "pretest": "npm run verify:approval-policy && npm run verify:semantic-sampling && npm run verify:runtime-profile && npm run verify:directory-watch && npm run verify:salvage && npm run verify:harness && npm run verify:mcp && npm run verify:caption-motion && npm run verify:export-adaptive && npm run verify:editor && npm run verify:captions && npm run verify:agent-tools && npm run verify:components && npm run verify:media-persist && npm run verify:export-gl && npm run verify:server-extra && npm run verify:sqlite-migration && npm run verify:production-contracts && npm run verify:desktop-window && npm run verify:desktop-update && npm run verify:toolbar-tooltips && npm run verify:project-store-transport && tsx src/agent/tools/upload-tools.verify.ts && tsx server/plugins/upload-routes.verify.ts && tsx src/agent/local-models.verify.ts && tsx server/codex/codex-agent.verify.ts && tsx src/agent/codex/runtime.verify.ts && tsx src/agent/codex/followup-activation.verify.ts && tsx src/components/settings/codexReasoning.verify.ts && tsx src/library/sound-localization.verify.ts && tsx src/media/qualityPolicy.verify.ts && tsx src/components/chat/chatAttachmentLifecycle.verify.ts && npm run verify:music-intelligence && npm run verify:skills && npm run verify:shortcuts && npm run verify:i18n",
++    "verify:mcp": "tsx server/external-agent/broker-settlement.verify.ts && tsx server/external-agent/mcp-tool-exposure.verify.ts && tsx server/external-agent/mcp.verify.ts && tsx server/external-agent/mcp-check.verify.ts",
 +    "pretest": "npm run verify:approval-policy && npm run verify:semantic-sampling && npm run verify:runtime-profile && npm run verify:directory-watch && npm run verify:salvage && npm run verify:harness && npm run verify:mcp && npm run verify:caption-motion && npm run verify:export-adaptive && npm run verify:editor && npm run verify:captions && npm run verify:agent-tools && npm run verify:components && npm run verify:media-persist && npm run verify:export-gl && npm run verify:server-extra && npm run verify:sqlite-migration && npm run verify:production-contracts && npm run verify:desktop-window && npm run verify:desktop-update && npm run verify:toolbar-tooltips && npm run verify:project-store-transport && tsx src/agent/tools/upload-tools.verify.ts && tsx server/plugins/upload-routes.verify.ts && tsx src/agent/local-models.verify.ts && tsx server/codex/codex-agent.verify.ts && tsx src/agent/codex/runtime.verify.ts && tsx src/agent/codex/followup-activation.verify.ts && tsx src/components/settings/codexReasoning.verify.ts && tsx src/library/sound-localization.verify.ts && tsx src/media/qualityPolicy.verify.ts && tsx src/components/chat/chatAttachmentLifecycle.verify.ts && npm run verify:music-intelligence && npm run verify:skills && npm run verify:shortcuts && npm run verify:i18n && npm run verify:mantur-shutdown",
      "verify:salvage": "tsx src/agent/model-selection.verify.ts && tsx src/agent/context-compaction.verify.ts && tsx src/agent/context-overflow-guidance.verify.ts && tsx src/agent/tool-activation.verify.ts && tsx src/agent/tool-result-compaction.verify.ts && tsx src/agent/tool-result-output.verify.ts && tsx src/agent/token-efficiency.verify.ts && tsx src/captions/srt.verify.ts && tsx server/plugins/assemblyai-upload.verify.ts && tsx src/agent/capabilities.verify.ts && tsx src/agent/vision.verify.ts",
      "verify:harness": "tsx src/agent/harness-context.verify.ts && tsx src/agent/harness-runtime.verify.ts && tsx src/agent/agent-hydration-recovery.verify.ts && tsx src/agent/retry-message.verify.ts && tsx src/agent/useAgentHistoryActions.verify.ts && tsx src/agent/external-draft-persistence.verify.ts && tsx server/external-agent/agent-runtime-persistence.verify.ts && tsx server/plugins/project-store-project-document.verify.ts",
@@ -826,6 +854,352 @@ index 0357324..62bdff6 100644
 +    if (closeBrowser) await closeRenderBrowser(closeBrowser, renderingFailure);
    }
  }
+diff --git a/server/external-agent/broker-registry.ts b/server/external-agent/broker-registry.ts
+index 68079ae..b33e42d 100644
+--- a/server/external-agent/broker-registry.ts
++++ b/server/external-agent/broker-registry.ts
+@@ -26,12 +26,17 @@ interface EditorRegistration extends EditorBinding {
+
+ export interface EditorConnectionRegistryHooks {
+   bindingReplaced: (binding: EditorBinding, sameEditor: boolean) => void;
+-  revisionChanged: (binding: EditorBinding) => void;
++  revisionChanged: (binding: EditorBinding, completingCallId?: string) => void;
+   editorRemoved: (binding: EditorBinding) => void;
+   wakeProject: (projectId: string) => void;
+   hasInFlightCall: (projectId: string) => boolean;
+ }
+
++export interface EditorCallRevisionSync {
++  callId: string;
++  isCurrent: () => boolean;
++}
++
+ export function sameEditorBinding(left: EditorBinding, right: EditorBinding): boolean {
+   return left.projectId === right.projectId
+     && left.editorInstanceId === right.editorInstanceId
+@@ -160,13 +165,17 @@ export class EditorConnectionRegistry {
+     editorInstanceId: string,
+     baseRevision?: string,
+     registrationCapability?: string | null,
++    completion?: EditorCallRevisionSync,
+   ): Promise<boolean> {
++    if (completion && !completion.isCurrent()) return false;
+     const editor = this.editors.get(projectId);
+     if (!editor || editor.editorInstanceId !== editorInstanceId) return false;
+     if (registrationCapability !== undefined
+       && !capabilityMatches(editor.capability, registrationCapability)) return false;
+     if (editor.ownership) {
+       const renewed = await renewProjectEditOwnership(editor.ownership, baseRevision ?? editor.baseRevision);
++      // A renewal must not update or unregister a replacement connection.
++      if (this.editors.get(projectId) !== editor || completion && !completion.isCurrent()) return false;
+       if (renewed.status !== 'renewed') {
+         await this.unregister(projectId, editorInstanceId);
+         throw new ExternalEditorCallError('stale', `Project ${projectId} browser ownership is stale.`);
+@@ -181,7 +190,7 @@ export class EditorConnectionRegistry {
+     } else if (baseRevision && editor.baseRevision !== baseRevision) {
+       const previous = bindingOf(editor);
+       editor.baseRevision = baseRevision;
+-      this.hooks.revisionChanged(previous);
++      this.hooks.revisionChanged(previous, completion?.callId);
+     }
+     // A successful touch IS the keep-alive: refresh lastSeen so the online
+     // lease (isConnected) reflects this poll even when no call arrives.
+diff --git a/server/external-agent/broker-settlement.verify.ts b/server/external-agent/broker-settlement.verify.ts
+new file mode 100644
+index 0000000..774bce6
+--- /dev/null
++++ b/server/external-agent/broker-settlement.verify.ts
+@@ -0,0 +1,290 @@
++// Runnable check: node --import tsx server/external-agent/broker-settlement.verify.ts
++import assert from 'node:assert/strict';
++import { mkdtemp, rename, rm, writeFile } from 'node:fs/promises';
++import type { IncomingMessage, ServerResponse } from 'node:http';
++import { tmpdir } from 'node:os';
++import { join } from 'node:path';
++import { Readable } from 'node:stream';
++import { mock } from 'node:test';
++
++const root = await mkdtemp(join(tmpdir(), 'mantur-broker-settlement-'));
++process.env.OPENCHATCUT_DATA_DIR = root;
++process.env.OPENCHATCUT_SQLITE_STORE = '0';
++process.env.OPENCHATCUT_EDITOR_URL = 'http://127.0.0.1:5199';
++process.env.OPENCHATCUT_MCP_TOKEN = 'isolated-settlement-fixture';
++const broker = await import('./broker.ts');
++const store = await import('../plugins/project-store.ts');
++const ownership = await import('./project-edit-ownership.ts');
++const { EditorConnectionRegistry } = await import('./broker-registry.ts');
++const { handleExternalAgentBridge } = await import('../plugins/external-agent.ts');
++const { INITIAL } = await import('../../src/editor/initial.ts');
++const { docFromTimeline } = await import('../../src/persist/projectStore.ts');
++const { revisionOf } = await import('../../src/agent/external-edit-session.ts');
++const originalTouch = EditorConnectionRegistry.prototype.touch;
++let touchEntered: PromiseWithResolvers<void> | undefined;
++let touchCount = 0;
++const heldStores = new Set<() => Promise<void>>();
++const resultRequests = new Set<Promise<void>>();
++mock.method(EditorConnectionRegistry.prototype, 'touch', function (
++  this: InstanceType<typeof EditorConnectionRegistry>,
++  ...args: Parameters<typeof originalTouch>
++) {
++  touchCount += 1;
++  touchEntered?.resolve();
++  return originalTouch.apply(this, args);
++});
++
++function observe<T>(promise: Promise<T>) {
++  let state = 'pending';
++  const result = promise.then(
++    value => { state = 'applied'; return { ok: true as const, value }; },
++    (error: unknown) => { state = 'failed'; return { ok: false as const, error }; },
++  );
++  return { result, state: () => state };
++}
++
++function postResult(id: string, capability: string, baseRevision: string) {
++  const request = Object.assign(Readable.from([JSON.stringify({
++    id, outcome: 'applied', value: { status: 'applied' }, baseRevision,
++  })]), {
++    method: 'POST', url: '/result',
++    headers: {
++      host: '127.0.0.1:5199', origin: 'http://127.0.0.1:5199',
++      'content-type': 'application/json',
++      'x-openchatcut-editor-registration': capability,
++    },
++    socket: { remoteAddress: '127.0.0.1' },
++  }) as IncomingMessage;
++  let body: string | undefined;
++  const response = {
++    statusCode: 0,
++    setHeader: () => undefined,
++    end: (value: string) => { body = value; },
++  } as unknown as ServerResponse;
++  const done = handleExternalAgentBridge(request, response).catch((error: unknown) => {
++    response.statusCode = 500;
++    response.end(error instanceof Error ? error.message : String(error));
++  }).finally(() => { resultRequests.delete(done); });
++  resultRequests.add(done);
++  return { done, response, body: () => body };
++}
++
++let serial = 0;
++async function fixture(owned = true, timeoutMs = 30_000) {
++  broker.resetExternalAgentBrokerForTest();
++  const projectId = `settlement-project-${++serial}`;
++  const editorId = 'settlement-editor';
++  const before = docFromTimeline(INITIAL);
++  const after = docFromTimeline({ ...INITIAL, width: 1080, height: 1920 });
++  const oldRevision = revisionOf(before);
++  const newRevision = revisionOf(after);
++  assert.notEqual(oldRevision, newRevision);
++  let claim: import('./project-edit-ownership.ts').ProjectEditOwnershipClaim | undefined;
++  if (owned) {
++    await store.setStoredEntry(`project:${projectId}`, before);
++    const claimed = await ownership.claimBrowserProjectOwnership(projectId, editorId, oldRevision);
++    assert.equal(claimed.status, 'claimed');
++    if (claimed.status !== 'claimed') throw new Error('Fixture ownership was not acquired');
++    claim = claimed.claim;
++  }
++  const capability = broker.registerEditor(projectId, editorId, oldRevision, [], claim);
++  const binding = broker.editorBinding(projectId)!;
++  const result = observe(broker.invokeEditorTool('owner', binding, 'review_edit_session', {}, timeoutMs));
++  const call = await broker.nextEditorCall(projectId, editorId, oldRevision, new AbortController().signal, capability);
++  assert(call);
++  if (claim) {
++    await store.withSerializedProjectStore(async locked => {
++      await locked.writeEntryExact(`project:${projectId}`, after);
++      await locked.writeEntryExact(
++        ownership.projectEditOwnershipKey(projectId),
++        ownership.renewedProjectEditOwnership(claim!, newRevision),
++      );
++    });
++  }
++  return { projectId, editorId, oldRevision, newRevision, capability, binding, claim, result, call };
++}
++
++async function holdStore() {
++  let beforeRelease: ((locked: import('../plugins/project-store.ts').LockedProjectStore) => Promise<void>) | undefined;
++  const entered = Promise.withResolvers<void>();
++  const release = Promise.withResolvers<void>();
++  const held = store.withSerializedProjectStore(async locked => {
++    entered.resolve();
++    await release.promise;
++    if (beforeRelease) await beforeRelease(locked);
++  });
++  await entered.promise;
++  const releaseStore = async (write?: typeof beforeRelease) => {
++    beforeRelease = write;
++    release.resolve();
++    try { await held; } finally { heldStores.delete(releaseStore); }
++  };
++  heldStores.add(releaseStore);
++  return { release: releaseStore };
++}
++
++async function pendingSync(f: Awaited<ReturnType<typeof fixture>>, reportedRevision = f.newRevision) {
++  const barrier = await holdStore();
++  touchEntered = Promise.withResolvers<void>();
++  const request = postResult(f.call.id, f.capability, reportedRevision);
++  await touchEntered.promise;
++  touchEntered = undefined;
++  await Promise.resolve();
++  assert.equal(f.result.state(), 'pending', 'MCP must remain pending while revision synchronization is blocked');
++  assert.equal(request.body(), undefined, 'HTTP success must wait for revision synchronization');
++  return { request, barrier };
++}
++
++function assertFailure(result: { ok: true; value: unknown } | { ok: false; error: unknown }, outcome: string) {
++  assert.equal(result.ok, false);
++  if (!result.ok) {
++    assert(result.error instanceof broker.ExternalEditorCallError);
++    assert.equal(result.error.outcome, outcome);
++  }
++}
++
++let testFailed = false;
++try {
++  // The continuation starts from MCP success, before the result HTTP handler returns.
++  {
++    const f = await fixture();
++    const { request, barrier } = await pendingSync(f, 'browser-revision-is-not-authoritative');
++    const duplicate = postResult(f.call.id, f.capability, f.newRevision);
++    const touches = touchCount;
++    await duplicate.done;
++    assert.equal(duplicate.response.statusCode, 404);
++    assert.equal(touchCount, touches, 'duplicate completion cannot start another renewal');
++    const next = f.result.result.then(result => {
++      assert.equal(result.ok, true);
++      assert.equal(broker.editorBinding(f.projectId)?.baseRevision, f.newRevision);
++      return observe(broker.invokeEditorTool('owner', broker.editorBinding(f.projectId)!, 'begin_edit_session', {}));
++    });
++    await barrier.release();
++    const nextResult = await next;
++    const nextCall = await broker.nextEditorCall(
++      f.projectId, f.editorId, f.newRevision, new AbortController().signal, f.capability,
++    );
++    assert.equal(nextCall?.binding.baseRevision, f.newRevision);
++    broker.settleEditorCall(nextCall!.id, 'applied', { editSessionId: 'second-round' }, f.capability);
++    assert.equal((await nextResult.result).ok, true);
++    await request.done;
++    assert.equal(request.response.statusCode, 200);
++  }
++
++  // No-ownership revision changes exempt only the call whose result advances it.
++  {
++    const f = await fixture(false);
++    const sibling = observe(broker.invokeEditorTool('other-owner', f.binding, 'read_timeline', {}));
++    const request = postResult(f.call.id, f.capability, f.newRevision);
++    await request.done;
++    assert.equal(request.response.statusCode, 200);
++    assert.equal((await f.result.result).ok, true);
++    assertFailure(await sibling.result, 'stale');
++    assert.equal(broker.editorBinding(f.projectId)?.baseRevision, f.newRevision);
++  }
++
++  // A capability is checked before touching the registry or accepting any result.
++  {
++    const f = await fixture(false);
++    const touches = touchCount;
++    const expiredTime = Date.now() + 60_000;
++    const clock = mock.method(Date, 'now', () => expiredTime);
++    const invalid = postResult(f.call.id, 'x'.repeat(43), f.newRevision);
++    try { await invalid.done; } finally { clock.mock.restore(); }
++    assert.equal(invalid.response.statusCode, 404);
++    assert.equal(touchCount, touches);
++    assert.equal(f.result.state(), 'pending');
++    assert.equal(broker.editorBinding(f.projectId)?.baseRevision, f.oldRevision);
++    const queued = observe(broker.invokeEditorTool('queued-owner', f.binding, 'read_timeline', {}));
++    const queuedId = broker.pendingEditorCallsForTest('queued-owner')[0]!.id;
++    const undelivered = postResult(queuedId, f.capability, f.newRevision);
++    await undelivered.done;
++    assert.equal(undelivered.response.statusCode, 404);
++    assert.equal(touchCount, touches);
++    broker.cancelEditorCallsForOwner('queued-owner');
++    await queued.result;
++    await postResult(f.call.id, f.capability, f.newRevision).done;
++    assert.equal((await f.result.result).ok, true);
++  }
++
++  for (const stop of ['cancel', 'timeout'] as const) {
++    const f = await fixture();
++    const { request, barrier } = await pendingSync(f);
++    const expiredTime = Date.now() + 60_000;
++    const clock = stop === 'timeout' ? mock.method(Date, 'now', () => expiredTime) : undefined;
++    if (stop === 'cancel') broker.cancelEditorCallsForOwner('owner');
++    try {
++      await barrier.release();
++      await request.done;
++    } finally { clock?.mock.restore(); }
++    assertFailure(await f.result.result, 'cancelled');
++    assert.equal(request.response.statusCode, 404);
++    assert.equal(broker.editorBinding(f.projectId)?.baseRevision, f.oldRevision);
++    assert.equal(broker.pendingEditorCallsForTest().length, 0);
++    const late = postResult(f.call.id, f.capability, f.newRevision);
++    await late.done;
++    assert.equal(late.response.statusCode, 404);
++  }
++
++
++  for (const replacement of ['same-binding', 'new-capability', 'new-epoch'] as const) {
++    const f = await fixture();
++    const { request, barrier } = await pendingSync(f);
++    const claim = replacement === 'new-epoch' ? { ...f.claim!, epoch: f.claim!.epoch + 1 } : f.claim!;
++    const capability = broker.registerEditor(
++      f.projectId, f.editorId, f.oldRevision, [], claim,
++      replacement === 'new-capability' ? null : f.capability,
++    );
++    await barrier.release(replacement === 'new-epoch' ? async locked => {
++      await locked.writeEntryExact(
++        ownership.projectEditOwnershipKey(f.projectId),
++        ownership.renewedProjectEditOwnership(claim, f.newRevision),
++      );
++    } : undefined);
++    await request.done;
++    assertFailure(await f.result.result, 'stale');
++    assert.equal(request.response.statusCode, 404);
++    assert.deepEqual(broker.editorBinding(f.projectId), { ...f.binding, ownershipEpoch: claim.epoch });
++    assert.equal(broker.editorRegistrationMatches(f.projectId, f.editorId, capability), true);
++    assert.equal(broker.pendingEditorCallsForTest().length, 0);
++  }
++
++  // A real project-store I/O failure cannot be hidden behind an applied result.
++  {
++    const f = await fixture();
++    const { request, barrier } = await pendingSync(f);
++    await rename(join(root, 'project-store-v1'), join(root, 'before-io-failure'));
++    await writeFile(join(root, 'project-store-v1'), 'not a directory');
++    await barrier.release();
++    await request.done;
++    assertFailure(await f.result.result, 'failed');
++    assert.equal(request.response.statusCode, 500);
++    assert.match(request.body()!, /ENOTDIR/);
++    assert.equal(broker.pendingEditorCallsForTest().length, 0);
++    assert.equal(broker.editorBinding(f.projectId)?.baseRevision, f.oldRevision);
++    await assert.rejects(broker.stopEditorCallsForShutdown(), /failed; shutdown is unconfirmed/);
++    await assert.rejects(broker.stopEditorRegistrationsForShutdown(), /failed; shutdown is unconfirmed/);
++  }
++
++  console.log('broker settlement: 9 deterministic route/broker scenarios passed, including real ownership renewal and I/O failure');
++} catch (error) {
++  testFailed = true;
++  throw error;
++} finally {
++  touchEntered = undefined;
++  broker.resetExternalAgentBrokerForTest();
++  const released = await Promise.allSettled([...heldStores].map(release => release()));
++  const requests = await Promise.allSettled([...resultRequests]);
++  mock.restoreAll();
++  const removed = await Promise.allSettled([rm(root, { recursive: true, force: true })]);
++  const errors = [...released, ...requests, ...removed]
++    .filter(result => result.status === 'rejected')
++    .map(result => result.reason);
++  if (errors.length) {
++    const error = new AggregateError(errors, 'Settlement fixture cleanup failed');
++    if (testFailed) console.error(error);
++    else throw error;
++  } else {
++    console.log('broker settlement cleanup: store barriers and result requests drained before removing fixtures');
++  }
++}
 diff --git a/server/external-agent/broker-shutdown.verify.ts b/server/external-agent/broker-shutdown.verify.ts
 new file mode 100644
 index 0000000..71bcf61
@@ -937,7 +1311,7 @@ index 0000000..71bcf61
 +  } finally { await rm(root, { recursive: true, force: true }); }
 +}
 diff --git a/server/external-agent/broker.ts b/server/external-agent/broker.ts
-index 55fcac7..f7de823 100644
+index 55fcac7..8cb5fdc 100644
 --- a/server/external-agent/broker.ts
 +++ b/server/external-agent/broker.ts
 @@ -1,4 +1,6 @@
@@ -947,7 +1321,15 @@ index 55fcac7..f7de823 100644
  import type { ProjectEditOwnershipClaim } from './project-edit-ownership.ts';
  import {
    EditorConnectionRegistry,
-@@ -62,6 +64,11 @@ const waiters = new Map<string, Set<() => void>>();
+@@ -29,6 +31,7 @@ interface QueuedCall {
+   arguments: Record<string, unknown>;
+   state: 'queued' | 'in_flight';
+   allowRevisionDrift: boolean;
++  settling?: boolean;
+   deadline: number;
+   resolve: (value: unknown) => void;
+   reject: (error: ExternalEditorCallError) => void;
+@@ -62,6 +65,11 @@ const waiters = new Map<string, Set<() => void>>();
  const sessionOwnership = new EditSessionOwnershipRegistry();
  const cancellationQueues = new Map<string, ExternalEditorCancellation[]>();
  const cancellationWaiters = new Map<string, Set<() => void>>();
@@ -959,7 +1341,19 @@ index 55fcac7..f7de823 100644
 
  const editorKey = (projectId: string, editorInstanceId: string) => `${projectId}\u0000${editorInstanceId}`;
 
-@@ -173,6 +180,7 @@ export function registerEditor(
+@@ -143,9 +151,9 @@ const registry = new EditorConnectionRegistry({
+         : `Editor ${binding.editorInstanceId} closed or switched projects.`,
+     );
+   },
+-  revisionChanged(binding) {
++  revisionChanged(binding, completingCallId) {
+     cancelCalls(
+-      (call) => sameBinding(call.binding, binding) && !call.allowRevisionDrift,
++      (call) => call.id !== completingCallId && sameBinding(call.binding, binding) && !call.allowRevisionDrift,
+       'stale',
+       `Project ${binding.projectId} changed while the editor call was pending.`,
+     );
+@@ -173,6 +181,7 @@ export function registerEditor(
    ownership?: ProjectEditOwnershipClaim,
    registrationCapability?: string | null,
  ): string {
@@ -967,7 +1361,7 @@ index 55fcac7..f7de823 100644
    return registry.register(
      projectId,
      editorInstanceId,
-@@ -194,7 +202,13 @@ export function unregisterEditor(
+@@ -194,7 +203,13 @@ export function unregisterEditor(
    projectId: string, editorInstanceId: string,
    registrationCapability?: string | null,
  ): Promise<boolean> {
@@ -982,7 +1376,7 @@ index 55fcac7..f7de823 100644
  }
 
  export function onRegisteredToolsChanged(listener: () => void): () => void {
-@@ -205,7 +219,8 @@ export function touchEditor(
+@@ -205,7 +220,8 @@ export function touchEditor(
    projectId: string, editorInstanceId: string,
    baseRevision?: string, registrationCapability?: string | null,
  ): Promise<boolean> {
@@ -992,7 +1386,7 @@ index 55fcac7..f7de823 100644
  }
 
  export function editorBinding(projectId: string): EditorBinding | null {
-@@ -294,7 +309,14 @@ export function invokeEditorTool(
+@@ -294,7 +310,14 @@ export function invokeEditorTool(
    args: Record<string, unknown>,
    timeoutMs = DEFAULT_TIMEOUT_MS,
  ): Promise<unknown> {
@@ -1008,7 +1402,7 @@ index 55fcac7..f7de823 100644
    const recoveryTool = name === 'list_edit_sessions' || name === 'recover_edit_session';
    const ownsSession = name !== 'begin_edit_session' && !recoveryTool && 'editSessionId' in args;
    if (ownsSession) requireOwnedEditSession(ownerId, binding, args);
-@@ -337,6 +359,36 @@ export function invokeEditorTool(
+@@ -337,6 +360,36 @@ export function invokeEditorTool(
    });
  }
 
@@ -1045,6 +1439,130 @@ index 55fcac7..f7de823 100644
  function takeNextCall(projectId: string, binding: EditorBinding): QueuedCall | undefined {
    const queue = queues.get(projectId);
    while (queue?.length) {
+@@ -438,12 +491,6 @@ export async function nextEditorCancellation(
+   return cancellation ?? null;
+ }
+
+-/** Binding of a pending editor call, read before settle for revision sync. */
+-export function editorCallBinding(id: string): EditorBinding | null {
+-  const call = pending.get(id);
+-  return call ? { ...call.binding } : null;
+-}
+-
+ export function settleEditorCall(
+   id: string,
+   outcome: ExternalCallTerminalOutcome,
+@@ -451,7 +498,7 @@ export function settleEditorCall(
+   registrationCapability?: string | null,
+ ): boolean {
+   const call = pending.get(id);
+-  if (!call) return false;
++  if (!call || call.settling) return false;
+   if (registrationCapability !== undefined
+     && !editorRegistrationMatches(
+       call.binding.projectId,
+@@ -461,6 +508,58 @@ export function settleEditorCall(
+   return finishCall(call, outcome, value, false);
+ }
+
++/**
++ * Synchronize the registered revision before releasing a browser result to MCP.
++ * A cancelled, expired, replaced, or duplicate completion cannot publish success.
++ */
++export async function settleEditorCallWithRevision(
++  id: string,
++  outcome: ExternalCallTerminalOutcome,
++  value: unknown,
++  registrationCapability: string | null,
++  baseRevision?: string,
++): Promise<boolean> {
++  const call = pending.get(id);
++  if (!call || call.state !== 'in_flight' || call.settling) return false;
++  const isCurrent = (): boolean => {
++    if (pending.get(id) !== call || !editorRegistrationMatches(
++      call.binding.projectId,
++      call.binding.editorInstanceId,
++      registrationCapability,
++    )) return false;
++    if (Date.now() >= call.deadline) {
++      finishCall(call, 'cancelled', 'Editor call timed out before revision synchronization completed.', true);
++      return false;
++    }
++    return true;
++  };
++  if (!isCurrent()) return false;
++  call.settling = true;
++  try {
++    const synced = !registrationsClosed && await registrationWork.admit(() => registry.touch(
++      call.binding.projectId,
++      call.binding.editorInstanceId,
++      baseRevision,
++      registrationCapability,
++      { callId: id, isCurrent },
++    ));
++    if (!isCurrent() || !synced) {
++      finishCall(call, 'stale', 'Editor registration changed before result revision synchronization completed.', false);
++      return false;
++    }
++    return finishCall(call, outcome, value, false);
++  } catch (error) {
++    if (pending.get(id) !== call) return false;
++    finishCall(
++      call,
++      error instanceof ExternalEditorCallError ? error.outcome : 'failed',
++      error instanceof Error ? error.message : 'Editor result revision synchronization failed.',
++      false,
++    );
++    throw error;
++  }
++}
++
+ export function cancelEditorCallsForOwner(
+   ownerId: string,
+   outcome: Extract<ExternalCallTerminalOutcome, 'cancelled' | 'stale' | 'failed'> = 'cancelled',
+diff --git a/server/external-agent/mcp-check.verify.ts b/server/external-agent/mcp-check.verify.ts
+index a39acc1..089ee40 100644
+--- a/server/external-agent/mcp-check.verify.ts
++++ b/server/external-agent/mcp-check.verify.ts
+@@ -74,8 +74,7 @@ const resultResponse = {
+ } as unknown as ServerResponse;
+ let settledImages = 0;
+ const resultOperations = {
+-  editorCallBinding: () => null,
+-  settleEditorCall: (_id, _outcome, value) => {
++  settleEditorCall: async (_id, _outcome, value) => {
+     settledImages = (value as { __images?: unknown[] }).__images?.length ?? 0;
+     return true;
+   },
+diff --git a/server/external-agent/mcp-session-verifier.ts b/server/external-agent/mcp-session-verifier.ts
+index 225fb56..f5096b7 100644
+--- a/server/external-agent/mcp-session-verifier.ts
++++ b/server/external-agent/mcp-session-verifier.ts
+@@ -41,8 +41,22 @@ export async function connectClient(
+ ): Promise<ConnectedClient> {
+   const before = new Set(mcpSessionsForTest().map((session) => session.id));
+   const client = new Client({ name, version: '1.0.0' });
+-  const transport = new StreamableHTTPClientTransport(url, { requestInit: { headers } });
+-  await client.connect(transport);
++  const notificationsReady = Promise.withResolvers<void>();
++  const transport = new StreamableHTTPClientTransport(url, {
++    requestInit: { headers },
++    fetch: (input, init) => {
++      const response = fetch(input, init);
++      if (init?.method === 'GET') {
++        void response.then((result) => {
++          assert.equal(result.status, 200, 'the notification stream must be established');
++          notificationsReady.resolve();
++        }).catch(notificationsReady.reject);
++      }
++      return response;
++    },
++  });
++  // The SDK starts its GET notification stream without awaiting it in connect().
++  await Promise.all([client.connect(transport), notificationsReady.promise]);
+   const session = mcpSessionsForTest().find((candidate) => !before.has(candidate.id));
+   assert(session, 'initialization registers exactly one new MCP session');
+   return { client, sessionId: session.id };
 diff --git a/server/external-agent/mcp.ts b/server/external-agent/mcp.ts
 index d5b4530..fd2b6b8 100644
 --- a/server/external-agent/mcp.ts
@@ -1387,11 +1905,92 @@ index db26432..04b98db 100644
 
        registerRenderStillRoute(server);
        registerRenderClipRoute(server);
+diff --git a/server/plugins/external-agent-bridge-routes.ts b/server/plugins/external-agent-bridge-routes.ts
+index 77291be..273f2d3 100644
+--- a/server/plugins/external-agent-bridge-routes.ts
++++ b/server/plugins/external-agent-bridge-routes.ts
+@@ -6,11 +6,9 @@ import {
+ import type {
+   nextEditorCall,
+   nextEditorCancellation,
+-  editorCallBinding,
+   editorRegistrationMatches,
+   registerEditor,
+-  settleEditorCall,
+-  touchEditor,
++  settleEditorCallWithRevision,
+   unregisterEditor,
+   ExternalCallTerminalOutcome,
+   ExternalToolSchema,
+@@ -46,9 +44,7 @@ export interface BridgeOperations {
+   unregisterEditor: typeof unregisterEditor;
+   nextEditorCall: typeof nextEditorCall;
+   nextEditorCancellation: typeof nextEditorCancellation;
+-  settleEditorCall: typeof settleEditorCall;
+-  editorCallBinding: typeof editorCallBinding;
+-  touchEditor: typeof touchEditor;
++  settleEditorCall: typeof settleEditorCallWithRevision;
+   mcpTools: typeof mcpTools;
+ }
+
+@@ -268,24 +264,13 @@ async function settleBridgeCall(
+         : null;
+   if (!outcome) throw new Error('invalid tool result outcome');
+   const capability = registrationCapability(req, true);
+-  const binding = operations.editorCallBinding(body.id);
+-  const settled = operations.settleEditorCall(
++  const settled = await operations.settleEditorCall(
+     body.id,
+     outcome,
+     body.value,
+     capability,
++    typeof body.baseRevision === 'string' && body.baseRevision ? body.baseRevision : undefined,
+   );
+-  if (settled && binding && typeof body.baseRevision === 'string' && body.baseRevision) {
+-    // The editor just committed the tool's mutation; sync the registry to the
+-    // post-tool revision so a follow-up MCP session binds to the current
+-    // snapshot instead of being rejected as stale by the previous one.
+-    await operations.touchEditor(
+-      binding.projectId,
+-      binding.editorInstanceId,
+-      body.baseRevision,
+-      capability,
+-    ).catch(() => undefined);
+-  }
+   sendBridgeJson(res, settled ? 200 : 404, settled
+     ? { ok: true }
+     : { error: 'editor call is unavailable' });
 diff --git a/server/plugins/external-agent.ts b/server/plugins/external-agent.ts
-index 289e318..919c93c 100644
+index 289e318..e30a32b 100644
 --- a/server/plugins/external-agent.ts
 +++ b/server/plugins/external-agent.ts
-@@ -132,7 +132,7 @@ export function externalAgentPlugin(): Plugin {
+@@ -2,13 +2,11 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
+ import { TLSSocket } from 'node:tls';
+ import type { Plugin } from 'vite';
+ import {
+-  editorCallBinding,
+-  touchEditor,
+   editorRegistrationMatches,
+   nextEditorCall,
+   nextEditorCancellation,
+   registerEditor,
+-  settleEditorCall,
++  settleEditorCallWithRevision,
+   unregisterEditor,
+ } from '../external-agent/broker.ts';
+ import { handleMcpRequest, mcpTools } from '../external-agent/mcp.ts';
+@@ -42,9 +40,7 @@ const bridgeOperations: BridgeOperations = {
+   unregisterEditor,
+   nextEditorCall,
+   nextEditorCancellation,
+-  settleEditorCall,
+-  editorCallBinding,
+-  touchEditor,
++  settleEditorCall: settleEditorCallWithRevision,
+   mcpTools,
+ };
+
+@@ -132,7 +128,7 @@ export function externalAgentPlugin(): Plugin {
      name: 'openchatcut-external-agent',
      configureServer(server) {
        server.middlewares.use('/api/external-agent', (req, res) => {
@@ -1400,7 +1999,7 @@ index 289e318..919c93c 100644
            if (!res.headersSent) sendBridgeJson(res, 400, { error: error instanceof Error ? error.message : String(error) });
          });
        });
-@@ -141,7 +141,7 @@ export function externalAgentPlugin(): Plugin {
+@@ -141,7 +137,7 @@ export function externalAgentPlugin(): Plugin {
            sendBridgeJson(res, 401, { error: 'invalid OpenChatCut MCP token' });
            return;
          }
@@ -1409,6 +2008,40 @@ index 289e318..919c93c 100644
            server.config.logger.error(`[external-mcp] ${error instanceof Error ? error.message : String(error)}`);
            if (!res.headersSent) sendBridgeJson(res, 500, { error: 'MCP request failed' });
          });
+diff --git a/server/plugins/external-agent.verify.ts b/server/plugins/external-agent.verify.ts
+index 1c929cc..1cf7b91 100644
+--- a/server/plugins/external-agent.verify.ts
++++ b/server/plugins/external-agent.verify.ts
+@@ -17,8 +17,6 @@ const calls: Record<keyof BridgeOperations, number> = {
+   nextEditorCall: 0,
+   nextEditorCancellation: 0,
+   settleEditorCall: 0,
+-  editorCallBinding: 0,
+-  touchEditor: 0,
+   mcpTools: 0,
+ };
+
+@@ -61,19 +59,11 @@ const operations = {
+     assert.equal(capability, registrationCapability);
+     return null;
+   },
+-  settleEditorCall: (_id, _outcome, _value, capability) => {
++  settleEditorCall: async (_id, _outcome, _value, capability) => {
+     calls.settleEditorCall += 1;
+     assert.equal(capability, registrationCapability);
+     return true;
+   },
+-  editorCallBinding: (_id) => {
+-    calls.editorCallBinding += 1;
+-    return { projectId: 'project-a', editorInstanceId: 'editor-a', baseRevision: 'rev-a', ownershipEpoch: 1 };
+-  },
+-  touchEditor: async () => {
+-    calls.touchEditor += 1;
+-    return true;
+-  },
+   mcpTools: () => {
+     calls.mcpTools += 1;
+     return [];
 diff --git a/server/plugins/extract-frames-shutdown.verify.ts b/server/plugins/extract-frames-shutdown.verify.ts
 new file mode 100644
 index 0000000..1ef5b14

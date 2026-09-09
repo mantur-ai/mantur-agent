@@ -70,6 +70,8 @@ Agent 导入本地文件在手动模式下保留单次确认，素材先加入�
 
 编辑器固定修复后的图像与归档依赖，保留模型及语音提供方；范围与原生验证限制见[依赖安全决策](../../../.agents/notes/implemented/bug-fix/2026-09-08-mantur-editor-security-dependencies.zh.md)。
 
+浏览器工具结果会在完成 MCP 调用前同步权威项目版本。同步失败仍返回错误，取消或注册替换不能恢复成功状态；见[结果版本决策](../../../.agents/notes/implemented/bug-fix/2026-09-09-mantur-editor-result-revision.zh.md)。
+
 编辑器通过工程存储通道确认实际语义向量可用性后才执行索引操作；检查失败或响应无效仍然报错。已接受的修改纳入浏览器退出等待。扩展与模型目录的指定 GET 请求保留原始完成 Promise；下载及安装请求仍须具备自己的退出管理。
 
 本地 `/api/extract-frames` 请求保留 FFmpeg、FFprobe、可选 Python 标注及临时文件清理的完成结果。部分预览不会清除采样或标注错误；这些错误仍会拒绝退出。[抽帧决策](../../../.agents/notes/implemented/bug-fix/2026-09-08-mantur-extract-frames-shutdown.zh.md)记录实际媒体验证与范围限制。
@@ -78,9 +80,9 @@ Agent 导入本地文件在手动模式下保留单次确认，素材先加入�
 
 | 退出补丁层 | 固定值 |
 |---|---|
-| 编辑器提交 | `2fcb4c0c734494387c78068d770709a70bda1bd9` |
-| 结果树 | `889e9551f34e28a5bf8d181334f6ec6bdfd9a2b5` |
-| 补丁 SHA-256 | `fa4698d9794add099b012fadcb63d849c4083c4feb3b1e9dc36628b83ab90cb5` |
+| 编辑器提交 | `2ee4ba5962336268d5de95b24a4fe5b09d8ba5c1` |
+| 结果树 | `6f3b4ba1dbfbfbe02fcaefd80998b8f6d049c15b` |
+| 补丁 SHA-256 | `ed820c9fd777c305986f713be304387109003d6cb7b4fb07f0956f5865bbb9c4` |
 
 Host Remote 解析 Agent，合并并发打开请求，并启动 `adapters/mantur-runtime.mjs`。既有 MCP 客户端挂载于该 Agent 作用域。所有挂载的 MCP 客户端解析到同一 peer 实例，保留 Agent 作用域内的服务器名称预留。MCP bearer 只存在于 Host 内存和子进程环境。卸载等待连接与子进程退出。Client 忽略已切走会话的启动结果。本包不发布 invariant companion：退出状态由子进程句柄直接持有，连接和工具版本约束由 MCP 客户端负责。
 
