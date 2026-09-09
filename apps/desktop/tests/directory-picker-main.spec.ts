@@ -28,6 +28,7 @@ const native = vi.hoisted(() => ({
     stopAndVerifyExit: vi.fn(async () => {}), stop: vi.fn(), closed: Promise.resolve() },
   requestUpdateSave: vi.fn(async () => []), startAutoUpdates: vi.fn<(options: StartAutoUpdatesOptions) => unknown>(),
   appendFile: vi.fn(async () => {}),
+  upgrade: vi.fn<(root: string, cipher: unknown, confirm: () => Promise<boolean>) => Promise<boolean>>(),
 }))
 
 vi.mock('node:fs/promises', async importOriginal => ({
@@ -51,6 +52,11 @@ vi.mock('../src/draft-bridge.ts', () => ({ installDraftBridge: () => native.draf
 vi.mock('../src/auth/host.ts', () => ({ NativeAccountHost: vi.fn(function () { return native.account }) }))
 vi.mock('../src/auth/ipc.ts', () => ({ installNativeAccountBridge: () => ({ publish: vi.fn() }) }))
 vi.mock('../src/update-bridge.ts', () => ({ installUpdateBridge: () => ({ publish: vi.fn() }) }))
+vi.mock('../src/auth/upgrade.ts', () => ({ prepareNativeAccountUpgrade: native.upgrade }))
+vi.mock('../src/embedded-cli.ts', () => ({
+  prepareEmbeddedCli: async () => '/desktop-user-data/managed-cli-bin',
+  embeddedCliEnvironment: (_bin: string, environment: NodeJS.ProcessEnv) => environment,
+}))
 vi.mock('../src/runtime.ts', () => ({ startDesktopService: () => native.service }))
 vi.mock('../src/update-save.ts', () => ({ requestUpdateSave: native.requestUpdateSave }))
 vi.mock('../src/updater.ts', () => ({ startAutoUpdates: native.startAutoUpdates }))
@@ -68,6 +74,7 @@ beforeEach(() => {
   native.dialog.showOpenDialog.mockResolvedValue({ canceled: true, filePaths: [] })
   native.dialog.showMessageBox.mockResolvedValue({ response: 0 })
   native.startAutoUpdates.mockReturnValue({ dispose: vi.fn() })
+  native.upgrade.mockResolvedValue(true)
 })
 afterEach(() => {
   vi.restoreAllMocks()
@@ -168,4 +175,59 @@ describe('desktop directory picker wiring', () => {
       }
     } finally { result.resolve({ canceled: false, filePaths: [resolve('late directory')] }); await rejected }
   })
+})
+
+describe('native account upgrade in Main startup', () => {
+  it('parents consent to the native window and defaults to leaving old storage unchanged', async () => {
+    native.upgrade.mockImplementation(async (_root, _cipher, confirm) => confirm())
+    native.dialog.showMessageBox.mockResolvedValueOnce({ response: 1 })
+    await import('../src/main.ts')
+    await vi.waitFor(() => { expect(native.app.quit).toHaveBeenCalledOnce() })
+    expect(native.dialog.showMessageBox).toHaveBeenCalledExactlyOnceWith(native.window, {
+      type: 'question', title: desktopCopy('en').accountUpgradeTitle,
+      message: desktopCopy('en').accountUpgradeMessage, detail: desktopCopy('en').accountUpgradeDetail,
+      buttons: [desktopCopy('en').accountUpgradeButton, desktopCopy('en').quitButton],
+      defaultId: 1, cancelId: 1, noLink: true,
+    })
+    expect(native.startAutoUpdates).not.toHaveBeenCalled()
+    expect(native.window.loadURL).not.toHaveBeenCalled()
+    expect(native.drafts.prepare).not.toHaveBeenCalled()
+  })
+
+  it('continues to the account UI only after confirmed recovery finishes', async () => {
+    const completed = Promise.withResolvers<boolean>()
+    native.upgrade.mockImplementation(async (_root, _cipher, confirm) => {
+      expect(await confirm()).toBe(true)
+      return completed.promise
+    })
+    await import('../src/main.ts')
+    await vi.waitFor(() => { expect(native.dialog.showMessageBox).toHaveBeenCalledOnce() })
+    expect(native.window.loadURL).not.toHaveBeenCalled()
+    completed.resolve(true)
+    await vi.waitFor(() => { expect(native.window.loadURL).toHaveBeenCalledOnce() })
+    expect(native.app.quit).not.toHaveBeenCalled()
+  })
+
+  it('shows fixed recovery failure copy without logging database errors or starting the Host', async () => {
+    native.upgrade.mockRejectedValueOnce(new Error('isolated-sensitive-error'))
+    await import('../src/main.ts')
+    await vi.waitFor(() => { expect(native.app.quit).toHaveBeenCalledOnce() })
+    expect(native.dialog.showMessageBox).toHaveBeenCalledExactlyOnceWith(native.window, {
+      type: 'error', title: desktopCopy('en').accountUpgradeTitle,
+      message: desktopCopy('en').accountUpgradeFailed, detail: desktopCopy('en').accountUpgradeFailedDetail,
+      buttons: [desktopCopy('en').quitButton], defaultId: 0, cancelId: 0, noLink: true,
+    })
+    expect(native.appendFile).not.toHaveBeenCalled()
+    expect(native.window.loadURL).not.toHaveBeenCalled()
+    expect(native.startAutoUpdates).not.toHaveBeenCalled()
+  })
+})
+
+it.each(['en', 'zh-CN'])('records account recovery dialog copy for %s', (locale) => {
+  const copy = desktopCopy(locale)
+  expect({
+    title: copy.accountUpgradeTitle, message: copy.accountUpgradeMessage, detail: copy.accountUpgradeDetail,
+    confirm: copy.accountUpgradeButton, cancel: copy.quitButton,
+    failure: copy.accountUpgradeFailed, failureDetail: copy.accountUpgradeFailedDetail,
+  }).toMatchSnapshot()
 })

@@ -1,6 +1,12 @@
 /** Native desktop copy selected from the operating-system locale. */
 
 const zh = {
+  accountUpgradeTitle: '重新登录漫途账号',
+  accountUpgradeMessage: '此版本使用浏览器登录，需要重新授权。',
+  accountUpgradeDetail: '继续会在本机私有账号目录旁保留旧账号数据备份，并清空本机登录状态。项目、草稿和模型 Key 不受影响。旧凭据不会被复用，此操作不会撤销网站上的旧设备授权。随后可在浏览器重新登录，或暂时跳过。',
+  accountUpgradeButton: '备份并重新登录',
+  accountUpgradeFailed: '无法完成账号存储更新，尚未启动登录。',
+  accountUpgradeFailedDetail: '原始账号数据仍保留在原位置或本机私有备份中；项目、草稿和模型 Key 未修改。请退出并联系支持，不要删除账号目录。',
   directoryPickerTitle: '选择目录',
   directoryPickerBusy: '目录选择窗口已打开，请先完成或取消当前选择。',
   directoryPickerUnavailable: '正在准备更新或退出，暂时无法选择目录。',
@@ -49,6 +55,12 @@ type DesktopCopy = {
 }
 
 const en = {
+  accountUpgradeTitle: 'Sign in to Mantur again',
+  accountUpgradeMessage: 'This version uses browser sign-in and needs new authorization.',
+  accountUpgradeDetail: 'Continuing keeps a private backup beside the local account directory and clears local sign-in. Projects, drafts and model keys are unchanged. Old credentials are not reused, and existing website device grants are not revoked. You can then sign in through your browser or skip sign-in.',
+  accountUpgradeButton: 'Back up and sign in again',
+  accountUpgradeFailed: 'Account storage could not be updated. Sign-in has not started.',
+  accountUpgradeFailedDetail: 'Original account data remains in its original location or a private local backup. Projects, drafts and model keys were not changed. Quit and contact support; do not delete the account directory.',
   directoryPickerTitle: 'Choose a directory',
   directoryPickerBusy: 'A directory chooser is already open. Complete or cancel that selection first.',
   directoryPickerUnavailable: 'Directories cannot be selected while preparing an update or quitting.',
