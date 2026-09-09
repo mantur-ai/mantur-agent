@@ -11,12 +11,12 @@ export interface Draft {
 }
 /** Shared workbench viewing state; saved files remain owned by the Host. */
 export interface WorkbenchState {
-  views: Record<string, 'script' | 'editing'>
+  views: Record<string, 'script' | 'editing' | 'assets'>
   paths: Record<string, string>
   drafts: Record<string, Record<string, Draft>>
 }
 const workbenchActions = {
-  select: (d: WorkbenchState, session: string, view: 'script' | 'editing') => { d.views[session] = view },
+  select: (d: WorkbenchState, session: string, view: 'script' | 'editing' | 'assets') => { d.views[session] = view },
   open: (d: WorkbenchState, session: string, document: ScriptDocument) => {
     d.paths[session] = document.path
     const drafts = d.drafts[session] ??= {}

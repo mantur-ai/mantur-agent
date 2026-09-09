@@ -35,7 +35,7 @@ node --check prototypes/drama-asset-workbench/app.mjs
 
 ## 生产接入限制
 
-真实写回需要项目源版本指纹与原子更新适配器、主会话关联提案/回执、Base 同步读回、签名 URL 安全媒体访问，以及生成前重新验证和费用批准。当前集成沿用剧本工作台唯一的 main.workbench 外框，资产子槽等待其拥有者的稳定版本；未注册插件、未改任何现有客户端包。生产接口缺失时不能把受控通道伪装为真实主会话。
+真实写回需要项目源版本指纹与原子更新适配器、主会话关联提案/回执、Base 同步读回、签名 URL 安全媒体访问，以及生成前重新验证和费用批准。剧本工作台在唯一的 main.workbench 外框下声明可选的资产标签/内容子槽。Loader 组合测试在其中挂载受控资产贡献；发布配置不添加资产提供者。生产接口缺失时不能把受控通道伪装为真实主会话。
 
 [浏览器与测试证据](evidence/verification.md) 记录实际运行结果。expected-workflow.json 是无密钥受控通道快照，不是 Harness 真实 Session 回放。
 
@@ -45,4 +45,4 @@ node --check prototypes/drama-asset-workbench/app.mjs
 
 [接口与导入证据](evidence/main-agent-interface.md) 定义宿主接入步骤及获准本地导入中的记录缺口。私有预览保留在仓库外：43 条资产、13 个校验通过的 Clip 和三张未绑定图片。实际请求字段为空时继续保留未知状态，参数文件不能证明已提交。expected-handoff.json 保存完整合成请求信封，不是真实主会话记录。
 
-[session-sender.mjs](session-sender.mjs) 检查当前选择和绑定后，把冻结信封交给捕获 Session 的现有 conversation.send。它只返回接收回执，错误向上传播，不自动重试或模拟提案。七项受控注册表测试覆盖单项/批量投递及等待期间的会话/草稿变化。浏览器预览尚未挂载此适配器，不声称已运行真实模型或完成共同外框集成。
+[session-sender.mjs](session-sender.mjs) 检查当前选择和绑定后，把冻结信封交给捕获 Session 的现有 conversation.send。它只返回接收回执，错误向上传播，不自动重试或模拟提案。七项受控注册表测试覆盖单项/批量投递及等待期间的会话/草稿变化。独立预览尚未挂载此适配器。共同外框测试使用受控会话接收和明确提案，不运行真实模型或写入项目源文件。

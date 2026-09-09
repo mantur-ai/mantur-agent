@@ -2,6 +2,7 @@
 export const en = {
   title: 'Script workbench', script: 'Script', editing: 'Editing', expand: 'Expand workbench', collapse: 'Collapse workbench',
   editingUnavailable: 'The editing plugin is unavailable. Select Script to continue writing.',
+  assetsUnavailable: 'The asset plugin is unavailable.',
   selectSession: 'Select a project conversation to edit its scripts.', folder: 'Project folder', browse: 'Open folder', root: 'Project root',
   files: 'Episodes and files', empty: 'No script files in this folder.', reading: 'Read', source: 'Edit source',
   save: 'Save', saved: 'Saved', dirty: 'Unsaved changes', refresh: 'Check file', loading: 'Loading…',
@@ -19,6 +20,7 @@ export type ScriptKey = keyof typeof en
 export const zh: Record<ScriptKey, string> = {
   title: '剧本工作台', script: '剧本', editing: '剪辑', expand: '展开工作台', collapse: '收起工作台',
   editingUnavailable: '剪辑插件当前不可用，可选择“剧本”继续写作。',
+  assetsUnavailable: '资产插件当前不可用。',
   selectSession: '请先选择项目对话，再编辑项目剧本。', folder: '项目内文件夹', browse: '打开文件夹', root: '项目根目录',
   files: '分集与文件', empty: '此文件夹内没有剧本文件。', reading: '阅读', source: '编辑源码',
   save: '保存', saved: '已保存', dirty: '有未保存修改', refresh: '检查文件更新', loading: '正在读取…',

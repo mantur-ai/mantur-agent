@@ -35,7 +35,7 @@ node --check prototypes/drama-asset-workbench/app.mjs
 
 ## Production integration limitations
 
-Real updates require source fingerprints and atomic writes, correlated main-session proposals/receipts, Base readback, safe signed-URL media access and renewed validation/price approval before generation. The current integration follows the script workbench's single main.workbench shell; an asset child slot awaits that owner's stable revision. No plugin is registered and no existing client package changed. Missing production APIs must not be disguised by the controlled channel.
+Real updates require source fingerprints and atomic writes, correlated main-session proposals/receipts, Base readback, safe signed-URL media access and renewed validation/price approval before generation. The script workbench declares optional asset tab/content slots under its single main.workbench shell. A Loader composition test mounts a controlled asset contribution there; no asset provider is added to shipped profiles. Missing production APIs must not be disguised by the controlled channel.
 
 [Browser and test evidence](evidence/verification.md) records observed results. expected-workflow.json is a keyless controlled-channel snapshot, not a real Harness Session replay.
 
@@ -45,4 +45,4 @@ Real updates require source fingerprints and atomic writes, correlated main-sess
 
 [Interface and import evidence](evidence/main-agent-interface.md) defines the host integration steps and unresolved records from the authorized local import. The private preview remains outside the repository: 43 asset records, 13 checksum-verified clips and three unbound images. Empty actual-request fields stay unknown; saved parameters do not prove submission. expected-handoff.json captures the complete synthetic request envelope and is not a real main-session transcript.
 
-[session-sender.mjs](session-sender.mjs) passes the frozen envelope to the captured Session's existing conversation.send after checking selection and binding. It returns admission receipts only; errors propagate without retry or simulated proposals. Seven controlled-registry tests cover single/batch delivery and pending-send session/draft changes. The browser preview does not mount this adapter, and no real model run or common-shell integration is claimed.
+[session-sender.mjs](session-sender.mjs) passes the frozen envelope to the captured Session's existing conversation.send after checking selection and binding. It returns admission receipts only; errors propagate without retry or simulated proposals. Seven controlled-registry tests cover single/batch delivery and pending-send session/draft changes. The standalone preview does not mount this adapter. The common-shell test uses controlled conversation admission and explicit proposals; it does not run a real model or write project sources.

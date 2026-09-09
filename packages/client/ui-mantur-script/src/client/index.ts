@@ -28,6 +28,10 @@ export interface ScriptCommands {
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap { 'script.mantur': ScriptKey }
   interface SlotMap {
+    /** Optional asset tab; its plugin owns its label and availability. */
+    'main.workbench.assets.tab': { kind: 'single'; scope: 'root'; owner: { selected: boolean; selectAssets: () => void } }
+    /** Asset drafts remain mounted across same-Session content switches. */
+    'main.workbench.assets.content': { kind: 'single'; scope: 'root'; owner: { closeWorkbench: () => void } }
     /** Optional editing tab; its plugin owns its label and availability. */
     'main.workbench.editing.tab': { kind: 'single'; scope: 'root'; owner: { selected: boolean; selectEditing: () => void } }
     /** Editing stays mounted after first activation within this Session. */
@@ -53,6 +57,8 @@ export async function apply(ctx: Context): Promise<void> {
     ctx.slots.inject('main.workbench', () => ctx.slots.register({
       name: 'main.workbench', locale: 'script.mantur', store,
       children: {
+        'main.workbench.assets.tab': { kind: 'single', scope: 'root' },
+        'main.workbench.assets.content': { kind: 'single', scope: 'root' },
         'main.workbench.editing.tab': { kind: 'single', scope: 'root' },
         'main.workbench.editing.content': { kind: 'single', scope: 'root' },
       },

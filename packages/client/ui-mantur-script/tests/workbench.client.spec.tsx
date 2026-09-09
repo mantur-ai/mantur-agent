@@ -19,7 +19,10 @@ function setup(dictionary = zh) {
     useSessions: select => select({ current: session, byId: {} } as never),
     useStore: select => select(useSyncExternalStore(notify => instance.subscribe(notify), () => instance.getSnapshot())),
     actions: instance.actions,
-    t: (key: keyof typeof en) => dictionary[key],
+    t: (key) => {
+      if (!Object.hasOwn(dictionary, key)) throw new Error(`Unexpected locale key: ${key}`)
+      return dictionary[key as keyof typeof en]
+    },
     closeWorkbench: vi.fn(),
     list: vi.fn(async () => [{ path: first.path, name: '01.md', directory: false }]),
     read: vi.fn(async () => disk),
@@ -29,7 +32,7 @@ function setup(dictionary = zh) {
       return disk
     }),
     send: vi.fn(async () => {}),
-    renderSlot: ((key: string, owner: { selected?: boolean; selectEditing?: () => void }) => key.endsWith('.tab')
+    renderSlot: ((key: string, owner: { selected?: boolean; selectEditing?: () => void }) => key.includes('.assets.') ? null : key.endsWith('.tab')
       ? <button type="button" aria-pressed={owner.selected} onClick={owner.selectEditing}>剪辑</button>
       : <iframe title="Test editing" />) as Props['renderSlot'],
   } satisfies Partial<Props>

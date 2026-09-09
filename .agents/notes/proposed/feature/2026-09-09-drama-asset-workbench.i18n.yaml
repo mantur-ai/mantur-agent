@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/proposed/feature/2026-09-09-drama-asset-workbench.md
-2026-09-09-drama-asset-workbench.md: 30b04640102cea0f1e1c3966a25e2ef60665d71b
-2026-09-09-drama-asset-workbench.zh.md: 6d7c16b96f7392c7e875ab57920402561ec4b9d0
+2026-09-09-drama-asset-workbench.md: 05058fb72a4d80d3336ac5b4c54efaed5fcbd865
+2026-09-09-drama-asset-workbench.zh.md: b70112ed675234ffb3d79c022070493194c09d6c

@@ -54,7 +54,7 @@ it('loads, executes, and disposes the script plugin from cordis.yml', async () =
     ctx.loader.internal = { version: 'v2', async import(name: string) {
       if (!modules.has(name)) throw new Error(`Unexpected plugin ${name}`)
       return modules.get(name)
-    } } as NonNullable<typeof ctx.loader.internal>
+    } } as unknown as NonNullable<typeof ctx.loader.internal>
     await ctx.loader.create({ name: 'cordis:include', config: { path: pathToFileURL(config).href } })
     await ctx.loader.await()
     const responses: StreamChunk[][] = []

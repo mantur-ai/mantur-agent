@@ -1,4 +1,4 @@
-/** Script and optional editing panels share one resident workbench. */
+/** Script, asset, and editing panels share one resident workbench. */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
 import { MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -9,20 +9,26 @@ import type { createWorkbenchStore } from './store.ts'
 import css from './Workbench.module.css'
 
 type Shared = PropsStore<ReturnType<typeof createWorkbenchStore>> & PropsLocale<'script.mantur'>
-type WorkbenchProps = PropsRuntime<'main.workbench'> & Shared & ScriptCommands & PropsRenderSlots<'main.workbench.editing.tab' | 'main.workbench.editing.content'>
+type WorkbenchProps = PropsRuntime<'main.workbench'> & Shared & ScriptCommands & PropsRenderSlots<'main.workbench.editing.tab' | 'main.workbench.editing.content' | 'main.workbench.assets.tab' | 'main.workbench.assets.content'>
 
 /** @param props - Current Session, shared view state, and file commands. @returns Resident workbench panels. */
 export function Workbench(props: WorkbenchProps) {
   const session = props.useSessions(s => s.current)
   const active = props.useStore(s => s.views[session ?? '']) ?? 'script'
   const [editingMounted, setEditingMounted] = useState(false)
+  const [assetsMounted, setAssetsMounted] = useState(false)
   useEffect(() => { if (active === 'editing') setEditingMounted(true) }, [active])
+  useEffect(() => { if (active === 'assets') setAssetsMounted(true) }, [active])
   return <section className={css.shell} aria-label={props.t('title')}>
     <header className={css.tabs}>
       <button type="button" aria-pressed={active === 'script'} onClick={() =>{  props.actions.select(session ?? '', 'script') }}>{props.t('script')}</button>
+      {props.renderSlot('main.workbench.assets.tab', { selected: active === 'assets', selectAssets: () => { props.actions.select(session ?? '', 'assets') } })}
       {props.renderSlot('main.workbench.editing.tab', { selected: active === 'editing', selectEditing: () =>{  props.actions.select(session ?? '', 'editing') } })}
     </header>
     <div className={css.panel} hidden={active !== 'script'}><ScriptEditor {...props} session={session} /></div>
+    {(active === 'assets' || assetsMounted) && <div className={css.panel} hidden={active !== 'assets'}>
+      {props.renderSlot('main.workbench.assets.content', { closeWorkbench: props.closeWorkbench }, { fallback: <p className={css.empty}>{props.t('assetsUnavailable')}</p> })}
+    </div>}
     {(active === 'editing' || editingMounted) && <div className={css.panel} hidden={active !== 'editing'}>
       {props.renderSlot('main.workbench.editing.content', { closeWorkbench: props.closeWorkbench }, { fallback: <p className={css.empty}>{props.t('editingUnavailable')}</p> })}
     </div>}
