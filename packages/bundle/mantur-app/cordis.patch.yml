@@ -71,6 +71,12 @@
       config:
         maxBytes: 2097152
         maxEntries: 1000
+    - id: ui-mantur-assets
+      name: '@deepseek-ai/dsh-client-ui-mantur-assets'
+      config:
+        maxBytes: 8388608
+        maxEntries: 2000
+        maxMediaBytes: 52428800
     - id: ui-mantur-account
       name: '@deepseek-ai/dsh-client-ui-mantur-account'
 

@@ -1,0 +1,9 @@
+{
+  "name":"@deepseek-ai/dsh-client-ui-mantur-assets","version":"0.1.0-rc.1","type":"module","main":"lib/index.js","types":"lib/types/index.d.ts",
+  "exports":{".":{"types":"./lib/types/index.d.ts","default":"./lib/index.js"},"./client":{"types":"./lib/types/client/index.d.ts","default":"./lib/client.js"},"./src/*":"./src/*","./package.json":"./package.json"},
+  "dsh":{"client":{"inject":["@deepseek-ai/dsh-client-ui-mantur-script","@deepseek-ai/dsh-client-ui-session"],"platform":"web"}},
+  "files":["lib/index.js","lib/client.js","lib/types"],"scripts":{"bundle":"tsdown"},
+  "dependencies":{"@deepseek-ai/dsh-typert-protocol":"workspace:^","@deepseek-ai/dsh-tools":"workspace:^","@deepseek-ai/schemastery":"workspace:^"},
+  "peerDependencies":{"@deepseek-ai/cordis":"workspace:^","@deepseek-ai/dsh-fs":"workspace:^"},
+  "devDependencies":{"@deepseek-ai/cordis":"workspace:^","@deepseek-ai/dsh-agent":"workspace:^","@deepseek-ai/dsh-fs":"workspace:^","@deepseek-ai/dsh-brand":"workspace:^","@deepseek-ai/dsh-typert-protocol":"workspace:^","@deepseek-ai/dsh-tools":"workspace:^","@deepseek-ai/dsh-client-ui-session":"workspace:^","@deepseek-ai/dsh-client-ui-mantur-script":"workspace:^"}
+}
