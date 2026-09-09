@@ -72,7 +72,14 @@ beforeEach(() => {
   Object.defineProperty(process, 'platform', { value: 'darwin' })
   Object.defineProperty(process, 'resourcesPath', { configurable: true, value: '/desktop-resources' })
   native.dialog.showOpenDialog.mockResolvedValue({ canceled: true, filePaths: [] })
-  native.dialog.showMessageBox.mockResolvedValue({ response: 0 })
+  native.dialog.showMessageBox.mockImplementation((_window: unknown, options: { signal?: AbortSignal }) => {
+    const signal = options.signal
+    if (signal === undefined) return Promise.resolve({ response: 0 })
+    return new Promise<{ response: number }>((resolve) => {
+      if (signal.aborted) resolve({ response: 0 })
+      else signal.addEventListener('abort', () => { resolve({ response: 0 }) }, { once: true })
+    })
+  })
   native.startAutoUpdates.mockReturnValue({ dispose: vi.fn() })
   native.upgrade.mockResolvedValue(true)
 })
@@ -143,6 +150,10 @@ describe('desktop directory picker wiring', () => {
     try {
       await expect(subject.pick()).rejects.toThrow(desktopCopy('en').directoryPickerUnavailable)
       expect(native.dialog.showOpenDialog).not.toHaveBeenCalled()
+      expect(native.dialog.showMessageBox).toHaveBeenCalledExactlyOnceWith(native.window, expect.objectContaining({
+        title: desktopCopy('en').updateSavingTitle, signal: expect.any(AbortSignal),
+      }))
+      expect(native.drafts.release).not.toHaveBeenCalled()
     } finally { checkpoint.reject(error); await rejected }
     expect(native.drafts.release).toHaveBeenCalledOnce()
     expect(native.requestUpdateSave).not.toHaveBeenCalled()
