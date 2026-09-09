@@ -29,28 +29,21 @@ async function mount(dictionary = en) {
 }
 
 describe('Session editor workbench', () => {
-  it.each([en, zh])('localizes the boundary toggle and exposes its current visibility', (dictionary) => {
-    const props = propsFor(dictionary)
+  it('observes live opening and suppresses only a same-Session collapse', () => {
+    const props = propsFor()
     const openWorkbench = vi.fn()
     const suppressAutomaticOpening = vi.fn()
     const observeAutomaticOpening = vi.fn(() => () => {})
     const injected = { observeAutomaticOpening, suppressAutomaticOpening }
-    const view = render(<WorkbenchToggle {...props} {...injected} expanded={false} openWorkbench={openWorkbench} />)
-    const button = view.getByRole('button', { name: dictionary.expand })
-    expect(button.getAttribute('aria-expanded')).toBe('false')
-    expect(button.tabIndex).toBe(0)
-    button.focus()
-    fireEvent.click(button)
-    expect(openWorkbench).toHaveBeenCalledOnce()
-    expect(suppressAutomaticOpening).not.toHaveBeenCalled()
-    view.rerender(<WorkbenchToggle {...props} {...injected} expanded openWorkbench={openWorkbench} />)
-    expect(view.getByRole('button', { name: dictionary.collapse })).toBe(button)
-    expect(button.getAttribute('aria-expanded')).toBe('true')
-    expect(document.activeElement).toBe(button)
-    fireEvent.click(button)
-    expect(props.closeWorkbench).toHaveBeenCalledOnce()
+    const view = render(<WorkbenchToggle {...props} {...injected} expanded openWorkbench={openWorkbench} />)
+    expect(view.container.textContent).toBe('')
+    expect(observeAutomaticOpening).toHaveBeenCalledWith(openWorkbench)
+    view.rerender(<WorkbenchToggle {...props} {...injected} expanded={false} openWorkbench={openWorkbench} />)
     expect(suppressAutomaticOpening).toHaveBeenCalledOnce()
-    expect(view.container.innerHTML).toMatchSnapshot()
+    view.rerender(<WorkbenchToggle {...props} {...injected} expanded openWorkbench={openWorkbench} />)
+    view.rerender(<WorkbenchToggle {...props} {...injected} expanded={false} openWorkbench={openWorkbench}
+      useSessions={select => select({ current: 'session-b' as SessionId } as never)} />)
+    expect(suppressAutomaticOpening).toHaveBeenCalledOnce()
   })
   it.each([['en', en], ['zh', zh]] as const)('records the %s workspace and controls', async (_language, dictionary) => {
     const { getByRole } = await mount(dictionary)

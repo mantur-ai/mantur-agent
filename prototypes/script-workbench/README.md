@@ -4,7 +4,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This isolated browser prototype reads episode files, preserves manual drafts across navigation and collapse, and validates an explicit selection rewrite against the original file. It is not a shipped DSH plugin or a connected main Agent. The controlled adapter accepts `改为：replacement`; it never invokes a model, account or operator. Production integration remains [proposed](../../.agents/notes/proposed/feature/2026-09-09-script-workbench.md).
+This isolated browser prototype reads episode files, preserves manual drafts across navigation and collapse, and validates an explicit selection rewrite against the original file. It is not a shipped DSH plugin or a connected main Agent. The controlled adapter accepts `改为：replacement`; it never invokes a model, account or operator. Production integration follows the [integrated workbench decision](../../.agents/notes/implemented/feature/2026-09-09-script-workbench.md).
 
 ## Preview
 

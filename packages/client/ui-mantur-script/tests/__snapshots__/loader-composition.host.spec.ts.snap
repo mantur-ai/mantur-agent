@@ -1,0 +1,39 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`loads, executes, and disposes the script plugin from cordis.yml 1`] = `
+{
+  "description": "Replace exactly the selected passage from a script rewrite request. Copy path, version, start, end and selected verbatim from that request; offsets are UTF-16 code units in LF-normalized text. Supply only the replacement text. A stale file or mismatched selection fails without writing: stop and ask the user to select the current passage again. Do not work around a conflict with another write tool. Success confirms a guarded file write, not any other production step.",
+  "name": "replace_script_selection",
+  "parameters": {
+    "properties": {
+      "end": {
+        "type": "integer",
+      },
+      "path": {
+        "type": "string",
+      },
+      "replacement": {
+        "type": "string",
+      },
+      "selected": {
+        "type": "string",
+      },
+      "start": {
+        "type": "integer",
+      },
+      "version": {
+        "type": "string",
+      },
+    },
+    "required": [
+      "path",
+      "version",
+      "start",
+      "end",
+      "selected",
+      "replacement",
+    ],
+    "type": "object",
+  },
+}
+`;

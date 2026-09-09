@@ -129,6 +129,7 @@
   ],
   "references": [
     { "path": "./packages/client/ui-mantur-editing/tsconfig.host.json" },
+    { "path": "./packages/client/ui-mantur-script/tsconfig.host.json" },
     { "path": "./packages/bundle/mantur-app" },
     { "path": "./vendor/cosmokit" },
     { "path": "./vendor/schemastery" },

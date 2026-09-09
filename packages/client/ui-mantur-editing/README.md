@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Open the local editor with the chevron at the right edge of the Mantur conversation. Creation mode selection does not open or close the workbench. The editor owns its media pool, preview, timeline, and project saving. This optional plugin starts a separate editor for each Session in that Session's working directory.
+Open the shared workbench with the chevron at the right edge of the Mantur conversation, then select Editing. Creation mode selection does not open or close the workbench. The editor owns its media pool, preview, timeline, and project saving. This optional plugin starts a separate editor for each Session in that Session's working directory.
 
 ## Table of Contents
 
@@ -24,6 +24,8 @@ Open the local editor with the chevron at the right edge of the Mantur conversat
 
 <a id="use-this-package"></a>
 ## Use this package
+
+The browser composition requires [the shared script workbench](../ui-mantur-script/README.md), which owns the root panel and declares this plugin’s child slots. A standalone editing-only browser composition is unsupported. Removing this plugin removes its tab and content without closing the shared shell. Live opening requests select Editing only when the existing opening policy allows visibility.
 
 The packaged desktop enables `ui-mantur-editing` with its installed resource directory and Electron executable. A development profile explicitly selects `runtimeMode: development` and supplies the runtime fields below. The resident edge chevron opens the current Session through the authenticated Remote gateway and collapses the workbench when expanded. Its localized accessible label and `aria-expanded` describe the current action and state. Without a selected Session and working directory, the workbench shows a diagnostic. Hiding the workbench retains the current Session’s editor page and native Agent binding. Reopening that view continues the same editing draft. The header's Refresh action recreates the editor page for the same Session; it does not delete saved project files. Agent or Host disposal requests the same checked runtime shutdown; an unconfirmed drain retains its owner.
 

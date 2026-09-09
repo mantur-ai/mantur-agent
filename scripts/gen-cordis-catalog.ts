@@ -86,6 +86,7 @@ export const SERVICE_PAGE: Record<string, string> = {
   inspector: 'extensions.md',
   webServer: 'web-server.md',
   manturEditing: 'workspace.md',
+  manturScript: 'workspace.md',
   invariants: 'invariants.md',
   llm: 'llm-streaming.md',
   lsp: 'lsp.md',
@@ -683,6 +684,9 @@ export const FOUNDATION_TYPE_NAMES: ReadonlySet<string> = new Set([
 
 /** Project types deliberately documented outside the subsystems catalog. */
 export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
+  ScriptEntry: 'Project file discovery is documented in packages/client/ui-mantur-script/README.md',
+  ScriptDocument: 'Versioned script reads are documented in packages/client/ui-mantur-script/README.md',
+  ScriptWrite: 'Guarded script saves are documented in packages/client/ui-mantur-script/README.md',
   EditingWorkspace: 'Session editor address and directories are documented in packages/client/ui-mantur-editing/README.md',
   z: 'schemastery schema constructor is owned by vendor/schemastery (vendored upstream)',
   BeginCommandRequest: 'event-local request contract is owned by packages/client/ui-input-trigger/src/types.ts',

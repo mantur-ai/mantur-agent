@@ -401,6 +401,41 @@
       }
     },
     {
+      "name": "replace_script_selection",
+      "description": "Replace exactly the selected passage from a script rewrite request. Copy path, version, start, end and selected verbatim from that request; offsets are UTF-16 code units in LF-normalized text. Supply only the replacement text. A stale file or mismatched selection fails without writing: stop and ask the user to select the current passage again. Do not work around a conflict with another write tool. Success confirms a guarded file write, not any other production step.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "start": {
+            "type": "integer"
+          },
+          "end": {
+            "type": "integer"
+          },
+          "selected": {
+            "type": "string"
+          },
+          "replacement": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "version",
+          "start",
+          "end",
+          "selected",
+          "replacement"
+        ]
+      }
+    },
+    {
       "name": "send_message",
       "description": "Send a message to a direct continuable child by its agent id. If you are a resident continuable child, you may also target your direct parent. If the target is still working, the message steers its nearest step; if it is idle, the message starts a turn. This call returns no answer from the agent — only confirmation that the message was delivered. A failure means the message was NOT delivered.",
       "parameters": {

@@ -178,6 +178,7 @@
       "@deepseek-ai/dsh-client-ui-mantur-account": ["./packages/client/ui-mantur-account/src"],
       "@deepseek-ai/dsh-client-ui-mantur-navigation": ["./packages/client/ui-mantur-navigation/src"],
       "@deepseek-ai/dsh-client-ui-mantur-editing": ["./packages/client/ui-mantur-editing/src"],
+      "@deepseek-ai/dsh-client-ui-mantur-script": ["./packages/client/ui-mantur-script/src"],
       "@deepseek-ai/dsh-client-ui-approval": ["./packages/client/ui-approval/src"],
       "@deepseek-ai/dsh-client-ui-approval/client": ["./packages/client/ui-approval/src/client/index.ts"],
       "@deepseek-ai/dsh-client-ui-chat": ["./packages/client/ui-chat/src"],

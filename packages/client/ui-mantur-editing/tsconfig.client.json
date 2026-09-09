@@ -44,6 +44,9 @@
     },
     {
       "path": "../ui-conversation"
+    },
+    {
+      "path": "../ui-mantur-script/tsconfig.client.json"
     }
   ],
   "files": [
