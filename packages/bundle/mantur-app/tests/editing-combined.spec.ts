@@ -97,7 +97,7 @@ export async function createServer() {
     await ctx.plugin(Persistence, { root: join(root, 'sessions'), compression: 'none' })
     await ctx.plugin(Attachments, { dshHome: join(root, 'home') })
     await ctx.plugin(Loop, { agents: [] })
-    const adapter = new MockAdapter([toolCallResponse('combined-mcp', 'mcp__mantur_cut__mutate', {}), textResponse('saved')])
+    const adapter = new MockAdapter([toolCallResponse('open-workbench', 'open_editing_workbench', {}), toolCallResponse('combined-mcp', 'mcp__mantur_cut__mutate', {}), textResponse('saved')])
     const resolveModel = adapter.resolveModel.bind(adapter)
     vi.spyOn(adapter, 'resolveModel').mockImplementation(async (provider, model) => ({ ...await resolveModel(provider, model), inputModalities: ['text', 'image'] }))
     ctx.effect(() => ctx.llm.registerAdapter(['mock'], adapter))
@@ -105,8 +105,8 @@ export async function createServer() {
     await ctx.plugin(Editing, { runtimeMode: 'development', editorRoot, nodeExecutable: process.execPath,
       startupTimeoutMs: 10000, stopTimeoutMs: 10000, toolCallTimeoutMs: 10000 })
     const handle = await ctx.agents.create({ sessionId: SessionId('combined'), meta: { cwd: root }, agentOptions: { provider: 'mock', model: 'mock' } })
-    const workspace = await ctx.manturEditing.open(handle.agent, 'http://127.0.0.1:5298')
-    expect(childClosures.map(state => state.closed)).toEqual([false])
+    expect(childClosures).toHaveLength(0)
+    expect(ctx.tools.schemas(handle.agent).some(tool => tool.name === 'open_editing_workbench')).toBe(true)
     ctx.on('tools/execute', async (exec, next) => {
       if (exec.name === 'mcp__mantur_cut__mutate') signal = exec.signal
       return next()
@@ -121,6 +121,11 @@ export async function createServer() {
     const quiesce = vi.spyOn(ctx.agentLoop, 'quiesceForShutdown')
     handle.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Run the local fixture mutation.' }], source: { kind: 'user' } }))
     await expect.poll(() => fixture.calls.length).toBe(1)
+    const workspace = await ctx.manturEditing.open(handle.agent, 'http://127.0.0.1:5298')
+    expect(childClosures.map(state => state.closed)).toEqual([false])
+    const openResult = handle.agent.session.snapshotEvents().find(event =>
+      event.type === 'tool/result' && event.data.meta && typeof event.data.meta === 'object' && !Array.isArray(event.data.meta) && event.data.meta.kind === 'mantur-editing-workspace')
+    expect(openResult?.type).toBe('tool/result')
     expect(signal?.aborted).toBe(false)
     const coordinator = createHostUpdateShutdown(ctx)
     preparing = coordinator.prepare()

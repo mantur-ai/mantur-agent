@@ -27,6 +27,8 @@ Open the local editor with the chevron at the right edge of the Mantur conversat
 
 The packaged desktop enables `ui-mantur-editing` with its installed resource directory and Electron executable. A development profile explicitly selects `runtimeMode: development` and supplies the runtime fields below. The resident edge chevron opens the current Session through the authenticated Remote gateway and collapses the workbench when expanded. Its localized accessible label and `aria-expanded` describe the current action and state. Without a selected Session and working directory, the workbench shows a diagnostic. Hiding the workbench retains the current Session’s editor page and native Agent binding. Reopening that view continues the same editing draft. The header's Refresh action recreates the editor page for the same Session; it does not delete saved project files. Agent or Host disposal requests the same checked runtime shutdown; an unconfirmed drain retains its owner.
 
+The Agent can call `open_editing_workbench` before the native editing tools are mounted. The call takes no project or Session argument and uses its calling Agent’s existing workspace. Its successful result means the runtime and native MCP connection are ready; it does not mean an edit was applied. The Client observes opening calls once the resident edge button is mounted, and shows the workbench only after observing a live call move from pending to success. A user collapse suppresses later automatic openings for that Session, including later turns; the edge chevron remains available for manual expansion. Replayed history and switching back do not reopen the panel. Hidden views retain tools, the editor page and active work.
+
 Each Session uses `<cwd>/剪辑/<session-id>/`: `工程/` contains project persistence and runtime state, `素材/` contains imported media, and `导出/` is the default export destination. The Host reads `cwd` from the resolved Agent's Session header; the browser cannot select another path. Session directory components reject traversal and symbolic links. Reopening preserves files. Different Sessions use separate runtimes and tool scopes even within one project.
 
 The Project media tab browses the current Agent directory and its subdirectories. Imports reference compatible originals in place; required compatibility conversions write separate files and never modify originals. The same endpoint backs `import_asset` and `import_folder`. Hidden directories, `node_modules`, and the project's `剪辑` tree are excluded. A refresh reads new files; missing sources stay offline until the user selects a replacement. Removing pool entries or reference records never deletes originals.
@@ -82,6 +84,8 @@ Isolated-profile POST and PUT requests to `/upload` retain their request body, s
 
 The Host Remote resolves the Agent, coalesces concurrent opens, and launches `adapters/mantur-runtime.mjs`. It mounts the existing MCP client inside that Agent's scope. All mounted MCP clients resolve the same peer instance, preserving Agent-scoped server-name reservations. The MCP bearer remains in Host memory and the child environment. Disposal drains both connection and subprocess. The Client ignores startup responses from a Session that is no longer selected. No invariant companion is published: subprocess exit state belongs to the child handle; connection and tool-generation invariants belong to the MCP client.
 
+The opening tool is registered with the editing plugin independently of panel visibility. Its success carries credential-free `mantur-editing-workspace` presentation metadata containing the calling Session, loopback editor address and editing directory. The address is constructed from a validated local port; the bearer remains on the Host. Startup and cancellation failures remain ordinary tool errors. Client opening signals use existing conversation events; they do not inspect model prose. See the [Agent entry decision](../../../.agents/notes/implemented/feature/2026-09-09-mantur-agent-editing-entry.md).
+
 Opening the workbench mounts the native MCP tools and a `systemPrompt.section` in that Agent's scope after startup succeeds. The section explains draft reads, review and terminal status, starting a fresh draft after application, inspecting saved work before repeating mutations, and project versus source frame rates. The next model request records this guidance in `request/header`. Unopened Agents receive no editing section; hiding the view retains it, while Agent or Host disposal removes it. This guidance does not repair a disconnected transport or prove that an edit succeeded.
 
 The controlled [editor patch](adapters/mantur-cut.patch) has these fixed sources. Apply it to a clean upstream checkout with `git apply --index`; `git write-tree` must match the result tree before building. It includes draft import, terminal checkpoint persistence, and ordinary H.264 audio finalization. The latter separates the existing PCM mix and encodes AAC directly into MP4 after video rendering, preserving video packets and the pinned Remotion audio-track behavior. See the [audio timing decision](../../../.agents/notes/implemented/bug-fix/2026-09-07-mantur-cut-aac-timing.md) for failure handling, regression commands and upgrade limits.
@@ -109,7 +113,15 @@ The controlled [editor patch](adapters/mantur-cut.patch) has these fixed sources
 <a id="model-experience"></a>
 ## Model Experience
 
-Indirectly, through the Agent-scoped MCP tools and workflow section recorded in model requests.
+### Editing entry and native workflow
+
+#### What the model sees
+
+`open_editing_workbench` is available before first use and returns the calling Session, local editor URL and editing directory as JSON; failures remain tool errors. After startup, Agent-scoped native MCP tools and the workflow section join the logged model request. Opening, applying a draft, saving and export remain distinct outcomes.
+
+#### Token effect
+
+The opening schema adds a fixed request cost. A successful open adds native tool definitions and the workflow section; call results accumulate in Session history until compaction.
 
 #### KV Cache effect
 

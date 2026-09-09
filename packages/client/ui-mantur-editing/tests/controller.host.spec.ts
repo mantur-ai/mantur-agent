@@ -5,6 +5,8 @@ import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { ConnectionHandle } from '@deepseek-ai/dsh-mcp-client'
 import type { startEditor } from '../src/runtime.ts'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
+import ToolRuntime from '@deepseek-ai/dsh-tools'
+import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { afterEach, expect, it, vi } from 'vitest'
 import ManturEditing, { Config } from '../src/index.ts'
 
@@ -55,9 +57,9 @@ async function setup() {
   const ctx = new Context()
   contexts.push(ctx)
   ctx.provide('typert', {} as never)
-  ctx.provide('tools', {} as never)
   ctx.provide('webServer', { port: 5298 } as never)
   await ctx.plugin(SystemPrompt, { includeHarnessIdentity: false })
+  await ctx.plugin(ToolRuntime)
   harness.start.mockImplementation(async (_config, cwd, id) => {
     const dispose = vi.fn(async () => {})
     harness.stopped.push(dispose)
@@ -181,12 +183,12 @@ it('includes an opening editor in shutdown and stops its newly mounted MCP conne
   const stopping = ctx.manturEditing.stopForShutdown()
   try {
     expect(harness.stopped).toHaveLength(0)
-    resume.resolve()
+    resume.resolve(undefined)
     await refused
     await stopping
     expect(harness.drain).toHaveBeenCalledOnce()
     expect(harness.stopped[0]).toHaveBeenCalledOnce()
-  } finally { resume.resolve(); await refused; await stopping }
+  } finally { resume.resolve(undefined); await refused; await stopping }
 })
 
 it('retains an editor cleanup failure and refuses future opens after repeated shutdown', async () => {
@@ -199,4 +201,85 @@ it('retains an editor cleanup failure and refuses future opens after repeated sh
   expect(ctx.manturEditing.stopForShutdown()).toBe(stopping)
   await expect(ctx.manturEditing.open(agent, 'http://127.0.0.1:5298')).rejects.toThrow('shutting down')
   expect(harness.stopped[0]).toHaveBeenCalledOnce()
+})
+
+it('discovers the editing entry before opening and reuses its Agent owner through tools and Remote', async () => {
+  const { ctx, makeAgent } = await setup()
+  const a = makeAgent('tool-a'); const b = makeAgent('tool-b')
+  expect(ctx.tools.schemas(a.agent).some(tool => tool.name === 'open_editing_workbench')).toBe(true)
+  expect(harness.start).not.toHaveBeenCalled()
+  const execute = (agent: Agent, id: string) => ctx.tools.execute({
+    name: 'open_editing_workbench', arguments: {}, agent,
+    callId: ToolCallId(id), signal: new AbortController().signal,
+  })
+  const first = await execute(a.agent, 'first')
+  expect(first.isError).toBe(false)
+  if (first.isError) throw new Error('Opening failed')
+  expect(first.value).toEqual({
+    sessionId: 'tool-a', editorUrl: 'http://127.0.0.1:5300/', directory: '/project-tool-a/tool-a',
+  })
+  expect(first.meta).toEqual({ kind: 'mantur-editing-workspace', ...first.value as object })
+  expect(JSON.stringify(first)).not.toContain('host-secret')
+  expect(first.content).toEqual([{ type: 'text', text: JSON.stringify(first.value) }])
+  const reopened = await ctx.manturEditing.open(a.agent, 'http://127.0.0.1:5298')
+  expect(reopened.directory).toBe('/project-tool-a/tool-a')
+  expect((await execute(a.agent, 'repeat')).isError).toBe(false)
+  expect(harness.start).toHaveBeenCalledOnce()
+  expect((await execute(b.agent, 'other')).isError).toBe(false)
+  expect(harness.start).toHaveBeenCalledTimes(2)
+  expect(harness.scopes).toEqual([scopeOf(a.scope.ctx), scopeOf(b.scope.ctx)])
+})
+
+it('exposes startup errors through the tool result without reporting an opened workbench', async () => {
+  const { ctx, makeAgent } = await setup()
+  const { agent } = makeAgent('failure')
+  harness.connect.mockRejectedValueOnce(new Error('native editor MCP unavailable'))
+  const result = await ctx.tools.execute({
+    name: 'open_editing_workbench', arguments: {}, agent,
+    callId: ToolCallId('failed-open'), signal: new AbortController().signal,
+  })
+  expect(result.isError).toBe(true)
+  expect(JSON.stringify(result.content)).toContain('native editor MCP unavailable')
+  expect(result.meta).toBeUndefined()
+  expect(await editingSections(ctx, agent)).toEqual([])
+})
+
+it('rejects an ownerless or already cancelled editing tool before starting a process', async () => {
+  const { ctx, makeAgent } = await setup()
+  const { agent } = makeAgent('cancelled')
+  const ownerless = await ctx.tools.execute({
+    name: 'open_editing_workbench', arguments: {},
+    callId: ToolCallId('ownerless'), signal: new AbortController().signal,
+  })
+  expect(ownerless.isError).toBe(true)
+  expect(JSON.stringify(ownerless.content)).toContain('owning Agent Session')
+  const cancelled = await ctx.tools.execute({
+    name: 'open_editing_workbench', arguments: {}, agent,
+    callId: ToolCallId('cancelled'), signal: AbortSignal.abort(),
+  })
+  expect(cancelled.isError).toBe(true)
+  expect(harness.start).not.toHaveBeenCalled()
+})
+
+it('retains the Session editor when the opening tool is cancelled during startup', async () => {
+  const { ctx, makeAgent } = await setup()
+  const { agent } = makeAgent('cancel-during-open')
+  const started = Promise.withResolvers<undefined>(); const resume = Promise.withResolvers<undefined>()
+  const start = harness.start.getMockImplementation()!
+  harness.start.mockImplementation(async (...args) => {
+    started.resolve(undefined); await resume.promise; return start(...args)
+  })
+  const abort = new AbortController()
+  const pending = ctx.tools.execute({
+    name: 'open_editing_workbench', arguments: {}, agent,
+    callId: ToolCallId('cancel-startup'), signal: abort.signal,
+  })
+  try {
+    await started.promise
+    abort.abort(); resume.resolve(undefined)
+    expect((await pending).isError).toBe(true)
+    expect(harness.stopped[0]).not.toHaveBeenCalled()
+    await ctx.manturEditing.open(agent, 'http://127.0.0.1:5298')
+    expect(harness.start).toHaveBeenCalledOnce()
+  } finally { resume.resolve(undefined); await pending }
 })

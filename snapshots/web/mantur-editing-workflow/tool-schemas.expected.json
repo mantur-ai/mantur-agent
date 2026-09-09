@@ -333,6 +333,14 @@
       }
     },
     {
+      "name": "open_editing_workbench",
+      "description": "Open or reuse this conversation’s 漫途Cut workbench when the user requests video editing. Call this before editing if the mcp__mantur_cut__ tools are not available. After success use those native tools to target the project shown in the workbench, inspect it and edit its draft. Opening does not import media, apply edits or authorize overwrite, deletion, paid generation, export or publishing. Preserve each native tool’s confirmation requirements. A hidden workbench can remain active; do not reopen it merely to show progress.",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
       "name": "ralph",
       "description": "Run a foreground fresh-agent Ralph loop toward one immutable objective. Use only when the direct human explicitly asks for Ralph or fresh-agent iteration. Each round opens a new child with no parent conversation or prior child session; the shared workspace is long-term memory, and only a bounded structured report crosses rounds. The call returns when a worker reports completion or a concrete blocker, or at the round limit. Ordinary long-running same-session work belongs to goal tools.",
       "parameters": {
