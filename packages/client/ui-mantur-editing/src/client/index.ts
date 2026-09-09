@@ -2,6 +2,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
+import type {} from '@deepseek-ai/dsh-client-ui-mantur-script/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-theme/client'
 import type {} from '@deepseek-ai/dsh-api-gateway/client'
@@ -10,7 +11,7 @@ import editingRemote from '@deepseek-ai/dsh-client-ui-mantur-editing/remote'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { EditingWorkspace } from '../types.ts'
 import { en, zh, type EditingKey } from './locales.ts'
-import { WorkbenchToggle, Workbench } from './Workbench.tsx'
+import { WorkbenchToggle, Workbench, EditingTab } from './Workbench.tsx'
 import { installAgentOpening } from './agent-opening.ts'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 
@@ -59,12 +60,12 @@ export async function apply(ctx: Context): Promise<void> {
 function installWorkbench(ctx: Context): void {
   const opening = installAgentOpening(ctx)
   ctx.effect(() => ctx.locale.register('editing.mantur', { en, zh }), 'editing: dictionaries')
-  ctx.slots.inject('main.workbench.toggle', () => ctx.slots.register({
-    name: 'main.workbench.toggle', locale: 'editing.mantur',
+  ctx.slots.inject('main.workbench.toggle.editing', () => ctx.slots.register({
+    name: 'main.workbench.toggle.editing', locale: 'editing.mantur',
     inject: (): WorkbenchToggleInjection => ({ observeAutomaticOpening: opening.observe, suppressAutomaticOpening: opening.suppress }),
   }, WorkbenchToggle))
-  ctx.slots.inject('main.workbench', () => ctx.slots.register({
-    name: 'main.workbench', locale: 'editing.mantur',
+  ctx.slots.inject('main.workbench.editing.content', () => ctx.slots.register({
+    name: 'main.workbench.editing.content', locale: 'editing.mantur',
     inject: (): WorkbenchInjection => ({
       openWorkspace: async (sessionId) => {
         const result = await ctx.remote.manturEditing.open(sessionId, window.location.origin)
@@ -77,5 +78,7 @@ function installWorkbench(ctx: Context): void {
       subscribeTheme: notify => ctx.on('theme/change', notify),
     }),
   }, Workbench))
-  ctx.effect(() => () => { ctx.layout.closeWorkbench() }, 'editing: close on unload')
+  ctx.slots.inject('main.workbench.editing.tab', () => ctx.slots.register({
+    name: 'main.workbench.editing.tab', locale: 'editing.mantur',
+  }, EditingTab))
 }

@@ -8,27 +8,23 @@ import type { EditingWorkspace } from '../types.ts'
 import css from './Workbench.module.css'
 
 /**
- * Toggle the workbench without changing the selected creation mode or Session.
+ * Observe live editing opens and retain explicit same-Session dismissal.
  * @param props - Localized labels and the layout's current visibility controls.
- * @returns Keyboard-accessible control at the conversation boundary.
+ * @returns No visible content; the shared shell owns the boundary button.
  */
-export function WorkbenchToggle({ expanded, openWorkbench, closeWorkbench, observeAutomaticOpening, suppressAutomaticOpening, t }:
-PropsRuntime<'main.workbench.toggle'> & PropsLocale<'editing.mantur'> & InjectFace<WorkbenchToggleInjection>) {
+export function WorkbenchToggle({ expanded, openWorkbench, observeAutomaticOpening, suppressAutomaticOpening, useSessions }:
+PropsRuntime<'main.workbench.toggle.editing'> & PropsLocale<'editing.mantur'> & InjectFace<WorkbenchToggleInjection>) {
+  const session = useSessions(s => s.current)
+  const previous = useRef({ session, expanded })
   useEffect(() => observeAutomaticOpening(openWorkbench), [observeAutomaticOpening, openWorkbench])
-  const label = t(expanded ? 'collapse' : 'expand')
-  return <button type="button" className={css.edgeToggle} aria-label={label} title={label}
-    aria-expanded={expanded} onClick={() => {
-      if (expanded) { suppressAutomaticOpening(); closeWorkbench() }
-      else openWorkbench()
-    }}>
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
-      <polyline points={expanded ? '9 6 15 12 9 18' : '15 6 9 12 15 18'} />
-    </svg>
-  </button>
+  useEffect(() => {
+    if (previous.current.session === session && previous.current.expanded && !expanded) suppressAutomaticOpening()
+    previous.current = { session, expanded }
+  }, [session, expanded, suppressAutomaticOpening])
+  return null
 }
 
-type Props = PropsRuntime<'main.workbench'> & PropsLocale<'editing.mantur'> & InjectFace<WorkbenchInjection>
+type Props = PropsRuntime<'main.workbench.editing.content'> & PropsLocale<'editing.mantur'> & InjectFace<WorkbenchInjection>
 
 /**
  * Render the full editor beside Mantur without starting another model turn.
@@ -90,4 +86,9 @@ function ThemedEditor({ url, title, getColorScheme, subscribeTheme, getLocale, s
     return () => { window.removeEventListener('message', ready) }
   }, [sendTheme, url])
   return <iframe ref={frame} className={css.editor} src={src} title={title} onLoad={sendTheme} allow="autoplay; fullscreen; cross-origin-isolated" />
+}
+
+/** @param props - Shared shell selection and locale-owned editing label. @returns Editing availability control. */
+export function EditingTab({ selected, selectEditing, t }: PropsRuntime<'main.workbench.editing.tab'> & PropsLocale<'editing.mantur'>) {
+  return <button type="button" aria-pressed={selected} onClick={selectEditing}>{t('tab')}</button>
 }

@@ -1422,6 +1422,31 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'manturScript',
+    summary: 'Remote operations never resolve paths against another Session or process cwd.',
+    description: 'Remote operations never resolve paths against another Session or process cwd.',
+    methods: [
+      {
+        signature: '@Remote(\'list\') async list(agent: Agent, directory: string): Promise<ScriptEntry[]>',
+        description: 'List the selected project folder without recursive discovery.',
+        parameters: [{ name: 'agent', description: 'Owning Session.' }, { name: 'directory', description: 'Project-relative or absolute folder.' }],
+        returns: 'Direct script files and folders.',
+      },
+      {
+        signature: '@Remote(\'read\') async read(agent: Agent, path: string): Promise<ScriptDocument>',
+        description: 'Read a bounded UTF-8 document from one observed file generation.',
+        parameters: [{ name: 'agent', description: 'Owning Session.' }, { name: 'path', description: 'Script file within its project.' }],
+        returns: 'Consistently observed text and version.',
+      },
+      {
+        signature: '@Remote(\'save\') async save(agent: Agent, request: ScriptWrite): Promise<ScriptDocument>',
+        description: 'Save a draft only while its observed generation remains current.',
+        parameters: [{ name: 'agent', description: 'Owning Session.' }, { name: 'request', description: 'Versioned full draft.' }],
+        returns: 'Written text and new generation.',
+      },
+    ],
+  },
+  {
     key: 'messageFeedback',
     summary: 'Storage-domain sidecar service.',
     description: 'Storage-domain sidecar service. It inspects persisted Session history and never creates or resumes an Agent or Session.',
@@ -5088,6 +5113,22 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ScopeKey',
     declaration: 'export type ScopeKey = object;',
+  },
+  {
+    name: 'ScriptDocument',
+    declaration: 'export interface ScriptDocument {\n    readonly path: string;\n    readonly version: ScriptVersion;\n    readonly content: string;\n}',
+  },
+  {
+    name: 'ScriptEntry',
+    declaration: 'export interface ScriptEntry {\n    readonly path: string;\n    readonly name: string;\n    readonly directory: boolean;\n}',
+  },
+  {
+    name: 'ScriptVersion',
+    declaration: 'export type ScriptVersion = Branded<\'ScriptVersion\'>;',
+  },
+  {
+    name: 'ScriptWrite',
+    declaration: 'export interface ScriptWrite {\n    readonly path: string;\n    readonly version: ScriptVersion;\n    readonly content: string;\n}',
   },
   {
     name: 'SearchFileMatches',

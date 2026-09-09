@@ -457,6 +457,24 @@ export type CreationMode = typeof CREATION_MODES[number]
 
 来源：[`packages/client/ui-mantur-navigation/src/index.ts:9`](../packages/client/ui-mantur-navigation/src/index.ts)
 
+<a id="deepseek-aidsh-client-ui-mantur-script"></a>
+
+## `@deepseek-ai/dsh-client-ui-mantur-script`
+
+依赖： `typert` · `fs` · `tools`
+
+```ts config-catalog
+/** Deployment limits for whole-document editing and directory discovery. */
+export interface Config {
+  /** Maximum UTF-8 bytes read or written for one script. */
+  readonly maxBytes: number
+  /** Maximum direct entries examined in one project folder. */
+  readonly maxEntries: number
+}
+```
+
+来源： [`packages/client/ui-mantur-script/src/index.ts:13`](../packages/client/ui-mantur-script/src/index.ts)
+
 <a id="deepseek-aidsh-client-ui-workspace"></a>
 
 ## `@deepseek-ai/dsh-client-ui-workspace`

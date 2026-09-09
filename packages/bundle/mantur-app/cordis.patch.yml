@@ -66,6 +66,11 @@
           script: [short-drama]
           production: [drama-asset-seedance-pipeline, mantur-copyhit]
           assets: [mantur-smartclip]
+    - id: ui-mantur-script
+      name: '@deepseek-ai/dsh-client-ui-mantur-script'
+      config:
+        maxBytes: 2097152
+        maxEntries: 1000
     - id: ui-mantur-account
       name: '@deepseek-ai/dsh-client-ui-mantur-account'
 

@@ -29,7 +29,7 @@ const pathsPlugin = (): ReturnType<typeof tsconfigPaths> => tsconfigPaths({ proj
 const mockedEditingRemote = {
   name: 'mocked-mantur-editing-remote',
   resolveId(id: string) {
-    if (id === '@deepseek-ai/dsh-client-ui-mantur-editing/remote') return id
+    if (id === '@deepseek-ai/dsh-client-ui-mantur-editing/remote' || id === '@deepseek-ai/dsh-client-ui-mantur-script/remote') return id
   },
 }
 

@@ -1,0 +1,80 @@
+{
+  "schema": "drama-prompt-edit-v1",
+  "intent": "propose-text-only",
+  "requestId": "edit-1",
+  "projectId": "fixture-drama-lantern",
+  "sessionId": "main-session-test",
+  "requirement": "保持身份，调整光线",
+  "allowedFields": [
+    "prompt",
+    "negativePrompt"
+  ],
+  "targets": [
+    {
+      "id": "CLIP-EP01-001",
+      "attempt": 1,
+      "locator": {
+        "documentId": "clip-report",
+        "table": "clips",
+        "rowId": "CLIP-EP01-001",
+        "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "version": 1
+      },
+      "before": {
+        "prompt": "@Image1 林舟在渡口抬起铜灯，镜头缓慢推进。不要背景音乐，不要字幕。",
+        "negativePrompt": ""
+      },
+      "draft": {
+        "prompt": "@Image1 林舟在渡口抬起铜灯，镜头缓慢推进。不要背景音乐，不要字幕。",
+        "negativePrompt": ""
+      },
+      "draftRevision": 0,
+      "context": {
+        "kind": "video",
+        "references": [
+          {
+            "id": "CHAR-001-V01",
+            "version": 1,
+            "roles": [
+              "identity"
+            ]
+          }
+        ],
+        "episode": 1,
+        "scene": "S01",
+        "previousClipId": null,
+        "source": {
+          "documentId": "clip-report",
+          "table": "clips",
+          "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      },
+      "sourcePins": {
+        "CLIP-EP01-001": {
+          "documentId": "clip-report",
+          "table": "clips",
+          "rowId": "CLIP-EP01-001",
+          "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "version": 1
+        },
+        "CHAR-001-V01": {
+          "documentId": "asset-report",
+          "table": "images",
+          "rowId": "CHAR-001-V01",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "version": 1
+        }
+      }
+    }
+  ],
+  "context": {
+    "name": "渡灯",
+    "label": "两集隔离验证项目",
+    "worldRules": "水墨动画世界；人物和场景保持同一美术语言。",
+    "artSpec": {
+      "positiveStyle": "水墨动画",
+      "negativeConstraints": "不复制参考图主体、文字或Logo"
+    },
+    "sourceRevision": "schema-fixture-1"
+  }
+}

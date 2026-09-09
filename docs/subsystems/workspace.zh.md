@@ -245,6 +245,42 @@ Prepare one project per first-send identity, without creating or sending a Sessi
 
 Source: [`packages/workspace/mantur-projects/src/index.ts`](../../packages/workspace/mantur-projects/src/index.ts)
 
+<a id="ctxmanturscript--manturscript"></a>
+
+### `ctx.manturScript` — `ManturScript`
+
+Remote operations never resolve paths against another Session or process cwd.
+
+```ts cordis-catalog
+/**
+ * List the selected project folder without recursive discovery.
+ * @param agent - Owning Session.
+ * @param directory - Project-relative or absolute folder.
+ * @returns Direct script files and folders.
+ */
+@Remote('list') async list(agent: Agent, directory: string): Promise<ScriptEntry[]>
+
+/**
+ * Read a bounded UTF-8 document from one observed file generation.
+ * @param agent - Owning Session.
+ * @param path - Script file within its project.
+ * @returns Consistently observed text and version.
+ */
+@Remote('read') async read(agent: Agent, path: string): Promise<ScriptDocument>
+
+/**
+ * Save a draft only while its observed generation remains current.
+ * @param agent - Owning Session.
+ * @param request - Versioned full draft.
+ * @returns Written text and new generation.
+ */
+@Remote('save') async save(agent: Agent, request: ScriptWrite): Promise<ScriptDocument>
+```
+
+Types: [Agent](core.zh.md)
+
+Source: [`packages/client/ui-mantur-script/src/index.ts`](../../packages/client/ui-mantur-script/src/index.ts)
+
 <a id="ctxworkspacecontroller--workspacecontroller"></a>
 
 ### `ctx.workspaceController` — `WorkspaceController`
