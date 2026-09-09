@@ -45,6 +45,7 @@ const SAFE_HOST_DEPENDENCY_EXPORTS = {
   '@deepseek-ai/dsh-deque': ['Deque'],
   '@deepseek-ai/dsh-llm': ['callConfigEquals'],
   '@deepseek-ai/dsh-timeout': ['MAX_TIMER_DELAY_MS'],
+  '@deepseek-ai/dsh-tools': ['defineTool'],
   '@deepseek-ai/schemastery': ['default'],
 } as const satisfies HostDependencyExports
 

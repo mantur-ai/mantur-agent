@@ -4,10 +4,11 @@ import type { SessionId, SessionSeq } from '@deepseek-ai/dsh-session/types'
 import type { ConversationNodeDefinition, ConversationViewDefinition, ConversationViewNode } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-tools/types'
 import { z } from 'zod'
+import { EDITING_WORKSPACE_META_KIND } from '../types.ts'
 
 const target = 'mantur-editing-open'
 const metadata = z.object({
-  kind: z.literal('mantur-editing-workspace'), sessionId: z.string().min(1),
+  kind: z.literal(EDITING_WORKSPACE_META_KIND), sessionId: z.string().min(1),
   editorUrl: z.string(), directory: z.string(),
 })
 
@@ -41,7 +42,7 @@ const definition: ConversationNodeDefinition<OpeningState> = {
     }
     if (event.type === 'tool/result' && event.data.message.content[0].isError !== true
       && event.data.error === undefined && event.data.meta !== null && typeof event.data.meta === 'object'
-      && 'kind' in event.data.meta && event.data.meta.kind === 'mantur-editing-workspace') {
+      && 'kind' in event.data.meta && event.data.meta.kind === EDITING_WORKSPACE_META_KIND) {
       return { id: event.data.message.source.callId, role: 'update' }
     }
     return null
