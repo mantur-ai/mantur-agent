@@ -1,7 +1,8 @@
 /** Browser-only validation UI. No model endpoint, account, token or session creation. */
+import { renderMarkdown } from "./markdown.mjs";
 import { Workbench } from './model.mjs';
 const $ = id => document.getElementById(id);
-let bench, path, selection, reading = false, navigation = 0;
+let bench, path, selection, reading = true, navigation = 0;
 const instructions = new Map();
 const statusNames = { sending: '投递中', queued: '已投递，等待受控执行', running: '执行中', committing: '正在写入，不能取消', completed: '文件已修改并读回', cancelled: '已取消', failed: '失败，查看提示', written: '已写入，正在读回', 'readback-conflict': '已写入，但读回冲突' };
 function status(message, error = false) { $('status').textContent = message; $('status').classList.toggle('error', error); }
@@ -34,7 +35,13 @@ function render() {
   $('editor').disabled = doc.busy;
   $('dirty').textContent = doc.busy ? '正在保存' : doc.text === doc.base ? '已保存' : '有未保存修改';
   for (const id of ['save', 'send', 'refresh', 'undo']) $(id).disabled = doc.busy;
-  $('preview').textContent = doc.text;
+  if (/\.md$/i.test(path)) $('preview').innerHTML = renderMarkdown(doc.text);
+  else $('preview').textContent = doc.text;
+  $('preview').classList.toggle('plain-text', !/\.md$/i.test(path));
+  $('editor').hidden = reading;
+  $('preview').hidden = !reading;
+  $('mode').textContent = reading ? '编辑正文' : '阅读预览';
+  $('selection-hint').textContent = reading ? '阅读预览 · 要修改选段，请先切换「编辑正文」' : '选中一段文字，即可填写改写要求';
   $('document').classList.toggle('has-selection', selection?.path === path && selection?.revision === doc.revision);
   const change = doc.history.at(-1);
   $('change').hidden = !change;

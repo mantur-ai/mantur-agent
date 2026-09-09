@@ -14,11 +14,11 @@ From the repository root, run:
 python3 prototypes/script-workbench/preview.py
 ```
 
-Open the printed local URL. The server binds a random loopback port and copies the two synthetic episodes into a private temporary project. It only serves allowlisted prototype assets and writes those two copies. Stopping the server removes the copies. The page initially shows an empty state; opening the synthetic project requires an explicit click. No repository installation or package build is needed.
+Open the printed local URL. The server binds a random loopback port and copies the two synthetic episodes into a private temporary project. It only serves allowlisted prototype assets and writes those two copies. Stopping the server removes the copies. The page initially shows an empty state; opening the synthetic project requires an explicit click. No repository installation or package build is needed. Local browser modules include Marked 16.4.2 (MIT) and DOMPurify 3.4.11 (Apache-2.0 or MPL-2.0), copied from the existing external-disk dependency tree; their license texts are retained in browser/. Active HTML, links and remote media are excluded from the rendered subset.
 
 Select an episode, edit and save it, select text, enter `改为：replacement`, and click the submission button. Expand the validation tools to execute the queued request. Admission, execution, commit and readback are separate states. Inspect the last file change or restore its predecessor through the file menu. A request cannot be cancelled after its commit begins.
 
-The local-project picker uses browser directory handles and requires a supporting browser. It lists non-hidden `.md`, `.txt` and `.fountain` files recursively, treating each file as one episode. It does not infer episodes inside a combined document. Use a disposable project for this experimental path. Draft export keeps the original file extension. Preview is plain text, not a complete Markdown or Fountain layout engine.
+The local-project picker uses browser directory handles and requires a supporting browser. It lists non-hidden `.md`, `.txt` and `.fountain` files recursively, treating each file as one episode. It does not infer episodes inside a combined document. Use a disposable project for this experimental path. Draft export keeps the original file extension. Markdown files open in rendered reading mode with headings, quotes, emphasis, lists and tables. Switch to source editing to select a rewrite range. Text and Fountain files retain plain-text preview. Rendering never rewrites the source file.
 
 ## Data protection and limits
 

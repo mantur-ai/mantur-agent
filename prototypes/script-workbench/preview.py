@@ -36,7 +36,7 @@ def serve():
                 elif self.path.startswith('/api/file/'):
                     path = allowed.get(unquote(self.path[len('/api/file/'):]))
                     self.reply(200, {'text': path.read_text()}) if path else self.reply(404, {'error': '未知文件'})
-                elif self.path in ('/', '/index.html', '/app.mjs', '/model.mjs', '/style.css'):
+                elif self.path in ('/', '/index.html', '/app.mjs', '/model.mjs', '/style.css', '/markdown.mjs', '/browser/marked.mjs', '/browser/purify.mjs'):
                     super().do_GET()
                 else:
                     self.reply(404, {'error': '未知资源'})
