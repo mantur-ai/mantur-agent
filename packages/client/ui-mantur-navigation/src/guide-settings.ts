@@ -3,7 +3,7 @@
 import z from '@deepseek-ai/schemastery'
 
 /** Stable UI-only creation modes, in navigation order. */
-export const CREATION_MODES = ['script', 'production', 'editing', 'assets'] as const
+export const CREATION_MODES = ['script', 'production', 'assets'] as const
 
 /** Persisted creation-mode identifier; not an Agent preset. */
 export type CreationMode = typeof CREATION_MODES[number]
@@ -27,13 +27,12 @@ export interface GuideSettings extends GuideConfig {
 export const GuideRecommendationsSchema = z.object({
   script: z.array(z.string()).required(),
   production: z.array(z.string()).required(),
-  editing: z.array(z.string()).required(),
   assets: z.array(z.string()).required(),
 }).required()
 
-/** First use selects script writing and allows the welcome message. */
+/** First use selects script writing; the retired editing mode resolves explicitly to production. */
 export const GuideSettingsSchema: z<GuideSettings> = z.object({
   recommendations: GuideRecommendationsSchema,
-  mode: z.union([...CREATION_MODES]).default('script'),
+  mode: z.union([...CREATION_MODES, z.transform(z.const('editing'), () => 'production' as const)]).default('script'),
   closed: z.boolean().default(false),
 })

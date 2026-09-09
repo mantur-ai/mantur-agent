@@ -18,7 +18,7 @@ afterEach(() => { vi.unstubAllGlobals() })
 const t = makeTranslate(zh)
 const mt = makeTranslate(marketZh)
 const skill = { slug: 'short-drama', name: '爽文短剧剧本创作', description: '写分集剧本', category: '剧本', installed: true, version: '1.0.0', triggers: [] }
-const settings: GuideSettings = { mode: 'script', closed: false, recommendations: { script: ['short-drama', 'not-in-catalog'], production: [], editing: [], assets: [] } }
+const settings: GuideSettings = { mode: 'script', closed: false, recommendations: { script: ['short-drama', 'not-in-catalog'], production: [], assets: [] } }
 const ready: ManturMarketplaceState = { phase: 'ready', catalog: { skills: [skill], installedCount: 1, signedIn: true } }
 
 function props(preferences = settings, market = ready) {
@@ -45,7 +45,7 @@ describe('Mantur creation guide', () => {
     const state = { phase: 'ready' as const, catalog: { skills: [detail], installedCount: 0, signedIn: false }, detail }
     const p = props(settings, state)
     const view = render(guide(p))
-    fireEvent.click(screen.getByRole('button', { name: '短剧编剧' }))
+    fireEvent.click(screen.getByRole('button', { name: '剧本改编' }))
     fireEvent.click(screen.getByRole('button', { name: '登录后安装' }))
     view.rerender(guide(props(settings, { ...state, loginPhase: 'starting' })))
     view.rerender(guide(props(settings, { ...state, catalog: { ...state.catalog, signedIn } })))
@@ -58,7 +58,7 @@ describe('Mantur creation guide', () => {
     const detail = { ...skill, installed: false, usesOperators: [] }
     const state = { phase: 'ready' as const, catalog: { skills: [detail], installedCount: 0, signedIn: false }, detail }
     const view = render(guide(props(settings, state)))
-    fireEvent.click(screen.getByRole('button', { name: '短剧编剧' }))
+    fireEvent.click(screen.getByRole('button', { name: '剧本改编' }))
     fireEvent.click(screen.getByRole('button', { name: '登录后安装' }))
     view.rerender(guide(props(settings, { ...state, loginPhase: 'starting' })))
     view.rerender(guide({ ...props(settings, { ...state, loginPhase: 'starting' }), sessionId: 's2' }))
@@ -74,14 +74,14 @@ describe('Mantur creation guide', () => {
     expect(screen.getByText(zh['welcome.title'])).toBeTruthy()
     expect(screen.getByText(zh['welcome.body'])).toBeTruthy()
     expect(screen.getByRole('button', { name: '馒头仔' }).querySelector('img')?.getAttribute('src')).toBe('./mantoo-script-peek@3x.png')
-    expect(screen.getByRole('button', { name: '短剧编剧' }).getAttribute('title')).toBe(skill.name)
+    expect(screen.getByRole('button', { name: '剧本改编' }).getAttribute('title')).toBe(skill.name)
     expect(screen.queryByText('not-in-catalog')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: '短剧编剧' }))
-    expect(p.inputActions.appendReference).toHaveBeenCalledWith({ source: 'skill', ref: skill.slug, label: '短剧编剧', clipboardText: '/short-drama' })
+    fireEvent.click(screen.getByRole('button', { name: '剧本改编' }))
+    expect(p.inputActions.appendReference).toHaveBeenCalledWith({ source: 'skill', ref: skill.slug, label: '剧本改编', clipboardText: '/short-drama' })
     expect(p.openDetail).not.toHaveBeenCalled()
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(p.inputActions.submit).not.toHaveBeenCalled()
-    expect(screen.getByText(zh.selected.replace('{name}', '短剧编剧'))).toBeTruthy()
+    expect(screen.getByText(zh.selected.replace('{name}', '剧本改编'))).toBeTruthy()
   })
 
   it('closes with Escape, persists dismissal and never reopens on mode changes or remount', async () => {
@@ -102,19 +102,19 @@ describe('Mantur creation guide', () => {
   it('updates the home guide on mode change and removes the mascot during chat', () => {
     const p = props()
     const view = render(guide(p))
-    view.rerender(guide(props({ ...settings, mode: 'editing' })))
-    expect(screen.getByText(zh['intro.editing'])).toBeTruthy()
+    view.rerender(guide(props({ ...settings, mode: 'assets' })))
+    expect(screen.getByText(zh['intro.assets'])).toBeTruthy()
     view.rerender(guide({ ...props(), hero: false }))
-    expect(screen.queryByRole('button', { name: '短剧编剧' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '剧本改编' })).toBeNull()
     expect(screen.queryByRole('button', { name: '馒头仔' })).toBeNull()
-    expect(screen.queryByText(zh['intro.editing'])).toBeNull()
+    expect(screen.queryByText(zh['intro.assets'])).toBeNull()
     expect(view.container.children).toHaveLength(0)
     view.rerender(guide(p))
     expect(screen.getByRole('button', { name: '馒头仔' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: '短剧编剧' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '剧本改编' })).toBeTruthy()
   })
 
-  it.each(['script', 'production', 'editing', 'assets'] as const)('uses the approved %s artwork without changing the draft', (mode) => {
+  it.each(['script', 'production', 'assets'] as const)('uses the approved %s artwork without changing the draft', (mode) => {
     const p = props({ ...settings, mode })
     render(guide(p))
     const image = screen.getByRole('button', { name: '馒头仔' }).querySelector('img')!
@@ -129,7 +129,7 @@ describe('Mantur creation guide', () => {
     const uninstalled = { ...skill, installed: false }
     const p = props(settings, { phase: 'ready', catalog: { skills: [uninstalled], installedCount: 0, signedIn: true } })
     const view = render(guide(p))
-    fireEvent.click(screen.getByRole('button', { name: '短剧编剧' }))
+    fireEvent.click(screen.getByRole('button', { name: '剧本改编' }))
     expect(p.openDetail).toHaveBeenCalledWith(skill.slug)
     expect(p.install).not.toHaveBeenCalled()
     const detailProps = props(settings, { phase: 'ready', catalog: { skills: [uninstalled], installedCount: 0, signedIn: true }, detail: { ...uninstalled, usesOperators: [] } })
@@ -151,7 +151,7 @@ describe('Mantur creation guide', () => {
     let finish!: (value: boolean) => void
     p.install.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
     const view = render(guide(p))
-    fireEvent.click(screen.getByRole('button', { name: '短剧编剧' }))
+    fireEvent.click(screen.getByRole('button', { name: '剧本改编' }))
     fireEvent.click(screen.getByRole('button', { name: '安装后使用' }))
     view.rerender(guide({ ...p, sessionId: 's2' }))
     finish(true)
@@ -168,14 +168,14 @@ describe('Mantur creation guide', () => {
     const pending = Promise.withResolvers<boolean>()
     p.install.mockReturnValue(pending.promise)
     render(guide(p))
-    fireEvent.click(screen.getByRole('button', { name: '短剧编剧' }))
-    const dialog = screen.getByRole('dialog', { name: '短剧编剧' })
+    fireEvent.click(screen.getByRole('button', { name: '剧本改编' }))
+    const dialog = screen.getByRole('dialog', { name: '剧本改编' })
     expect(dialog.textContent).toContain(zh.notInstalled)
     expect(dialog.textContent).not.toContain('很长的说明')
     expect(dialog.textContent).not.toContain('完整介绍')
     fireEvent.click(screen.getByRole('button', { name: zh.close }))
     expect(p.install).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: '短剧编剧' }))
+    fireEvent.click(screen.getByRole('button', { name: '剧本改编' }))
     fireEvent.click(screen.getByRole('button', { name: zh.installAndUse }))
     fireEvent.click(screen.getByRole('button', { name: zh.close }))
     await act(async () => { pending.resolve(true) })
@@ -206,7 +206,7 @@ describe('Mantur creation guide', () => {
     const pending = Promise.withResolvers<boolean>()
     p.install.mockReturnValue(pending.promise)
     const view = render(guide(p))
-    fireEvent.click(screen.getByRole('button', { name: '短剧编剧' }))
+    fireEvent.click(screen.getByRole('button', { name: '剧本改编' }))
     fireEvent.click(screen.getByRole('button', { name: zh.installAndUse }))
     navigation += 1
     await act(async () => { pending.resolve(true) })
@@ -296,13 +296,15 @@ describe('Mantur creation guide', () => {
     p.saveMode.mockResolvedValue(false)
     render(<CreationModes {...p as unknown as CreationModesProps} />)
     const first = screen.getByRole('tab', { name: '剧本创作' })
-    const last = screen.getByRole('tab', { name: '素材创作' })
+    const last = screen.getByRole('tab', { name: '素材生产' })
+    expect(screen.getAllByRole('tab').map(tab => tab.textContent)).toEqual(['剧本创作', '漫剧制作', '素材生产'])
+    expect(screen.queryByRole('tab', { name: '剪辑成片' })).toBeNull()
     fireEvent.keyDown(first, { key: 'ArrowLeft' })
     expect(p.saveMode).toHaveBeenLastCalledWith('assets')
     fireEvent.keyDown(last, { key: 'ArrowRight' })
     expect(p.saveMode).toHaveBeenLastCalledWith('script')
     fireEvent.keyDown(last, { key: 'ArrowLeft' })
-    expect(p.saveMode).toHaveBeenLastCalledWith('editing')
+    expect(p.saveMode).toHaveBeenLastCalledWith('production')
     fireEvent.keyDown(first, { key: 'End' })
     expect(p.saveMode).toHaveBeenLastCalledWith('assets')
     fireEvent.keyDown(last, { key: 'Home' })
@@ -323,7 +325,7 @@ describe('Mantur creation guide', () => {
     expect(p.saveClosed).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: '馒头仔' }))
     await waitFor(() => { expect(screen.getByText(zh.saveFailed)).toBeTruthy() })
-    fireEvent.click(screen.getByRole('button', { name: '短剧编剧' }))
+    fireEvent.click(screen.getByRole('button', { name: '剧本改编' }))
     expect(screen.getByText(zh.insertFailed)).toBeTruthy()
     expect(p.inputActions.submit).not.toHaveBeenCalled()
   })
@@ -334,9 +336,9 @@ describe('Mantur creation guide', () => {
       { source: 'file', ref: skill.slug }, { source: 'skill', ref: 'another' }, { source: 'skill', ref: skill.slug },
     ] }) }
     const view = render(guide(withOccurrences))
-    expect(screen.getByRole('button', { name: '短剧编剧' }).getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByRole('button', { name: '剧本改编' }).getAttribute('aria-pressed')).toBe('true')
     view.rerender(guide({ ...p, useGuideInput: (select: (value: unknown) => unknown) => select(undefined) }))
-    expect(screen.getByRole('button', { name: '短剧编剧' }).getAttribute('aria-pressed')).toBe('false')
+    expect(screen.getByRole('button', { name: '剧本改编' }).getAttribute('aria-pressed')).toBe('false')
     fireEvent.click(screen.getByRole('button', { name: zh.more }))
     fireEvent.click(screen.getByRole('button', { name: zh.close }))
     expect(screen.queryByRole('dialog')).toBeNull()
@@ -372,7 +374,7 @@ describe('Mantur creation guide', () => {
     fireEvent.click(screen.getByRole('button', { name: zh.use }))
     expect(screen.queryByRole('dialog')).toBeNull()
     view.rerender(guide(p))
-    fireEvent.click(screen.getByRole('button', { name: '短剧编剧' }))
+    fireEvent.click(screen.getByRole('button', { name: '剧本改编' }))
     fireEvent.click(screen.getByRole('button', { name: zh.close }))
     expect(p.closeDetail).toHaveBeenCalled()
   })
@@ -382,7 +384,7 @@ describe('Mantur creation guide', () => {
     const state = { phase: 'ready', catalog: { skills: [uninstalled], installedCount: 0, signedIn: false }, detail: { ...uninstalled, usesOperators: [] } } as const
     const p = props(settings, state)
     const view = render(guide(p))
-    fireEvent.click(screen.getByRole('button', { name: '短剧编剧' }))
+    fireEvent.click(screen.getByRole('button', { name: '剧本改编' }))
     fireEvent.click(screen.getByRole('button', { name: marketZh['skills.loginToInstall'] }))
     expect(p.startLogin).toHaveBeenCalledOnce()
     view.rerender(guide(props(settings, { ...state, loginPhase: 'starting' })))
@@ -412,7 +414,7 @@ describe('Mantur creation guide', () => {
     let finish!: (value: boolean) => void
     p.install.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
     const view = render(guide(p))
-    fireEvent.click(screen.getByRole('button', { name: '短剧编剧' }))
+    fireEvent.click(screen.getByRole('button', { name: '剧本改编' }))
     fireEvent.click(screen.getByRole('button', { name: zh.installAndUse }))
     view.rerender(guide({ ...p, sessionId: 's2' }))
     await act(async () => { finish(result) })

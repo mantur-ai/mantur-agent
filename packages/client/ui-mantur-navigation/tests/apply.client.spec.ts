@@ -12,7 +12,7 @@ import { apply as hostApply } from '../src/index.ts'
 import { CreationGuide, CreationModes, type CreationGuideInjected, type GuidePreferencesInjected } from '../src/client/CreationGuide.tsx'
 import { ManturComposerLayout, type ManturComposerInjected } from '../src/client/ManturComposerLayout.tsx'
 import { ProjectPathSettings, type ProjectPathSettingsInjected } from '../src/client/ProjectPathSettings.tsx'
-import { GUIDE_NAMESPACE, type GuideSettings } from '../src/guide-settings.ts'
+import { GUIDE_NAMESPACE, GuideSettingsSchema, type GuideSettings } from '../src/guide-settings.ts'
 import type { ManturMarketplaceStore } from '../src/client/store.ts'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { DesktopUpdate, type DesktopUpdateInjected } from '../src/client/DesktopUpdate.tsx'
@@ -70,6 +70,12 @@ async function bench() {
 }
 
 describe('ui-mantur-navigation apply', () => {
+  it('maps only the retired editing preference to production and preserves dismissal', () => {
+    const recommendations = { script: ['short-drama'], production: [], assets: [] }
+    expect(GuideSettingsSchema({ recommendations, mode: 'editing', closed: true })).toEqual({ recommendations, mode: 'production', closed: true })
+    expect(GuideSettingsSchema({ recommendations }).mode).toBe('script')
+    expect(() => GuideSettingsSchema({ recommendations, mode: 'unknown' })).toThrow()
+  })
   it('releases native updates and the first Remote when the second mount fails and its owner closes', async () => {
     const unsubscribe = vi.fn()
     vi.stubGlobal('window', { manturUpdates: {
@@ -125,7 +131,7 @@ describe('ui-mantur-navigation apply', () => {
   it('registers host preferences and declares browser services', () => {
     const register = vi.fn()
     const ctx = { inject: (_services: string[], callback: (scope: unknown) => void) => { callback({ settings: { register } }) } }
-    const config = { recommendations: { script: [], production: [], editing: [], assets: [] } }
+    const config = { recommendations: { script: [], production: [], assets: [] } }
     hostApply(ctx as unknown as Context, config)
     expect(register).toHaveBeenCalledWith(GUIDE_NAMESPACE, expect.anything(), { base: { ...config, mode: 'script', closed: false } })
     expect(inject).toEqual(['slots', 'locale', 'remote', 'sessions', 'workspaces', 'conversation', 'conversationDrafts', 'uiWorkspace', 'settingsScope'])
@@ -183,21 +189,21 @@ describe('ui-mantur-navigation apply', () => {
       subject.ctx.on('mantur/creation-mode-selected', selected)
       const modeProps = (subject.slots.entries('conversation.hero.modes')[0]!.inject as unknown as () => GuidePreferencesInjected)()
       expect(selected).not.toHaveBeenCalled()
-      expect(await modeProps.saveMode('editing')).toBe(false)
+      expect(await modeProps.saveMode('production')).toBe(false)
       expect(selected).not.toHaveBeenCalled()
       expect(await modeProps.saveClosed(true)).toBe(false)
-      const value: GuideSettings = { mode: 'editing', closed: true, recommendations: { script: [], editing: [], production: [], assets: [] } }
+      const value: GuideSettings = { mode: 'production', closed: true, recommendations: { script: [], production: [], assets: [] } }
       subject.preferences.getSnapshot.mockReturnValue({ value })
       expect(selected).not.toHaveBeenCalled()
-      expect(await modeProps.saveMode('editing')).toBe(true)
-      expect(await modeProps.saveMode('editing')).toBe(true)
+      expect(await modeProps.saveMode('production')).toBe(true)
+      expect(await modeProps.saveMode('production')).toBe(true)
       expect(selected).toHaveBeenCalledTimes(2)
-      expect(selected).toHaveBeenLastCalledWith('editing')
+      expect(selected).toHaveBeenLastCalledWith('production')
       subject.preferences.set.mockRejectedValueOnce(new Error('write failed'))
-      await expect(modeProps.saveMode('editing')).rejects.toThrow('write failed')
+      await expect(modeProps.saveMode('production')).rejects.toThrow('write failed')
       expect(selected).toHaveBeenCalledTimes(2)
       expect(await modeProps.saveClosed(true)).toBe(true)
-      expect(subject.preferences.set).toHaveBeenCalledWith('mode', 'editing')
+      expect(subject.preferences.set).toHaveBeenCalledWith('mode', 'production')
       expect(subject.preferences.set).toHaveBeenCalledWith('closed', true)
       const createGuide = subject.slots.entries('conversation.composer.guide')[0]!.inject as unknown as
         (id: SessionId | undefined) => CreationGuideInjected

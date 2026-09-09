@@ -60,8 +60,8 @@ it('keeps an uninstalled shortcut confirmation brief and leaves the current draf
     await page.getByRole('button', { name: '暂时跳过', exact: true }).click()
     const editor = page.locator('[data-composer-input][contenteditable="true"]').first()
     await editor.fill('保留未发送的创作需求')
-    await page.getByRole('button', { name: '短剧编剧', exact: true }).click()
-    const dialog = page.getByRole('dialog', { name: '短剧编剧', exact: true })
+    await page.getByRole('button', { name: '剧本改编', exact: true }).click()
+    const dialog = page.getByRole('dialog', { name: '剧本改编', exact: true })
     await dialog.getByRole('button', { name: '登录后安装', exact: true }).waitFor()
     expect(await dialog.innerText()).toContain('尚未安装此技能。安装后可添加到当前对话。')
     expect(await dialog.innerText()).not.toContain(detail.description)
@@ -88,8 +88,7 @@ it('keeps an uninstalled shortcut confirmation brief and leaves the current draf
 
 it('keeps guidance readable at the desktop minimum without moving the composer or covering controls', async () => {
   const skills = [skill, ...[
-    'drama-asset-seedance-pipeline', 'character-forge', 'mantur-video-prompt-director', 'mantur-acting-director',
-    'mantur-smartclip', 'four-dimensional-voice-director', 'mantur-image-prompt-director', 'chinese-wonderland-director',
+    'drama-asset-seedance-pipeline', 'mantur-copyhit', 'mantur-smartclip',
   ].map(slug => ({ ...skill, slug }))]
   const server = createServer((_request, response) => {
     response.writeHead(200, { 'content-type': 'application/json' })
@@ -106,7 +105,7 @@ it('keeps guidance readable at the desktop minimum without moving the composer o
     const console = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl)
     await page.getByRole('button', { name: '暂时跳过' }).click()
-    await page.getByRole('button', { name: '短剧编剧', exact: true }).waitFor()
+    await page.getByRole('button', { name: '剧本改编', exact: true }).waitFor()
     const positions = () => page.locator('[data-composer-seat]').evaluate(element =>
       ['[data-composer-card]', '[data-skill-rail]'].map((selector) => {
         const rect = element.querySelector(selector)!.getBoundingClientRect()
@@ -119,7 +118,7 @@ it('keeps guidance readable at the desktop minimum without moving the composer o
       await expect.poll(() => page.locator('[data-sidebar-collapsed]').count()).toBe(width < 1024 ? 1 : 0)
       await expect.poll(sidebarWidth).toBe(width < 1024 ? '56px' : expandedSidebarWidth)
       const before = await positions()
-      for (const [mode, name] of [['script', '剧本创作'], ['production', '漫剧制作'], ['editing', '剪辑成片'], ['assets', '素材创作']] as const) {
+      for (const [mode, name] of [['script', '剧本创作'], ['production', '漫剧制作'], ['assets', '素材生产']] as const) {
         const tab = page.getByRole('tab', { name, exact: true })
         await tab.click()
         await expect.poll(() => tab.getAttribute('aria-selected')).toBe('true')
@@ -347,12 +346,12 @@ it('preserves a live draft, attachments and controls while changing modes and ad
     await expect.poll(() => workspaceButton.innerText()).toBe('workspace')
     expect(await editor.innerText()).toContain('保留这个故事和参考图')
     expect(await page.getByRole('img', { name: 'reference.png' }).count()).toBe(attachments)
-    const shortcut = page.getByRole('button', { name: '短剧编剧', exact: true })
+    const shortcut = page.getByRole('button', { name: '剧本改编', exact: true })
     expect(await shortcut.getAttribute('title')).toBe(skill.name)
     await shortcut.click()
     await shortcut.click()
-    await expect.poll(() => editor.innerText()).toContain('短剧编剧')
-    expect((await editor.innerText()).split('短剧编剧')).toHaveLength(2)
+    await expect.poll(() => editor.innerText()).toContain('剧本改编')
+    expect((await editor.innerText()).split('剧本改编')).toHaveLength(2)
     expect(await editor.innerText()).not.toContain(skill.name)
     expect(await page.getByRole('dialog').count()).toBe(0)
     expect(await editor.evaluate(element => document.activeElement === element)).toBe(true)
@@ -362,19 +361,19 @@ it('preserves a live draft, attachments and controls while changing modes and ad
     expect((await composerPositions()).card).toEqual(draftPositions.card)
     expect((await composerPositions()).shortcuts.y).toBe(draftPositions.shortcuts.y)
     expect(await editor.innerText()).toContain('保留这个故事和参考图')
-    expect(await editor.innerText()).toContain('短剧编剧')
+    expect(await editor.innerText()).toContain('剧本改编')
     expect(await page.getByRole('img', { name: 'reference.png' }).count()).toBe(attachments)
     expect(await page.getByRole('button', { name: '选择模型' }).innerText()).toBe(model)
     expect(await page.getByRole('button', { name: /访问模式/ }).innerText()).toBe(permission)
     expect(prompts).toBe(0)
     await page.keyboard.press('Escape')
     await expect.poll(() => page.getByRole('button', { name: '馒头仔' }).getAttribute('aria-expanded')).toBe('false')
-    await page.getByRole('tab', { name: '素材创作' }).click()
-    await expect.poll(() => page.getByRole('tab', { name: '素材创作' }).getAttribute('aria-selected')).toBe('true')
+    await page.getByRole('tab', { name: '素材生产' }).click()
+    await expect.poll(() => page.getByRole('tab', { name: '素材生产' }).getAttribute('aria-selected')).toBe('true')
     expect(await page.getByRole('button', { name: '馒头仔' }).getAttribute('aria-expanded')).toBe('false')
     await page.reload()
     await page.getByRole('button', { name: '暂时跳过' }).click()
-    await expect.poll(() => page.getByRole('tab', { name: '素材创作' }).getAttribute('aria-selected')).toBe('true')
+    await expect.poll(() => page.getByRole('tab', { name: '素材生产' }).getAttribute('aria-selected')).toBe('true')
     expect(await page.getByRole('button', { name: '馒头仔' }).getAttribute('aria-expanded')).toBe('false')
     await page.getByRole('button', { name: '馒头仔' }).click()
     await page.getByText('缺一个人物、一处场景，还是一段声音？描述你需要的素材，或上传参考。', { exact: true }).waitFor()
@@ -436,7 +435,7 @@ it('preserves a live draft, attachments and controls while changing modes and ad
       element => getComputedStyle(element).backgroundColor,
     )).toBe('rgba(0, 0, 0, 0)')
     await page.getByRole('tab', { name: '剧本创作' }).click()
-    await page.getByRole('button', { name: '短剧编剧', exact: true }).waitFor()
+    await page.getByRole('button', { name: '剧本改编', exact: true }).waitFor()
     expect((await composerPositions()).card).toEqual(narrowPositions.card)
     await page.screenshot({ path: join(images, 'narrow-recommendations.png') })
     await workspaceButton.click()

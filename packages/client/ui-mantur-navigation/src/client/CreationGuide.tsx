@@ -26,7 +26,7 @@ export interface GuidePreferencesInjected {
 export type CreationModesProps = PropsRuntime<'conversation.hero.modes'>
   & PropsLocale<'guide.mantur'> & InjectFace<GuidePreferencesInjected>
 
-/** Render the four UI-only modes with roving keyboard focus. */
+/** Render the three UI-only modes with roving keyboard focus. */
 export function CreationModes({ usePreferences, saveMode, t }: CreationModesProps) {
   const preferences = usePreferences(snapshot => snapshot)
   const [failed, setFailed] = useState(false)
