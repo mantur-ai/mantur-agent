@@ -25,6 +25,24 @@ function bench() {
 async function settle(): Promise<void> { await Promise.resolve(); await Promise.resolve() }
 
 describe('native account renderer state', () => {
+  it.each(['local', 'network'])('releases a %s login failure for retry and keeps Skip signed out', async (kind) => {
+    const b = bench()
+    b.invoke.mockResolvedValueOnce({ ok: false, revision: 1,
+      snapshot: { ...signedOut, phase: 'failed', failure: { kind } } })
+      .mockResolvedValueOnce({ ok: true, revision: 2, snapshot: authorizing() })
+      .mockResolvedValueOnce({ ok: true, revision: 3, snapshot: { ...signedOut, skipped: true } })
+    expect(await b.client.run({ kind: 'browser' })).toEqual({ ok: false })
+    expect(b.client.store.getSnapshot()).toMatchObject({ operation: undefined, failure: { kind },
+      snapshot: { busy: false, authenticated: false } })
+    expect(await b.client.run({ kind: 'browser' })).toEqual({ ok: true })
+    expect(b.client.store.getSnapshot()).toMatchObject({ operation: undefined, failure: undefined,
+      snapshot: { busy: false, authenticated: false, phase: 'authorizing' } })
+    expect(await b.client.run({ kind: 'skip' })).toEqual({ ok: true })
+    expect(b.client.store.getSnapshot()).toMatchObject({ operation: undefined,
+      snapshot: { busy: false, authenticated: false, skipped: true, phase: 'signed-out' } })
+    expect(b.invoke.mock.calls.map(([action]) => action.kind)).toEqual(['browser', 'browser', 'skip'])
+  })
+
   it('suppresses a superseded failure reply after a newer signed-in publication', async () => {
     const b = bench()
     const first = Promise.withResolvers<NativeAccountReply>()

@@ -46,16 +46,24 @@ it('returns from both native marketplace entrypoints with the selected detail an
     let revision = 0
     const preparing = Promise.withResolvers<NativeAccountReply>()
     let holdPreparation = true
+    let nextFailure: 'local' | 'network' | undefined
     const operations: NativeAccountAction['kind'][] = []
     await page.exposeFunction('invokeNativeAccountFixture', (action: NativeAccountAction) => {
       operations.push(action.kind)
+      if (action.kind === 'browser' && nextFailure !== undefined) {
+        snapshot = { ...snapshot, phase: 'failed', busy: false, failure: { kind: nextFailure } }
+        nextFailure = undefined
+        return { ok: false, revision: ++revision, snapshot }
+      }
       if (action.kind === 'browser' && holdPreparation) {
         holdPreparation = false
         return preparing.promise
       }
       if (action.kind === 'browser') snapshot = { ...snapshot, phase: 'authorizing',
         attempt: { expiresAt: 1_999_999_999_999 } }
-      else if (action.kind !== 'refresh' && action.kind !== 'skip') throw new Error(`Unexpected native action: ${action.kind}`)
+      else if (action.kind === 'skip') snapshot = { phase: 'signed-out', busy: false,
+        authenticated: false, skipped: true, pendingRevocations: 0 }
+      else if (action.kind !== 'refresh') throw new Error(`Unexpected native action: ${action.kind}`)
       return { ok: true, revision: ++revision, snapshot }
     })
     await page.addInitScript(() => {
@@ -110,12 +118,28 @@ it('returns from both native marketplace entrypoints with the selected detail an
     await page.keyboard.press('Escape')
     await detail.getByRole('button', { name: '登录后安装' }).waitFor()
     await expectDetailFocus('登录后安装')
+    for (const kind of ['local', 'network'] as const) {
+      await detail.getByRole('button', { name: '登录后安装' }).click()
+      nextFailure = kind
+      await account.getByRole('button', { name: '登录漫途账号', exact: true }).click()
+      await account.getByRole('alert').waitFor()
+      for (const name of ['登录漫途账号', '暂时跳过', '返回创作']) {
+        await expect.poll(() => account.getByRole('button', { name, exact: true }).isEnabled()).toBe(true)
+      }
+      expect(snapshot).toMatchObject({ busy: false, authenticated: false, failure: { kind } })
+      await account.getByRole('button', { name: '返回创作' }).click()
+      await detail.getByRole('button', { name: '登录后安装' }).waitFor()
+      await expectDetailFocus('登录后安装')
+      expect(await editor.innerText()).toBe(initialDraft)
+      expect(await page.getByRole('img', { name: 'native-reference.png' }).count()).toBe(1)
+    }
     await detail.getByRole('button', { name: '登录后安装' }).click()
     await account.getByRole('button', { name: '登录漫途账号', exact: true }).click()
     await expect.poll(() => account.getByRole('button', { name: '正在准备登录…' }).isDisabled()).toBe(true)
     await account.getByRole('button', { name: '暂时跳过' }).click()
     await detail.getByRole('button', { name: '登录后安装' }).waitFor()
     await expectDetailFocus('登录后安装')
+    expect(snapshot).toMatchObject({ busy: false, authenticated: false, skipped: true })
     preparing.resolve({ ok: false, revision, failure: { kind: 'cancelled' } })
     captures.push(`## Guide after Skip\n\n${await detail.ariaSnapshot()}`)
     await detail.getByRole('button', { name: '关闭引导' }).click()
@@ -155,7 +179,7 @@ it('returns from both native marketplace entrypoints with the selected detail an
     expect(legacy).not.toHaveBeenCalled()
     expect(requests.every(request => request === 'GET /api/v1/skills' || request === 'GET /api/v1/skills/short-drama')).toBe(true)
     expect(prompts).toBe(0)
-    expect(operations).toEqual(['refresh', 'browser', 'skip', 'browser'])
+    expect(operations).toEqual(['refresh', 'browser', 'browser', 'browser', 'skip', 'browser'])
     expect(console.pageErrors).toEqual([])
     await mkdir(images, { recursive: true })
     await page.screenshot({ path: join(images, 'native-entrypoints.png') })
