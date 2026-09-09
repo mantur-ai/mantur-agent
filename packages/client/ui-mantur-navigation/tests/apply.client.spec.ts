@@ -72,9 +72,11 @@ async function bench() {
 describe('ui-mantur-navigation apply', () => {
   it('maps only the retired editing preference to production and preserves dismissal', () => {
     const recommendations = { script: ['short-drama'], production: [], assets: [] }
-    expect(GuideSettingsSchema({ recommendations, mode: 'editing', closed: true })).toEqual({ recommendations, mode: 'production', closed: true })
-    expect(GuideSettingsSchema({ recommendations }).mode).toBe('script')
-    expect(() => GuideSettingsSchema({ recommendations, mode: 'unknown' })).toThrow()
+    // Persisted input includes pre-migration and invalid values, not only the resolved settings type.
+    const parse = GuideSettingsSchema as (input: unknown) => GuideSettings
+    expect(parse({ recommendations, mode: 'editing', closed: true })).toEqual({ recommendations, mode: 'production', closed: true })
+    expect(parse({ recommendations }).mode).toBe('script')
+    expect(() => parse({ recommendations, mode: 'unknown' })).toThrow()
   })
   it('releases native updates and the first Remote when the second mount fails and its owner closes', async () => {
     const unsubscribe = vi.fn()

@@ -57,7 +57,8 @@ it('keeps an uninstalled shortcut confirmation brief and leaves the current draf
       if (path === '/api/session/prompt' || path === '/api/manturMarketplace/installSkill') writes.push(path)
     })
     await page.goto(scaffold.authenticatedUrl)
-    await page.getByRole('button', { name: '暂时跳过', exact: true }).click()
+    await page.locator('[data-composer-input][contenteditable="true"]').first().waitFor()
+    expect(await page.getByRole('button', { name: '暂时跳过', exact: true }).count()).toBe(0)
     const editor = page.locator('[data-composer-input][contenteditable="true"]').first()
     await editor.fill('保留未发送的创作需求')
     await page.getByRole('button', { name: '剧本改编', exact: true }).click()
@@ -104,7 +105,8 @@ it('keeps guidance readable at the desktop minimum without moving the composer o
     const page = await browser.newPage({ viewport: { width: 1280, height: 820 }, locale: ZH_BROWSER_LOCALE })
     const console = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl)
-    await page.getByRole('button', { name: '暂时跳过' }).click()
+    await page.locator('[data-composer-input][contenteditable="true"]').first().waitFor()
+    expect(await page.getByRole('button', { name: '暂时跳过', exact: true }).count()).toBe(0)
     await page.getByRole('button', { name: '剧本改编', exact: true }).waitFor()
     const positions = () => page.locator('[data-composer-seat]').evaluate(element =>
       ['[data-composer-card]', '[data-skill-rail]'].map((selector) => {
@@ -236,7 +238,8 @@ it('preserves a live draft, attachments and controls while changing modes and ad
     let prompts = 0
     page.on('request', (request) => { if (new URL(request.url()).pathname === '/api/session/prompt') prompts++ })
     await page.goto(scaffold.authenticatedUrl)
-    await page.getByRole('button', { name: '暂时跳过' }).click()
+    await page.locator('[data-composer-input][contenteditable="true"]').first().waitFor()
+    expect(await page.getByRole('button', { name: '暂时跳过', exact: true }).count()).toBe(0)
     const workspaceButton = page.locator('[data-workspace-footer]').getByRole('button', { name: '选择工作区' })
     await workspaceButton.waitFor()
     expect(await page.getByRole('button', { name: '发送消息', exact: true }).isDisabled()).toBe(true)
@@ -372,11 +375,12 @@ it('preserves a live draft, attachments and controls while changing modes and ad
     await expect.poll(() => page.getByRole('tab', { name: '素材生产' }).getAttribute('aria-selected')).toBe('true')
     expect(await page.getByRole('button', { name: '馒头仔' }).getAttribute('aria-expanded')).toBe('false')
     await page.reload()
-    await page.getByRole('button', { name: '暂时跳过' }).click()
+    await page.locator('[data-composer-input][contenteditable="true"]').first().waitFor()
+    expect(await page.getByRole('button', { name: '暂时跳过', exact: true }).count()).toBe(0)
     await expect.poll(() => page.getByRole('tab', { name: '素材生产' }).getAttribute('aria-selected')).toBe('true')
     expect(await page.getByRole('button', { name: '馒头仔' }).getAttribute('aria-expanded')).toBe('false')
     await page.getByRole('button', { name: '馒头仔' }).click()
-    await page.getByText('缺一个人物、一处场景，还是一段声音？描述你需要的素材，或上传参考。', { exact: true }).waitFor()
+    await page.getByText('上传已有漫剧或短剧，提取高光片段，制作投放素材。', { exact: true }).waitFor()
     await page.setViewportSize({ width: 720, height: 900 })
     // Finish the app frame's responsive sidebar transition before measuring guide-only changes.
     await page.locator('[data-sidebar-collapsed]').waitFor()
@@ -391,7 +395,10 @@ it('preserves a live draft, attachments and controls while changing modes and ad
     const bubbleBody = page.getByRole('region', { name: '馒头仔' }).locator('[tabindex="0"]')
     await bubbleBody.focus()
     await page.keyboard.press('End')
-    await expect.poll(() => bubbleBody.evaluate(element => element.scrollTop)).toBeGreaterThan(0)
+    // End reaches the actual content edge; short introductions need no scrolling.
+    await expect.poll(() => bubbleBody.evaluate(element =>
+      element.scrollTop === element.scrollHeight - element.clientHeight,
+    )).toBe(true)
     expect(await page.getByRole('button', { name: '关闭引导', exact: true }).isVisible()).toBe(true)
     await page.keyboard.press('Home')
     await expect.poll(() => bubbleBody.evaluate(element => element.scrollTop)).toBe(0)
