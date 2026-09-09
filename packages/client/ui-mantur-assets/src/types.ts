@@ -1,9 +1,10 @@
 /** Serializable observations and guarded commands for pipeline report editing. */
 
+import type { Branded } from '@deepseek-ai/dsh-brand'
 /** Opaque report row identity, including its owning table. */
-export type AssetKey = string
+export type AssetKey = Branded<'ManturAssetKey'>
 /** Opaque persisted proposal identity. */
-export type ProposalId = string
+export type ProposalId = Branded<'ManturAssetProposalId'>
 /** Filesystem generation observed by the Host. */
 export type AssetVersion = import('@deepseek-ai/dsh-fs').FsVersion
 /** Source generation pinned by all editing commands. */

@@ -1,15 +1,20 @@
 /* oxlint-disable @stylistic/max-len -- Remote command wiring remains adjacent to the slot registration. */
-/** Browser registration is reserved for the shared workbench contribution. */
+/** Register the production asset contribution in the shared Mantur workbench. */
 import type { Context } from '@deepseek-ai/cordis'
 import { createElement } from 'react'
 import type {} from '@deepseek-ai/dsh-client-ui-mantur-script/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
+import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
+import type {} from '@deepseek-ai/dsh-api-gateway/client'
 import remote from '@deepseek-ai/dsh-client-ui-mantur-assets/remote'
 import { AssetsPanel } from './AssetsPanel.tsx'
 import { en, zh, type AssetKey } from './locales.ts'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-export const inject = ['slots', 'remote']
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { AssetCommand, AssetSnapshot, PromptEdit } from '../types.ts'
+export const inject = ['slots', 'remote', 'locale', 'sessions']
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap { 'assets.mantur': AssetKey }
 }
@@ -18,8 +23,8 @@ export async function apply(ctx: Context): Promise<void> {
   const mounted = await ctx.remote.$mount(remote); ctx.effect(() => mounted, 'assets: remote')
   await ctx.inject(['remote.manturAssets'], (child) => {
     child.effect(() => child.locale.register('assets.mantur', { en, zh }), 'assets: dictionaries')
-    child.slots.inject('main.workbench.assets.tab', () => child.slots.register({ name: 'main.workbench.assets.tab' }, AssetTab))
-    child.slots.inject('main.workbench.assets.content', () => child.slots.register({ name: 'main.workbench.assets.content' }, owner => createElement(AssetsPanel, { ...owner, ...commands(child) })))
+    child.slots.inject('main.workbench.assets.tab', () => child.slots.register({ name: 'main.workbench.assets.tab', locale: 'assets.mantur' }, AssetTab))
+    child.slots.inject('main.workbench.assets.content', () => child.slots.register({ name: 'main.workbench.assets.content', locale: 'assets.mantur' }, owner => createElement(AssetsPanel, { ...owner, ...commands(child) })))
   }).await()
 }
 function AssetTab(props: PropsRuntime<'main.workbench.assets.tab'> & PropsLocale<'assets.mantur'>) {
@@ -28,9 +33,9 @@ function AssetTab(props: PropsRuntime<'main.workbench.assets.tab'> & PropsLocale
 function commands(ctx: Context) {
   const call = <T>(result: { ok: true; value: T } | { ok: false; error: { message: string } }): T => { if (!result.ok) throw new Error(result.error.message); return result.value }
   return {
-    load: async (session: string, path: string) => call(await ctx.remote.manturAssets.load(session as never, path)),
-    save: async (session: string, snapshot: AssetSnapshot, edits: PromptEdit[]) => call(await ctx.remote.manturAssets.saveDraft(session as never, { source: snapshot.source, stateVersion: snapshot.stateVersion, edits } as AssetCommand)),
-    request: async (session: string, snapshot: AssetSnapshot, edits: PromptEdit[], instruction: string) => { const prepared = call(await ctx.remote.manturAssets.prepare(session as never, snapshot.source, edits, instruction)); const conversation = ctx.sessions.binding(session as never)?.ctx.get('conversation'); if (!conversation) throw new Error('The owning conversation is unavailable.'); await conversation.send(JSON.stringify({ task: 'Use propose_asset_prompts for this selected pipeline report. Do not generate media.', requestId: prepared.requestId, source: prepared.source, edits: prepared.edits })); return prepared.requestId },
-    apply: async (session: string, requestId: string) => call(await ctx.remote.manturAssets.apply(session as never, requestId)),
+    load: async (session: SessionId, path: string) => call(await ctx.remote.manturAssets.load(session, path)),
+    save: async (session: SessionId, snapshot: AssetSnapshot, edits: PromptEdit[]) => call(await ctx.remote.manturAssets.saveDraft(session, { source: snapshot.source, stateVersion: snapshot.stateVersion, edits } as AssetCommand)),
+    request: async (session: SessionId, snapshot: AssetSnapshot, edits: PromptEdit[], instruction: string) => { const prepared = call(await ctx.remote.manturAssets.prepare(session, snapshot.source, edits, instruction)); const conversation = ctx.sessions.binding(session)?.ctx.get('conversation'); if (!conversation) throw new Error('The owning conversation is unavailable.'); await conversation.send(JSON.stringify({ task: 'Use propose_asset_prompts for this selected pipeline report. Do not generate media.', requestId: prepared.requestId, source: prepared.source, edits: prepared.edits })); return prepared.requestId },
+    apply: async (session: SessionId, requestId: string) => call(await ctx.remote.manturAssets.apply(session, requestId)),
   }
 }
