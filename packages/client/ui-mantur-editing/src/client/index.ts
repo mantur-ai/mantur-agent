@@ -11,6 +11,16 @@ import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { EditingWorkspace } from '../types.ts'
 import { en, zh, type EditingKey } from './locales.ts'
 import { WorkbenchToggle, Workbench } from './Workbench.tsx'
+import { installAgentOpening } from './agent-opening.ts'
+import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
+
+/** User-owned visibility intent supplied to the boundary button. */
+export interface WorkbenchToggleInjection {
+  /** Observe live opening requests after the panel control mounts. @param open - Mounted layout action. @returns Unsubscribe. */
+  observeAutomaticOpening: (open: () => void) => () => void
+  /** Retain manual collapse for the selected Session. */
+  suppressAutomaticOpening: () => void
+}
 
 /** Host workspace command and Mantur appearance subscriptions. */
 export interface WorkbenchInjection {
@@ -34,7 +44,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 }
 
 /** Services used by this optional workbench. */
-export const inject = ['slots', 'locale', 'layout', 'theme', 'remote']
+export const inject = ['slots', 'locale', 'layout', 'theme', 'remote', 'sessions', 'uiConversation']
 
 /**
  * Register the editor and its independent visibility control.
@@ -47,9 +57,11 @@ export async function apply(ctx: Context): Promise<void> {
 }
 
 function installWorkbench(ctx: Context): void {
+  const opening = installAgentOpening(ctx)
   ctx.effect(() => ctx.locale.register('editing.mantur', { en, zh }), 'editing: dictionaries')
   ctx.slots.inject('main.workbench.toggle', () => ctx.slots.register({
     name: 'main.workbench.toggle', locale: 'editing.mantur',
+    inject: (): WorkbenchToggleInjection => ({ observeAutomaticOpening: opening.observe, suppressAutomaticOpening: opening.suppress }),
   }, WorkbenchToggle))
   ctx.slots.inject('main.workbench', () => ctx.slots.register({
     name: 'main.workbench', locale: 'editing.mantur',

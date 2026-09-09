@@ -2,6 +2,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
+import { UiConversation } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import * as client from '../src/client/index.ts'
 import { Workbench } from '../src/client/Workbench.tsx'
 import type {} from '@deepseek-ai/dsh-client-ui-mantur-navigation/client'
@@ -20,6 +21,9 @@ describe('editing workbench composition', () => {
     ctx.provide('theme', { getTheme: () => ({ active: { colorScheme } }) } as never)
     const layout = { openWorkbench: vi.fn(), closeWorkbench: vi.fn() }
     ctx.provide('layout', layout as never)
+    const sessions = { list: { getSnapshot: () => ({ current: undefined }), subscribe: () => () => {} } }
+    ctx.provide('sessions', sessions as never)
+    new UiConversation(ctx, sessions as never)
     const disposeRemote = vi.fn(async () => {})
     ctx.provide('remote', { $mount: vi.fn(async () => disposeRemote) } as never)
     ctx.provide('remote.manturEditing', {} as never)

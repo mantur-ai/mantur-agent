@@ -48,6 +48,7 @@
   ],
   "files": [
     "src/client/index.ts",
+    "src/client/agent-opening.ts",
     "src/client/Workbench.tsx",
     "src/client/locales.ts",
     "src/types.ts",

@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { InjectFace } from '@deepseek-ai/dsh-client-ui-slots'
-import type { WorkbenchInjection } from './index.ts'
+import type { WorkbenchInjection, WorkbenchToggleInjection } from './index.ts'
 import { localEditorUrl } from '../settings.ts'
 import type { EditingWorkspace } from '../types.ts'
 import css from './Workbench.module.css'
@@ -12,10 +12,15 @@ import css from './Workbench.module.css'
  * @param props - Localized labels and the layout's current visibility controls.
  * @returns Keyboard-accessible control at the conversation boundary.
  */
-export function WorkbenchToggle({ expanded, openWorkbench, closeWorkbench, t }: PropsRuntime<'main.workbench.toggle'> & PropsLocale<'editing.mantur'>) {
+export function WorkbenchToggle({ expanded, openWorkbench, closeWorkbench, observeAutomaticOpening, suppressAutomaticOpening, t }:
+PropsRuntime<'main.workbench.toggle'> & PropsLocale<'editing.mantur'> & InjectFace<WorkbenchToggleInjection>) {
+  useEffect(() => observeAutomaticOpening(openWorkbench), [observeAutomaticOpening, openWorkbench])
   const label = t(expanded ? 'collapse' : 'expand')
   return <button type="button" className={css.edgeToggle} aria-label={label} title={label}
-    aria-expanded={expanded} onClick={expanded ? closeWorkbench : openWorkbench}>
+    aria-expanded={expanded} onClick={() => {
+      if (expanded) { suppressAutomaticOpening(); closeWorkbench() }
+      else openWorkbench()
+    }}>
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
       strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
       <polyline points={expanded ? '9 6 15 12 9 18' : '15 6 9 12 15 18'} />
