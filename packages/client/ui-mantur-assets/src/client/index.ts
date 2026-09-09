@@ -18,13 +18,13 @@ export const inject = ['slots', 'remote', 'locale', 'sessions']
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap { 'assets.mantur': AssetKey }
 }
-/** The Host provider is usable independently in headless verification; the shell contribution is added after its slot contract lands. */
+/** @param ctx - Locale, Session, slots, and generated Remote services for the asset workbench. */
 export async function apply(ctx: Context): Promise<void> {
   const mounted = await ctx.remote.$mount(remote); ctx.effect(() => mounted, 'assets: remote')
   await ctx.inject(['remote.manturAssets'], (child) => {
     child.effect(() => child.locale.register('assets.mantur', { en, zh }), 'assets: dictionaries')
     child.slots.inject('main.workbench.assets.tab', () => child.slots.register({ name: 'main.workbench.assets.tab', locale: 'assets.mantur' }, AssetTab))
-    child.slots.inject('main.workbench.assets.content', () => child.slots.register({ name: 'main.workbench.assets.content', locale: 'assets.mantur' }, owner => createElement(AssetsPanel, { ...owner, ...commands(child) })))
+    child.slots.inject('main.workbench.assets.content', () => child.slots.register({ name: 'main.workbench.assets.content', locale: 'assets.mantur', inject: () => commands(child) }, AssetsPanel))
   }).await()
 }
 function AssetTab(props: PropsRuntime<'main.workbench.assets.tab'> & PropsLocale<'assets.mantur'>) {

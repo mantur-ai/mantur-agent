@@ -7,6 +7,7 @@ import { LocalFileSystem } from '@deepseek-ai/dsh-fs-local'
 import Tools from '@deepseek-ai/dsh-tools'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import Assets from '../src/index.ts'
+import { fingerprint } from '../src/report.ts'
 import { expect, it } from 'vitest'
 
 const real = '/Volumes/新磁盘/dsh/青春里的甜蜜风暴2_EP31_验收_2026-09-06'
@@ -31,5 +32,19 @@ it('reads real reports, saves a guarded draft, applies a proposal, and refuses a
     expect(applied.rows.find(value => value.key === row.key)?.prompt).toContain('提案版')
     await writeFile(join(root, 'assets-report.json'), (await readFile(join(root, 'assets-report.json'), 'utf8')).replace('提案版', '外部修改'))
     await expect(ctx.manturAssets.saveDraft(agent, { source: applied.source, stateVersion: applied.stateVersion, edits: [] })).rejects.toMatchObject({ code: 'FS_STALE_VERSION' })
+  } finally { await ctx.fiber.dispose(); await rm(root, { recursive: true, force: true }) }
+})
+
+it('fails loudly on a malformed journal instead of replacing it with an empty state', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dsh-assets-journal-'))
+  const ctx = new Context()
+  try {
+    await cp(assets, join(root, 'assets-report.json'))
+    ctx.provide('typert', {} as never); await ctx.plugin(SystemPrompt, { includeHarnessIdentity: false }); await ctx.plugin(Tools)
+    await ctx.plugin(LocalFileSystem, { cwd: root }); await ctx.plugin(Assets, { maxBytes: 9_000_000, maxEntries: 100, maxMediaBytes: 50_000_000 })
+    const absolute = join(root, 'assets-report.json')
+    await writeFile(join(root, `.mantur-assets-${fingerprint(absolute).slice(0, 16)}.json`), '{broken')
+    const agent = { ctx, session: { id: 'journal-session', header: { cwd: root } } } as never
+    await expect(ctx.manturAssets.load(agent, 'assets-report.json')).rejects.toThrow(/JSON/)
   } finally { await ctx.fiber.dispose(); await rm(root, { recursive: true, force: true }) }
 })
