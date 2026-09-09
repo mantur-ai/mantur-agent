@@ -41,6 +41,10 @@ pnpm run desktop:smoke
 
 Chrome for Testing 下载 URL 将版本号放在目录中，并使用 `chrome-headless-shell-<platform>.zip` 作为归档文件名。本地缓存文件名还会包含固定版本号。
 
+编辑器打包暂存仅排除 webpack 构建缓存、重复的 `.remotion/chrome-headless-shell` 缓存和非目标平台的 ONNX 原生目录。清单指定的浏览器、目标绑定、其他缓存内容和许可证均保留。macOS 暂存阶段在签名前将 compositor 可执行文件及相邻 dylib 的引用改为 `@loader_path`；无法解析的非系统库会阻止打包。签名选项和权限配置保持不变。见[资源暂存决策](../../.agents/notes/implemented/bug-fix/2026-09-09-mantur-native-resource-staging.zh.md)。
+
+编辑器的固定版本渲染器补丁公开每个浏览器子进程及管道关闭的完成证据。安装准备同时等待该证据和公开浏览器关闭操作；缺失证据或清理失败仍会阻止安装。见[渲染浏览器关闭](../../.agents/notes/implemented/bug-fix/2026-09-09-mantur-render-browser-close.zh.md)。
+
 macOS 命令先由 electron-builder 完成签名并生成更新 ZIP，再用 Apple 的 `hdiutil` 创建 DMG。构建阶段使用临时唯一卷名，避免与已安装或已挂载的同名应用冲突；最终镜像会恢复 `漫途Agent` 卷名、加入 Applications 快捷方式，并生成独立的更新 blockmap。挂载点使用 macOS `getconf DARWIN_USER_TEMP_DIR` 下的独立临时目录，镜像文件仍位于构建输出目录；解析或创建挂载点失败会停止打包。
 
 在没有 Developer ID 凭据的情况下进行本地 Apple Silicon 验收时，请在独立、干净的构建副本中运行 `pnpm run desktop:dist:mac:arm64:local`。该命令明确选择 electron-builder 的 ad-hoc 身份，关闭证书自动发现及公证，并要求严格签名校验。标准签名器在生成 ZIP 前封装已装配的应用；创建 DMG 前还必须通过 `codesign --verify --deep --strict`。签名后不得修改应用内容。这种本地身份只证明应用包完整性，不表示 Apple 认可、已公证、通过 Gatekeeper 或适用于公开更新。正式发行工作流及证书要求保持不变；见[本地签名决策](../../.agents/notes/implemented/bug-fix/2026-09-09-local-macos-bundle-signing.zh.md)。

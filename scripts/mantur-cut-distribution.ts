@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { delimiter, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import { copyRuntimeDependencies, relocateMacCompositor } from './mantur-cut-resources.ts'
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const sourceConfigPath = resolve(root, 'apps/desktop/mantur-cut/source.json')
@@ -454,8 +455,9 @@ async function copyProductionProgram(source: string, staging: string, auditRepor
   await cp(join(source, 'desktop-dist/chrome-headless-shell'), join(staging, 'chrome-headless-shell'), { recursive: true })
   await cp(join(source, 'public/whisper-cli', targetKey), join(staging, 'whisper-cli', targetKey), { recursive: true })
   await cp(join(source, '.cache/whisper-cli/whisper.cpp/LICENSE'), join(staging, 'whisper-cli/LICENSE.whisper.cpp'))
-  await cp(join(source, 'node_modules'), join(staging, 'runtime/node_modules'), { recursive: true })
+  await copyRuntimeDependencies(join(source, 'node_modules'), join(staging, 'runtime/node_modules'), targetKey)
   await removePackageBinLinks(join(staging, 'runtime/node_modules'))
+  if (target.platform === 'darwin') await relocateMacCompositor(join(staging, paths.compositor))
   await cp(join(source, 'package.json'), join(staging, 'package.json'))
   await cp(join(source, 'package-lock.json'), join(staging, 'package-lock.json'))
   await cp(join(source, 'LICENSE'), join(staging, 'LICENSE'))

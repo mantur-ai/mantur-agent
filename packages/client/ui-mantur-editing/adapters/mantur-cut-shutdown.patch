@@ -1,8 +1,44 @@
+diff --git a/.gitignore b/.gitignore
+index e42eb07..2962ba0 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -87,6 +87,7 @@ MODEL-OPT-PLAN.md
+ # `git add -A`, and CI died with MODULE_NOT_FOUND on a file that exists locally.
+ /scripts/*
+ !/scripts/sync-mediapipe.mjs
++!/scripts/patch-remotion-shutdown.mjs
+ # Stable regressions are *.verify.* by convention (see the *.check.* rule
+ # above), so they are never local-only.
+ !/scripts/*.verify.mjs
+diff --git a/MANTUR-RENDER-SHUTDOWN.md b/MANTUR-RENDER-SHUTDOWN.md
+new file mode 100644
+index 0000000..670a7f4
+--- /dev/null
++++ b/MANTUR-RENDER-SHUTDOWN.md
+@@ -0,0 +1,9 @@
++# Render browser shutdown
++
++Mantur's install preparation requires the rendering browser's close operation and the exact spawned child's `close` event. Node emits that event after the process ends and its stdio streams close; a process `exit` event alone is insufficient. Pending or failed cleanup continues to block installation.
++
++`scripts/patch-remotion-shutdown.mjs` is an install-time source patch for both the CommonJS BrowserRunner and ESM bundle in pinned `@remotion/renderer` 4.0.509. It registers the `close` listener immediately after spawn, before the first asynchronous browser setup operation, and exposes its promise on the runner. Existing license notices are retained. Both original and patched bytes are SHA-256 checked before either file is modified. Unknown source bytes reject installation rather than silently disabling evidence collection. No global spawn interception, PID polling, timeout-as-success, or relaxation of process signing is used.
++
++The patch is applied by `npm ci`/`npm install` through the root `postinstall`. If dependency install scripts are intentionally disabled, run `node scripts/patch-remotion-shutdown.mjs` explicitly before building or running the editor. `remotion/render-shutdown.mjs` rejects missing evidence even if the browser's public `close()` resolves.
++
++`node remotion/render-shutdown.verify.mjs` covers the close barrier, repeated close calls, missing evidence, failed cleanup, and preservation of simultaneous rendering and cleanup failures. The isolated native export regression additionally requires successful MP4 generation and `stopForShutdown`; an MP4 alone is not sufficient evidence of safe update preparation.
 diff --git a/README.md b/README.md
-index c28bd44..666627b 100644
+index c28bd44..8df9208 100644
 --- a/README.md
 +++ b/README.md
-@@ -376,6 +376,8 @@ the adjacent video clips. Submit the draft for review and wait for the user to
+@@ -349,6 +349,8 @@ If an `auto` session becomes stale, it returns an error instead of falling back
+
+ In the Mantur integration, `import_asset` and `import_folder` read media from the current Agent project. Manual sessions require confirmation before reading local files. Imported assets enter the editing draft, so successive imports and edits retain the same session revision; review applies the assets with the other draft operations. Compatible originals are referenced in place and remain unchanged. Concurrent live edits still make the session stale.
+
++After rendering, Mantur confirms the browser process and its output pipes have closed before preparing installation. The pinned dependency patch and failure behavior are documented in [render browser shutdown](MANTUR-RENDER-SHUTDOWN.md).
++
+ Only draft-safe project read/edit tools are exposed in these sessions. Generation, export, project deletion, and other immediate side-effect tools stay unavailable because a rejected proposal could not roll them back.
+
+ ### Codex
+@@ -376,6 +378,8 @@ the adjacent video clips. Submit the draft for review and wait for the user to
  approve it in OpenChatCut before reporting that the edit was applied.
  ```
 
@@ -49,23 +85,31 @@ index 7f373b1..3813420 100644
    app.use('/media/uploads', uploadsMiddleware());
    if (mantur) {
 diff --git a/package-lock.json b/package-lock.json
-index 0e72452..80b33b6 100644
+index 0e72452..75e2253 100644
 --- a/package-lock.json
 +++ b/package-lock.json
-@@ -2093,9 +2093,9 @@
+@@ -7,6 +7,7 @@
+     "": {
+       "name": "openchatcut",
+       "version": "0.2.14",
++      "hasInstallScript": true,
+       "license": "AGPL-3.0-or-later",
+       "dependencies": {
+         "@ai-sdk/alibaba": "^2.0.16",
+@@ -2093,9 +2094,9 @@
        }
      },
      "node_modules/@img/sharp-darwin-arm64": {
 -      "version": "0.34.5",
 -      "resolved": "https://registry.npmjs.org/@img/sharp-darwin-arm64/-/sharp-darwin-arm64-0.34.5.tgz",
 -      "integrity": "sha512-imtQ3WMJXbMY4fxb/Ndp6HBTNVtWCUI0WdobyheGf5+ad6xX8VIDO8u2xE4qc/fr08CKG/7dDseFtn6M6g/r3w==",
-+      "version": "0.35.3",
-+      "resolved": "https://registry.npmjs.org/@img/sharp-darwin-arm64/-/sharp-darwin-arm64-0.35.3.tgz",
-+      "integrity": "sha512-RMnFX7YQsMoh7lWfcM4NEHHymBX/rLuKNPVM84XE9ONPcaSCDgE7CHIHpSgPcO2xcRthgBy1HfNO319mwhIAkg==",
++      "version": "0.35.4",
++      "resolved": "https://registry.npmjs.org/@img/sharp-darwin-arm64/-/sharp-darwin-arm64-0.35.4.tgz",
++      "integrity": "sha512-Uhfl4V4lhP2nbUVF9+hyH1+luj86f1gUFeo8ALYxFoULoU+G87D43BfeMP8XHsk9boxAnCY/bf2EHwhA7MuGsA==",
        "cpu": [
          "arm64"
        ],
-@@ -2105,19 +2105,19 @@
+@@ -2105,19 +2106,19 @@
          "darwin"
        ],
        "engines": {
@@ -77,20 +121,20 @@ index 0e72452..80b33b6 100644
        },
        "optionalDependencies": {
 -        "@img/sharp-libvips-darwin-arm64": "1.2.4"
-+        "@img/sharp-libvips-darwin-arm64": "1.3.2"
++        "@img/sharp-libvips-darwin-arm64": "1.3.3"
        }
      },
      "node_modules/@img/sharp-darwin-x64": {
 -      "version": "0.34.5",
 -      "resolved": "https://registry.npmjs.org/@img/sharp-darwin-x64/-/sharp-darwin-x64-0.34.5.tgz",
 -      "integrity": "sha512-YNEFAF/4KQ/PeW0N+r+aVVsoIY0/qxxikF2SWdp+NRkmMB7y9LBZAVqQ4yhGCm/H3H270OSykqmQMKLBhBJDEw==",
-+      "version": "0.35.3",
-+      "resolved": "https://registry.npmjs.org/@img/sharp-darwin-x64/-/sharp-darwin-x64-0.35.3.tgz",
-+      "integrity": "sha512-Xo+5uFBtLN0BKqieTxiFzFPQAUlBbbH5iBKyRX/z1JrbnYsHTfKJnUfL8+p2TPXr1pXqao4eeL4Rl144uDpK9w==",
++      "version": "0.35.4",
++      "resolved": "https://registry.npmjs.org/@img/sharp-darwin-x64/-/sharp-darwin-x64-0.35.4.tgz",
++      "integrity": "sha512-hWniXY3bG5qKpkKrAwPe4y+VTPmf086YQAnkxWh7uA1YrlRouWGa0M0Mxj3ZjnXFkv7/TD1bTy9lGUK26vRvWw==",
        "cpu": [
          "x64"
        ],
-@@ -2127,19 +2127,38 @@
+@@ -2127,19 +2128,38 @@
          "darwin"
        ],
        "engines": {
@@ -102,20 +146,20 @@ index 0e72452..80b33b6 100644
        },
        "optionalDependencies": {
 -        "@img/sharp-libvips-darwin-x64": "1.2.4"
-+        "@img/sharp-libvips-darwin-x64": "1.3.2"
++        "@img/sharp-libvips-darwin-x64": "1.3.3"
 +      }
 +    },
 +    "node_modules/@img/sharp-freebsd-wasm32": {
-+      "version": "0.35.3",
-+      "resolved": "https://registry.npmjs.org/@img/sharp-freebsd-wasm32/-/sharp-freebsd-wasm32-0.35.3.tgz",
-+      "integrity": "sha512-lUxcqWIj2wMQ9BrwNjngcr1gWUr5xgaGThBRqPPalIC2n67Cqj1uPh8NnA/ZhAg8hUbKl+kVHKwgUIwe6ZYPrg==",
++      "version": "0.35.4",
++      "resolved": "https://registry.npmjs.org/@img/sharp-freebsd-wasm32/-/sharp-freebsd-wasm32-0.35.4.tgz",
++      "integrity": "sha512-lIsKw/BU+kjB4eZjxrYrZmwOJYi3Ajrv66iAlBmUPyKc3HpnloevB1g3wxGD9P/5BbQ1brBGl65VRRrCvQDEqA==",
 +      "license": "Apache-2.0",
 +      "optional": true,
 +      "os": [
 +        "freebsd"
 +      ],
 +      "dependencies": {
-+        "@img/sharp-wasm32": "0.35.3"
++        "@img/sharp-wasm32": "0.35.4"
 +      },
 +      "engines": {
 +        "node": ">=20.9.0"
@@ -128,143 +172,143 @@ index 0e72452..80b33b6 100644
 -      "version": "1.2.4",
 -      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-darwin-arm64/-/sharp-libvips-darwin-arm64-1.2.4.tgz",
 -      "integrity": "sha512-zqjjo7RatFfFoP0MkQ51jfuFZBnVE2pRiaydKJ1G/rHZvnsrHAOcQALIi9sA5co5xenQdTugCvtb1cuf78Vf4g==",
-+      "version": "1.3.2",
-+      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-darwin-arm64/-/sharp-libvips-darwin-arm64-1.3.2.tgz",
-+      "integrity": "sha512-9J6ypZFpQBj4YnePGoq/S38w6nz+vqg5WZLrLGY4YuSemdMq47GMLBPO42MzwdGwpg/agZ7xzZcFHa48xlywfg==",
++      "version": "1.3.3",
++      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-darwin-arm64/-/sharp-libvips-darwin-arm64-1.3.3.tgz",
++      "integrity": "sha512-suTBPTDGrI9WodccaDdwZItTSaBYASlBk1NSfElSHrUfzu3szG6lvIF58+WiFvnfzuK8ZBFS5zE00PxqxnRiPg==",
        "cpu": [
          "arm64"
        ],
-@@ -2153,9 +2172,9 @@
+@@ -2153,9 +2173,9 @@
        }
      },
      "node_modules/@img/sharp-libvips-darwin-x64": {
 -      "version": "1.2.4",
 -      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-darwin-x64/-/sharp-libvips-darwin-x64-1.2.4.tgz",
 -      "integrity": "sha512-1IOd5xfVhlGwX+zXv2N93k0yMONvUlANylbJw1eTah8K/Jtpi15KC+WSiaX/nBmbm2HxRM1gZ0nSdjSsrZbGKg==",
-+      "version": "1.3.2",
-+      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-darwin-x64/-/sharp-libvips-darwin-x64-1.3.2.tgz",
-+      "integrity": "sha512-m2pW1n6cns9VaubNwsZ+c3CRYjxNQWgJ5gPlnL1nbBcpkBvFm6SCFN5o0psFHI8w9n11NKhFkeEDns98tiqbEw==",
++      "version": "1.3.3",
++      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-darwin-x64/-/sharp-libvips-darwin-x64-1.3.3.tgz",
++      "integrity": "sha512-FVJZ5mITMobmXIz/hPDTw0EintTW5H3WfrxwLqEqjiIihlu+hVRyGrFQ60xl0Lxn7Bt3zdpevPaQi0HEzqz9fw==",
        "cpu": [
          "x64"
        ],
-@@ -2169,9 +2188,9 @@
+@@ -2169,9 +2189,9 @@
        }
      },
      "node_modules/@img/sharp-libvips-linux-arm": {
 -      "version": "1.2.4",
 -      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linux-arm/-/sharp-libvips-linux-arm-1.2.4.tgz",
 -      "integrity": "sha512-bFI7xcKFELdiNCVov8e44Ia4u2byA+l3XtsAj+Q8tfCwO6BQ8iDojYdvoPMqsKDkuoOo+X6HZA0s0q11ANMQ8A==",
-+      "version": "1.3.2",
-+      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linux-arm/-/sharp-libvips-linux-arm-1.3.2.tgz",
-+      "integrity": "sha512-1eMLzy92I4J6rmi4mAT8yC3HxOtniyGELlzGbNMLLeqe052ahFQ0h6LFq+lh5DsDIdYViIDst08abvSbcEdLXQ==",
++      "version": "1.3.3",
++      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linux-arm/-/sharp-libvips-linux-arm-1.3.3.tgz",
++      "integrity": "sha512-3rbU4vqXXc3hY/OiXdl52xZvT0F1yEngWfvqudtPJg/KkyiaQw2DRsFrNzpmLvfavbwOq3qXn36GP8obHRULQA==",
        "cpu": [
          "arm"
        ],
-@@ -2188,9 +2207,9 @@
+@@ -2188,9 +2208,9 @@
        }
      },
      "node_modules/@img/sharp-libvips-linux-arm64": {
 -      "version": "1.2.4",
 -      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linux-arm64/-/sharp-libvips-linux-arm64-1.2.4.tgz",
 -      "integrity": "sha512-excjX8DfsIcJ10x1Kzr4RcWe1edC9PquDRRPx3YVCvQv+U5p7Yin2s32ftzikXojb1PIFc/9Mt28/y+iRklkrw==",
-+      "version": "1.3.2",
-+      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linux-arm64/-/sharp-libvips-linux-arm64-1.3.2.tgz",
-+      "integrity": "sha512-dqVSFynCox4C/J8kT16V7SIFAns0IjgLwkvYT7p8LQVmJ5OS5b6tI9IGflxTeuBS//zXeFIUbwt5dwxyZ17cnA==",
++      "version": "1.3.3",
++      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linux-arm64/-/sharp-libvips-linux-arm64-1.3.3.tgz",
++      "integrity": "sha512-0DaL0A6Xu6sQSQFwe4iVCrKWU2cCTItnRsYsCdxAMm9NF6twAA9BKnoqy4hqz4+azQ0JHuA26qiUKsf1XJ/v5A==",
        "cpu": [
          "arm64"
        ],
-@@ -2207,9 +2226,9 @@
+@@ -2207,9 +2227,9 @@
        }
      },
      "node_modules/@img/sharp-libvips-linux-ppc64": {
 -      "version": "1.2.4",
 -      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linux-ppc64/-/sharp-libvips-linux-ppc64-1.2.4.tgz",
 -      "integrity": "sha512-FMuvGijLDYG6lW+b/UvyilUWu5Ayu+3r2d1S8notiGCIyYU/76eig1UfMmkZ7vwgOrzKzlQbFSuQfgm7GYUPpA==",
-+      "version": "1.3.2",
-+      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linux-ppc64/-/sharp-libvips-linux-ppc64-1.3.2.tgz",
-+      "integrity": "sha512-3z0NHDxD6n5I9gc05U1eW1AyRm+Gznzq3naMrthPNqE6oYykcogW0l/jfpJdjYnuNl8R7yI9pNbE1XiUeyq0Aw==",
++      "version": "1.3.3",
++      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linux-ppc64/-/sharp-libvips-linux-ppc64-1.3.3.tgz",
++      "integrity": "sha512-cdn1OvUBwsXhbC0zSzJnNzf5MZ/mTrobawDvNXBTxe8VtqKAm0sRuEY2Evzovb/w9JMk4TvRxqt1mekSuJz64w==",
        "cpu": [
          "ppc64"
        ],
-@@ -2226,9 +2245,9 @@
+@@ -2226,9 +2246,9 @@
        }
      },
      "node_modules/@img/sharp-libvips-linux-riscv64": {
 -      "version": "1.2.4",
 -      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linux-riscv64/-/sharp-libvips-linux-riscv64-1.2.4.tgz",
 -      "integrity": "sha512-oVDbcR4zUC0ce82teubSm+x6ETixtKZBh/qbREIOcI3cULzDyb18Sr/Wcyx7NRQeQzOiHTNbZFF1UwPS2scyGA==",
-+      "version": "1.3.2",
-+      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linux-riscv64/-/sharp-libvips-linux-riscv64-1.3.2.tgz",
-+      "integrity": "sha512-bsb4rI+NldGOsXuej2r8OdSS8+zXDVaCWxyWrcv6kneTOlgAHtZABRzBBCwdsPiD90J4myNJuHpg6kA20ImW/w==",
++      "version": "1.3.3",
++      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linux-riscv64/-/sharp-libvips-linux-riscv64-1.3.3.tgz",
++      "integrity": "sha512-HjPVx7yKz+0lqdhDlTw1tt90wamBoxhiXpvl1XZpJLiHH4RCJ5yDTqH+VlYPv2fwFs89JFw4c1IexYOcQUi4IQ==",
        "cpu": [
          "riscv64"
        ],
-@@ -2245,9 +2264,9 @@
+@@ -2245,9 +2265,9 @@
        }
      },
      "node_modules/@img/sharp-libvips-linux-s390x": {
 -      "version": "1.2.4",
 -      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linux-s390x/-/sharp-libvips-linux-s390x-1.2.4.tgz",
 -      "integrity": "sha512-qmp9VrzgPgMoGZyPvrQHqk02uyjA0/QrTO26Tqk6l4ZV0MPWIW6LTkqOIov+J1yEu7MbFQaDpwdwJKhbJvuRxQ==",
-+      "version": "1.3.2",
-+      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linux-s390x/-/sharp-libvips-linux-s390x-1.3.2.tgz",
-+      "integrity": "sha512-/ABshyj8gCpyIrNXnHn4LorDJ0HHm1VhXPBlxZ8zAtfVPAaSafXPGn+sUSIRiwaSBy0mmFjSjiXI5mkcwdChKQ==",
++      "version": "1.3.3",
++      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linux-s390x/-/sharp-libvips-linux-s390x-1.3.3.tgz",
++      "integrity": "sha512-neWLh+3yCNThxnfy3c4BbVBeGgt9aftno+XbT56iK28RgeDs3UOFWviLWlUu0bArYVYJaFDK+RRohbicUNCm8Q==",
        "cpu": [
          "s390x"
        ],
-@@ -2264,9 +2283,9 @@
+@@ -2264,9 +2284,9 @@
        }
      },
      "node_modules/@img/sharp-libvips-linux-x64": {
 -      "version": "1.2.4",
 -      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linux-x64/-/sharp-libvips-linux-x64-1.2.4.tgz",
 -      "integrity": "sha512-tJxiiLsmHc9Ax1bz3oaOYBURTXGIRDODBqhveVHonrHJ9/+k89qbLl0bcJns+e4t4rvaNBxaEZsFtSfAdquPrw==",
-+      "version": "1.3.2",
-+      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linux-x64/-/sharp-libvips-linux-x64-1.3.2.tgz",
-+      "integrity": "sha512-ITPEtgffGJ0S6G9dRyw/366tJQqFRcHWPHhC+Stpg3Z8AEMrDrTr2lhdz4f/Y/HMbRh//7Z5mBzEpVdi62Oc3w==",
++      "version": "1.3.3",
++      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linux-x64/-/sharp-libvips-linux-x64-1.3.3.tgz",
++      "integrity": "sha512-4vKmvAst9nrowcqquKFAyZJUDolUaIp8uRiN0mWFguJ1IplC9/pitXtlnnlU4aa/eJw3J7i67V+pwUL+wZGdsA==",
        "cpu": [
          "x64"
        ],
-@@ -2283,9 +2302,9 @@
+@@ -2283,9 +2303,9 @@
        }
      },
      "node_modules/@img/sharp-libvips-linuxmusl-arm64": {
 -      "version": "1.2.4",
 -      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linuxmusl-arm64/-/sharp-libvips-linuxmusl-arm64-1.2.4.tgz",
 -      "integrity": "sha512-FVQHuwx1IIuNow9QAbYUzJ+En8KcVm9Lk5+uGUQJHaZmMECZmOlix9HnH7n1TRkXMS0pGxIJokIVB9SuqZGGXw==",
-+      "version": "1.3.2",
-+      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linuxmusl-arm64/-/sharp-libvips-linuxmusl-arm64-1.3.2.tgz",
-+      "integrity": "sha512-zE9EdiUzUmg5mDT5a1rk5fYJ6GWPloTwWBYDS14naqHsL+EaMpDj1AWnpLgh3u0YCORv2Tt50wrcrpYqkP97Kw==",
++      "version": "1.3.3",
++      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linuxmusl-arm64/-/sharp-libvips-linuxmusl-arm64-1.3.3.tgz",
++      "integrity": "sha512-Y9kQaLMuNoB0bPYOOdcZMaseNrFpPodIWWMrx+CZyydf2xn68j9WYc6sWWRrDwNkzCQjKYfc68L7jKjGlHMibw==",
        "cpu": [
          "arm64"
        ],
-@@ -2302,9 +2321,9 @@
+@@ -2302,9 +2322,9 @@
        }
      },
      "node_modules/@img/sharp-libvips-linuxmusl-x64": {
 -      "version": "1.2.4",
 -      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linuxmusl-x64/-/sharp-libvips-linuxmusl-x64-1.2.4.tgz",
 -      "integrity": "sha512-+LpyBk7L44ZIXwz/VYfglaX/okxezESc6UxDSoyo2Ks6Jxc4Y7sGjpgU9s4PMgqgjj1gZCylTieNamqA1MF7Dg==",
-+      "version": "1.3.2",
-+      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linuxmusl-x64/-/sharp-libvips-linuxmusl-x64-1.3.2.tgz",
-+      "integrity": "sha512-m0lrLiUt+lBYnCFr8qV/65yMR4E/c7/wf78I5eKTdkEakFAlZ9QlzEM3QIhhAwVeUhLAHLcCq7a7Vszq/oFNZQ==",
++      "version": "1.3.3",
++      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linuxmusl-x64/-/sharp-libvips-linuxmusl-x64-1.3.3.tgz",
++      "integrity": "sha512-fj8Mv0HHfD1Rr+4I68+3agJynxDWtBFgicTbSOb9Bke6pIwzGcJ+RX/yHjmiEGFMCavY/dxvem7MyNaJF+wDiw==",
        "cpu": [
          "x64"
        ],
-@@ -2321,9 +2340,9 @@
+@@ -2321,9 +2341,9 @@
        }
      },
      "node_modules/@img/sharp-linux-arm": {
 -      "version": "0.34.5",
 -      "resolved": "https://registry.npmjs.org/@img/sharp-linux-arm/-/sharp-linux-arm-0.34.5.tgz",
 -      "integrity": "sha512-9dLqsvwtg1uuXBGZKsxem9595+ujv0sJ6Vi8wcTANSFpwV/GONat5eCkzQo/1O6zRIkh0m/8+5BjrRr7jDUSZw==",
-+      "version": "0.35.3",
-+      "resolved": "https://registry.npmjs.org/@img/sharp-linux-arm/-/sharp-linux-arm-0.35.3.tgz",
-+      "integrity": "sha512-affVWCTLooy8TSxbDx2qkzuDeaWLNVBA+P//FNBirHsXpP2fuBhk5AuboYUnrDnzoXes8GFjpTx0SBFOCRg+FA==",
++      "version": "0.35.4",
++      "resolved": "https://registry.npmjs.org/@img/sharp-linux-arm/-/sharp-linux-arm-0.35.4.tgz",
++      "integrity": "sha512-7OAS8gI0EReKGVN2HssHlM6umJgxF5VI3xN0p9FA91p/YO+ou5hiNghLdZ5BEHztwaaK5+bLKRf8x/o2L2nk9A==",
        "cpu": [
          "arm"
        ],
-@@ -2336,19 +2355,19 @@
+@@ -2336,19 +2356,19 @@
          "linux"
        ],
        "engines": {
@@ -276,20 +320,20 @@ index 0e72452..80b33b6 100644
        },
        "optionalDependencies": {
 -        "@img/sharp-libvips-linux-arm": "1.2.4"
-+        "@img/sharp-libvips-linux-arm": "1.3.2"
++        "@img/sharp-libvips-linux-arm": "1.3.3"
        }
      },
      "node_modules/@img/sharp-linux-arm64": {
 -      "version": "0.34.5",
 -      "resolved": "https://registry.npmjs.org/@img/sharp-linux-arm64/-/sharp-linux-arm64-0.34.5.tgz",
 -      "integrity": "sha512-bKQzaJRY/bkPOXyKx5EVup7qkaojECG6NLYswgktOZjaXecSAeCWiZwwiFf3/Y+O1HrauiE3FVsGxFg8c24rZg==",
-+      "version": "0.35.3",
-+      "resolved": "https://registry.npmjs.org/@img/sharp-linux-arm64/-/sharp-linux-arm64-0.35.3.tgz",
-+      "integrity": "sha512-QgKDspHPnrU+GQ55XPhGwyhC8acLVOOSyAvo1oVfFmrIXLkDNmGWzAfDZ4xK8oSA1qBQrALcHX0G5UZni/SuFQ==",
++      "version": "0.35.4",
++      "resolved": "https://registry.npmjs.org/@img/sharp-linux-arm64/-/sharp-linux-arm64-0.35.4.tgz",
++      "integrity": "sha512-De4jpEnAU8Hd5oT0j1G3uL4ZvTuipVMn7YC6vPaJhy6/7EwEae0SVAoBrUMYQbkLGDm85taVWwuPc1a44LTzCQ==",
        "cpu": [
          "arm64"
        ],
-@@ -2361,19 +2380,19 @@
+@@ -2361,19 +2381,19 @@
          "linux"
        ],
        "engines": {
@@ -301,20 +345,20 @@ index 0e72452..80b33b6 100644
        },
        "optionalDependencies": {
 -        "@img/sharp-libvips-linux-arm64": "1.2.4"
-+        "@img/sharp-libvips-linux-arm64": "1.3.2"
++        "@img/sharp-libvips-linux-arm64": "1.3.3"
        }
      },
      "node_modules/@img/sharp-linux-ppc64": {
 -      "version": "0.34.5",
 -      "resolved": "https://registry.npmjs.org/@img/sharp-linux-ppc64/-/sharp-linux-ppc64-0.34.5.tgz",
 -      "integrity": "sha512-7zznwNaqW6YtsfrGGDA6BRkISKAAE1Jo0QdpNYXNMHu2+0dTrPflTLNkpc8l7MUP5M16ZJcUvysVWWrMefZquA==",
-+      "version": "0.35.3",
-+      "resolved": "https://registry.npmjs.org/@img/sharp-linux-ppc64/-/sharp-linux-ppc64-0.35.3.tgz",
-+      "integrity": "sha512-sMd8rDxmpLOwv/7N44klFjOD5DUO7FLdjiXDI0hoxYaf7Ar262dQIEkosE98bps+5HPLtp/EvNqeqQtOycP/IA==",
++      "version": "0.35.4",
++      "resolved": "https://registry.npmjs.org/@img/sharp-linux-ppc64/-/sharp-linux-ppc64-0.35.4.tgz",
++      "integrity": "sha512-2oYZJeIl4kCcMGk4ouZVjnkCtFrpQFlNEtJ6GbxzhHQchwH0NH/qEb9ykmOl29dqwMq+JhFdZn+1ak2FKhI9fQ==",
        "cpu": [
          "ppc64"
        ],
-@@ -2386,19 +2405,19 @@
+@@ -2386,19 +2406,19 @@
          "linux"
        ],
        "engines": {
@@ -326,20 +370,20 @@ index 0e72452..80b33b6 100644
        },
        "optionalDependencies": {
 -        "@img/sharp-libvips-linux-ppc64": "1.2.4"
-+        "@img/sharp-libvips-linux-ppc64": "1.3.2"
++        "@img/sharp-libvips-linux-ppc64": "1.3.3"
        }
      },
      "node_modules/@img/sharp-linux-riscv64": {
 -      "version": "0.34.5",
 -      "resolved": "https://registry.npmjs.org/@img/sharp-linux-riscv64/-/sharp-linux-riscv64-0.34.5.tgz",
 -      "integrity": "sha512-51gJuLPTKa7piYPaVs8GmByo7/U7/7TZOq+cnXJIHZKavIRHAP77e3N2HEl3dgiqdD/w0yUfiJnII77PuDDFdw==",
-+      "version": "0.35.3",
-+      "resolved": "https://registry.npmjs.org/@img/sharp-linux-riscv64/-/sharp-linux-riscv64-0.35.3.tgz",
-+      "integrity": "sha512-0Eob78yjlYPfL5vMNWAW55l3R9Y6BQS/gOfe0ZcP9mEz9ohhKSt4im1hayiknXgf8AWrFqMvJcKIdmLmEe7yeQ==",
++      "version": "0.35.4",
++      "resolved": "https://registry.npmjs.org/@img/sharp-linux-riscv64/-/sharp-linux-riscv64-0.35.4.tgz",
++      "integrity": "sha512-cPbNChoRURAWdebDIHSenxRpgEdy7JkPydSnUxRm9VvKD7m0/xVaR/8Fzlu81pk5nHEvHH87UZUA7cTtwnbJSA==",
        "cpu": [
          "riscv64"
        ],
-@@ -2411,19 +2430,19 @@
+@@ -2411,19 +2431,19 @@
          "linux"
        ],
        "engines": {
@@ -351,20 +395,20 @@ index 0e72452..80b33b6 100644
        },
        "optionalDependencies": {
 -        "@img/sharp-libvips-linux-riscv64": "1.2.4"
-+        "@img/sharp-libvips-linux-riscv64": "1.3.2"
++        "@img/sharp-libvips-linux-riscv64": "1.3.3"
        }
      },
      "node_modules/@img/sharp-linux-s390x": {
 -      "version": "0.34.5",
 -      "resolved": "https://registry.npmjs.org/@img/sharp-linux-s390x/-/sharp-linux-s390x-0.34.5.tgz",
 -      "integrity": "sha512-nQtCk0PdKfho3eC5MrbQoigJ2gd1CgddUMkabUj+rBevs8tZ2cULOx46E7oyX+04WGfABgIwmMC0VqieTiR4jg==",
-+      "version": "0.35.3",
-+      "resolved": "https://registry.npmjs.org/@img/sharp-linux-s390x/-/sharp-linux-s390x-0.35.3.tgz",
-+      "integrity": "sha512-KgAxQ0DxpNOq1rG2t5cgTgShJFGSuU7XO45cqC+1NVOuZnP6tlgZRuSYOfNupGkHID0o3cJOsw4DVeJpMovcGw==",
++      "version": "0.35.4",
++      "resolved": "https://registry.npmjs.org/@img/sharp-linux-s390x/-/sharp-linux-s390x-0.35.4.tgz",
++      "integrity": "sha512-RY0JFY8Fd6RonCBtHz+DvadaPkXDSI1AUn6yWL9TipqkZ1vY8w8evqdgyDFnkm4/K1ve1TvZiaePP5oSd4+WVQ==",
        "cpu": [
          "s390x"
        ],
-@@ -2436,19 +2455,19 @@
+@@ -2436,19 +2456,19 @@
          "linux"
        ],
        "engines": {
@@ -376,20 +420,20 @@ index 0e72452..80b33b6 100644
        },
        "optionalDependencies": {
 -        "@img/sharp-libvips-linux-s390x": "1.2.4"
-+        "@img/sharp-libvips-linux-s390x": "1.3.2"
++        "@img/sharp-libvips-linux-s390x": "1.3.3"
        }
      },
      "node_modules/@img/sharp-linux-x64": {
 -      "version": "0.34.5",
 -      "resolved": "https://registry.npmjs.org/@img/sharp-linux-x64/-/sharp-linux-x64-0.34.5.tgz",
 -      "integrity": "sha512-MEzd8HPKxVxVenwAa+JRPwEC7QFjoPWuS5NZnBt6B3pu7EG2Ge0id1oLHZpPJdn3OQK+BQDiw9zStiHBTJQQQQ==",
-+      "version": "0.35.3",
-+      "resolved": "https://registry.npmjs.org/@img/sharp-linux-x64/-/sharp-linux-x64-0.35.3.tgz",
-+      "integrity": "sha512-8pqvxubL2PGdhlPy6GLqzDYMUjyRmKAwKHYKixpdJYBUK7PJ0C029XdsnpFIdgRZG68fZiGdHVWcKPvtiPB4cA==",
++      "version": "0.35.4",
++      "resolved": "https://registry.npmjs.org/@img/sharp-linux-x64/-/sharp-linux-x64-0.35.4.tgz",
++      "integrity": "sha512-9qvvEAuk8k89TfWUoX2htWjbAMX8p+NxCppjpcg5k6xMsjhBQPTsoIh36h9Qde4WRuGpJeYnOjdosDn/cnv+OA==",
        "cpu": [
          "x64"
        ],
-@@ -2461,19 +2480,19 @@
+@@ -2461,19 +2481,19 @@
          "linux"
        ],
        "engines": {
@@ -401,20 +445,20 @@ index 0e72452..80b33b6 100644
        },
        "optionalDependencies": {
 -        "@img/sharp-libvips-linux-x64": "1.2.4"
-+        "@img/sharp-libvips-linux-x64": "1.3.2"
++        "@img/sharp-libvips-linux-x64": "1.3.3"
        }
      },
      "node_modules/@img/sharp-linuxmusl-arm64": {
 -      "version": "0.34.5",
 -      "resolved": "https://registry.npmjs.org/@img/sharp-linuxmusl-arm64/-/sharp-linuxmusl-arm64-0.34.5.tgz",
 -      "integrity": "sha512-fprJR6GtRsMt6Kyfq44IsChVZeGN97gTD331weR1ex1c1rypDEABN6Tm2xa1wE6lYb5DdEnk03NZPqA7Id21yg==",
-+      "version": "0.35.3",
-+      "resolved": "https://registry.npmjs.org/@img/sharp-linuxmusl-arm64/-/sharp-linuxmusl-arm64-0.35.3.tgz",
-+      "integrity": "sha512-Vz0iQjzzcSX3HCbfwFfCSG/9SCIqyO0mH2sXyiHaAYfBk0cRsCWXRyQYX0ovCK/PAQBbTzQ0dsPQHh5MAFL59w==",
++      "version": "0.35.4",
++      "resolved": "https://registry.npmjs.org/@img/sharp-linuxmusl-arm64/-/sharp-linuxmusl-arm64-0.35.4.tgz",
++      "integrity": "sha512-KB5jxpfWQTr0nc3xdHtWChdbifHrBGsd2SM62Eyxrl8afikm+f5qGBU75SJIZBT/S1MC8XyacdlXBMSWq6OURA==",
        "cpu": [
          "arm64"
        ],
-@@ -2486,19 +2505,19 @@
+@@ -2486,19 +2506,19 @@
          "linux"
        ],
        "engines": {
@@ -426,20 +470,20 @@ index 0e72452..80b33b6 100644
        },
        "optionalDependencies": {
 -        "@img/sharp-libvips-linuxmusl-arm64": "1.2.4"
-+        "@img/sharp-libvips-linuxmusl-arm64": "1.3.2"
++        "@img/sharp-libvips-linuxmusl-arm64": "1.3.3"
        }
      },
      "node_modules/@img/sharp-linuxmusl-x64": {
 -      "version": "0.34.5",
 -      "resolved": "https://registry.npmjs.org/@img/sharp-linuxmusl-x64/-/sharp-linuxmusl-x64-0.34.5.tgz",
 -      "integrity": "sha512-Jg8wNT1MUzIvhBFxViqrEhWDGzqymo3sV7z7ZsaWbZNDLXRJZoRGrjulp60YYtV4wfY8VIKcWidjojlLcWrd8Q==",
-+      "version": "0.35.3",
-+      "resolved": "https://registry.npmjs.org/@img/sharp-linuxmusl-x64/-/sharp-linuxmusl-x64-0.35.3.tgz",
-+      "integrity": "sha512-6O1NPKcDVj9QEdg7Hx549EX8U0rp6yXQERqru6yRN7fGBn32UvIRJUlWnk+8xDCiG76hXVBbX82NZ/ZKr0euIg==",
++      "version": "0.35.4",
++      "resolved": "https://registry.npmjs.org/@img/sharp-linuxmusl-x64/-/sharp-linuxmusl-x64-0.35.4.tgz",
++      "integrity": "sha512-f+eZJZIQNEEd26RPSW+76chwOf1XtA2Y/O+5ocVyLliHkeih3e+jhLVBdNTd2rS3IbNXK8+ug93Vf5ZXtF5Lxg==",
        "cpu": [
          "x64"
        ],
-@@ -2511,38 +2530,54 @@
+@@ -2511,38 +2531,64 @@
          "linux"
        ],
        "engines": {
@@ -451,20 +495,20 @@ index 0e72452..80b33b6 100644
        },
        "optionalDependencies": {
 -        "@img/sharp-libvips-linuxmusl-x64": "1.2.4"
-+        "@img/sharp-libvips-linuxmusl-x64": "1.3.2"
++        "@img/sharp-libvips-linuxmusl-x64": "1.3.3"
        }
      },
      "node_modules/@img/sharp-wasm32": {
 -      "version": "0.34.5",
 -      "resolved": "https://registry.npmjs.org/@img/sharp-wasm32/-/sharp-wasm32-0.34.5.tgz",
 -      "integrity": "sha512-OdWTEiVkY2PHwqkbBI8frFxQQFekHaSSkUIJkwzclWZe64O1X4UlUjqqqLaPbUpMOQk6FBu/HtlGXNblIs0huw==",
-+      "version": "0.35.3",
-+      "resolved": "https://registry.npmjs.org/@img/sharp-wasm32/-/sharp-wasm32-0.35.3.tgz",
-+      "integrity": "sha512-cZ0XkcYGpHZkqW6iCkqTcmUC0CD9DhD5d/qeZlZkfRBn6GnHniZXLUo5+9xw8Iv76YE6LQFN9YNBlKREcCG76w==",
++      "version": "0.35.4",
++      "resolved": "https://registry.npmjs.org/@img/sharp-wasm32/-/sharp-wasm32-0.35.4.tgz",
++      "integrity": "sha512-zQnl4Kwp7Q6NHsENtU2T/00Zi+w3AQNwz3+UaTyVBy2FpXrzXzGjndpK61onhZjRtRpQXxCTeqw19bVyXOh7jA==",
 +      "license": "Apache-2.0 AND LGPL-3.0-or-later AND MIT",
 +      "optional": true,
 +      "dependencies": {
-+        "@emnapi/runtime": "^1.11.1"
++        "@emnapi/runtime": "^1.11.3"
 +      },
 +      "engines": {
 +        "node": ">=20.9.0"
@@ -473,10 +517,20 @@ index 0e72452..80b33b6 100644
 +        "url": "https://opencollective.com/libvips"
 +      }
 +    },
++    "node_modules/@img/sharp-wasm32/node_modules/@emnapi/runtime": {
++      "version": "1.11.3",
++      "resolved": "https://registry.npmjs.org/@emnapi/runtime/-/runtime-1.11.3.tgz",
++      "integrity": "sha512-Xz4Tpyki7XyrpbUK1jR1AhdAdaXyhhY4lZ3neLodmhpuWfy2PAQN5B46sAiU4liOXGLkHypn/qU+jvfWSCYYLA==",
++      "license": "MIT",
++      "optional": true,
++      "dependencies": {
++        "tslib": "^2.4.0"
++      }
++    },
 +    "node_modules/@img/sharp-webcontainers-wasm32": {
-+      "version": "0.35.3",
-+      "resolved": "https://registry.npmjs.org/@img/sharp-webcontainers-wasm32/-/sharp-webcontainers-wasm32-0.35.3.tgz",
-+      "integrity": "sha512-2rnq7bX3NzeR2T4YWgz8qiG4h3TSdMe+vN1iQXpJleSJ3SM5zQ8Fy2SyyXAWlbxpEZ2Y+Z4u1BePgJEYbSy80Q==",
++      "version": "0.35.4",
++      "resolved": "https://registry.npmjs.org/@img/sharp-webcontainers-wasm32/-/sharp-webcontainers-wasm32-0.35.4.tgz",
++      "integrity": "sha512-ESfNkywmCfPNyaZjxooddJQiQ+l/nTpGEOGthxiLnIHXC/CmcBixnfwUleX9mCz9ovrUUvKMap/pm8RYbzfwaA==",
        "cpu": [
          "wasm32"
        ],
@@ -485,7 +539,7 @@ index 0e72452..80b33b6 100644
        "optional": true,
        "dependencies": {
 -        "@emnapi/runtime": "^1.7.0"
-+        "@img/sharp-wasm32": "0.35.3"
++        "@img/sharp-wasm32": "0.35.4"
        },
        "engines": {
 -        "node": "^18.17.0 || ^20.3.0 || >=21.0.0"
@@ -499,13 +553,13 @@ index 0e72452..80b33b6 100644
 -      "version": "0.34.5",
 -      "resolved": "https://registry.npmjs.org/@img/sharp-win32-arm64/-/sharp-win32-arm64-0.34.5.tgz",
 -      "integrity": "sha512-WQ3AgWCWYSb2yt+IG8mnC6Jdk9Whs7O0gxphblsLvdhSpSTtmu69ZG1Gkb6NuvxsNACwiPV6cNSZNzt0KPsw7g==",
-+      "version": "0.35.3",
-+      "resolved": "https://registry.npmjs.org/@img/sharp-win32-arm64/-/sharp-win32-arm64-0.35.3.tgz",
-+      "integrity": "sha512-4bPwFdMbeC4JQ8L8LOyWp6nsHcboP5fxkp6iPOXz2Vg49R42TuMs2whkJ5OAP4/Ul035qOzy0AecOF9VOscn4w==",
++      "version": "0.35.4",
++      "resolved": "https://registry.npmjs.org/@img/sharp-win32-arm64/-/sharp-win32-arm64-0.35.4.tgz",
++      "integrity": "sha512-iNdlBX9gLVvqe2I3uIJSIKTq6wckP/DYxZtcqxm09x5Gi24DnFBmPAWZmr60ZyYMG0xlzo6goG3670ar+RXvRw==",
        "cpu": [
          "arm64"
        ],
-@@ -2552,16 +2587,16 @@
+@@ -2552,16 +2598,16 @@
          "win32"
        ],
        "engines": {
@@ -520,13 +574,13 @@ index 0e72452..80b33b6 100644
 -      "version": "0.34.5",
 -      "resolved": "https://registry.npmjs.org/@img/sharp-win32-ia32/-/sharp-win32-ia32-0.34.5.tgz",
 -      "integrity": "sha512-FV9m/7NmeCmSHDD5j4+4pNI8Cp3aW+JvLoXcTUo0IqyjSfAZJ8dIUmijx1qaJsIiU+Hosw6xM5KijAWRJCSgNg==",
-+      "version": "0.35.3",
-+      "resolved": "https://registry.npmjs.org/@img/sharp-win32-ia32/-/sharp-win32-ia32-0.35.3.tgz",
-+      "integrity": "sha512-r53mXsBN6lFUDiST764SvgwUdHAqM4rPAiDzAmf4fLoB6X/rkfyTrLCg6+g17wJJiCmB3JYgHuUldCWUIRFSXw==",
++      "version": "0.35.4",
++      "resolved": "https://registry.npmjs.org/@img/sharp-win32-ia32/-/sharp-win32-ia32-0.35.4.tgz",
++      "integrity": "sha512-kqRsbaa5CS6KHlpxnN7WhE6vAAugXyZButpRdvDWetlv6Qv4N9WTcrWzF7tXfB9T7MsoadqdI8hmwLq6UlLvtw==",
        "cpu": [
          "ia32"
        ],
-@@ -2571,16 +2606,16 @@
+@@ -2571,16 +2617,16 @@
          "win32"
        ],
        "engines": {
@@ -541,13 +595,13 @@ index 0e72452..80b33b6 100644
 -      "version": "0.34.5",
 -      "resolved": "https://registry.npmjs.org/@img/sharp-win32-x64/-/sharp-win32-x64-0.34.5.tgz",
 -      "integrity": "sha512-+29YMsqY2/9eFEiW93eqWnuLcWcufowXewwSNIT6UwZdUUCrM3oFjMWH/Z6/TMmb4hlFenmfAVbpWeup2jryCw==",
-+      "version": "0.35.3",
-+      "resolved": "https://registry.npmjs.org/@img/sharp-win32-x64/-/sharp-win32-x64-0.35.3.tgz",
-+      "integrity": "sha512-D4y1vNeZrIIJCN+uHaWVtH86B+aCrdMYYjicy9pXHvbGZeGYLLSd3wdVuC37FxVXlU1ARsk84eKWfWMXGYEqvA==",
++      "version": "0.35.4",
++      "resolved": "https://registry.npmjs.org/@img/sharp-win32-x64/-/sharp-win32-x64-0.35.4.tgz",
++      "integrity": "sha512-XtmnYhBcrORsJ4XJngyzr/EWP0hRZLAZRFaApdKuviyqF78+ylxh2y06ZmtULAMOnObJ3ucpN0AcwSWnMowTRg==",
        "cpu": [
          "x64"
        ],
-@@ -2590,7 +2625,7 @@
+@@ -2590,7 +2636,7 @@
          "win32"
        ],
        "engines": {
@@ -556,7 +610,7 @@ index 0e72452..80b33b6 100644
        },
        "funding": {
          "url": "https://opencollective.com/libvips"
-@@ -5076,12 +5111,12 @@
+@@ -5076,12 +5122,12 @@
        }
      },
      "node_modules/adm-zip": {
@@ -573,7 +627,7 @@ index 0e72452..80b33b6 100644
        }
      },
      "node_modules/agent-base": {
-@@ -11507,47 +11542,52 @@
+@@ -11507,47 +11553,52 @@
        "license": "ISC"
      },
      "node_modules/sharp": {
@@ -581,9 +635,9 @@ index 0e72452..80b33b6 100644
 -      "resolved": "https://registry.npmjs.org/sharp/-/sharp-0.34.5.tgz",
 -      "integrity": "sha512-Ou9I5Ft9WNcCbXrU9cMgPBcCK8LiwLqcbywW3t4oDV37n1pzpuNLsYiAV8eODnjbtQlSDwZ2cUEeQz4E54Hltg==",
 -      "hasInstallScript": true,
-+      "version": "0.35.3",
-+      "resolved": "https://registry.npmjs.org/sharp/-/sharp-0.35.3.tgz",
-+      "integrity": "sha512-ej0zVHuZGHCiABXcNxeYhpRnPNPAcvbG8RMdBAhDAxLKkCRVSpK3Iyu7qbqw3JMzoj0REeM6f3tJLtVwl0023Q==",
++      "version": "0.35.4",
++      "resolved": "https://registry.npmjs.org/sharp/-/sharp-0.35.4.tgz",
++      "integrity": "sha512-n++8XWcj+jCOr2IOl7h8LbKnGBDY4aPbmprMONBNFdn0ImXqpGVv5zliDs0V9HbmbCQLpbuo2ej9rAoOQTvMDA==",
        "license": "Apache-2.0",
        "dependencies": {
 -        "@img/colour": "^1.0.0",
@@ -624,31 +678,31 @@ index 0e72452..80b33b6 100644
 -        "@img/sharp-win32-arm64": "0.34.5",
 -        "@img/sharp-win32-ia32": "0.34.5",
 -        "@img/sharp-win32-x64": "0.34.5"
-+        "@img/sharp-darwin-arm64": "0.35.3",
-+        "@img/sharp-darwin-x64": "0.35.3",
-+        "@img/sharp-freebsd-wasm32": "0.35.3",
-+        "@img/sharp-libvips-darwin-arm64": "1.3.2",
-+        "@img/sharp-libvips-darwin-x64": "1.3.2",
-+        "@img/sharp-libvips-linux-arm": "1.3.2",
-+        "@img/sharp-libvips-linux-arm64": "1.3.2",
-+        "@img/sharp-libvips-linux-ppc64": "1.3.2",
-+        "@img/sharp-libvips-linux-riscv64": "1.3.2",
-+        "@img/sharp-libvips-linux-s390x": "1.3.2",
-+        "@img/sharp-libvips-linux-x64": "1.3.2",
-+        "@img/sharp-libvips-linuxmusl-arm64": "1.3.2",
-+        "@img/sharp-libvips-linuxmusl-x64": "1.3.2",
-+        "@img/sharp-linux-arm": "0.35.3",
-+        "@img/sharp-linux-arm64": "0.35.3",
-+        "@img/sharp-linux-ppc64": "0.35.3",
-+        "@img/sharp-linux-riscv64": "0.35.3",
-+        "@img/sharp-linux-s390x": "0.35.3",
-+        "@img/sharp-linux-x64": "0.35.3",
-+        "@img/sharp-linuxmusl-arm64": "0.35.3",
-+        "@img/sharp-linuxmusl-x64": "0.35.3",
-+        "@img/sharp-webcontainers-wasm32": "0.35.3",
-+        "@img/sharp-win32-arm64": "0.35.3",
-+        "@img/sharp-win32-ia32": "0.35.3",
-+        "@img/sharp-win32-x64": "0.35.3"
++        "@img/sharp-darwin-arm64": "0.35.4",
++        "@img/sharp-darwin-x64": "0.35.4",
++        "@img/sharp-freebsd-wasm32": "0.35.4",
++        "@img/sharp-libvips-darwin-arm64": "1.3.3",
++        "@img/sharp-libvips-darwin-x64": "1.3.3",
++        "@img/sharp-libvips-linux-arm": "1.3.3",
++        "@img/sharp-libvips-linux-arm64": "1.3.3",
++        "@img/sharp-libvips-linux-ppc64": "1.3.3",
++        "@img/sharp-libvips-linux-riscv64": "1.3.3",
++        "@img/sharp-libvips-linux-s390x": "1.3.3",
++        "@img/sharp-libvips-linux-x64": "1.3.3",
++        "@img/sharp-libvips-linuxmusl-arm64": "1.3.3",
++        "@img/sharp-libvips-linuxmusl-x64": "1.3.3",
++        "@img/sharp-linux-arm": "0.35.4",
++        "@img/sharp-linux-arm64": "0.35.4",
++        "@img/sharp-linux-ppc64": "0.35.4",
++        "@img/sharp-linux-riscv64": "0.35.4",
++        "@img/sharp-linux-s390x": "0.35.4",
++        "@img/sharp-linux-x64": "0.35.4",
++        "@img/sharp-linuxmusl-arm64": "0.35.4",
++        "@img/sharp-linuxmusl-x64": "0.35.4",
++        "@img/sharp-webcontainers-wasm32": "0.35.4",
++        "@img/sharp-win32-arm64": "0.35.4",
++        "@img/sharp-win32-ia32": "0.35.4",
++        "@img/sharp-win32-x64": "0.35.4"
 +      },
 +      "peerDependenciesMeta": {
 +        "@types/node": {
@@ -658,10 +712,18 @@ index 0e72452..80b33b6 100644
      },
      "node_modules/sharp/node_modules/semver": {
 diff --git a/package.json b/package.json
-index 69a1f6b..711a691 100644
+index 69a1f6b..c7744e8 100644
 --- a/package.json
 +++ b/package.json
-@@ -32,8 +32,8 @@
+@@ -12,6 +12,7 @@
+     "node": ">=24 <25"
+   },
+   "scripts": {
++    "postinstall": "node scripts/patch-remotion-shutdown.mjs",
+     "sync:mediapipe": "node scripts/sync-mediapipe.mjs",
+     "sync:whisper-cli": "node scripts/sync-whisper-cli.mjs",
+     "generate:server-tool-catalog": "tsx server/agent-runs/generate-tool-catalog.mts",
+@@ -32,8 +33,8 @@
      "verify:directory-watch": "tsx shared/directory-import.verify.ts && tsx desktop/directory-watch-errors.verify.ts && tsx desktop/directory-watch-controller.verify.ts && tsx desktop/directory-watch-import.verify.ts && tsx desktop/directory-watch.verify.ts && tsx src/media/directoryDrop.verify.ts && tsx src/media/directoryImportAsset.verify.ts && tsx src/media/useDirectoryImport.verify.ts && tsx src/media/directoryImportIntegration.verify.ts && tsx src/media/media-folder-menu.verify.ts && tsx src/media/media-pool-batch-timeline.verify.ts",
      "verify:clip-fx-export": "node src/gl/clipFxExport.verify.mjs",
      "verify:approval-policy": "tsx src/agent/approval-policy.verify.ts",
@@ -672,17 +734,17 @@ index 69a1f6b..711a691 100644
      "verify:salvage": "tsx src/agent/model-selection.verify.ts && tsx src/agent/context-compaction.verify.ts && tsx src/agent/context-overflow-guidance.verify.ts && tsx src/agent/tool-activation.verify.ts && tsx src/agent/tool-result-compaction.verify.ts && tsx src/agent/tool-result-output.verify.ts && tsx src/agent/token-efficiency.verify.ts && tsx src/captions/srt.verify.ts && tsx server/plugins/assemblyai-upload.verify.ts && tsx src/agent/capabilities.verify.ts && tsx src/agent/vision.verify.ts",
      "verify:harness": "tsx src/agent/harness-context.verify.ts && tsx src/agent/harness-runtime.verify.ts && tsx src/agent/agent-hydration-recovery.verify.ts && tsx src/agent/retry-message.verify.ts && tsx src/agent/useAgentHistoryActions.verify.ts && tsx src/agent/external-draft-persistence.verify.ts && tsx server/external-agent/agent-runtime-persistence.verify.ts && tsx server/plugins/project-store-project-document.verify.ts",
      "verify:skills": "tsx src/agent/skills/skill-loading.verify.ts && tsx src/agent/skills/skill-deps.verify.ts && tsx server/skills-files.verify.ts",
-@@ -80,7 +80,8 @@
+@@ -80,7 +81,8 @@
      "verify:export-gl": "tsx src/export/export-reliability.verify.ts && tsx src/export/exportMediaPlan.verify.ts && tsx src/export/range.verify.ts && tsx src/gl/customTransitions.verify.ts && tsx src/gl/fx/chroma-key.verify.ts && tsx src/gl/fx/cube.verify.ts && tsx src/gl/fx/fx.verify.ts && tsx src/gl/shader-contract.verify.ts && tsx src/generate/media-export.geometry.verify.ts && tsx src/generate/video.verify.ts && tsx src/plugins/export.verify.ts && tsx src/plugins/resourcePreview.verify.ts && tsx src/plugins/validate.verify.ts && tsx src/multicam/align.verify.ts && tsx src/multicam/sync.verify.ts && tsx src/reframe/detect.verify.ts && tsx src/script/script.verify.ts && tsx --tsconfig tsconfig.app.json src/fonts/notoSansOffline.verify.ts",
      "verify:server-extra": "tsx server/media-process.verify.ts && tsx server/media-references.verify.ts && tsx server/media-normalization-reason.verify.ts && tsx server/media-normalization-reference.verify.ts && tsx server/media-normalization-admission.verify.ts && tsx server/plugins/upload-multipart-meta.verify.ts && tsx server/plugins/firecrawl.verify.ts && tsx server/plugins/request-shape-gate.verify.ts && tsx server/plugins/isolate-voice.verify.ts && tsx server/plugins/project-store-merge.verify.ts && tsx server/plugins/render-clip-cancellation.verify.ts && tsx server/plugins/storage-lifecycle.verify.ts && tsx server/plugins/video-reference.verify.ts && tsx server/safe-public-fetch.verify.ts && tsx shared/timeline-geometry.verify.ts && tsx remotion/render-timeout.verify.mjs && tsx server/plugins/stock-check.verify.ts",
      "verify:sqlite-migration": "tsx server/storage/sqlite-store.verify.ts && tsx server/storage/sqlite-migration-http.verify.ts && tsx server/plugins/project-store-export-recovery-sqlite.verify.ts && tsx src/export/serverExportRecovery.verify.ts",
 -    "verify:extract-audio": "tsx server/plugins/extract-audio.verify.ts"
 +    "verify:extract-audio": "tsx server/plugins/extract-audio.verify.ts",
-+    "verify:mantur-shutdown": "node --import tsx server/plugins/generation-shutdown.verify.ts && node --import tsx server/plugins/project-shutdown.verify.ts && node --import tsx server/external-agent/broker-shutdown.verify.ts && node --import tsx server/plugins/mantur-shutdown.verify.ts && node --import tsx src/agent/external-shutdown.verify.ts && node remotion/render-shutdown.verify.mjs && node --import tsx src/media/semantic-search/vectorCapability.verify.ts && node --import tsx server/plugins/mcp-transport-shutdown.verify.ts && node --import tsx server/plugins/extract-frames-shutdown.verify.ts && node --import tsx server/plugins/local-upload-shutdown.verify.ts"
++    "verify:mantur-shutdown": "node scripts/patch-remotion-shutdown.verify.mjs && node --import tsx server/media-process-shutdown.verify.ts && node --import tsx server/plugins/generation-shutdown.verify.ts && node --import tsx server/plugins/project-shutdown.verify.ts && node --import tsx server/external-agent/broker-shutdown.verify.ts && node --import tsx server/plugins/mantur-shutdown.verify.ts && node --import tsx src/agent/external-shutdown.verify.ts && node remotion/render-shutdown.verify.mjs && node --import tsx src/media/semantic-search/vectorCapability.verify.ts && node --import tsx server/plugins/mcp-transport-shutdown.verify.ts && node --import tsx server/plugins/extract-frames-shutdown.verify.ts && node --import tsx server/plugins/local-upload-shutdown.verify.ts"
    },
    "dependencies": {
      "@ai-sdk/alibaba": "^2.0.16",
-@@ -149,6 +150,12 @@
+@@ -149,6 +151,12 @@
      "vite": "^8.1.1"
    },
    "overrides": {
@@ -692,29 +754,51 @@ index 69a1f6b..711a691 100644
 +      "adm-zip": "0.6.0"
 +    },
 +    "@huggingface/transformers": {
-+      "sharp": "0.35.3"
++      "sharp": "0.35.4"
 +    }
    }
  }
+diff --git a/remotion/render-shutdown-browser.verify.mjs b/remotion/render-shutdown-browser.verify.mjs
+new file mode 100644
+index 0000000..1a007a3
+--- /dev/null
++++ b/remotion/render-shutdown-browser.verify.mjs
+@@ -0,0 +1,16 @@
++import assert from 'node:assert/strict';
++import { openBrowser } from '@remotion/renderer';
++import { ownRenderBrowser, assertRenderShutdownConfirmed } from './render-shutdown.mjs';
++
++const browserExecutable = process.env.MANTUR_TEST_BROWSER_EXECUTABLE;
++if (!browserExecutable) throw new Error('MANTUR_TEST_BROWSER_EXECUTABLE must identify the isolated test browser');
++const browser = await openBrowser('chrome', { browserExecutable });
++const close = ownRenderBrowser(browser);
++try {
++  assert(browser.runner.manturProcessAndPipesClosed instanceof Promise);
++  assert.throws(assertRenderShutdownConfirmed, /unconfirmed/);
++} finally {
++  await close();
++}
++assert.doesNotThrow(assertRenderShutdownConfirmed);
++console.log('Real browser close operation and spawned process-and-pipe close event confirmed');
 diff --git a/remotion/render-shutdown.d.mts b/remotion/render-shutdown.d.mts
 new file mode 100644
-index 0000000..eeea792
+index 0000000..f6cd6a6
 --- /dev/null
 +++ b/remotion/render-shutdown.d.mts
 @@ -0,0 +1,6 @@
 +/** Retain the first close operation for an acquired render browser. */
-+export function ownRenderBrowser(browser: { close(options: { silent: boolean }): Promise<void> }): () => Promise<void>;
++export function ownRenderBrowser(browser: { close(options: { silent: boolean }): Promise<void>; runner?: unknown }): () => Promise<void>;
 +/** Preserve both render and close errors. */
 +export function closeRenderBrowser(close: () => Promise<void>, renderingFailure?: { error: unknown }): Promise<void>;
 +/** Reject when this process lacks exact render process-and-pipe close evidence. */
 +export function assertRenderShutdownConfirmed(): void;
 diff --git a/remotion/render-shutdown.mjs b/remotion/render-shutdown.mjs
 new file mode 100644
-index 0000000..312c14c
+index 0000000..f6552a6
 --- /dev/null
 +++ b/remotion/render-shutdown.mjs
-@@ -0,0 +1,31 @@
-+/** Render browser ownership recorded only when this instance acquires a browser handle. */
+@@ -0,0 +1,37 @@
++/** Pending browser ownership ends only after its close operation and child-process close event. */
 +let acquiredBrowsers = 0;
 +const closeFailures = [];
 +
@@ -722,7 +806,13 @@ index 0000000..312c14c
 +export function ownRenderBrowser(browser) {
 +  acquiredBrowsers += 1;
 +  let closing;
-+  return () => closing ??= Promise.resolve().then(() => browser.close({ silent: true })).catch((error) => {
++  const processClosed = browser.runner?.manturProcessAndPipesClosed;
++  return () => closing ??= Promise.resolve().then(async () => {
++    await browser.close({ silent: true });
++    if (!(processClosed instanceof Promise)) throw new Error('Rendering browser lacks pinned process-and-pipe close evidence');
++    await processClosed;
++    acquiredBrowsers -= 1;
++  }).catch((error) => {
 +    closeFailures.push(error);
 +    throw error;
 +  });
@@ -737,27 +827,45 @@ index 0000000..312c14c
 +  }
 +}
 +
-+/** The pinned public Browser.close waits for exit, not the spawned process's close event and pipes. */
++/** Reject while any browser is pending or any browser cleanup failed. */
 +export function assertRenderShutdownConfirmed() {
 +  const failures = [...closeFailures];
 +  if (acquiredBrowsers) failures.push(new Error(
-+    `This editor acquired ${acquiredBrowsers} rendering browser(s); Remotion does not expose their process-and-pipe close completion`,
++    `This editor has ${acquiredBrowsers} rendering browser(s) without confirmed process-and-pipe closure`,
 +  ));
 +  if (failures.length) throw new AggregateError(failures, 'Rendering subprocess shutdown is unconfirmed; installation is blocked');
 +}
 diff --git a/remotion/render-shutdown.verify.mjs b/remotion/render-shutdown.verify.mjs
 new file mode 100644
-index 0000000..9d4c87e
+index 0000000..d191c34
 --- /dev/null
 +++ b/remotion/render-shutdown.verify.mjs
-@@ -0,0 +1,37 @@
+@@ -0,0 +1,57 @@
 +import assert from 'node:assert/strict';
 +import { setImmediate as tick } from 'node:timers/promises';
 +import { withAbortableCompositionSelection } from './render.mjs';
 +import { assertRenderShutdownConfirmed } from './render-shutdown.mjs';
++import { ownRenderBrowser } from './render-shutdown.mjs';
 +
 +// Merely importing the installed renderer has not acquired a rendering subprocess.
 +assert.doesNotThrow(assertRenderShutdownConfirmed);
++const processClosed = Promise.withResolvers();
++let normalCloses = 0;
++const close = ownRenderBrowser({
++  runner: { manturProcessAndPipesClosed: processClosed.promise },
++  close: async () => { normalCloses += 1; },
++});
++let confirmed = false;
++const pending = close().then(() => { confirmed = true; });
++await tick();
++assert.equal(confirmed, false, 'Browser.close alone does not prove output pipes closed');
++assert.throws(assertRenderShutdownConfirmed, /unconfirmed/);
++processClosed.resolve();
++await pending;
++await close();
++assert.equal(normalCloses, 1, 'cleanup is owned once');
++assert.doesNotThrow(assertRenderShutdownConfirmed);
++
 +const released = Promise.withResolvers();
 +const closing = Promise.withResolvers();
 +let closes = 0;
@@ -787,7 +895,9 @@ index 0000000..9d4c87e
 +  run: async () => assert.fail('failed selection must not render'),
 +}), (error) => error instanceof AggregateError && error.errors[0] === original && error.errors[1] === earlierClose);
 +assert.equal(abortCloses, 1, 'finally retains the original abort-triggered close promise');
-+console.log('render shutdown: unused instance, pending close, failed close and original failure retention passed');
++await assert.rejects(ownRenderBrowser({ close: async () => {} })(), /lacks pinned process-and-pipe close evidence/);
++assert.throws(assertRenderShutdownConfirmed, /unconfirmed/);
++console.log('render shutdown: process-and-pipe barrier, idempotence, missing evidence and failure retention passed');
 diff --git a/remotion/render.mjs b/remotion/render.mjs
 index 0357324..62bdff6 100644
 --- a/remotion/render.mjs
@@ -854,6 +964,80 @@ index 0357324..62bdff6 100644
 +    if (closeBrowser) await closeRenderBrowser(closeBrowser, renderingFailure);
    }
  }
+diff --git a/scripts/patch-remotion-shutdown.mjs b/scripts/patch-remotion-shutdown.mjs
+new file mode 100644
+index 0000000..8da7a9d
+--- /dev/null
++++ b/scripts/patch-remotion-shutdown.mjs
+@@ -0,0 +1,43 @@
++/** Expose the exact child-process close event in pinned Remotion 4.0.509. */
++import { createHash } from 'node:crypto';
++import { readFile, writeFile } from 'node:fs/promises';
++import { createRequire } from 'node:module';
++import { dirname, join, resolve } from 'node:path';
++import { fileURLToPath } from 'node:url';
++
++const patches = [
++  { file: 'browser/BrowserRunner.js', indent: '    ', comma: ',',
++    original: 'e5401a2f9ddacefd34814025ce2a26c378584cab31237b1655d74c880e07adfe',
++    patched: '3f32af1d0140b3f3316e50330e7bd900ab4ef16f2738b5634455f484d16c26ae' },
++  { file: 'esm/index.mjs', indent: '  ', comma: '',
++    original: 'f9604c14bb917e263c9e79c85044b681d1da41df5b5b8ae586a6f2e4b7050413',
++    patched: '465ca13edf1f61d2a3524741523a47733bcbe2a6c65a5a29cf81a0119eb4c866' },
++];
++const digest = source => createHash('sha256').update(source).digest('hex');
++
++/** Apply only to the reviewed source bytes; an unknown dependency version fails closed. */
++export function patchRemotionShutdown(source) {
++  const hash = digest(source);
++  const patch = patches.find(entry => entry.original === hash || entry.patched === hash);
++  if (!patch) throw new Error('Unrecognized Remotion BrowserRunner; review the shutdown patch before building');
++  if (hash === patch.patched) return source;
++  const { indent, comma } = patch;
++  const patched = source.replace(
++    `${indent}const browserWSEndpoint = await waitForWSEndpoint({`,
++    `${indent}const manturProcessAndPipesClosed = new Promise((resolve) => {\n${indent}${indent}proc.once("close", () => resolve());\n${indent}});\n${indent}const browserWSEndpoint = await waitForWSEndpoint({`,
++  ).replace(`${indent}${indent}closeProcess${comma}\n${indent}};\n};`, `${indent}${indent}closeProcess,\n${indent}${indent}manturProcessAndPipesClosed${comma}\n${indent}};\n};`);
++  if (digest(patched) !== patch.patched) throw new Error('Remotion shutdown patch did not produce the reviewed source');
++  return patched;
++}
++
++if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
++  const require = createRequire(import.meta.url);
++  const root = dirname(require.resolve('@remotion/renderer'));
++  const plans = await Promise.all(patches.map(async ({ file }) => {
++    const path = join(root, file);
++    const source = await readFile(path, 'utf8');
++    return { path, source, patched: patchRemotionShutdown(source) };
++  }));
++  for (const { path, source, patched } of plans) if (patched !== source) await writeFile(path, patched);
++  console.log('Remotion 4.0.509 process-and-pipe close evidence patch verified');
++}
+diff --git a/scripts/patch-remotion-shutdown.verify.mjs b/scripts/patch-remotion-shutdown.verify.mjs
+new file mode 100644
+index 0000000..9789183
+--- /dev/null
++++ b/scripts/patch-remotion-shutdown.verify.mjs
+@@ -0,0 +1,19 @@
++import assert from 'node:assert/strict';
++import { readFile } from 'node:fs/promises';
++import { createRequire } from 'node:module';
++import { dirname, join } from 'node:path';
++import { patchRemotionShutdown } from './patch-remotion-shutdown.mjs';
++
++const require = createRequire(import.meta.url);
++for (const file of ['browser/BrowserRunner.js', 'esm/index.mjs']) {
++  const installed = await readFile(join(dirname(require.resolve('@remotion/renderer')), file), 'utf8');
++  const patched = patchRemotionShutdown(installed);
++  assert.equal(patchRemotionShutdown(patched), patched);
++  const original = patched.replace(
++    /^ +const manturProcessAndPipesClosed = new Promise\(\(resolve\) => \{\n +proc.once\("close", \(\) => resolve\(\)\);\n +\}\);\n/m, '',
++  ).replace(/(\n +closeProcess),\n +manturProcessAndPipesClosed(,?)/, '$1$2');
++  assert.equal(patchRemotionShutdown(original), patched);
++  assert.throws(() => patchRemotionShutdown(`${original}\n`), /Unrecognized Remotion/);
++  assert(patched.indexOf('proc.once("close"') < patched.indexOf('await waitForWSEndpoint('));
++}
++console.log('Remotion patch: original and patched hashes, idempotence and unknown-source rejection passed');
 diff --git a/server/external-agent/broker-registry.ts b/server/external-agent/broker-registry.ts
 index 68079ae..b33e42d 100644
 --- a/server/external-agent/broker-registry.ts
@@ -1753,7 +1937,7 @@ index 64509b0..5bc5027 100644
  }
 
 diff --git a/server/media-acceleration.ts b/server/media-acceleration.ts
-index 2b6e85e..98fbce1 100644
+index 2b6e85e..e89f04e 100644
 --- a/server/media-acceleration.ts
 +++ b/server/media-acceleration.ts
 @@ -1,4 +1,5 @@
@@ -1766,7 +1950,7 @@ index 2b6e85e..98fbce1 100644
      cwd: dirname(ffmpeg),
      stdio: ['ignore', 'pipe', 'ignore'],
    });
-+  trackEditorMediaProcess(child);
++  trackEditorMediaProcess(child, 'hardware acceleration list probe');
    let output = '';
    child.stdout.on('data', (chunk: Buffer) => { output = `${output}${chunk}`.slice(0, 8192); });
    const timer = setTimeout(() => child.kill('SIGKILL'), 5_000);
@@ -1774,7 +1958,7 @@ index 2b6e85e..98fbce1 100644
      cwd: dirname(ffmpeg),
      stdio: ['ignore', 'pipe', 'pipe'],
    });
-+  trackEditorMediaProcess(child);
++  trackEditorMediaProcess(child, 'encoder quality probe');
    let output = '';
    const collect = (chunk: Buffer) => { output = `${output}${chunk}`.slice(0, 16_384); };
    child.stdout.on('data', collect);
@@ -1782,7 +1966,7 @@ index 2b6e85e..98fbce1 100644
      cwd: dirname(ffmpeg),
      stdio: ['pipe', 'ignore', 'ignore'],
    });
-+  trackEditorMediaProcess(child);
++  trackEditorMediaProcess(child, 'encoder execution probe');
    const timer = setTimeout(() => child.kill('SIGKILL'), 12_000);
    child.once('error', () => {
      clearTimeout(timer);
@@ -1790,12 +1974,49 @@ index 2b6e85e..98fbce1 100644
      cwd: dirname(ffmpeg),
      stdio: ['ignore', 'pipe', 'pipe'],
    });
-+  trackEditorMediaProcess(child);
++  trackEditorMediaProcess(child, 'compiled encoder list probe');
    let output = '';
    const collect = (chunk: Buffer) => { output = `${output}${chunk}`.slice(0, 16_384); };
    child.stdout.on('data', collect);
+diff --git a/server/media-process-shutdown.verify.ts b/server/media-process-shutdown.verify.ts
+new file mode 100644
+index 0000000..e3d6e48
+--- /dev/null
++++ b/server/media-process-shutdown.verify.ts
+@@ -0,0 +1,31 @@
++import assert from 'node:assert/strict';
++import { spawn } from 'node:child_process';
++import { once } from 'node:events';
++import { basename } from 'node:path';
++import { trackEditorMediaProcess, stopEditorMediaProcessesForShutdown } from './shutdown-runtime.ts';
++
++const child = trackEditorMediaProcess(spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
++  stdio: 'ignore', env: {},
++}), 'synthetic signal probe');
++const closed = once(child, 'close');
++try {
++  await once(child, 'spawn');
++  assert.equal(child.kill('SIGKILL'), true);
++  await closed;
++  await assert.rejects(stopEditorMediaProcessesForShutdown(), error => {
++    assert(error instanceof AggregateError);
++    assert.equal(error.errors.length, 1);
++    const failure: unknown = error.errors[0];
++    assert(failure instanceof Error);
++    assert(failure.message.includes('synthetic signal probe'));
++    assert(failure.message.includes(basename(process.execPath)));
++    assert(failure.message.includes(`pid ${child.pid}`));
++    assert(failure.message.includes('SIGKILL'));
++    assert(!failure.message.includes('setInterval'));
++    return true;
++  });
++} finally {
++  if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
++  await closed;
++}
++console.log('Media shutdown retains a signaled child failure with operation, basename and PID only');
 diff --git a/server/media-process.ts b/server/media-process.ts
-index 868587f..45b872d 100644
+index 868587f..accad56 100644
 --- a/server/media-process.ts
 +++ b/server/media-process.ts
 @@ -9,6 +9,7 @@ import {
@@ -1811,7 +2032,7 @@ index 868587f..45b872d 100644
    options: SpawnOptions = {},
  ): ChildProcess {
 -  const child = spawn(command, args, options);
-+  const child = trackEditorMediaProcess(spawn(command, args, options));
++  const child = trackEditorMediaProcess(spawn(command, args, options), 'media operation');
 +  if (options.detached || options.shell) recordUnconfirmedEditorProducer('media subprocess with detached or shell descendants');
    if (child.pid !== undefined) {
      try {
@@ -1836,6 +2057,18 @@ index 36411d0..6dbcead 100644
            },
          },
        );
+diff --git a/server/plugins/export-media-plan.verify.ts b/server/plugins/export-media-plan.verify.ts
+index 4f2825e..79cc9b4 100644
+--- a/server/plugins/export-media-plan.verify.ts
++++ b/server/plugins/export-media-plan.verify.ts
+@@ -667,6 +667,7 @@ try {
+   let browserCloseCalls = 0;
+   let renderMediaCalls = 0;
+   const fakeBrowser = {
++    runner: { manturProcessAndPipesClosed: Promise.resolve() },
+     async close() {
+       browserCloseCalls += 1;
+     },
 diff --git a/server/plugins/export-stage.ts b/server/plugins/export-stage.ts
 index e26b987..a36f18b 100644
 --- a/server/plugins/export-stage.ts
@@ -3697,11 +3930,12 @@ index cd50ad1..c8b7fb2 100644
      case 'semantic-vectors-search':
 diff --git a/server/shutdown-runtime.ts b/server/shutdown-runtime.ts
 new file mode 100644
-index 0000000..dd19356
+index 0000000..ea9a2f0
 --- /dev/null
 +++ b/server/shutdown-runtime.ts
-@@ -0,0 +1,45 @@
+@@ -0,0 +1,46 @@
 +import type { ChildProcess } from 'node:child_process';
++import { basename } from 'node:path';
 +import { ShutdownWork } from '../shared/shutdown-work.ts';
 +
 +export const editorRequests = new ShutdownWork('Editor requests');
@@ -3722,13 +3956,13 @@ index 0000000..dd19356
 +export function recordUnconfirmedEditorProducer(name: string): void { unconfirmed.add(name); }
 +
 +/** Retain the exact child handle's close event, including inherited output pipes. */
-+export function trackEditorMediaProcess<T extends ChildProcess>(child: T): T {
++export function trackEditorMediaProcess<T extends ChildProcess>(child: T, operation: string): T {
 +  let failure: Error | undefined;
 +  const closed = new Promise<void>((resolve, reject) => {
 +    child.once('error', (error) => { failure = error; });
 +    child.once('close', (_code, signal) => {
 +      if (failure && child.pid !== undefined) reject(failure);
-+      else if (signal) reject(new Error(`Editor media subprocess ended with ${signal}`));
++      else if (signal) reject(new Error(`Editor media subprocess ${operation} (${basename(child.spawnfile)}, pid ${child.pid}) ended with ${signal}`));
 +      else resolve();
 +    });
 +  });
