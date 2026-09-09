@@ -44,17 +44,17 @@ export class ManturAssets extends TypertRemoteService {
   }
   @Remote('load') async load(agent: Agent, assetsPath: string, _clipsPath?: string, mediaManifest?: string): Promise<AssetSnapshot> {
     const source = await this.pin(agent, assetsPath); const sourceText = await this.read(source.path, this.config.maxBytes)
-    const parsed = report(sourceText); const root = await this.ctx.fs.resolve(this.cwd(agent)); const stateFile = `${root.displayPath}/.mantur-assets-${fingerprint(source.path).slice(0, 16)}.json`
-    const state = await this.readState(stateFile, source.path); const media = new Map<string, { path: string; sha: string; type: string }>()
+    report(sourceText); const root = await this.ctx.fs.resolve(this.cwd(agent)); const stateFile = `${root.displayPath}/.mantur-assets-${fingerprint(source.path).slice(0, 16)}.json`
+    const media = new Map<string, { path: string; sha: string; type: string }>()
     if (mediaManifest !== undefined) {
       const manifest = JSON.parse(await this.read((await this.pin(agent, mediaManifest)).path, this.config.maxBytes)) as unknown
       if (!Array.isArray(manifest)) throw new Error('Media manifest must be an array')
       for (const item of manifest) { if (!item || typeof item !== 'object') throw new Error('Invalid media manifest row'); const row = item as Record<string, unknown>; if (typeof row.clip_id !== 'string' || typeof row.file !== 'string') throw new Error('Media manifest requires clip_id and file'); const target = await this.target(agent, row.file, true); const stat = await this.ctx.fs.stat(target); if (stat?.type !== 'file') throw new Error('Media file missing'); media.set(row.clip_id, { path: target.displayPath, sha: String(row.sha256 ?? ''), type: 'video/mp4' }) }
     }
     this.sessions.set(agent.session as object, { source, stateFile, media })
-    return { source, stateVersion: (await this.ctx.fs.stat(await this.target(agent, stateFile, true)))?.version as AssetVersion | undefined ?? null, state, rows: parsed.rows, projectState: null }
+    return this.snapshot(agent, source)
   }
-  @Remote('saveDraft') async saveDraft(agent: Agent, command: AssetCommand): Promise<AssetSnapshot> { const current = await this.require(agent, command.source); const snapshot = await this.snapshot(agent, current); if (snapshot.stateVersion !== command.stateVersion) throw new FsError('Asset journal changed; reload before saving.', 'FS_STALE_VERSION'); const draft = { revision: (snapshot.state.drafts.at(-1)?.revision ?? 0) + 1, source: current, edits: command.edits }; snapshot.state.drafts.push(draft); await this.writeState(agent, current, snapshot.state, snapshot.stateVersion); return this.snapshot(agent, current) }
+  @Remote('saveDraft') async saveDraft(agent: Agent, command: AssetCommand): Promise<AssetSnapshot> { const current = await this.require(agent, command.source); const snapshot = await this.snapshot(agent, current); if (snapshot.stateVersion !== command.stateVersion) throw new FsError('Asset journal changed; reload before saving.', 'FS_STALE_VERSION'); if (snapshot.state.pending !== null) throw new Error('An unfinished source write requires recovery'); const draft = { revision: (snapshot.state.drafts.at(-1)?.revision ?? 0) + 1, source: current, edits: command.edits }; snapshot.state.drafts.push(draft); await this.writeState(agent, current, snapshot.state, snapshot.stateVersion); return this.snapshot(agent, current) }
   /**
    * Capture disk prompt fields separately from the user's proposed text.
    * @param agent - Owning Session.
@@ -94,7 +94,77 @@ export class ManturAssets extends TypertRemoteService {
     await this.writeState(agent, current, state, stateVersion)
     return { requestId: id, source: current, edits }
   }
-  @Remote('apply') async apply(agent: Agent, requestId: string): Promise<AssetSnapshot> { const info = await this.session(agent); const source = info.source; const state = await this.readState(info.stateFile, source.path); const proposal = state.proposals.find(item => String(item.id) === requestId); if (!proposal || proposal.status !== 'proposed') throw new Error('Only an Agent proposal can be applied'); const current = await this.pin(agent, source.path); if (current.sha256 !== source.sha256 || current.version !== source.version) throw new FsError('Source changed; proposal was not applied.', 'FS_STALE_VERSION'); const text = await this.read(source.path, this.config.maxBytes); const next = report(text).replace(proposal.edits); const after = { ...await this.pin(agent, source.path), sha256: fingerprint(next) }; state.pending = { proposal: proposal.id, source: current, afterText: next, afterSha: after.sha256 }; const oldVersion = await this.stateVersion(agent); await this.writeState(agent, source, state, oldVersion); await this.ctx.fs.writeText(await this.target(agent, source.path, true), next, { kind: 'replaceIfVersion', version: current.version }); proposal.status = 'applied'; state.pending = null; state.history.push({ id: proposal.id, before: proposal.before, after: proposal.edits, beforeSha: source.sha256, afterSha: after.sha256 }); await this.writeState(agent, after, state, await this.stateVersion(agent)); return this.snapshot(agent, after) }
+  /**
+   * Commit an approved proposal with an exclusive journal generation.
+   * @param agent - Owning Session.
+   * @param requestId - Proposal to apply.
+   * @returns Current disk observation after both writes complete.
+   */
+  @Remote('apply')
+  async apply(agent: Agent, requestId: string): Promise<AssetSnapshot> {
+    const info = await this.session(agent)
+    const version = await this.stateVersion(agent)
+    const state = await this.readState(info.stateFile, info.source.path)
+    if (state.pending !== null) throw new Error('An unfinished source write requires recovery')
+    const proposal = state.proposals.find(item => item.id === requestId)
+    if (proposal?.status !== 'proposed') throw new Error('Only an Agent proposal can be applied')
+    const current = await this.require(agent, proposal.source)
+    const text = await this.read(current.path, this.config.maxBytes)
+    if (fingerprint(text) !== current.sha256) throw new FsError('Source changed before applying.', 'FS_STALE_VERSION')
+    const next = report(text).replace(proposal.edits)
+    state.pending = { proposal: proposal.id, source: current, afterText: next, afterSha: fingerprint(next) }
+    const reserved = await this.writeState(agent, current, state, version)
+    await this.ctx.fs.writeText(await this.target(agent, current.path, true), next, {
+      kind: 'replaceIfVersion', version: current.version,
+    })
+    return this.finishWrite(agent, state, reserved)
+  }
+
+  /**
+   * Retry only the exact pending write or finalize its already-written bytes.
+   * @param agent - Session reopening the selected report.
+   * @param expected - Journal generation shown by the recovery UI.
+   * @returns Completed state; conflicting source bytes remain untouched.
+   */
+  @Remote('recover')
+  async recover(agent: Agent, expected: AssetVersion): Promise<AssetSnapshot> {
+    const info = await this.session(agent)
+    if (await this.stateVersion(agent) !== expected) throw new FsError('Asset journal changed.', 'FS_STALE_VERSION')
+    const state = await this.readState(info.stateFile, info.source.path)
+    const pending = state.pending
+    if (pending === null) throw new Error('No unfinished asset write')
+    if (pending.source.path !== state.path || fingerprint(pending.afterText) !== pending.afterSha) {
+      throw new Error('Invalid pending asset write')
+    }
+    const current = await this.pin(agent, state.path)
+    if (current.sha256 !== pending.afterSha && (current.sha256 !== pending.source.sha256
+      || current.version !== pending.source.version)) {
+      throw new FsError('Source changed outside the pending write; recovery refused.', 'FS_STALE_VERSION')
+    }
+    // Reserve this journal generation before either retrying or completing it.
+    const reserved = await this.writeState(agent, current, state, expected)
+    if (current.sha256 !== pending.afterSha) {
+      await this.ctx.fs.writeText(await this.target(agent, state.path, true), pending.afterText, {
+        kind: 'replaceIfVersion', version: current.version,
+      })
+    }
+    return this.finishWrite(agent, state, reserved)
+  }
+
+  private async finishWrite(agent: Agent, state: AssetState, reserved: AssetVersion): Promise<AssetSnapshot> {
+    const pending = state.pending
+    if (pending === null) throw new Error('Missing pending asset write')
+    const current = await this.pin(agent, state.path)
+    if (current.sha256 !== pending.afterSha) throw new FsError('Written source changed before completion.', 'FS_STALE_VERSION')
+    const proposal = state.proposals.find(item => item.id === pending.proposal)
+    if (proposal?.status !== 'proposed') throw new Error('Pending proposal is unavailable')
+    proposal.status = 'applied'
+    state.history.push({ id: proposal.id, before: proposal.before, after: proposal.edits,
+      beforeSha: pending.source.sha256, afterSha: pending.afterSha })
+    state.pending = null
+    await this.writeState(agent, current, state, reserved)
+    return this.snapshot(agent, current)
+  }
   @Remote('propose') async proposeRemote(agent: Agent, requestId: string, source: string, edits: PromptEdit[]): Promise<AssetProposal> { return this.propose(agent, requestId, source, edits) }
   @Remote('media') async media(agent: Agent, id: string): Promise<AssetMedia> {
     const row = (await this.session(agent)).media.get(id)
@@ -145,7 +215,9 @@ export class ManturAssets extends TypertRemoteService {
   }
   private async propose(agent: Agent | undefined, requestId: string, source: string, edits: PromptEdit[]): Promise<AssetProposal> {
     if (!agent) throw new Error('Asset proposal requires an owning Agent')
-    const info = await this.session(agent); const state = await this.readState(info.stateFile, source)
+    const info = await this.session(agent); const expected = await this.stateVersion(agent)
+    const state = await this.readState(info.stateFile, source)
+    if (state.pending !== null) throw new Error('An unfinished source write requires recovery')
     const proposal = state.proposals.find(item => String(item.id) === requestId)
     if (!proposal || proposal.status !== 'requested') throw new Error('Unknown or completed asset request')
     if (edits.length !== proposal.before.length || new Set(edits.map(edit => edit.key)).size !== edits.length
@@ -153,11 +225,29 @@ export class ManturAssets extends TypertRemoteService {
       throw new Error('Agent proposal targets do not match the requested rows')
     }
     proposal.edits = edits; proposal.status = 'proposed'
-    await this.writeState(agent, proposal.source, state, await this.stateVersion(agent)); return proposal
+    await this.writeState(agent, proposal.source, state, expected); return proposal
   }
-  private async snapshot(agent: Agent, source: SourcePin): Promise<AssetSnapshot> { const text = await this.read(source.path, this.config.maxBytes); const stateFile = (await this.session(agent)).stateFile; const state = await this.readState(stateFile, source.path); return { source: { ...source, sha256: fingerprint(text) }, stateVersion: await this.stateVersion(agent), state, rows: report(text).rows, projectState: null } }
-  private async stateVersion(agent: Agent) { return (await this.ctx.fs.stat(await this.target(agent, (await this.session(agent)).stateFile, true)))?.version as AssetVersion | undefined ?? null }
-  private async writeState(agent: Agent, _source: SourcePin, state: AssetState, expected: AssetVersion | null) { const path = (await this.session(agent)).stateFile; const target = await this.target(agent, path, true); const text = JSON.stringify(state, null, 2) + '\n'; if (expected === null) await this.ctx.fs.writeText(target, text, { kind: 'createIfAbsent' }); else await this.ctx.fs.writeText(target, text, { kind: 'replaceIfVersion', version: expected }) }
+  private async snapshot(agent: Agent, source: SourcePin): Promise<AssetSnapshot> {
+    const current = await this.pin(agent, source.path)
+    const text = await this.read(current.path, this.config.maxBytes)
+    if (fingerprint(text) !== current.sha256) throw new FsError('Source changed while reading.', 'FS_STALE_VERSION')
+    const stateFile = (await this.session(agent)).stateFile
+    const version = await this.stateVersion(agent)
+    const state = await this.readState(stateFile, current.path)
+    if (await this.stateVersion(agent) !== version) throw new FsError('Journal changed while reading.', 'FS_STALE_VERSION')
+    return { source: current, stateVersion: version, state, rows: report(text).rows, projectState: null }
+  }
+  private async stateVersion(agent: Agent) {
+    return (await this.ctx.fs.stat(await this.target(agent, (await this.session(agent)).stateFile, true)))?.version ?? null
+  }
+  private async writeState(agent: Agent, _source: SourcePin, state: AssetState, expected: AssetVersion | null): Promise<AssetVersion> {
+    const target = await this.target(agent, (await this.session(agent)).stateFile, true)
+    const text = JSON.stringify(state, null, 2) + '\n'
+    if (Buffer.byteLength(text) > this.config.maxBytes) throw new FsError('Asset journal exceeds its size limit.', 'FS_TOO_LARGE')
+    const result = await this.ctx.fs.writeText(target, text, expected === null
+      ? { kind: 'createIfAbsent' } : { kind: 'replaceIfVersion', version: expected })
+    return result.version
+  }
   private async readState(path: string, source: string): Promise<AssetState> {
     const target = await this.ctx.fs.resolve(path)
     const before = await this.ctx.fs.stat(target)

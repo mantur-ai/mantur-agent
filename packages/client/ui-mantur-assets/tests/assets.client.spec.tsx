@@ -17,6 +17,16 @@ it('mounts the Chinese asset panel and drives load, save, and apply through prod
 
 it('shows a provider error without crashing the asset panel', async () => {
   const load = vi.fn(async () => { throw new Error('FS_STALE_VERSION') })
-  render(<AssetsPanel {...({ useSessions: (select: (value: { current: string }) => unknown) => select({ current: 'session-1' }), t: (key: string) => key, closeWorkbench: vi.fn(), load, save: vi.fn(), request: vi.fn(), apply: vi.fn() } as never)} />)
+  const view = render(<AssetsPanel {...({ useSessions: (select: (value: { current: string }) => unknown) => select({ current: 'session-1' }), t: (key: string) => key, closeWorkbench: vi.fn(), load, save: vi.fn(), request: vi.fn(), apply: vi.fn() } as never)} />)
   fireEvent.click(screen.getByText('load')); await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('FS_STALE_VERSION'))
+  view.unmount()
+})
+
+it('shows persisted unfinished writes and requested proposals after loading', async () => {
+  const pendingSnapshot = { ...snapshot, state: { ...snapshot.state, pending: { proposal: 'pending-1' }, proposals: [{ id: 'request-1', status: 'requested' }] } }
+  const view = render(<AssetsPanel {...({ useSessions: (select: (value: { current: string }) => unknown) => select({ current: 'session-1' }), t: (key: string) => key, closeWorkbench: vi.fn(), load: vi.fn(async () => pendingSnapshot), save: vi.fn(), request: vi.fn(), apply: vi.fn() } as never)} />)
+  fireEvent.click(view.getByText('load'))
+  await waitFor(() => expect(view.getByRole('status').textContent).toBe('unfinished pending-1'))
+  expect(view.getByText('pending request-1')).toBeTruthy()
+  view.unmount()
 })

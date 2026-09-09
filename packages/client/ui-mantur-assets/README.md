@@ -2,7 +2,9 @@
 
 This plugin reads an explicitly selected Mantur pipeline report and keeps prompt drafts, Agent proposals, actual request fields, and media observations separate. Report writes are guarded by the source filesystem version and SHA-256 fingerprint. A pending journal is written before replacement so a caller can recover after interruption without guessing an asset-to-media binding.
 
-The browser face is intentionally an empty registration until the shared workbench asset slot is available in the assembled profile. The Host face is independently testable and is the production source of truth for readback and guarded writes.
+The browser panel reads reports, selects prompt rows, saves drafts, submits proposal requests, and displays persisted unfinished requests and writes. Recovery is a Host operation; the panel has no recovery button. Recovery retries the recorded replacement only while the source version and hash still match, or completes history when the replacement bytes are already present. Conflicting source content remains untouched.
+
+Journal updates retain the filesystem version observed before reading and use conditional writes. Concurrent calls through one LocalFileSystem instance are covered; cross-process writers and power-loss durability are not verified. Tests read an acceptance report from an external volume and modify private temporary copies; they require that local fixture.
 
 ## Model Experience
 
