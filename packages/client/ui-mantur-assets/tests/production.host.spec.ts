@@ -1,5 +1,5 @@
 /* oxlint-disable @stylistic/max-len -- acceptance setup keeps source paths explicit. */
-import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { Context } from '@deepseek-ai/cordis'
@@ -50,6 +50,25 @@ it('fails loudly on a malformed journal instead of replacing it with an empty st
     await writeFile(join(root, `.mantur-assets-${fingerprint(absolute).slice(0, 16)}.json`), '{broken')
     const agent = { ctx, session: { id: 'journal-session', header: { cwd: root } } } as never
     await expect(ctx.manturAssets.load(agent, 'assets-report.json')).rejects.toThrow(/JSON/)
+  } finally { await ctx.fiber.dispose(); await rm(root, { recursive: true, force: true }) }
+})
+
+it('discovers project-local image and video candidates and serves explicit previews', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dsh-assets-candidates-')); const ctx = new Context()
+  try {
+    await cp(assets, join(root, 'assets-report.json')); await mkdir(join(root, '候选'), { recursive: true })
+    await cp(join(real, '资产/生成图片/CHAR-001-V01-V01.png'), join(root, '候选/CHAR-001-V01-V01.png'))
+    await writeFile(join(root, '候选/CLIP-EP31-001.mp4'), Buffer.from([0, 0, 0, 0, 0x66, 0x74, 0x79, 0x70, 0, 0, 0, 0]))
+    const transport = connection(); ctx.provide('connection', transport.service as never); ctx.provide('typert', {} as never); await ctx.plugin(SystemPrompt, { includeHarnessIdentity: false }); await ctx.plugin(Tools); await ctx.plugin(LocalFileSystem, { cwd: root }); await ctx.plugin(Assets, { maxBytes: 9_000_000, maxEntries: 100, maxMediaBytes: 50_000_000 })
+    const agent = { ctx, session: { id: 'candidate-session', header: { cwd: root } } } as never
+    await ctx.manturAssets.load(agent, 'assets-report.json')
+    const candidates = await ctx.manturAssets.candidates(agent, '候选')
+    expect(candidates.map(candidate => candidate.assetId)).toEqual(['CHAR-001-V01', null])
+    const image = await ctx.manturAssets.preview(agent, candidates[0]!.path); expect(image.kind).toBe('image')
+    const video = await ctx.manturAssets.preview(agent, candidates[1]!.path); expect(video.kind).toBe('video')
+    const route = transport.get()!
+    expect((await route.fetch(new Request(new URL(image.url, 'http://127.0.0.1')))).headers.get('content-type')).toBe('image/png')
+    expect((await route.fetch(new Request(new URL(video.url, 'http://127.0.0.1')))).headers.get('content-type')).toBe('video/mp4')
   } finally { await ctx.fiber.dispose(); await rm(root, { recursive: true, force: true }) }
 })
 

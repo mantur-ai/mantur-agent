@@ -9,10 +9,18 @@ const record = (value: unknown): Row => {
 type Row = Record<string, unknown>
 interface Located { row: Row; mirror?: Row; prompt: string; negative?: string; view: AssetRow }
 
-/** @param text - Exact file bytes decoded as UTF-8. @returns SHA-256 fingerprint. */
+/**
+ * Hash text or bytes for source and media freshness checks.
+ * @param text - Exact file bytes decoded as UTF-8, or raw media bytes.
+ * @returns SHA-256 fingerprint.
+ */
 export function fingerprint(text: string | Uint8Array): string { return createHash('sha256').update(text).digest('hex') }
 
-/** @param text - Pipeline JSON. @returns Parsed report with field-local replacement. */
+/**
+ * Parse a supported Mantur pipeline report and expose guarded prompt replacement.
+ * @param text - Pipeline JSON.
+ * @returns Parsed rows with field-local replacement.
+ */
 export function report(text: string): { rows: AssetRow[]; replace: (edits: PromptEdit[]) => string } {
   const doc = record(JSON.parse(text))
   const located: Located[] = []

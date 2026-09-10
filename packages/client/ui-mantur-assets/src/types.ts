@@ -24,6 +24,19 @@ export interface AssetRow extends PromptText {
   actualRequest: string
   actualPrompt: string
 }
+/** A project-local media file discovered for explicit user review. */
+export interface AssetCandidate {
+  /** Exact asset identity when the filename matches one loaded report row. */
+  assetId: string | null
+  /** Canonical project-local file path. */
+  path: string
+  /** File basename shown in the workbench. */
+  name: string
+  /** Media kind inferred from the filename. */
+  kind: 'image' | 'video'
+  /** Byte size observed during discovery. */
+  size: number
+}
 /** Selected row and its exact observed fingerprint. */
 export interface PromptEdit extends PromptText { key: AssetKey; fingerprint: string }
 /** Every saved revision retains its source observation. */
