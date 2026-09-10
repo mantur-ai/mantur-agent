@@ -29,6 +29,8 @@ kind: "package-reference"
 
 ### 重排序与视图选项
 
+Host 的 `newSessionWorkspace` 配置默认为 `recent`：首次进入和未指定范围的新会话使用当前或最近 Workspace。`explicit` 保持未关联状态，直到用户选择 Workspace 或产品准备策略创建项目。明确指定 Workspace 的操作仍选择该目标。客户端等待设置就绪后才自动选择，不会在配置加载期间猜测最近目标。
+
 视图选项把分组方式和每个记账各自的一份浏览器持久化 Session 顺序放在一起：**手动排序**和**最近更新**在两种呈现方式下都可用。进入最近更新时会执行一次完整的时间排序，后续 user prompt 或 steer 会将对应 Session 置顶一次；进入手动排序则保留所有当前位置并停用后续置顶。两种模式下的拖拽都会编辑当前顺序；真实 Workspace 在手动模式下的拖拽还会更新 Host Session 记账，而 Ungrouped 和单列表的顺序始终只保存在浏览器本地。折叠分组的拖拽边界按渲染行确定，并把来源行放在中间隐藏行之前，因此拖拽不会隐藏来源行。无论采用哪种 Session 顺序，Workspace 拖拽顺序都由 Host 持久化。
 
 ### 搜索
@@ -62,6 +64,8 @@ Session 行渲染运行时的实时 `pendingInteraction` 分类：审批显示**
 ### 目录流子 slot
 
 每个注册各自声明一个**目录流子 slot**（`single` kind：`conversation.hero.workspace.directoryFlow`／`sidebar.workspaces.directoryFlow`），由组合的选择器包 client half 填入其选取交互——`-native` 后端的无渲染 OS 选择器驱动，`-browse` 组合下则是应用内浏览对话框。平铺显示的**添加工作区…** 操作仅在当前界面的 slot 被占用时渲染；slot 为空意味着该组合没有目录选择能力。本包持有触发与接纳：占用方通过 slot 的属主交互约定（`open`/`busy`/`onPicked`/`onCancel`/`onError`）每次打开上报一个所选路径，owner 通过对象层接纳它，并等待 Workspace 列表投影刷新后才选中已提交的 Workspace。
+
+本插件在组合时选定原生目录回调：Electron 载体提供 `window.manturDirectoryPicker`，普通浏览器使用 Host 的 `directoryPicker.pick` RPC。所选回调的取消或错误都不会调用另一种实现。两种情况下，Workspace 接纳仍由 Host 负责。
 
 ### 视图状态
 
@@ -106,7 +110,7 @@ Workspace 与 Session 悬浮卡片会复制对应行被截断的值：激活 Wor
 - **没有模糊内容搜索或事件深链接**：内容后端采用字面 token/短语匹配，选择结果会打开 Session，而不是匹配的事件。
 - **没有 Session 删除与取消归档控件**：会话可以归档，但已归档会话没有查看或取消归档入口；删除 Workspace 注册记录不会删除 Session。
 - **待处理的用户交互不会聚合到折叠的分组上**：折叠分组内正在等待的行不会点亮分组头指示，只有展开该分组后才可见。
-- **原生文件夹选择依赖本地 Host 载体**：在 `-native` 组合下，进程内部署或远程浏览器部署无法打开本地操作系统对话框；可远程的选取是 `-browse` 组合的应用内流程。
+- **原生文件夹选择需要本地载体**：Electron 提供窗口自有的选择器；普通浏览器需要本地 Host 选择器。可远程的选取是 `-browse` 组合的应用内流程。
 
 <a id="dev-note"></a>
 ### 开发备注

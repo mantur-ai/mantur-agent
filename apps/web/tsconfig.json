@@ -23,6 +23,11 @@
   // cannot see both sides of the cordis Context merges).
   "exclude": [
     "tests/scaffold.ts",
+    "tests/mantur-editing-workflow.snapshot.ts",
+    "tests/mcp-http-recovery.snapshot.ts",
+    "tests/mcp-shutdown.snapshot.ts",
+    "tests/desktop-drafts.e2e.ts",
+    "tests/desktop-updates.e2e.ts",
     "tests/scaffold-hermetic.e2e.ts",
     "tests/startup-rpc-budget.e2e.ts",
     "tests/minimal-preset.snapshot.ts",
@@ -42,6 +47,9 @@
     "tests/settings-chrome.e2e.ts",
     "tests/models-settings.e2e.ts",
     "tests/mantur-brand.snapshot.ts",
+    "tests/mantur-guide.expected.e2e.ts",
+    "tests/mantur-native-account.expected.e2e.ts",
+    "tests/mantur-automatic-project.expected.e2e.ts",
     "tests/default-model.e2e.ts",
     "tests/github-ready-review.e2e.ts",
     "tests/streaming-fence-highlight.e2e.ts",

@@ -33,11 +33,13 @@ Use this provider when skills live on disk — in the repository, a custom direc
 
 ### Skill format
 
-A skill is either a directory bundle `<name>/SKILL.md` or a flat file `<name>.md` at the top level of a scanned root; nested `**/SKILL.md` files are deliberately not discovered. The file starts with YAML frontmatter: required `name` and `description`, plus optional `whenToUse`, `metadata`, `disable-model-invocation`, and `user-invocable`.
+A skill is either a directory bundle `<name>/SKILL.md` or a flat file `<name>.md` at the top level of a scanned root; nested `**/SKILL.md` files are deliberately not discovered. The file starts with YAML frontmatter: required `name` and `description`, plus optional human-facing `title`, `whenToUse`, `metadata`, `disable-model-invocation`, and `user-invocable`. `title` does not change the kebab-case invocation name.
 
 `disable-model-invocation: true` keeps the skill out of model-facing catalogs and loaders; `user-invocable: false` keeps it out of human-facing commands, and omitted fields default to permitting their surface. The two keys accept YAML booleans plus the case-insensitive `true`/`false`, `yes`/`no`, `on`/`off`, and `1`/`0` forms; a rejected spelling or a non-boolean value drops the whole skill with a warning rather than silently permitting a surface.
 
 The catalog and the body have separate lifecycles: discovery parses frontmatter into the catalog entry, and every load re-reads the current file, so editing a skill body needs no versioning or cache invalidation.
+
+`parseSkillText` accepts already-read Markdown and uses the same frontmatter and invocation-policy parser as filesystem discovery. Its diagnostic callback receives invalid-input reasons; the filesystem caller logs them and skips the file, while a verified bundle reader can reject loading. The parser does not perform discovery, verify a resource identity or read additional files.
 
 ### Roots and priority
 

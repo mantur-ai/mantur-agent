@@ -1289,10 +1289,12 @@ describe('dsh-tool-subagent continuable background mode', () => {
       start: async () => { throw new Error('continuable policy must not start a one-shot child') },
       prepareContinuable: async (request) => {
         preparationCount += 1
-        if (request.signal === cancelled.signal) cancelledChildId = request.sessionId
-        else survivingChildId = request.sessionId
         if (preparationCount === 2) bothPreparing.resolve(undefined)
         await releasePreparations.promise
+        if (request.signal.aborted) {
+          expect(request.signal.reason).toBe(cancelled.signal.reason)
+          cancelledChildId = request.sessionId
+        } else survivingChildId = request.sessionId
         return {}
       },
     })

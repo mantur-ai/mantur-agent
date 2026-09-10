@@ -38,6 +38,9 @@
     "packages/client/*/tests/**/*.host.spec.ts"
   ],
   "references": [
+    { "path": "./packages/client/ui-mantur-assets/tsconfig.client.json" },
+    { "path": "./packages/client/ui-mantur-editing/tsconfig.client.json" },
+    { "path": "./packages/client/ui-mantur-script/tsconfig.client.json" },
     // Shared leaf: web e2e boots the real host webserver (fixture + real-host
     // smoke policy). webserver has zero workspace deps and no cordis merge,
     // so it cannot drag host-side Context augmentation into this program.

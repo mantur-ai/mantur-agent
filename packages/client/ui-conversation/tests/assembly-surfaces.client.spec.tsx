@@ -5,9 +5,9 @@ import { act, cleanup, fireEvent, waitFor, within } from '@testing-library/react
 import { useState } from 'react'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import type { ISession } from '@deepseek-ai/dsh-api-session-controller/client'
-import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import {
-  RemoteError, SlotTestRuntime, usePinnedBrowserLanguages, stubSettingsScope,
+  RemoteError, SlotTestRuntime, usePinnedBrowserLanguages, stubSettingsScope, type FixtureSession,
 } from '@deepseek-ai/dsh-client-test-runtime'
 import { InputHub } from '../src/client/input/hub.ts'
 import { apply, inject, type EmptyWorkspaceOwnerProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
@@ -58,7 +58,7 @@ function WorkspaceProbe({ open }: EmptyWorkspaceOwnerProps) {
   )
 }
 
-async function bench(opts?: { blank?: boolean }) {
+async function bench(opts?: { blank?: boolean; command?: ISession['command'] }) {
   const runtime = await SlotTestRuntime.create()
   runtime.ctx.provide('uiWorkspace', { connectWorkspace: vi.fn(async () => SID) } as never)
   runtime.ctx.provide('settingsScope', { bind: () => stubSettingsScope().scope } as never)
@@ -72,6 +72,7 @@ async function bench(opts?: { blank?: boolean }) {
     session: {
       loadOlder: vi.fn<ISession['loadOlder']>(),
       prompt: vi.fn<ISession['prompt']>(async () => ({ ok: true, value: { accepted: true } })),
+      ...(opts?.command === undefined ? {} : { command: opts.command }),
     },
   })
   await runtime.root.declare(LAYOUT_CHILDREN, AppRoot)
@@ -80,6 +81,56 @@ async function bench(opts?: { blank?: boolean }) {
 }
 
 describe('resident composer', () => {
+  it('keeps one permission control inside the card and its Session value across accessory removal and recreation', async () => {
+    const command = vi.fn<ISession['command']>(async () => ({ ok: true, value: { matched: true } }))
+    const runtime = await bench({ command })
+    const session = runtime.sessions.binding(SID)!.session as FixtureSession
+    const permissions = { currentValue: 'read-only', options: [
+      { value: 'read-only', name: 'read-only' }, { value: 'workspace-write', name: 'workspace-write' },
+    ] }
+    session.projections.set('permissions', permissions)
+    const view = runtime.renderRoot()
+    const access = () => view.getAllByRole('button', { name: /^访问模式/ })
+    const verify = async (external: boolean, name: string): Promise<void> => {
+      await waitFor(() => {
+        expect(access()).toHaveLength(1)
+        expect(access()[0]!.textContent).toBe(name)
+        const control = access()[0]!
+        const editor = view.container.querySelector('[data-composer-input]')!
+        expect(control.closest('[data-composer-card]')).toBe(editor.closest('[data-composer-card]'))
+        expect(control.closest('[data-permission-accessory]') !== null).toBe(external)
+        expect(Boolean(control.compareDocumentPosition(editor) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(external)
+      })
+    }
+    const mountLayout = () => runtime.slots.register({
+      name: 'conversation.composer.bar.accessory',
+      children: { 'conversation.composer.bar.accessory.permissions': { kind: 'single', scope: 'session-maybe' } },
+    }, ({ disabled, renderSlot }: PropsRuntime<'conversation.composer.bar.accessory'>
+      & PropsRenderSlots<'conversation.composer.bar.accessory.permissions'>) =>
+      <div data-permission-accessory>{renderSlot('conversation.composer.bar.accessory.permissions', { disabled })}</div>)
+    try {
+      await verify(false, '仅可查看')
+      let removeLayout!: () => void
+      await act(async () => { removeLayout = mountLayout() })
+      await verify(true, '仅可查看')
+      fireEvent.click(access()[0]!)
+      fireEvent.click(view.getByRole('menuitem', { name: '工作区内修改' }))
+      expect(command).toHaveBeenCalledWith('/permission workspace-write')
+      await act(async () => { session.projections.set('permissions', { ...permissions, currentValue: 'workspace-write' }) })
+      await verify(true, '工作区内修改')
+      await act(async () => { removeLayout() })
+      await verify(false, '工作区内修改')
+      expect(runtime.slots.entries('conversation.composer.bar.accessory.permissions')).toHaveLength(0)
+      await act(async () => { removeLayout = mountLayout() })
+      await verify(true, '工作区内修改')
+      expect(runtime.slots.entries('conversation.composer.bar.accessory.permissions')).toHaveLength(1)
+      await act(async () => { session.projections.set('permissions', undefined) })
+      expect(view.queryByRole('button', { name: /^访问模式/ })).toBeNull()
+      await act(async () => { removeLayout() })
+      expect(view.queryByRole('button', { name: /^访问模式/ })).toBeNull()
+    } finally { await runtime.dispose() }
+  })
+
   it('renders the locked view state while no session exists at all', async () => {
     const runtime = await SlotTestRuntime.create()
     runtime.ctx.provide('uiWorkspace', { connectWorkspace: vi.fn(async () => SID) } as never)

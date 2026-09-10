@@ -189,6 +189,7 @@ export class ReferenceChipNode extends DecoratorNode<JSX.Element> {
       <ReferenceChip
         label={this.__label}
         appearance={this.__appearance}
+        marker={this.__clipboardText.startsWith('/') ? '/' : '@'}
         invalid={this.__invalid}
       />
     )

@@ -424,6 +424,8 @@ const attachments = new WeakMap<Session, SessionEntry>()
  */
 export class Session {
   private log: SessionEvent[] = []
+  private sealedOffset: SessionLogOffset | undefined
+  private sealedWriteFailure: Error | undefined
   /** Single incremental owner of surface acceptance and projection state. */
   private readonly surfaceManager = new SurfaceManager(this.log)
 
@@ -631,6 +633,19 @@ export class Session {
   }
 
   /**
+   * Permanently close append admission and capture the exclusive final event offset.
+   * A late append invalidates subsequent seal verification even when its caller catches the error.
+   * The caller must stop producers before sealing and separately prove storage durability.
+   * @returns the stable exclusive final event offset.
+   * @throws if publication is in progress or any append was attempted after sealing.
+   */
+  seal(): SessionLogOffset {
+    if (attachments.get(this)?.appending) throw new Error('cannot seal a session during event publication')
+    if (this.sealedWriteFailure !== undefined) throw this.sealedWriteFailure
+    return this.sealedOffset ??= this.seq
+  }
+
+  /**
    * Append one typed event to the log and synchronously notify observers via
    * the store-owned, module-private publication hooks. The hot path never blocks
    * on I/O — persistence plugins buffer asynchronously. Once the event enters
@@ -670,6 +685,10 @@ export class Session {
     data: SessionEventMap[T],
     ...opts: T extends SurfaceEventType ? [opts: SurfaceIntent] : []
   ): SessionEvent<T> {
+    if (this.sealedOffset !== undefined) {
+      this.sealedWriteFailure ??= new Error(`session "${this.id}" is sealed for shutdown`)
+      throw this.sealedWriteFailure
+    }
     const surfaceOpts: SurfaceIntent | undefined = opts[0]
     const surfaceMetadata = {
       ...surfaceOpts?.sourceEventSeqs === undefined ? {} : { sourceEventSeqs: surfaceOpts.sourceEventSeqs },

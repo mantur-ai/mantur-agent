@@ -11,6 +11,8 @@ English | [中文](README.zh.md)
 
 `dsh-session-projection-cache` persists the state checkpoints of every registered projection unit (`ctx.sessionProjectionCache`) as one versioned document per session in the `session_projcache` storage domain's `per-record` layout. The shipped JSON backend stores each record at `<root>/session_projcache/sessions/<id>.json`, and the cache never reads the session-persistence layer. A stored row is a fold shortcut, never an authority: it may be stale — its `seq` says exactly how stale — but never wrong. Three mandatory checkpoints (session creation, `turn/end`, and session disposal) plus configurable count and interval throttles keep the cache fresh. Choose it when list views need synchronous cached values or cold projection folds should skip an already-checkpointed prefix.
 
+`stopForShutdown()` freezes direct checkpoint writes and cold-read write-back, stops event and timer producers, and waits for admitted live and cold writes. Derived-cache write failures retain their existing caller or warning behavior. The storage owner closes the domain after this drain; stopping the cache alone does not prove that the domain is closed.
+
 ## Table of Contents
 
 - [Use this package](#use-this-package)

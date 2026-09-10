@@ -51,6 +51,8 @@ A cancel returns `null`, not an error. Missing platform tooling, a failed choose
 
 The backend is a thin service over a platform chooser: `NativeDirectoryPicker` registers the `native` capability whose `pick` forwards to `pickNativeDirectory`, and the chooser runs as a subprocess so the host process never blocks on the dialog. The command boundary (`DirectoryPickerRunner`) and platform facts are injectable, and the shared no-shell subprocess runner lives in [`dsh-native-command`](../../util/native-command/README.md).
 
+The service owns every accepted pick until its process and output readers finish. Its native-only `stopForShutdown()` synchronously refuses new picks, aborts accepted picks, and joins them; plugin disposal uses the same stop. Repeated calls retain the same completion or cleanup failure. Caller cancellation and ordinary chooser failures do not fail a completed cleanup. A process that does not close keeps shutdown pending. This ownership is per service instance, including picks accepted before any browser connection exists.
+
 ### Platform mechanics
 
 Platform tools run without a shell: `osascript` on macOS, and Zenity with a KDialog fallback on Linux; the caller's abort terminates the native process. Windows opens the modern `IFileOpenDialog` in a spawned child process — a koffi-driven COM conversation on the child's main thread with the best thread DPI awareness the host accepts (per-monitor-v2 first), aborted by posting `WM_CLOSE` to the dialog thread.
@@ -109,4 +111,4 @@ None.
 
 </details>
 
-**Runtime invariant:** No companion is published. Each pick is one stateless subprocess round trip; the chooser outcome is only the returned path.
+**Runtime invariant:** No companion is published. The service alone owns its active picks and stop result; no independent registry or event projection can disagree with that ownership. Lifecycle tests observe admission and actual child closure.

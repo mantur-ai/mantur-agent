@@ -125,6 +125,20 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     'conversation.hero.headline': { kind: 'single'; scope: 'root' }
     /** Optional badge shown after the blank-session headline. */
     'conversation.hero.badge': { kind: 'single'; scope: 'root' }
+    /** Product-owned creation choices below the blank-conversation headline. */
+    'conversation.hero.modes': { kind: 'single'; scope: 'root' }
+    /** Product guidance above the resident composer; never owns the editor. */
+    'conversation.composer.guide': { kind: 'single'; scope: 'session-maybe'; owner: { hero: boolean; disabled: boolean } }
+    /** Arrange owner-created composer parts without replacing the editor or workspace behavior. */
+    'conversation.composer.layout': {
+      kind: 'single'
+      scope: 'session-maybe'
+      owner: { hero: boolean; disabled: boolean; heading: ReactNode; workspace: ReactNode; content: ReactNode }
+    }
+    /** Product controls above the editor inside the resident composer card. */
+    'conversation.composer.bar.accessory': { kind: 'single'; scope: 'session-maybe'; owner: { disabled: boolean } }
+    /** Permission control declared by a composer accessory; otherwise rendered in the toolbar. */
+    'conversation.composer.bar.accessory.permissions': { kind: 'single'; scope: 'session-maybe'; owner: { disabled: boolean } }
     /** Agent-preset control staged for a New Session. */
     'conversation.hero.agentPreset': { kind: 'single'; scope: 'root'; owner: HeroAgentPresetOwnerProps }
     /** Full-width entries above the composer card. */
@@ -221,7 +235,10 @@ export interface ConversationInjected {
   /** Connect and open a blank Session in the selected Workspace. */
   selectWorkspace: (workspaceId: WorkspaceId) => Promise<void>
   /** Session-addressed composer block source, or the stable absent source. */
-  hooks: { composerBlock: ObservableSnapshot<ComposerBlock | undefined> }
+  hooks: {
+    composerBlock: ObservableSnapshot<ComposerBlock | undefined>
+    draftEnabled: ObservableSnapshot<boolean>
+  }
 }
 
 /** Business callbacks injected into the strict Session body. */
@@ -229,7 +246,7 @@ export interface ConversationSessionInjected {
   /** Package-owned View roster source bound only for the Conversation body. */
   readonly hooks: { readonly conversationViews: ObservableSnapshot<readonly ViewTab[]> }
   /** Bind input draft persistence to the Session-owned store instance. */
-  bindDraftMirror: (write: (text: string) => void) => () => void
+  bindDraftMirror: (write: (text: string) => void, seed?: string) => () => void
   /** Select and activate one View while addressing an opaque focus request to it. */
   openView: (view: string, focus: string) => void
 }
@@ -261,9 +278,17 @@ export interface ComposerBarOwnerProps {
   accessory?: ReactNode
 }
 
-/** Package-private operations injected into the resident composer bar. */
-export interface ComposerBarInjected {
+/** Package-private input and command faces shared by composer controls. */
+export interface ComposerControlInjected {
+  /** Actions for the browser-only draft when no Session is selected. */
+  unassignedActions: InputActions | undefined
   keyboard: ComposerKeyboard | undefined
+  command: ((line: string) => Promise<boolean>) | undefined
+  hooks: { composerInput: ObservableSnapshot<InputState | undefined> }
+}
+
+/** Package-private operations injected into the resident composer bar. */
+export interface ComposerBarInjected extends ComposerControlInjected {
   addImages: ((files: readonly File[]) => string | null) | undefined
   removeImage: ((id: DraftAttachmentId) => void) | undefined
   draftImages: ((ids: readonly DraftAttachmentId[]) => readonly ComposerAttachment[]) | undefined
@@ -274,8 +299,9 @@ export interface ComposerBarInjected {
   ) => InputSubmitMode
   toggleCommandMenu: ((selection: EditSelection) => void) | undefined
   stop: (() => void) | undefined
-  command: ((line: string) => Promise<boolean>) | undefined
   hooks: {
+    composerInput: ObservableSnapshot<InputState | undefined>
+    externalPermissions: ObservableSnapshot<boolean>
     notices: ObservableSnapshot<InputNotice | null>
     lexicon: ObservableSnapshot<ReadonlyMap<'/' | '@', readonly string[]>>
     menuLauncher: ObservableSnapshot<string | null>
@@ -296,6 +322,7 @@ export type ComposerBarProps =
     | 'conversation.input.left' | 'conversation.input.plan'
     | 'conversation.input.right' | 'conversation.input.model'
     | 'conversation.composer.dock'
+    | 'conversation.composer.bar.accessory'
   >
   & InjectFace<ComposerBarInjected>
   & PropsLocale<'conversation'>
@@ -328,6 +355,9 @@ export type ConversationSlotProps =
     | 'conversation.hero.brand.mark'
     | 'conversation.hero.headline'
     | 'conversation.hero.badge'
+    | 'conversation.hero.modes'
+    | 'conversation.composer.guide'
+    | 'conversation.composer.layout'
     | 'conversation.hero.workspace'
     | 'conversation.hero.agentPreset'
   >

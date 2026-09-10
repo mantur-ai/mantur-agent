@@ -99,6 +99,14 @@ const GROUP_ORDER = [
 
 const SERVICE_ROLES: ServiceRole[] = [
   {
+    key: 'manturEditing',
+    pkg: 'client-ui-mantur-editing',
+    title: 'Session editing workspace',
+    mode: 'core',
+    consumers: ['client-ui-mantur-editing'],
+    note: 'The optional Mantur plugin owns per-Agent editor processes and mounts the MCP client in the same Agent scope.',
+  },
+  {
     key: 'attachments',
     pkg: 'attachment',
     title: 'Durable binary attachment storage',
@@ -304,7 +312,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     pkg: 'storage-domain',
     title: 'Domain data facility',
     mode: 'core',
-    consumers: ['workspace', 'message-feedback'],
+    consumers: ['workspace', 'message-feedback', 'mantur-projects'],
     note: 'Waits for every configured backend, then publishes the domain form as one lifecycle-bound service for typed durable state.',
   },
   {
@@ -319,8 +327,16 @@ const SERVICE_ROLES: ServiceRole[] = [
     pkg: 'workspace',
     title: 'Workspace entity registry',
     mode: 'core',
-    consumers: ['api-workspace-controller', 'api-session-controller'],
+    consumers: ['api-workspace-controller', 'api-session-controller', 'mantur-projects'],
     note: 'Owns WorkspaceId-branded records over the domain facility; stable sessionIds accounts drive Host RPC and GUI projections.',
+  },
+  {
+    key: 'manturProjects',
+    pkg: 'mantur-projects',
+    title: 'Mantur first-send project preparation',
+    mode: 'core',
+    consumers: ['ui-mantur-navigation'],
+    note: 'Persists project roots and retry identities, creates exclusive directories, and returns Workspace and Session identities without submitting input.',
   },
   {
     key: 'sessionQuery',
@@ -450,6 +466,14 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'The one concrete loop plugin; extension packages depend on dsh-agent events and services, not on this package.',
   },
   {
+    key: 'goalRoundDriver',
+    pkg: 'goal-round-driver',
+    title: 'Automatic goal-round producer',
+    mode: 'bundle',
+    consumers: ['base'],
+    note: 'Owns automatic same-session round scheduling and an explicit stop that joins its driver tasks.',
+  },
+  {
     key: 'goals',
     pkg: 'goal',
     title: 'Same-session goal domain',
@@ -470,8 +494,16 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Subprocess seam',
     mode: 'seam',
     implementations: ['subprocess-local', 'subprocess-e2b'],
-    consumers: ['bash-local', 'bash-sandbox', 'terminal-bash', 'lsp-stdio', 'subagent-acp', 'subagent-codex', 'subagent-claude-code'],
-    note: 'The bash executors, the PTY shell backend, the LSP host, and the out-of-process ACP, Codex, and Claude Code subagent backends spawn through ctx.subprocess; the service owns process coordinates, tree/session lifetime, stdio dispositions, terminal mechanics, and kill escalation.',
+    consumers: ['command-scopes', 'lsp-stdio', 'subagent-acp', 'subagent-codex', 'subagent-claude-code'],
+    note: 'Command scopes, the LSP host, and out-of-process subagents use ctx.subprocess; it owns process coordinates, tree/session lifetime, stdio dispositions, terminal mechanics, and kill escalation.',
+  },
+  {
+    key: 'commandScopes',
+    pkg: 'command-scopes',
+    title: 'Command identity and cleanup',
+    mode: 'core',
+    consumers: ['bash-local', 'pwsh-local', 'terminal-bash', 'authorization-manturhub'],
+    note: 'Prepares command identity before process allocation and retains it through complete process-tree or terminal cleanup and release acknowledgment.',
   },
   {
     key: 'shell',

@@ -14,6 +14,36 @@ import SessionStore, {
 import type { CreateSessionOptions, SessionEventType, SessionHeader, SessionSurface } from '@deepseek-ai/dsh-session'
 
 describe('Session', () => {
+  it('refuses sealing while an event is being published', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SessionStore)
+    const session = ctx.sessions.create(SessionId('seal-publication'))
+    const failures: unknown[] = []
+    ctx.on('session/event', () => {
+      try { session.seal() } catch (error: unknown) { failures.push(error) }
+    })
+    try {
+      session.append('turn/start', { turn: 1 })
+      expect(failures).toEqual([new Error('cannot seal a session during event publication')])
+      expect(session.seal()).toBe(SessionLogOffset(1))
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('seals the final event offset and retains a rejected late append', () => {
+    const session = Session.create(SessionId('sealed-session'))
+    session.append('turn/start', { turn: 1 })
+    session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+    expect(session.seal()).toBe(SessionLogOffset(2))
+    expect(session.seal()).toBe(SessionLogOffset(2))
+    const events = session.snapshotEvents()
+    expect(() => session.append('turn/start', { turn: 2 })).toThrow('sealed for shutdown')
+    expect(session.snapshotEvents()).toEqual(events)
+    expect(() => session.seal()).toThrow('sealed for shutdown')
+  })
+
+
   it('exposes one stable readonly surface view', () => {
     const session = Session.create(SessionId('surface-view'))
     const surface = session.surface

@@ -29,6 +29,85 @@ function spec(command: string, overrides: Partial<SubprocessSpawnSpec> = {}): Su
 }
 
 describe('LocalSubprocessRuntime', () => {
+  it('closes spawn admission synchronously and joins an owned process for shutdown', async () => {
+    const ctx = new Context()
+    const fiber = await ctx.plugin(LocalSubprocessRuntime)
+    const service = ctx.subprocess as LocalSubprocessRuntime
+    const handle = service.spawn(spec('sleep 60'))
+    try {
+      const stopping = service.stopForShutdown()
+      expect(service.stopForShutdown()).toBe(stopping)
+      expect(() => service.spawn(spec('true'))).toThrow('admission is closed')
+      await expect(service.spawnTerminal({
+        argv: [process.execPath], cwd: process.cwd(), rows: 24, cols: 80, graceMs: 10,
+      })).rejects.toThrow('admission is closed')
+      await stopping
+      await handle.done
+    } finally {
+      await fiber.dispose()
+    }
+  })
+
+  it('retains failed shutdown targets and waits for other targets before rejecting', async () => {
+    const ctx = new Context()
+    const fiber = await ctx.plugin(LocalSubprocessRuntime)
+    const service = ctx.subprocess as LocalSubprocessRuntime
+    const failure = new Error('tree stop failed')
+    const exited = Promise.withResolvers<undefined>()
+    const failed = {
+      terminate: () => { throw failure },
+      terminateForHostExit: vi.fn(),
+    }
+    const draining = {
+      terminate: vi.fn(() => exited.promise),
+      terminateForHostExit: vi.fn(),
+    }
+    const terminals = (service as unknown as { terminals: Set<typeof failed | typeof draining> }).terminals
+    terminals.add(failed)
+    terminals.add(draining)
+    try {
+      let settled = false
+      const stopping = service.stopForShutdown()
+      const outcome = stopping.then(() => undefined, (error: unknown) => { settled = true; return error })
+      await new Promise(resolve => setImmediate(resolve))
+      expect(settled).toBe(false)
+      expect(draining.terminate).toHaveBeenCalledOnce()
+      expect(failed.terminateForHostExit).not.toHaveBeenCalled()
+      exited.resolve(undefined)
+      expect(await outcome).toBe(failure)
+      expect(terminals).toEqual(new Set([failed]))
+      await expect(service.stopForShutdown()).rejects.toBe(failure)
+    } finally {
+      exited.resolve(undefined)
+      terminals.clear()
+      await fiber.dispose()
+    }
+  })
+
+  it('reports ordinary-tree and terminal shutdown failures together', async () => {
+    const ctx = new Context()
+    const fiber = await ctx.plugin(LocalSubprocessRuntime)
+    const service = ctx.subprocess as LocalSubprocessRuntime
+    const handle = service.spawn(spec('sleep 60'))
+    const treeFailure = new Error('tree signalling failed')
+    const terminalFailure = new Error('terminal signalling failed')
+    const stop = vi.spyOn(handle, 'terminate').mockImplementation(() => { throw treeFailure })
+    const terminal = { terminate: async () => { throw terminalFailure } }
+    const terminals = (service as unknown as { terminals: Set<typeof terminal> }).terminals
+    terminals.add(terminal)
+    try {
+      await expect(service.stopForShutdown()).rejects.toMatchObject({
+        errors: [treeFailure, terminalFailure],
+      })
+      expect(terminals.has(terminal)).toBe(true)
+    } finally {
+      stop.mockRestore()
+      terminals.clear()
+      await fiber.dispose()
+      await handle.done
+    }
+  })
+
   it('places the host-exit finalizer before listeners that predate the service', async () => {
     const baseline = new Set(process.listeners('exit'))
     const prior = vi.fn()

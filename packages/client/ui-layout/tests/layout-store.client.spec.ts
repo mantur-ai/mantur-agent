@@ -25,6 +25,7 @@ describe('createLayoutStore', () => {
       narrow: false,
       narrowExpanded: false,
       mainPage: undefined,
+      workbenchSessions: [], workbenchSession: undefined,
     })
   })
 
@@ -61,7 +62,9 @@ describe('createLayoutStore', () => {
     actions.setSidebar(400)
     actions.setNarrow(true)
     actions.toggleSidebar()
-    expect(store.getSnapshot()).toEqual({ sidebar: 400, details: 0, narrow: true, narrowExpanded: true })
+    expect(store.getSnapshot()).toEqual({
+      sidebar: 400, details: 0, narrow: true, narrowExpanded: true, workbenchSessions: [], workbenchSession: undefined,
+    })
     actions.toggleSidebar()
     expect(store.getSnapshot().narrowExpanded).toBe(false)
     expect(store.getSnapshot().sidebar).toBe(400)
@@ -117,6 +120,7 @@ describe('createLayoutStore', () => {
       narrow: false,
       narrowExpanded: false,
       mainPage: undefined,
+      workbenchSessions: [], workbenchSession: undefined,
     })
   })
 })

@@ -25,6 +25,11 @@ export interface DirectoryPickerNativeCapability {
    * @returns the chosen absolute path, or null when the operator cancels.
    */
   pick(signal: AbortSignal): Promise<string | null>
+  /**
+   * Freeze admission, cancel accepted picks, and join owned chooser processes and output readers.
+   * @returns the shared stop result; cleanup failures remain rejected on repeated calls, unlike ordinary pick failures.
+   */
+  stopForShutdown(): Promise<void>
 }
 
 /**

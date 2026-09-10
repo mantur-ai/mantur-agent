@@ -23,6 +23,15 @@
 - id: ui-plan
   disabled: true
 
+- id: ui-workspace
+  config:
+    newSessionWorkspace: explicit
+
+- id: command-scopes
+  config:
+    identity: !!js >-
+      process.env.DSH_MANTUR_NATIVE_ACCOUNT === '1' ? 'required' : 'none'
+
 - insert:
     - id: mantur-identity
       name: '@deepseek-ai/dsh-mantur-app'
@@ -35,9 +44,51 @@
       name: '@deepseek-ai/dsh-authorization'
     - id: mantur-account
       name: '@deepseek-ai/dsh-authorization-manturhub'
+      config:
+        identity: !!js >-
+          process.env.DSH_MANTUR_NATIVE_ACCOUNT === '1' ? 'desktop-managed' : 'standalone'
+        native: !!js >-
+          process.env.DSH_MANTUR_NATIVE_ACCOUNT === '1'
+            ? { environmentLabel: 'ManturHub', requestTimeoutMs: 30000, maxResponseBytes: 65536, leaseMs: 86400000, revocationRetryMs: 60000 }
+            : undefined
     - id: mantur-marketplace
       name: '@deepseek-ai/dsh-manturhub-marketplace'
+      config:
+        bundledSkillDir: !!js process.env.DSH_BUNDLED_SKILL_DIR
+    - id: mantur-projects
+      name: '@deepseek-ai/dsh-mantur-projects'
+      config:
+        defaultRoot: !!js process.env.DSH_MANTUR_PROJECTS_ROOT
     - id: ui-mantur-navigation
       name: '@deepseek-ai/dsh-client-ui-mantur-navigation'
+      config:
+        recommendations:
+          script: [short-drama]
+          production: [drama-asset-seedance-pipeline, mantur-copyhit]
+          assets: [mantur-smartclip]
+    - id: ui-mantur-script
+      name: '@deepseek-ai/dsh-client-ui-mantur-script'
+      config:
+        maxBytes: 2097152
+        maxEntries: 1000
+    - id: ui-mantur-assets
+      name: '@deepseek-ai/dsh-client-ui-mantur-assets'
+      config:
+        maxBytes: 8388608
+        maxEntries: 2000
+        maxMediaBytes: 52428800
     - id: ui-mantur-account
       name: '@deepseek-ai/dsh-client-ui-mantur-account'
+
+# Packaged Desktop supplies its resource root and Electron-as-Node executable.
+- insert:
+    - id: ui-mantur-editing
+      name: '@deepseek-ai/dsh-client-ui-mantur-editing'
+      disabled: !!js process.env.DSH_MANTUR_EDITOR_ROOT === undefined
+      config:
+        runtimeMode: packaged
+        editorRoot: !!js process.env.DSH_MANTUR_EDITOR_ROOT
+        nodeExecutable: !!js process.env.DSH_MANTUR_EDITOR_NODE
+        startupTimeoutMs: 90000
+        stopTimeoutMs: 5000
+        toolCallTimeoutMs: 30000

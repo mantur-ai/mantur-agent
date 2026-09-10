@@ -31,7 +31,8 @@
     "@deepseek-ai/dsh-bash-local": "workspace:^",
     "@deepseek-ai/dsh-sandbox": "workspace:^",
     "@deepseek-ai/dsh-sandbox-policy": "workspace:^",
-    "@deepseek-ai/cordis": "workspace:^"
+    "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/dsh-command-scopes": "workspace:^"
   },
   "devDependencies": {
     "@deepseek-ai/dsh-shell": "workspace:^",
@@ -42,6 +43,7 @@
     "@deepseek-ai/dsh-sandbox-policy": "workspace:^",
     "@deepseek-ai/cordis": "workspace:^",
     "@deepseek-ai/node-addon-landlock-run": "workspace:^",
-    "@deepseek-ai/dsh-session-projection": "workspace:^"
+    "@deepseek-ai/dsh-session-projection": "workspace:^",
+    "@deepseek-ai/dsh-command-scopes": "workspace:^"
   }
 }

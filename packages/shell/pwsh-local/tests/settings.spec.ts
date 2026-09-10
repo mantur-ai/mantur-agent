@@ -1,5 +1,6 @@
 /** The shared `bash` settings section as the pwsh executor family resolves it. */
 
+import CommandScopes from '@deepseek-ai/dsh-command-scopes'
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import type { Fiber } from '@deepseek-ai/cordis'
@@ -35,6 +36,7 @@ async function boot(config: ConstructorParameters<typeof PwshLocalExecutor>[1] =
 }> {
   const ctx = new Context()
   await ctx.plugin(LocalSubprocessRuntime)
+  await ctx.plugin(CommandScopes, { identity: 'none' })
   const settingsFiber = ctx.plugin(MemorySettings)
   await settingsFiber.await()
   const executorFiber = ctx.plugin(PwshLocalExecutor, { timeoutMs: 60_000, ...config })

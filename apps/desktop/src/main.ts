@@ -1,35 +1,70 @@
 /** Thin native window over the shipped Mantur profile. */
 
 import { appendFile } from 'node:fs/promises'
+import { hostname } from 'node:os'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { app, BrowserWindow, dialog, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, safeStorage, shell } from 'electron'
 import electronUpdater from 'electron-updater'
+import { requestUpdateSave } from './update-save.ts'
+import { prepareDesktopUpdate, saveDraftsWithPrompt } from './prepare-update.ts'
+import { DesktopDraftStorage } from './draft-storage.ts'
+import { installDraftBridge } from './draft-bridge.ts'
+import { installUpdateBridge } from './update-bridge.ts'
+import { installDirectoryPickerBridge } from './directory-picker-bridge.ts'
+import { NativeAccountHost } from './auth/host.ts'
+import { prepareNativeAccountUpgrade } from './auth/upgrade.ts'
+import type { NativeAccountController } from './auth/controller.ts'
+import { installNativeAccountBridge } from './auth/ipc.ts'
+import { embeddedCliEnvironment, prepareEmbeddedCli } from './embedded-cli.ts'
 import {
   canResetProjectionCache,
-  desktopPaths,
-  desktopUserDataPath,
+  initializeDesktopPaths,
   prepareDesktopPaths,
   resetProjectionCache,
 } from './desktop-state.ts'
 import { desktopCopy } from './locales.ts'
 import { startDesktopService, type DesktopService } from './runtime.ts'
-import { startAutoUpdates } from './updater.ts'
+import { buildApplicationMenu } from './update-menu.ts'
+import { startAutoUpdates, type DesktopUpdateController, type DesktopUpdateState } from './updater.ts'
 
 const APP_NAME = '漫途Agent'
+const APP_ICON = fileURLToPath(new URL('../resources/mantur-app-icon.png', import.meta.url))
 const STARTUP_PAGE = fileURLToPath(new URL('../resources/startup.html', import.meta.url))
 
 let mainWindow: BrowserWindow | undefined
 let service: DesktopService | undefined
 let serviceUrl: string | undefined
 let quitting = false
-let stopUpdates: (() => void) | undefined
+let updates: DesktopUpdateController | undefined
+let updateState: DesktopUpdateState = { kind: 'idle' }
+let preparingUpdate = false
+let accountHost: NativeAccountHost | undefined
+let nativeAccount: NativeAccountController | undefined
 
 app.setName(APP_NAME)
-app.setPath('userData', desktopUserDataPath(
-  app.getPath('appData'),
-  app.isPackaged ? 'release' : 'development',
-))
-const paths = desktopPaths(app.getPath('userData'))
+const paths = initializeDesktopPaths(app, app.commandLine.hasSwitch('user-data-dir')
+  ? app.commandLine.getSwitchValue('user-data-dir')
+  : undefined)
+const accountBridge = installNativeAccountBridge({ ipc: ipcMain, window: () => mainWindow,
+  origin: () => serviceUrl === undefined ? undefined : new URL(serviceUrl).origin,
+  controller: () => nativeAccount,
+})
+const drafts = installDraftBridge({ ipc: ipcMain, window: () => mainWindow,
+  origin: () => serviceUrl === undefined ? undefined : new URL(serviceUrl).origin,
+  storage: new DesktopDraftStorage(paths.userData),
+})
+
+const updateBridge = installUpdateBridge({ ipc: ipcMain, window: () => mainWindow,
+  origin: () => serviceUrl === undefined ? undefined : new URL(serviceUrl).origin,
+  controller: () => updates, version: app.getVersion(),
+})
+
+const directoryPicker = installDirectoryPickerBridge({ ipc: ipcMain, window: () => mainWindow,
+  origin: () => serviceUrl === undefined ? undefined : new URL(serviceUrl).origin,
+  showOpenDialog: (window, options) => dialog.showOpenDialog(window, options),
+  unavailable: () => preparingUpdate || quitting, copy: () => desktopCopy(app.getLocale()),
+})
 
 function writeDesktopLog(message: string): void {
   void appendFile(paths.logPath, `${new Date().toISOString()} ${message}\n`).catch((error: unknown) => {
@@ -46,6 +81,40 @@ function openExternal(url: string): void {
   void shell.openExternal(url).catch((error: unknown) => { console.error(error) })
 }
 
+function renderApplicationMenu(): void {
+  const copy = desktopCopy(app.getLocale())
+  Menu.setApplicationMenu(Menu.buildFromTemplate(buildApplicationMenu({
+    appName: APP_NAME,
+    version: app.getVersion(),
+    platform: process.platform,
+    updatesEnabled: app.isPackaged && updates !== undefined,
+    state: updateState,
+    copy,
+    onCheck: () => { updates?.checkNow() },
+    onDownload: () => { updates?.downloadAvailableUpdate() },
+    onInstall: () => { updates?.installReadyUpdate() },
+  })))
+}
+
+function showUpdateFeedback(state: DesktopUpdateState): void {
+  const failure = state.kind === 'ready' ? state.error
+    : state.kind === 'error' && state.requestedByUser ? state.detail : undefined
+  if (failure === undefined && !(state.kind === 'up-to-date' && state.requestedByUser)) return
+  const copy = desktopCopy(app.getLocale())
+  const error = failure !== undefined
+  void dialog.showMessageBox({
+    type: error ? 'error' : 'info',
+    title: error ? copy.updateErrorTitle : copy.upToDateTitle,
+    message: error ? copy.updateErrorMessage(failure) : copy.upToDateMessage(app.getVersion()),
+    buttons: [copy.okButton],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true,
+  }).catch((dialogError: unknown) => {
+    writeDesktopLog(`desktop update: feedback dialog failed: ${String(dialogError)}`)
+  })
+}
+
 function createWindow(target = STARTUP_PAGE): BrowserWindow {
   const window = new BrowserWindow({
     width: 1_280,
@@ -55,7 +124,9 @@ function createWindow(target = STARTUP_PAGE): BrowserWindow {
     show: false,
     backgroundColor: '#f7f8fa',
     title: APP_NAME,
+    icon: APP_ICON,
     webPreferences: {
+      preload: fileURLToPath(new URL('./preload.cjs', import.meta.url)),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -71,8 +142,11 @@ function createWindow(target = STARTUP_PAGE): BrowserWindow {
     event.preventDefault()
     openExternal(target)
   })
+  window.webContents.on('did-start-navigation', (_event, _url, _isInPlace, isMainFrame) => {
+    if (isMainFrame) { drafts.release(); directoryPicker.invalidate() }
+  })
   window.once('ready-to-show', () => { window.show() })
-  window.on('closed', () => { mainWindow = undefined })
+  window.on('closed', () => { drafts.release(); directoryPicker.invalidate(); mainWindow = undefined })
   if (target === STARTUP_PAGE) void window.loadFile(target)
   else void window.loadURL(target)
   mainWindow = window
@@ -103,17 +177,67 @@ async function startupRecovery(error: unknown): Promise<'reset-cache' | 'show-lo
 async function launch(): Promise<void> {
   const window = createWindow()
   await prepareDesktopPaths(paths)
+  if (process.platform !== 'darwin' && process.platform !== 'win32') throw new Error('Native account requires macOS or Windows')
+  const copy = desktopCopy(app.getLocale())
+  try {
+    const ready = await prepareNativeAccountUpgrade(paths.userData, safeStorage, async () => {
+      const { response } = await dialog.showMessageBox(window, {
+        type: 'question', title: copy.accountUpgradeTitle, message: copy.accountUpgradeMessage,
+        detail: copy.accountUpgradeDetail, buttons: [copy.accountUpgradeButton, copy.quitButton],
+        defaultId: 1, cancelId: 1, noLink: true,
+      })
+      return response === 0 && !isQuitting()
+    })
+    if (!ready) { app.quit(); return }
+  } catch {
+    await dialog.showMessageBox(window, {
+      type: 'error', title: copy.accountUpgradeTitle, message: copy.accountUpgradeFailed,
+      detail: copy.accountUpgradeFailedDetail, buttons: [copy.quitButton], defaultId: 0, cancelId: 0, noLink: true,
+    })
+    app.quit()
+    return
+  }
+  const cliBin = await prepareEmbeddedCli({
+    resourceRoot: app.isPackaged ? join(process.resourcesPath, 'mantur-cli')
+      : fileURLToPath(new URL('../.generated/mantur-cli', import.meta.url)),
+    userData: paths.userData, executable: process.execPath, platform: process.platform,
+  })
   while (!quitting) {
     serviceUrl = undefined
     service = startDesktopService({
       electronExecutable: process.execPath,
       cwd: paths.launchRoot,
-      environment: { ...process.env, DSH_HOME: paths.dshHome },
+      environment: {
+        ...embeddedCliEnvironment(cliBin, process.env),
+        DSH_HOME: paths.dshHome,
+        DSH_BUNDLED_SKILL_DIR: app.isPackaged
+          ? join(process.resourcesPath, 'mantur-skills')
+          : fileURLToPath(new URL('../.generated/mantur-skills', import.meta.url)),
+        DSH_MANTUR_PROJECTS_ROOT: join(app.getPath('documents'), '漫途项目'),
+        DSH_MANTUR_NATIVE_ACCOUNT: '1',
+        DSH_MANTUR_UPDATE_IPC: '1',
+        ...(app.isPackaged ? {
+          DSH_MANTUR_EDITOR_ROOT: join(process.resourcesPath, 'mantur-cut'),
+          DSH_MANTUR_EDITOR_NODE: process.execPath,
+        } : {}),
+      },
       logPath: paths.logPath,
       mirrorOutput: !app.isPackaged,
     })
+    accountHost = new NativeAccountHost({ child: service.child, userData: paths.userData, cipher: safeStorage,
+      deviceName: `${APP_NAME} — ${hostname()}`, platform: process.platform === 'darwin' ? 'macos' : 'windows',
+      openBrowser: url => shell.openExternal(url),
+      onAuthorized: () => {
+        if (mainWindow === undefined || mainWindow.isDestroyed()) return
+        if (mainWindow.isMinimized()) mainWindow.restore()
+        mainWindow.show()
+        mainWindow.focus()
+      },
+      onController: (controller) => { nativeAccount = controller },
+      onSnapshot: () => { accountBridge.publish() },
+    })
     service.child.once('exit', (code, signal) => {
-      if (quitting || serviceUrl === undefined) return
+      if (quitting || preparingUpdate || serviceUrl === undefined) return
       void startupRecovery(new Error(
         `dsh stopped while the desktop window was running (code ${String(code)}, signal ${String(signal)}).`,
       )).then((action) => {
@@ -130,6 +254,8 @@ async function launch(): Promise<void> {
       if (isQuitting()) return
       const action = await startupRecovery(error)
       if (action === 'reset-cache') {
+        await accountHost.close()
+        accountHost = undefined
         await resetProjectionCache(paths.dshHome)
         writeDesktopLog('desktop recovery: reset session projection cache after user approval')
         continue
@@ -144,35 +270,55 @@ async function launch(): Promise<void> {
 async function stopService(): Promise<void> {
   const active = service
   if (active === undefined) return
+  await accountHost?.close()
+  accountHost = undefined
   active.stop()
   await active.closed
   if (service === active) service = undefined
 }
 
 function startUpdates(): void {
-  if (!app.isPackaged || stopUpdates !== undefined) return
+  if (!app.isPackaged || updates !== undefined) return
   const copy = desktopCopy(app.getLocale())
   const { autoUpdater } = electronUpdater
-  stopUpdates = startAutoUpdates({
+  updates = startAutoUpdates({
     updater: autoUpdater,
+    currentVersion: app.getVersion(),
     log: writeDesktopLog,
+    onStateChange: (state) => {
+      updateState = state
+      updateBridge.publish(state)
+      renderApplicationMenu()
+      showUpdateFeedback(state)
+    },
     beforeInstall: async () => {
-      quitting = true
-      await stopService()
+      if (directoryPicker.isPending()) throw new Error(copy.updateDirectoryPickerPending)
+      const active = service
+      if (active === undefined) throw new Error(copy.updateShutdownUnavailable)
+      const window = mainWindow
+      if (window === undefined || window.isDestroyed()) throw new Error(copy.updateShutdownUnavailable)
+      preparingUpdate = true
+      try { await prepareDesktopUpdate({
+        saveDrafts: () => saveDraftsWithPrompt({
+          save: () => drafts.prepare(), cancel: () => { drafts.release() },
+          show: async (signal) => {
+            await dialog.showMessageBox(window, {
+              type: 'info', title: copy.updateSavingTitle, message: copy.updateSavingMessage,
+              buttons: [copy.cancelUpdateButton], defaultId: 0, cancelId: 0, noLink: true, signal,
+            })
+          },
+        }),
+        releaseDrafts: () => { drafts.release() },
+        saveHost: () => requestUpdateSave({ child: active.child, timeoutMs: 30_000 }),
+        closeAccount: async () => { await accountHost?.close(); accountHost = undefined },
+        stopHost: async () => {
+          await active.stopAndVerifyExit()
+          if (service === active) service = undefined
+        },
+        cancelled: () => quitting,
+      }) } finally { preparingUpdate = false }
     },
     prompts: {
-      confirmDownload: async (version) => {
-        const result = await dialog.showMessageBox({
-          type: 'info',
-          title: copy.updateAvailableTitle,
-          message: copy.updateAvailableMessage(version),
-          buttons: [copy.downloadButton, copy.laterButton],
-          defaultId: 1,
-          cancelId: 1,
-          noLink: true,
-        })
-        return result.response === 0
-      },
       confirmInstall: async (version) => {
         const result = await dialog.showMessageBox({
           type: 'info',
@@ -187,6 +333,8 @@ function startUpdates(): void {
       },
     },
   })
+  updateBridge.publish(updateState)
+  renderApplicationMenu()
 }
 
 const singleInstance = app.requestSingleInstanceLock()
@@ -198,7 +346,16 @@ if (!singleInstance) {
     mainWindow?.show()
     mainWindow?.focus()
   })
-  void app.whenReady().then(launch).catch((error: unknown) => {
+  void app.whenReady().then(() => {
+    if (process.platform === 'darwin') app.dock?.setIcon(APP_ICON)
+    app.setAboutPanelOptions({
+      applicationName: APP_NAME,
+      applicationVersion: app.getVersion(),
+      iconPath: APP_ICON,
+    })
+    renderApplicationMenu()
+    return launch()
+  }).catch((error: unknown) => {
     writeDesktopLog(`desktop startup: ${String(error)}`)
     void startupRecovery(error).then((action) => {
       if (action === 'show-log') shell.showItemInFolder(paths.logPath)
@@ -219,8 +376,9 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', (event) => {
   quitting = true
-  stopUpdates?.()
-  stopUpdates = undefined
+  directoryPicker.invalidate()
+  updates?.dispose()
+  updates = undefined
   if (service === undefined) return
   event.preventDefault()
   void stopService().then(() => { app.quit() }).catch((error: unknown) => {

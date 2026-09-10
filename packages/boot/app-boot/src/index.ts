@@ -243,6 +243,41 @@ export interface UserPatchWatchOptions {
   compose?: (userPatches: PatchOptions[]) => PatchOptions[]
 }
 
+interface PatchWatchOwner {
+  closing: boolean
+  stopped?: Promise<void>
+  readonly opening: Set<Promise<() => Promise<void>>>
+  readonly watches: Set<() => Promise<void>>
+}
+
+const patchWatchOwners = new WeakMap<Context, PatchWatchOwner>()
+
+function patchWatchOwner(ctx: Context): PatchWatchOwner {
+  let owner = patchWatchOwners.get(ctx.root)
+  if (owner === undefined) {
+    owner = { closing: false, opening: new Set(), watches: new Set() }
+    patchWatchOwners.set(ctx.root, owner)
+  }
+  return owner
+}
+
+/**
+ * Freeze profile patch-watcher admission and await exact-path watcher and refresh cleanup.
+ * @param ctx - the booted application's context; ownership is scoped to its root.
+ * @returns once all admitted watchers stop; failed opening or cleanup during stop rejects.
+ */
+export function stopUserPatchWatches(ctx: Context): Promise<void> {
+  const owner = patchWatchOwner(ctx)
+  owner.closing = true
+  owner.stopped ??= (async () => {
+    const opening = await Promise.allSettled([...owner.opening])
+    const closing = await Promise.allSettled([...owner.watches].map(stop => stop()))
+    const failures = [...opening, ...closing].filter(result => result.status === 'rejected').map(result => result.reason as unknown)
+    if (failures.length > 0) throw new AggregateError(failures, 'Profile patch watchers did not stop')
+  })()
+  return owner.stopped
+}
+
 /**
  * Watch the user patch layer through Cordis HMR and transactionally reapply it to the boot include.
  * @param ctx - settled app context containing the root Include and an active HMR service.
@@ -254,6 +289,25 @@ export async function watchUserPatches(
   ctx: Context,
   options: UserPatchWatchOptions,
 ): Promise<() => Promise<void>> {
+  const owner = patchWatchOwner(ctx)
+  if (owner.closing) throw new Error('Profile patch watchers are stopping')
+  const opening = openUserPatchWatch(ctx, options).then((dispose) => {
+    let stopped: Promise<void> | undefined
+    const stop = (): Promise<void> => {
+      stopped ??= Promise.resolve().then(dispose).then(() => { owner.watches.delete(stop) })
+      return stopped
+    }
+    owner.watches.add(stop)
+    return stop
+  })
+  owner.opening.add(opening)
+  const retire = (): void => { owner.opening.delete(opening) }
+  void opening.then(retire, retire)
+  return await opening
+}
+
+/** Open the HMR-owned watcher; its disposer includes in-flight refreshes. */
+async function openUserPatchWatch(ctx: Context, options: UserPatchWatchOptions): Promise<() => Promise<void>> {
   const { binName, filename, compose = (patches: PatchOptions[]) => patches } = options
   const hmr = ctx.get('hmr')
   if (hmr === undefined) throw new Error(`${binName}: user patch-layer watching requires the Cordis HMR service`)

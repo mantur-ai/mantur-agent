@@ -191,6 +191,12 @@ interface BrowserPromptSource {
 export class SubagentRuntime extends TypertRemoteService {
   private providers = new Map<string, SubagentProvider>()
   private continuations: SubagentContinuationManager | undefined
+  private readonly continuationOwners = new Set<SubagentContinuationManager>()
+  private readonly runs = new Set<SubagentRun>()
+  private readonly pending = new Set<Promise<void>>()
+  private readonly shutdownFailures: unknown[] = []
+  private readonly shutdownSignal = new AbortController()
+  private shutdown: Promise<void> | undefined
   /**
    * The contained lifecycle-edge publisher. Built here because scoped dispatch
    * keys its carrier by this exact service instance, whose own context filter
@@ -200,16 +206,19 @@ export class SubagentRuntime extends TypertRemoteService {
 
   constructor(ctx: Context) {
     super(ctx, 'subagents')
-    this.emitLifecycle = createLifecycleEmitter(this.ctx, parent => scopeTarget(this, parent))
+    this.emitLifecycle = createLifecycleEmitter(this.ctx, parent => scopeTarget(this, parent), (work) => { void this.track(work) })
     ctx.inject(['agents'], (childCtx: Context) => {
       const manager = new SubagentContinuationManager(childCtx, {
         prepareContinuable: (name, request) => this.prepareContinuable(name, request),
         observeActivation: (provider, childId, parent) => this.observeActivation(provider, childId, parent),
+        recordCleanupFailure: (error) => { this.shutdownFailures.push(error) },
       })
+      this.continuationOwners.add(manager)
       this.continuations = manager
-      childCtx.effect(() => () => {
+      childCtx.effect(() => async () => {
         /* v8 ignore else -- one injected binding owns the slot until its fiber disposes. */
         if (this.continuations === manager) this.continuations = undefined
+        try { await this.track(manager.drain()) } finally { this.continuationOwners.delete(manager) }
       }, 'subagents.continuationBinding()')
     })
     ctx.inject(['sessionProjections'], (projectionCtx) => {
@@ -228,7 +237,10 @@ export class SubagentRuntime extends TypertRemoteService {
    * @throws when continuation services are unavailable or materialization fails.
    */
   async startContinuable(spec: ContinuableStartSpec): Promise<ContinuableStart> {
-    return this.requireContinuations().startContinuable(spec)
+    return this.track(this.requireContinuations().startContinuable({
+      ...spec,
+      signal: AbortSignal.any([spec.signal, this.shutdownSignal.signal]),
+    }), false)
   }
 
   /**
@@ -251,7 +263,7 @@ export class SubagentRuntime extends TypertRemoteService {
     content: ContentBlock[],
     options: SubagentSendMessageOptions,
   ): Promise<MessageId> {
-    return this.requireContinuations().sendMessage(sender, targetId, content, options)
+    return this.track(this.requireContinuations().sendMessage(sender, targetId, content, options), false)
   }
 
   /**
@@ -274,9 +286,9 @@ export class SubagentRuntime extends TypertRemoteService {
     signal: AbortSignal,
     delivery: HostPromptDeliveryMode,
   ): Promise<MessageId> {
-    return delivery === 'steer'
+    return this.track(delivery === 'steer'
       ? this.requireContinuations().steerPrompt(parent, childId, content, source, signal)
-      : this.requireContinuations().queuePrompt(parent, childId, content, source, signal)
+      : this.requireContinuations().queuePrompt(parent, childId, content, source, signal), false)
   }
 
   /**
@@ -401,7 +413,8 @@ export class SubagentRuntime extends TypertRemoteService {
    * message the child's FIFO inbox accepted; later execution is independent of
    * this call.
    * Image parts are admitted and persisted through the attachment store
-   * before delivery, and the child's model must accept image input.
+   * before delivery, and the child's model must accept image input. Shutdown
+   * freezes this entry and joins admitted attachment saves before completing.
    * @param request - durable address, minted identity, content, and optional browser zone.
    * @param signal - carrier cancellation, owning the call until inbox acceptance.
    * @returns the accepted message's inbox identity.
@@ -413,6 +426,7 @@ export class SubagentRuntime extends TypertRemoteService {
   @Remote('prompt')
   async prompt(request: SubagentPromptRequest, signal: AbortSignal): Promise<SubagentPromptReceipt> {
     const { parentSessionId, childSessionId, clientTimeZone } = request
+    if (this.shutdown !== undefined) return rejectPrompt(this.shutdownSignal.signal.reason, childSessionId, this.shutdownSignal.signal)
     validateControlRequest('subagent.prompt', request)
     const canonicalTimeZone = clientTimeZone === undefined
       ? undefined
@@ -437,7 +451,7 @@ export class SubagentRuntime extends TypertRemoteService {
       rpcId: request.requestId,
       ...(canonicalTimeZone === undefined ? {} : { clientTimeZone: canonicalTimeZone }),
     }
-    try {
+    const admission = (async (): Promise<SubagentPromptReceipt> => {
       // Admission precedes delivery: image parts become durable references
       // here, so the child inbox only ever accepts Host-persisted attachments.
       let content: ContentBlock[]
@@ -458,6 +472,9 @@ export class SubagentRuntime extends TypertRemoteService {
           'queue',
         ),
       }
+    })()
+    try {
+      return await this.track(admission, false)
     } catch (error: unknown) {
       return rejectPrompt(error, childSessionId, signal)
     }
@@ -508,6 +525,7 @@ export class SubagentRuntime extends TypertRemoteService {
    * @returns the exact Cordis effect disposer.
    */
   registerProvider(provider: SubagentProvider): () => void {
+    this.assertAdmitting()
     const name = provider.name
     // oxlint-disable-next-line typescript/no-misused-promises -- synchronous disposer
     return this.ctx.effect(function* (this: SubagentRuntime) {
@@ -517,7 +535,7 @@ export class SubagentRuntime extends TypertRemoteService {
       this.providers.set(name, provider)
       yield () => {
         this.providers.delete(name)
-        this.emitLifecycle('subagent/provider-removed', name)
+        if (this.shutdown === undefined) this.emitLifecycle('subagent/provider-removed', name)
       }
       // A throwing added-listener unwinds the yielded rollback, matching the
       // repository's fail-loud registration semantics.
@@ -553,6 +571,7 @@ export class SubagentRuntime extends TypertRemoteService {
    * @returns the published holder-owned run.
    */
   async start(name: string, request: SubagentStartRequest): Promise<SubagentRun> {
+    this.assertAdmitting()
     const provider = this.expectProvider(name)
     this.assertCapabilities(provider, request)
     assertSubagentMaxDepth(request.maxDepth)
@@ -562,8 +581,80 @@ export class SubagentRuntime extends TypertRemoteService {
       provider: name,
       ...request.label !== undefined ? { label: request.label } : {},
     })
-    const resolved: ResolvedSubagentStartRequest = { ...request, descriptor }
-    return observeRun(this.emitLifecycle, name, request.parent, await provider.start(resolved))
+    const resolved: ResolvedSubagentStartRequest = {
+      ...request, descriptor, signal: AbortSignal.any([request.signal, this.shutdownSignal.signal]),
+    }
+    return this.track((async () => {
+      const run = this.ownRun(await provider.start(resolved))
+      if (this.shutdown !== undefined) {
+        await run.dispose()
+        throw this.shutdownSignal.signal.reason
+      }
+      return observeRun(this.emitLifecycle, name, request.parent, run)
+    })())
+  }
+
+  /**
+   * Freeze provider registration and delegation; join starts, runs, continuations, and lifecycle listeners.
+   * The Host must begin agent-loop shutdown first so child disposal preserves queued input.
+   * Reuses each provider's disposal; provider removal does not release this ownership.
+   * @returns one shared promise after all owned work settles.
+   * @throws an aggregate retaining provider, listener, and cleanup failures, including removed runs.
+   */
+  stopForShutdown(): Promise<void> {
+    if (this.shutdown !== undefined) return this.shutdown
+    const completion = Promise.withResolvers<void>()
+    this.shutdown = completion.promise
+    this.shutdownSignal.abort(new SubagentError('subagents are stopping for shutdown', 'CANCELLED'))
+    for (const manager of this.continuationOwners) void this.track(manager.stopForShutdown())
+    for (const run of this.runs) void this.track(run.dispose())
+    const stop = async (): Promise<void> => {
+      // A provider may reenter shutdown before its start promise is registered.
+      await Promise.resolve()
+      while (this.pending.size > 0) await Promise.all([...this.pending])
+      if (this.shutdownFailures.length > 0) throw new AggregateError(this.shutdownFailures, 'subagent shutdown failed')
+    }
+    stop().then(completion.resolve, completion.reject)
+    return completion.promise
+  }
+
+  private assertAdmitting(): void {
+    if (this.shutdown !== undefined) throw this.shutdownSignal.signal.reason
+  }
+
+  private track<T>(work: Promise<T>, retainFailure = true): Promise<T> {
+    const settled = work.then(() => {}, (error: unknown) => {
+      if ((retainFailure || this.shutdown !== undefined)
+        && (!this.shutdownSignal.signal.aborted || error !== this.shutdownSignal.signal.reason)) this.shutdownFailures.push(error)
+    })
+    this.pending.add(settled)
+    void settled.then(() => { this.pending.delete(settled) })
+    return work
+  }
+
+  private ownRun(raw: SubagentRun): SubagentRun {
+    let disposal: Promise<void> | undefined
+    const result = this.track(raw.result).then(() => {}, () => {})
+    const owned: SubagentRun = {
+      id: raw.id,
+      localAgent: raw.localAgent,
+      result: raw.result,
+      dispose: () => {
+        if (disposal !== undefined) return disposal
+        const completion = Promise.withResolvers<void>()
+        disposal = completion.promise
+        const close = async (): Promise<void> => {
+          try { await raw.dispose() } finally {
+            await result
+            this.runs.delete(owned)
+          }
+        }
+        this.track(close()).then(completion.resolve, completion.reject)
+        return completion.promise
+      },
+    }
+    this.runs.add(owned)
+    return owned
   }
 
   /**
@@ -597,6 +688,7 @@ export class SubagentRuntime extends TypertRemoteService {
 
   /** Resolve the optional continuable-subagent manager or fail loud. */
   private requireContinuations(): SubagentContinuationManager {
+    this.assertAdmitting()
     if (this.continuations === undefined) {
       throw new SubagentError(
         'continuable subagents require the agents service',

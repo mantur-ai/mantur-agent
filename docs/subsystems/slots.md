@@ -146,6 +146,8 @@ root
 │  ├─ conversation.composer
 │  │  └─ conversation.approval.detail
 │  ├─ conversation.composer.bar
+│  │  ├─ conversation.composer.bar.accessory
+│  │  │  └─ conversation.composer.bar.accessory.permissions
 │  │  ├─ conversation.input.attachments
 │  │  ├─ conversation.input.plan
 │  │  └─ conversation.input.model
@@ -157,11 +159,15 @@ root
 │  ├─ conversation.hero.brand.mark
 │  ├─ conversation.hero.headline
 │  ├─ conversation.hero.badge
+│  ├─ conversation.hero.modes
+│  ├─ conversation.composer.layout
+│  ├─ conversation.composer.guide
 │  ├─ conversation.hero.workspace
 │  │  └─ conversation.hero.workspace.directoryFlow
 │  └─ conversation.hero.agentPreset
 ├─ details
 │  └─ conversation.details.tool
+├─ main.workbench
 └─ shell.overlay
 ```
 

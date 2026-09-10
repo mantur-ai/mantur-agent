@@ -103,8 +103,11 @@ interface SkillRootEntry {
   path: string
 }
 
-interface ParsedSkill {
+/** Frontmatter and instruction text shared by filesystem and verified bundle readers. */
+export interface ParsedSkill {
   name: string
+  version?: string
+  title?: string
   description: string
   whenToUse?: string
   invocation: SkillInvocationPolicy
@@ -209,6 +212,7 @@ export class FileSystemSkillProvider implements SkillProvider {
     if (parsed === undefined) return undefined
     return {
       name: parsed.name,
+      ...parsed.title !== undefined ? { title: parsed.title } : {},
       description: parsed.description,
       ...parsed.whenToUse !== undefined ? { whenToUse: parsed.whenToUse } : {},
       invocation: parsed.invocation,
@@ -731,6 +735,7 @@ async function discoverRoot(root: SkillRoot, ctx: Context, provider: string): Pr
     if (parsed === undefined) continue
     skills.push({
       name: parsed.name,
+      ...parsed.title !== undefined ? { title: parsed.title } : {},
       description: parsed.description,
       ...parsed.whenToUse !== undefined ? { whenToUse: parsed.whenToUse } : {},
       invocation: parsed.invocation,
@@ -796,36 +801,48 @@ async function parseSkillFile(path: string, ctx: Context, signal?: AbortSignal, 
   if (raw === undefined) {
     return undefined
   }
+  return parseSkillText(raw, message => ctx.logger.warn(`skill file ${path} ignored: ${message}`))
+}
+
+/**
+ * Parse already-read instructions using the filesystem provider's frontmatter rules.
+ * @param raw - complete UTF-8 SKILL.md contents.
+ * @param report - invalid-frontmatter diagnostic; callers may throw to reject the resource.
+ * @returns parsed instructions, or undefined after reporting invalid frontmatter.
+ */
+export function parseSkillText(raw: string, report: (message: string) => void): ParsedSkill | undefined {
   let parsed
   try {
     parsed = parseFrontmatter(raw)
   } catch (error) {
-    ctx.logger.warn(`skill file ${path} ignored: invalid YAML frontmatter: ${errorMessage(error)}`)
+    report(`invalid YAML frontmatter: ${errorMessage(error)}`)
     return undefined
   }
   if (!parsed) {
-    ctx.logger.warn(`skill file ${path} ignored: missing YAML frontmatter`)
+    report('missing YAML frontmatter')
     return undefined
   }
   const name = stringField(parsed.data, 'name')
   const description = stringField(parsed.data, 'description')
   if (name === undefined || description === undefined) {
-    ctx.logger.warn(`skill file ${path} ignored: frontmatter requires name and description`)
+    report('frontmatter requires name and description')
     return undefined
   }
   if (!isSkillName(name)) {
-    ctx.logger.warn(`skill file ${path} ignored: invalid skill name "${name}"`)
+    report(`invalid skill name "${name}"`)
     return undefined
   }
   let invocation
   try {
     invocation = parseInvocationPolicy(parsed.data)
   } catch (error) {
-    ctx.logger.warn(`skill file ${path} ignored: invalid invocation frontmatter: ${errorMessage(error)}`)
+    report(`invalid invocation frontmatter: ${errorMessage(error)}`)
     return undefined
   }
   return {
     name,
+    ...optionalString(parsed.data, 'version'),
+    ...optionalString(parsed.data, 'title'),
     description,
     ...optionalString(parsed.data, 'whenToUse'),
     invocation,

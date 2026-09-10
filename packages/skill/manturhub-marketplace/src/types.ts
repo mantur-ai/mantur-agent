@@ -9,6 +9,20 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
   }
 }
 
+/** Exact App resource identity captured by a homepage selection. */
+export interface ManturBundledSkillIdentity {
+  readonly name: string
+  readonly version: string
+  readonly digest: string
+}
+
+/** Offline homepage entry pinned to the running application's resource manifest. */
+export interface ManturBundledSkill extends ManturBundledSkillIdentity {
+  readonly reference: string
+  readonly title: string
+  readonly source: 'app-bundled'
+}
+
 /** One public Skill card returned by ManturHub. */
 export interface ManturMarketplaceSkill {
   readonly slug: string

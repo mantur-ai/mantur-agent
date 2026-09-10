@@ -1,7 +1,9 @@
 /** Application-owned paths and explicit recovery for disposable desktop state. */
 
 import { mkdir, rm } from 'node:fs/promises'
-import { basename, dirname, join, resolve } from 'node:path'
+import { mkdirSync } from 'node:fs'
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
+import type { App } from 'electron'
 
 /** Stable directory name below Electron's per-user application-data root. */
 export const DESKTOP_USER_DATA_NAME = 'mantur-agent'
@@ -24,10 +26,38 @@ export interface DesktopPaths {
   logPath: string
 }
 
-/** Resolve the mode-specific desktop user-data directory below an operating-system app-data root. */
-export function desktopUserDataPath(appData: string, mode: DesktopMode = 'release'): string {
+/**
+ * Resolve an explicit desktop directory or the unchanged mode-specific default.
+ * @param appData - Operating-system application-data root.
+ * @param mode - Default directory selection when no override is supplied.
+ * @param configured - Explicit --user-data-dir value; empty, relative, NUL-containing, and filesystem-root paths are rejected.
+ * @returns The selected absolute override or mode-specific default path.
+ */
+export function desktopUserDataPath(appData: string, mode: DesktopMode = 'release', configured?: string): string {
+  if (configured !== undefined) {
+    if (!isAbsolute(configured) || configured.includes('\0')) {
+      throw new Error('--user-data-dir requires an absolute non-root directory')
+    }
+    const directory = resolve(configured)
+    if (dirname(directory) === directory) throw new Error('--user-data-dir requires an absolute non-root directory')
+    return directory
+  }
   const name = mode === 'development' ? DESKTOP_DEVELOPMENT_USER_DATA_NAME : DESKTOP_USER_DATA_NAME
   return join(appData, name)
+}
+
+/**
+ * Select desktop and browser-session storage before account, draft, or Harness startup.
+ * @param application - Electron path configuration before readiness.
+ * @param configured - Explicit --user-data-dir value, if present.
+ * @returns Paths derived from the selected Electron userData directory.
+ */
+export function initializeDesktopPaths(application: Pick<App, 'getPath' | 'setPath' | 'isPackaged'>, configured?: string): DesktopPaths {
+  const userData = desktopUserDataPath(application.getPath('appData'), application.isPackaged ? 'release' : 'development', configured)
+  if (configured !== undefined) mkdirSync(userData, { recursive: true, mode: 0o700 })
+  application.setPath('userData', userData)
+  if (configured !== undefined) application.setPath('sessionData', userData)
+  return desktopPaths(application.getPath('userData'))
 }
 
 /** Resolve every desktop-owned path from Electron's configured user-data directory. */

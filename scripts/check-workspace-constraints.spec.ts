@@ -1,6 +1,8 @@
 /** Experimental-package publication and dependency constraints. */
 
 import { describe, expect, it } from 'vitest'
+import manturManifest from '../packages/bundle/mantur-app/package.json' with { type: 'json' }
+import editingManifest from '../packages/client/ui-mantur-editing/package.json' with { type: 'json' }
 import {
   checkExperimentalDependencyIsolation,
   checkExperimentalManifest,
@@ -78,6 +80,32 @@ describe('experimental workspace constraints', () => {
 })
 
 describe('package payload constraints', () => {
+  it('ships the bundled editing types entry without private browser compiler output', () => {
+    const manifest = { ...editingManifest, dsh: {} }
+    const workspace: WorkspaceManifest = { dir: 'packages/client/ui-mantur-editing', manifest }
+    expect(checkWorkspaceManifest(workspace)).toEqual([])
+    for (const files of [
+      editingManifest.files.filter(file => file !== 'lib/types.js'),
+      [...editingManifest.files, 'lib/types/**/*.js'],
+    ]) {
+      expect(checkWorkspaceManifest({ ...workspace, manifest: { ...manifest, files } }))
+        .toEqual([expect.stringContaining('package.json files must be')])
+    }
+  })
+
+  it('requires both Mantur update entries and rejects an unrelated published artifact', () => {
+    const workspace: WorkspaceManifest = { dir: 'packages/bundle/mantur-app', manifest: manturManifest }
+    expect(checkWorkspaceManifest(workspace)).toEqual([])
+    for (const files of [
+      manturManifest.files.filter(file => file !== 'lib/update-protocol.js'),
+      manturManifest.files.filter(file => file !== 'lib/update-shutdown.js'),
+      [...manturManifest.files, 'lib/unrelated.js'],
+    ]) {
+      expect(checkWorkspaceManifest({ ...workspace, manifest: { ...manturManifest, files } }))
+        .toEqual([expect.stringContaining('package.json files must be')])
+    }
+  })
+
   it('keeps the native desktop assembly private and outside npm publication policy', () => {
     const desktop: WorkspaceManifest = {
       dir: 'apps/desktop',
@@ -96,6 +124,24 @@ describe('package payload constraints', () => {
       manifest: { ...desktop.manifest, publishConfig: { access: 'public' } },
     })).toEqual([
       'apps/desktop/package.json: @deepseek-ai/dsh-desktop: private application must omit publishConfig',
+    ])
+  })
+
+  it('ships the external editor theme module and its declaration', () => {
+    expect(expectedDshPackageFiles({
+      name: '@deepseek-ai/dsh-client-ui-mantur-editing',
+      exports: { './client': { default: './lib/client.js' } },
+    })).toEqual([
+      'lib/index.js',
+      'lib/client.js',
+      'adapters/openchatcut-theme.mjs',
+      'adapters/openchatcut-theme.d.mts',
+      'adapters/mantur-cut.patch', 'adapters/mantur-runtime.mjs',
+      'adapters/mantur-runtime-shutdown.mjs',
+      'adapters/mantur-production-runtime.mjs', 'adapters/mantur-packaged-resources.mjs',
+      'adapters/mantur-packaged-resources.d.mts', 'adapters/mantur-cut-packaged.patch',
+      'adapters/mantur-cut-shutdown.patch',
+      'lib/types/**/*.d.ts',
     ])
   })
 

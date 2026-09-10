@@ -151,6 +151,15 @@ const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
   '@deepseek-ai/dsh-client-ui-primitives': ['lib/**/*.css'],
   '@deepseek-ai/dsh-client-web': ['lib/**/*.css'],
   '@deepseek-ai/dsh-client-ui-theme': ['lib/styles'],
+  // The external editor loads this standalone browser module without the client plugin loader.
+  '@deepseek-ai/dsh-client-ui-mantur-editing': [
+    'adapters/openchatcut-theme.mjs', 'adapters/openchatcut-theme.d.mts',
+    'adapters/mantur-cut.patch', 'adapters/mantur-runtime.mjs',
+    'adapters/mantur-runtime-shutdown.mjs',
+    'adapters/mantur-production-runtime.mjs', 'adapters/mantur-packaged-resources.mjs',
+    'adapters/mantur-packaged-resources.d.mts', 'adapters/mantur-cut-packaged.patch',
+    'adapters/mantur-cut-shutdown.patch',
+  ],
   // The CPython side ships as source .py files, published as-is rather than built.
   '@deepseek-ai/dsh-experimental-code-runtime-python': ['py/**/*.py'],
   // The shipped preset compositions travel inside the roster package.
@@ -168,6 +177,8 @@ const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
   // resolve at install time, before the build produces lib/bin.js.
   '@deepseek-ai/dsh-experimental-webworker-packer': ['bin.js', 'lib/repository-*.js'],
   '@deepseek-ai/dsh-subprocess-local': ['scripts/ensure-spawn-helper.mjs'],
+  // Desktop Main and the Host import separate update protocol and shutdown entries.
+  '@deepseek-ai/dsh-mantur-app': ['lib/update-protocol.js', 'lib/update-shutdown.js'],
 }
 
 function sameStringList(actual: readonly string[] | undefined, expected: readonly string[]): boolean {
@@ -205,6 +216,8 @@ export function expectedDshPackageFiles(manifest: PackageManifest): readonly str
     // as a row module, so it cannot ride inside the package entry.
     ...exportDefault(manifest, './startup') === './lib/startup.js' ? ['lib/startup.js'] : [],
     ...extras,
+    // A bundled shared-types entry does not publish private browser compiler output.
+    ...exportDefault(manifest, './types') === './lib/types.js' ? ['lib/types.js'] : [],
     // Subpaths whose runtime default is the tsc-emitted tree (lib/types/*.js —
     // browser-safe source channels rehomed off src so plain Node can import
     // them without type stripping) publish the emitted JS alongside the

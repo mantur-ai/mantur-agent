@@ -20,6 +20,7 @@ import type {
 } from '../contract/input.ts'
 import type { InputSubmitMode } from '../contract/composer-submission.ts'
 import type { PopupDismissFace } from './facade.ts'
+import type { DraftPersistence } from './draft-persistence.ts'
 import { SessionInputShell } from './facade.ts'
 
 /** Structural command face for per-session popup resolution. */
@@ -48,7 +49,10 @@ interface ConversationAttachmentFace {
 
 /** Session-addressed input facade registry (SessionInputResolver face + composer-layer extras). */
 export class InputHub implements SessionInputResolver {
+  /** Native persistence adapter, installed by the owning Conversation plugin. */
+  persistence: DraftPersistence | undefined
   private readonly shells = new Map<SessionId, SessionInputShell>()
+  private readonly draftReadiness = new Map<SessionId, Promise<void>>()
 
   /**
    * @param ctx - client root context (services resolved lazily per call — boot order stays free).
@@ -58,6 +62,14 @@ export class InputHub implements SessionInputResolver {
     private readonly rootCtx: Context,
     private readonly t: TranslateNS<'conversation'>,
   ) {}
+
+  /**
+   * Surface native persistence failure in each currently attached composer.
+   * @param message - Localized save failure notice.
+   */
+  reportPersistenceError(message: string): void {
+    for (const shell of this.shells.values()) shell.notify('error', message)
+  }
 
   /**
    * Resolve the facade for one session-scope ctx (SessionInputResolver face).
@@ -106,6 +118,13 @@ export class InputHub implements SessionInputResolver {
       },
     })
     this.shells.set(id, shell)
+    if (this.persistence !== undefined) {
+      const ready = this.persistence.attachDraft(`session:${id}`, shell)
+      this.draftReadiness.set(id, ready)
+      void ready.catch((error: unknown) => {
+        shell.notify('error', this.t('draft.saveFailed', { detail: String(error) }))
+      })
+    }
     // The one teardown axis: listeners, shell, and map entries all ride the
     // scope fiber (nothing here outlives the scope).
     actx.effect(() => {
@@ -123,6 +142,8 @@ export class InputHub implements SessionInputResolver {
         for (const off of offs) off()
         const drafts = shell.dispose()
         this.shells.delete(id)
+        this.draftReadiness.delete(id)
+        this.persistence?.detachDraft(`session:${id}`)
         const conversation = this.rootCtx.get('conversation') as ConversationAttachmentFace | undefined
         for (const imageId of drafts) conversation?.releaseDraftImage(imageId)
       }
@@ -142,6 +163,16 @@ export class InputHub implements SessionInputResolver {
     const binding = this.sessions().binding(id)
     if (binding === undefined) throw new Error(`conversation.input: session "${id}" resolved no binding`)
     return this.shellFor(binding)
+  }
+
+  /**
+   * Await the target composer's native restoration before transferring a draft into it.
+   * @param id - A materialized Session id.
+   * @returns completion of its restoration; failure rejects without moving source input.
+   */
+  async waitForDraft(id: SessionId): Promise<void> {
+    this.shell(id)
+    await this.draftReadiness.get(id)
   }
 
   /**

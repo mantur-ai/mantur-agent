@@ -1,0 +1,7 @@
+# Production asset provider
+
+The Mantur asset provider reads the selected pipeline report and stores its prompt drafts, proposals, actual request fields, and media bindings as separate observations. Source updates use the filesystem generation and source fingerprint captured by the request. A journal is committed before a replacement and history retains the selected prompt fields for guarded recovery. The provider does not schedule generation or infer missing image bindings.
+
+Recovery uses the existing pending journal because report replacement and history completion are separate writes. A failed replacement or completion leaves the proposal unfinished. Conditional journal writes reserve the observed generation before replacement and retain that generation for completion, so a competing update cannot be silently overwritten. Tests inject failures at both writes, reject recovery after an external source edit, and synchronize two first journal writers at a barrier. These tests cover one LocalFileSystem instance and a reopened Session object, not a process restart or cross-process exclusion.
+
+The workbench now scans an explicitly selected project-local candidate directory and issues a session-scoped preview URL only after validating the media signature. Filename prefixes may identify a matching report asset for review, but the scan never mutates an empty report binding. The acceptance fixture has twelve image files, ten filename matches, and no local videos; its remote clip URLs are not used as preview evidence.

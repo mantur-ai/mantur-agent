@@ -1,0 +1,5 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Session editor workbench > records the en workspace and controls 1`] = `"<section class="_workbench_063bd3" aria-label="Editing workbench"><header class="_header_063bd3"><strong title="/project/editing/session-a">Editing workbench</strong><button type="button" title="Refresh">Refresh</button></header><iframe class="_editor_063bd3" src="http://127.0.0.1:5299/?manturTheme=light&amp;manturLocale=en" title="Editing workbench" allow="autoplay; fullscreen; cross-origin-isolated"></iframe></section>"`;
+
+exports[`Session editor workbench > records the zh workspace and controls 1`] = `"<section class="_workbench_063bd3" aria-label="剪辑工作台"><header class="_header_063bd3"><strong title="/project/editing/session-a">剪辑工作台</strong><button type="button" title="刷新">刷新</button></header><iframe class="_editor_063bd3" src="http://127.0.0.1:5299/?manturTheme=light&amp;manturLocale=zh" title="剪辑工作台" allow="autoplay; fullscreen; cross-origin-isolated"></iframe></section>"`;

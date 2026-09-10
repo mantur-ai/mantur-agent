@@ -122,6 +122,26 @@ class WorkerThreadWorkflowEngine extends WorkflowEngine {
   })
 
   private readonly config: ResolvedConfig
+  private readonly runs = new Set<WorkerRun>()
+  private readonly cleanupFailures: unknown[] = []
+  private shutdown: Promise<void> | undefined
+
+  /**
+   * Freeze new workflows and join every retained worker and child cleanup.
+   * @returns one shared completion; rejects for current or previously released cleanup failures.
+   */
+  stopForShutdown(): Promise<void> {
+    if (this.shutdown !== undefined) return this.shutdown
+    const completion = Promise.withResolvers<void>()
+    this.shutdown = completion.promise
+    const stop = async (): Promise<void> => {
+      const outcomes = await Promise.allSettled([...this.runs].map(run => run.stopForShutdown()))
+      const failures = [...this.cleanupFailures, ...outcomes.flatMap<unknown>(outcome => outcome.status === 'rejected' ? [outcome.reason as unknown] : [])]
+      if (failures.length > 0) throw new AggregateError(failures, 'workflow engine shutdown failed')
+    }
+    stop().then(completion.resolve, completion.reject)
+    return completion.promise
+  }
 
   constructor(ctx: Context, config: Config) {
     super(ctx)
@@ -141,6 +161,7 @@ class WorkerThreadWorkflowEngine extends WorkflowEngine {
    * @returns the live run (its `result` resolves when the script settles).
    */
   start(request: WorkflowStartRequest): WorkflowRun {
+    if (this.shutdown !== undefined) throw new Error('workflow admission is closed for shutdown')
     const meta = validateMeta(request.meta)
     assertBodyParses(request.script, meta.name)
     const subagentProvider = resolveSubagentProvider(this.ctx, this.config.provider, request.subagentProvider)
@@ -187,6 +208,11 @@ class WorkerThreadWorkflowEngine extends WorkflowEngine {
       request.signal,
     )
 
+    this.runs.add(workerRun)
+    void workerRun.released.then((failures) => {
+      this.cleanupFailures.push(...failures)
+      this.runs.delete(workerRun)
+    })
     this.emitWorkflowEvent('workflow/start', info)
     // `workflow/end` fires as the (never-rejecting) result settles, with the
     // outcome DATA only — the value stays with the run's holder.

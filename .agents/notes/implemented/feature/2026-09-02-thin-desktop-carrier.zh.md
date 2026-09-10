@@ -14,13 +14,17 @@ Status: implemented
 
 Electron 还通过 `ELECTRON_RUN_AS_NODE=1` 提供子进程的 Node 运行时。这样每个安装包只含一套运行时，并保留所有受支持 Node 应用都通过具名 `dsh` profile 启动的规则。桌面依赖根包含既有 Python 部署闭包、Web 应用闭包与必需的 session-title peer；electron-builder 会为目标 Electron 运行时重建原生依赖。
 
-client 构建 profile `mantur` 会把 `DSH_CLIENT_TITLE` 固定为 `漫途Agent`，并同时写入仓库版本与 commit 元数据。Mantur 应用 profile 提供应用内身份，两个原生打包目标都使用已确认的蓝色无限环图标。载体声明稳定应用标识 `ai.mantur.agent`，并在 Electron 就绪前把其用户数据路径设为操作系统应用数据根目录下的 `mantur-agent` 目录。子进程只接收该目录的 `harness` 子目录作为 `DSH_HOME`，并从应用自有的中性目录启动；`~/.dsh` 下的 CLI 状态不会进入桌面启动。
+client 构建 profile `mantur` 会把 `DSH_CLIENT_TITLE` 固定为 `漫途Agent`，并同时写入仓库版本与 commit 元数据。Mantur 应用 profile 提供应用内身份。原生窗口、macOS Dock、关于面板和两个原生打包目标都使用带白色圆角底和透明外角的蓝色无限环图标；Web 客户端保留透明 Logo。载体声明稳定应用标识 `ai.mantur.agent`，并在 Electron 就绪前把其用户数据路径设为操作系统应用数据根目录下的 `mantur-agent` 目录。子进程只接收该目录的 `harness` 子目录作为 `DSH_HOME`，并从应用自有的中性目录启动；`~/.dsh` 下的 CLI 状态不会进入桌面启动。
 
 同一用户数据根目录还持有 Harness 与桌面诊断的持久合并日志。启动失败会先关闭子进程并完成日志写入。只有错误指向 schema 无效的 `session_projcache` 时，才会提供一项窄范围恢复：在用户通过原生对话框明确同意后，载体只删除该投影缓存并重试。会话日志、设置、凭据、profile 与 workspace 保持不变。其他错误只提供日志与退出。
 
-已安装构建通过 electron-updater 检查 `mantur-ai/mantur-harness` GitHub Releases。检查会在启动后开始，并每六小时重复。两个改变状态的步骤都需要分别同意：载体会先在下载前询问，再在停止 Harness 并重启进入安装器前第二次询问。释放 updater 会移除监听器，并阻止尚未完成的对话框结果触发下载或安装。后台检查与失败都会写入桌面日志。
+显式配置本地 profile 使用既有 Electron `--user-data-dir` 参数，不另加环境变量。传入的绝对非根目录同时选择 Electron `userData` 和 `sessionData`，其 `harness` 子目录仍是桌面端唯一的 `DSH_HOME`。校验和目录创建先于账号、草稿及 Harness 初始化，错误不会改选默认存储。未传参数时，两种模式的默认目录及初始化保持不变。不同配置目录隔离 profile 文件；选择同一目录会共享文件。该参数既不发现，也不迁移账号或凭据。
+
+已安装构建通过 electron-updater 检查 `mantur-ai/mantur-harness` GitHub Releases。stable 构建只接收 stable release；版本号含 `alpha`、`beta` 或 `rc` 的构建可以接收预发布版本。检查会在启动后开始，并每六小时重复。macOS 的原生应用菜单和 Windows 的帮助菜单会显示当前版本、手动检查操作、检查与下载进度、失败状态和可安装操作。手动检查得到无更新或错误结果时，还会显示本地化原生对话框。两个改变状态的步骤都需要分别同意：载体会先在下载前询问，再在停止 Harness 并重启进入安装器前第二次询问。下载后选择稍后仍可从菜单触发安装。释放 updater 会移除监听器，并阻止尚未完成的对话框结果触发下载或安装。后台检查与失败都会写入桌面日志。
 
 根目录的 `desktop:dev` 命令负责本地编辑循环，不会调用 electron-builder。监听器会重新运行桌面端 TypeScript 增量项目、bundle Electron 入口，并直接启动 Electron。源码或资源改动会终止活动 Electron 进程；Electron 先等待其 dsh 子进程关闭，再开始下一轮。开发 dsh 输出会同步显示在终端，同时保留在持久日志中。开发模式选用 `mantur-agent-dev` 用户数据目录，不会触及已安装应用的 `mantur-agent` 状态；`app.isPackaged` 会保持 updater 不活动。
+
+Main 负责目录对话框，因为只有 Electron 载体能将其父窗口设为当前活动窗口。无参数、仅限当前主 frame 的 preload 能力返回一个绝对目录或 `null`；共享 Workspace 插件在组合时选择此回调，接纳仍由 Host 负责。普通浏览器保留 [Host 选择器](2026-07-27-native-workspace-directory-picker.zh.md)。原生错误不会启动第二种实现。Main 在 Electron 调用结束前持续保留对话框待完成状态，期间拒绝重复请求和更新准备，并在导航、关闭或退出后使结果失效。结果失效不表示 OS 对话框已取消。无密钥的桥接与 Main 接线测试覆盖这些规则；原生可见性需要操作系统 GUI 验证。
 
 ## Packaging and verification
 
@@ -28,9 +32,13 @@ client 构建 profile `mantur` 会把 `DSH_CLIENT_TITLE` 固定为 `漫途Agent`
 
 内部打包工作流会生成未签名的 DMG、macOS 更新 ZIP 与一键 NSIS 安装包。私有 desktop workspace 仍不属于 npm release family；该工作流只把文件作为私有 Actions artifact 保留，不创建 tag 或 GitHub release。只有某个目标的原生打包和 packaged smoke 都通过后，才可认为该目标完成验证。
 
-macOS release 工作流通过受保护的 GitHub 环境 secret 为原生 arm64 与 x64 构建执行签名和 notarization。它会先验证 Developer ID 签名、Gatekeeper 评估、stapled ticket 与 packaged smoke，再合并两份架构专属通道文件。只有从精确版本 tag 发起的显式发布任务才会创建 GitHub release，其中包含两份 DMG、两份更新 ZIP、对应 blockmap、合并后的更新元数据与 SHA-256 哈希。工作流会拒绝已存在的 release；发布前还必须启用仓库级 Release Immutability，以阻止之后修改 tag 和产物。在 Windows 具备独立签名身份与发布路径之前，它不会进入外部更新通道。
+DMG 镜像文件保留在构建输出目录，但 `hdiutil` 挂载点使用 macOS `getconf DARWIN_USER_TEMP_DIR` 下的独立临时目录。关闭所有权的外置构建卷可能允许创建镜像，却拒绝在其输出目录中挂载镜像。解析或创建系统挂载点失败会明确报错；打包不会修改卷权限，也不会尝试其他目录。清理只在卸载后移除空挂载点；无法安全移除挂载点时保留镜像文件。
+
+macOS release 工作流通过受保护的 GitHub 环境 secret 为原生 arm64 与 x64 构建执行签名和 notarization。它会先验证 Developer ID 签名、Gatekeeper 评估、stapled ticket 与 packaged smoke，再合并两份架构专属通道文件。只有从精确 `v<version>` tag 发起的显式发布任务才会创建 GitHub release，其中包含两份 DMG、两份更新 ZIP、对应 blockmap、合并后的更新元数据与 SHA-256 哈希。electron-updater 可以从 GitHub feed 中选择这种兼容 semver 的 alpha、beta 与 RC release。工作流会拒绝已存在的 release；发布前还必须启用仓库级 Release Immutability，以阻止之后修改 tag 和产物。在 Windows 具备独立签名身份与发布路径之前，它不会进入外部更新通道。
 
 ## Alternatives considered
+
+**由后台 Host helper 打开桌面文件夹选择器。** 否决。该进程不拥有 Electron 窗口，无法为选择器指定应用父窗口。窄范围 Main 能力保留既有 Workspace 流程，不把工作区存储移入 Electron，也不把结果失效当成原生对话框取消。
 
 **内嵌 Harness Host，并用 Electron IPC 替代 HTTP。** 否决。这样会创建桌面专用应用组装与 transport，重复既有 Web 认证和生命周期行为，并在一键安装证明需求之前造成更大的上游差异。
 
@@ -42,12 +50,16 @@ macOS release 工作流通过受保护的 GitHub 环境 secret 为原生 arm64 �
 
 **为每次开发改动构建原生安装包。** 否决。DMG、ZIP、NSIS、签名、notarization 与更新元数据不会为普通 Electron 入口改动提供证据。这些操作仍属于发布路径检查，开发命令则直接验证同一套未打包主进程和 dsh Web 启动。
 
+**仅修改 HOME 来隔离桌面测试。** 否决。主进程在 Electron 的操作系统应用数据根目录下选择存储位置。显式桌面目录同时选择浏览器会话存储和子进程 Harness home，无需依赖环境中的 CLI 配置。
+
+**通过 Web 应用暴露桌面 updater 状态。** 否决。renderer 有意不提供 Electron preload bridge、Node integration 或桌面专用 HTTP API。原生菜单可以呈现应用生命周期功能，而无需给 Harness profile 或 Web client 增加桌面 transport。
+
 ## Consequences
 
 - 桌面用户可以获得普通安装包，而 Web profile 仍是唯一的交互式 Harness 应用实现。
 - loopback 子进程增加了一条本地 HTTP 生命周期，并通过本地化原生对话框显式呈现启动失败。
 - 已安装桌面状态与 CLI 状态隔离；schema 无效的会话投影缓存可执行一次由用户同意的可丢弃重置，而不是无期阻止应用启动。
-- 更新检查会自动运行，但下载与重启安装仍由用户决定。只有已签名的 macOS release 产物构成外部更新通道。
+- 更新检查会自动运行，也可由用户手动触发，但下载与重启安装仍由用户决定。stable 用户不会收到预发布版本。只有已签名的 macOS release 产物构成外部更新通道；Windows 对外更新仍需签名凭据与受保护的发布路径。
 - 桌面端改动通过一条受监听的开发命令运行，不生成安装包；开发数据与已安装数据保持分离。
 - 完整运行时依赖闭包与解包文件使安装包大于专用客户端；这项成本避免了第二套应用运行时，并让 Loader 与原生模块路径保持为普通文件路径。
 - 签名与 notarization 凭据仍是受保护的部署输入。内部打包工作流无法访问这些凭据，也不能发布 release。

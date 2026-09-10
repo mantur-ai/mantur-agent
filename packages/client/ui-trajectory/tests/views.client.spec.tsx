@@ -240,7 +240,7 @@ function standaloneProps(
 }
 
 type ConversationTargetSources = {
-  [Target in Extract<keyof ConversationViewSnapshotMap, string>]:
+  [Target in Extract<keyof ConversationViewSnapshotMap, string>]?:
   ObservableSnapshot<ConversationViewSnapshotMap[Target] | undefined>
 }
 
@@ -267,7 +267,11 @@ async function bench(snapshot = historySnapshot(NODES)) {
   const binding: ConversationBinding = {
     snapshot: conversationStore,
     activate: () => {},
-    target: target => targetSources[target],
+    target: (target) => {
+      const source = targetSources[target]
+      if (source === undefined) throw new Error(`Standalone trajectory fixture does not provide ${target}`)
+      return source
+    },
   }
   vi.spyOn(uiConversation, 'binding').mockReturnValue(binding)
   // The conversation entry's role: declare the ring, then seed the chat entry.

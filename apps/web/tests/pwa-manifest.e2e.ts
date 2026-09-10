@@ -72,3 +72,13 @@ it('ships the profile-owned favicon', async () => {
   expect(favicon).toMatch(/@media \(prefers-color-scheme: dark\)\s*{\s*path\s*{[^}]*fill:\s*#fff/i)
   expect(favicon).toContain('fill="#000"')
 })
+
+it.each(['script', 'production', 'editing', 'assets', 'welcome'])('ships the transparent %s artwork in every Web profile', async (mode) => {
+  for (const scale of [2, 3]) {
+    const name = mode === 'welcome' ? 'mantoo-welcome' : `mantoo-${mode}-peek`
+    const png = await readFile(join(DIST_ROOT, `${name}@${scale}x.png`))
+    expect(png.readUInt32BE(16)).toBe((mode === 'welcome' ? 96 : 184) * scale)
+    expect(png.readUInt32BE(20)).toBe((mode === 'welcome' ? 96 : 120) * scale)
+    expect(png[25]).toBe(6)
+  }
+})

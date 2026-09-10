@@ -16,6 +16,7 @@ import type {
   ManturMarketplaceState, ManturMarketplaceStore, ManturRecipeMarketplaceState,
 } from './store.ts'
 import css from './MarketplaceNavigation.module.css'
+import { focusDetailAction } from './detail-focus.ts'
 
 /** Mantur root-page identifiers. */
 export const MANTUR_MARKET_PAGES = {
@@ -28,7 +29,12 @@ export type ManturMarketPageId = typeof MANTUR_MARKET_PAGES[keyof typeof MANTUR_
 
 /** Full sidebar navigation props. */
 export type MarketplaceNavigationProps =
-  PropsRuntime<'sidebar.navigation'> & PropsLocale<'navigation.mantur'>
+  PropsRuntime<'sidebar.navigation'> & PropsLocale<'navigation.mantur'> & InjectFace<MarketplaceNavigationInjected>
+
+/** Invalidate pending current-composer actions before leaving for a marketplace page. */
+export interface MarketplaceNavigationInjected {
+  beforeOpenPage: () => void
+}
 
 /** Full root-page props. */
 export type MarketplacePageProps =
@@ -55,7 +61,7 @@ const items: readonly NavigationItem[] = [
 ]
 
 /** Render the Mantur-only feature group above Projects. */
-export function MarketplaceNavigation({ wide, activePage, openPage, t }: MarketplaceNavigationProps) {
+export function MarketplaceNavigation({ wide, activePage, openPage, beforeOpenPage, t }: MarketplaceNavigationProps) {
   return (
     <nav className={clsx(css.navigation, !wide && css.rail)} aria-label={t('section.features')}>
       <div className={css.navigationItems}>
@@ -68,7 +74,7 @@ export function MarketplaceNavigation({ wide, activePage, openPage, t }: Marketp
               className={clsx(css.navigationItem, selected && css.selected)}
               aria-current={selected ? 'page' : undefined}
               aria-label={t(label)}
-              onClick={() => { openPage(id) }}
+              onClick={() => { beforeOpenPage(); openPage(id) }}
             >
               <Icon size={wide ? 16 : 18} />
               {wide && <span>{t(label)}</span>}
@@ -129,11 +135,24 @@ function SkillMarketplace({ closePage, controller, useMarketplace, t }: {
   const ready = state.phase === 'ready' ? state : undefined
   const detail = ready?.detail
   const detailError = ready?.detailError
+  const source = useRef<HTMLElement>(null)
+  const detailAction = useRef<HTMLButtonElement>(null)
+  const loginSource = useRef<string>()
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('')
   useEffect(() => {
     void controller.ensureSkillCatalog()
   }, [controller])
+  useEffect(() => {
+    if (ready?.loginPhase === 'starting' || loginSource.current === undefined) return
+    const slug = loginSource.current
+    loginSource.current = undefined
+    if (detail?.slug === slug) focusDetailAction(source.current, detailAction.current)
+  }, [ready?.loginPhase, detail?.slug])
+
+  const useSkill = async (slug: string): Promise<void> => {
+    if (await controller.startSkill(slug)) closePage()
+  }
 
   const skills = state.phase === 'ready' ? state.catalog.skills : []
   const categories = useMemo(
@@ -149,13 +168,24 @@ function SkillMarketplace({ closePage, controller, useMarketplace, t }: {
   const detailFooter = detail === undefined || ready === undefined
     ? undefined
     : detail.installed
-      ? <button type="button" className={css.install} disabled>{t('skills.installed')}</button>
+      ? (
+        <button
+          type="button"
+          className={css.install}
+          disabled={ready.using !== undefined}
+          ref={detailAction}
+          onClick={() => { void useSkill(detail.slug) }}
+        >
+          {ready.using === detail.slug ? t('skills.using') : t('skills.use')}
+        </button>
+      )
       : ready.catalog.signedIn
         ? (
           <button
             type="button"
             className={css.install}
             disabled={ready.installing !== undefined}
+            ref={detailAction}
             onClick={() => { void controller.install(detail.slug) }}
           >
             {ready.installing === detail.slug ? t('skills.installing') : t('skills.install')}
@@ -166,7 +196,8 @@ function SkillMarketplace({ closePage, controller, useMarketplace, t }: {
             type="button"
             className={css.install}
             disabled={ready.loginPhase === 'starting' || ready.loginPhase === 'authorizing'}
-            onClick={() => { void controller.startLogin() }}
+            ref={detailAction}
+            onClick={() => { loginSource.current = detail.slug; void controller.startLogin() }}
           >
             {ready.loginPhase === 'starting' ? t('skills.loginPreparing') : t('skills.loginToInstall')}
           </button>
@@ -182,9 +213,16 @@ function SkillMarketplace({ closePage, controller, useMarketplace, t }: {
             : t('skills.installFailed')}
       </p>
     )
+  const useErrorNotice = ready?.useError === undefined
+    ? undefined
+    : (
+      <p className={css.installError} role="alert">
+        {ready.useError === 'no-workspace' ? t('skills.noWorkspace') : t('skills.useFailed')}
+      </p>
+    )
 
   return (
-    <main className={css.page} aria-labelledby="mantur-marketplace-title">
+    <main ref={source} className={css.page} aria-labelledby="mantur-marketplace-title">
       <header className={css.pageHeader}>
         <button type="button" className={css.back} onClick={closePage}>
           <IconChevronLeftOutline14 />
@@ -218,6 +256,7 @@ function SkillMarketplace({ closePage, controller, useMarketplace, t }: {
         )}
 
         {detail === undefined && installErrorNotice}
+        {detail === undefined && useErrorNotice}
 
         {state.phase === 'idle' || state.phase === 'loading'
           ? <p className={css.status}>{t('skills.loading')}</p>
@@ -241,14 +280,15 @@ function SkillMarketplace({ closePage, controller, useMarketplace, t }: {
                         <button
                           type="button"
                           className={css.install}
-                          disabled={skill.installed || ready?.installing !== undefined}
+                          disabled={ready?.installing !== undefined || ready?.using !== undefined}
                           onClick={() => {
-                            if (ready?.catalog.signedIn === true) void controller.install(skill.slug)
+                            if (skill.installed) void useSkill(skill.slug)
+                            else if (ready?.catalog.signedIn === true) void controller.install(skill.slug)
                             else void controller.openDetail(skill.slug)
                           }}
                         >
                           {skill.installed
-                            ? t('skills.installed')
+                            ? ready?.using === skill.slug ? t('skills.using') : t('skills.use')
                             : ready?.installing === skill.slug
                               ? t('skills.installing')
                               : ready?.catalog.signedIn === true
@@ -262,7 +302,7 @@ function SkillMarketplace({ closePage, controller, useMarketplace, t }: {
               )}
       </section>
       <Modal
-        open={detail !== undefined || ready?.detailLoading !== undefined || detailError !== undefined}
+        open={ready?.loginPhase !== 'starting' && (detail !== undefined || ready?.detailLoading !== undefined || detailError !== undefined)}
         onClose={() => { controller.closeDetail() }}
         title={detail?.name ?? (detailError === undefined ? t('skills.loadingDetail') : t('skills.detailFailedTitle'))}
         closeLabel={t('close')}
@@ -285,7 +325,9 @@ function SkillMarketplace({ closePage, controller, useMarketplace, t }: {
             </div>
             {detail.introduction !== undefined && <p>{detail.introduction}</p>}
             {installErrorNotice}
+            {useErrorNotice}
             {ready.loginPhase === 'failed' && <p className={css.installError}>{t('skills.loginFailed')}</p>}
+            {ready.loginPhase === 'unavailable' && <p className={css.installError} role="alert">{t('skills.loginUnavailable')}</p>}
             {ready.loginPhase === 'authorizing' && ready.login !== undefined && (
               <div className={css.loginGate}>
                 <span>{t('skills.loginCode')}</span>
@@ -339,10 +381,7 @@ function RecipeMarketplace({ closePage, controller, useRecipes, t }: {
       && appliedQuery.current.page === page) return
     appliedQuery.current = { query, category, page }
     const timer = window.setTimeout(() => {
-      void controller.ensureRecipeCatalog({
-        ...(page === 1 ? {} : { page }),
-        ...currentRecipeQuery(query, category),
-      })
+      void controller.ensureRecipeCatalog(currentRecipeQuery(query, category))
     }, 250)
     return () => { window.clearTimeout(timer) }
   }, [category, controller, page, query])
@@ -438,11 +477,6 @@ function RecipeMarketplace({ closePage, controller, useRecipes, t }: {
                                 </button>
                                 <div className={css.recipeCardBody}>
                                   <button type="button" className={css.recipeTitle} onClick={() => { void controller.openRecipeDetail(recipe.slug) }}>{recipe.title}</button>
-                                  <p>{recipe.summary}</p>
-                                  <div className={css.recipeTags}>
-                                    <span>{t(`recipes.category.${recipe.category}`)}</span>
-                                    {recipe.tags.slice(0, 2).map(tag => <span key={tag}>{tag}</span>)}
-                                  </div>
                                   <div className={css.recipeMeta}>
                                     <span><IconCopyOutline16 size={14} />{t('recipes.copies').replace('{count}', String(recipe.copies))}</span>
                                     <span className={css.recipeCost}>{recipe.costEstimate || t('recipes.liveQuote')}</span>

@@ -3,7 +3,7 @@
 import { spawn, type ChildProcessByStdio } from 'node:child_process'
 import { createWriteStream, mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
-import type { Readable } from 'node:stream'
+import { finished, type Readable } from 'node:stream'
 import { fileURLToPath } from 'node:url'
 
 const READY_PATTERN = /^dsh web: (http:\/\/127\.0\.0\.1:\d+\/\?token=[^\s]+)/mu
@@ -11,7 +11,7 @@ const OUTPUT_LIMIT = 64 * 1_024
 
 /** A running dsh process and its authenticated startup URL. */
 export interface DesktopService {
-  /** Child process running the shipped dsh CLI through Electron's Node mode. */
+  /** Child process running the shipped dsh CLI through Electron's Node mode, with parent IPC. */
   child: ChildProcessByStdio<null, Readable, Readable>
   /** Resolves after dsh exits and its persistent log finishes closing. */
   closed: Promise<void>
@@ -19,6 +19,8 @@ export interface DesktopService {
   ready: Promise<string>
   /** Request termination, escalating if dsh does not exit within the shutdown deadline. */
   stop: () => void
+  /** Stop after a separately verified save receipt and reject abnormal exit or log failure. */
+  stopAndVerifyExit(): Promise<void>
 }
 
 /** Options for starting the desktop-owned dsh process. */
@@ -75,6 +77,7 @@ export function startDesktopService(options: StartDesktopServiceOptions): Deskto
   const entry = options.entry ?? resolveDshEntry()
   const timeoutMs = options.timeoutMs ?? 60_000
   const shutdownTimeoutMs = options.shutdownTimeoutMs ?? 2_000
+  // Node's IPC overload loses the first three explicit stdio stream types.
   const child = spawn(options.electronExecutable, buildDshArguments(entry), {
     cwd: options.cwd,
     env: {
@@ -82,9 +85,18 @@ export function startDesktopService(options: StartDesktopServiceOptions): Deskto
       ELECTRON_RUN_AS_NODE: '1',
       NODE_OPTIONS: '',
     },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  })
+    stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+  }) as ChildProcessByStdio<null, Readable, Readable>
 
+  let updateReady = options.environment?.DSH_MANTUR_UPDATE_IPC !== '1'
+  let startupUrl: string | undefined
+  let acceptReady: (() => void) | undefined
+  child.on('message', (value: unknown) => {
+    if (value && typeof value === 'object' && (value as Record<string, unknown>).type === 'mantur:update:ready') {
+      updateReady = true
+      acceptReady?.()
+    }
+  })
   let output = ''
   let settled = false
   let timeout: NodeJS.Timeout | undefined
@@ -93,14 +105,19 @@ export function startDesktopService(options: StartDesktopServiceOptions): Deskto
     ? undefined
     : (() => {
       mkdirSync(dirname(options.logPath), { recursive: true })
-      return createWriteStream(options.logPath, { flags: 'a' })
+      return createWriteStream(options.logPath, { flags: 'a', flush: true })
     })()
-  log?.on('error', (error) => { console.error(error) })
+  let logFailure: Error | undefined
+  log?.on('error', (error) => { logFailure = error; console.error(error) })
+  const logClosed = new Promise<void>((resolve) => {
+    if (!log) { resolve(); return }
+    const cleanup = finished(log, () => { cleanup(); resolve() })
+  })
   const closed = new Promise<void>((resolve) => {
     child.once('close', () => {
       if (shutdownTimer !== undefined) clearTimeout(shutdownTimer)
       if (log === undefined) resolve()
-      else log.end(resolve)
+      else { log.end(); void logClosed.then(resolve) }
     })
   })
   const stop = (): void => {
@@ -118,13 +135,14 @@ export function startDesktopService(options: StartDesktopServiceOptions): Deskto
       if (timeout !== undefined) clearTimeout(timeout)
       return true
     }
+    acceptReady = () => { if (startupUrl !== undefined && updateReady && finish()) resolve(startupUrl) }
     const inspect = (chunk: Buffer | string, destination: NodeJS.WriteStream): void => {
       log?.write(chunk)
       if (options.mirrorOutput === true) destination.write(chunk)
       if (settled) return
       output = `${output}${String(chunk)}`.slice(-OUTPUT_LIMIT)
-      const url = extractReadyUrl(output)
-      if (url !== undefined && finish()) resolve(url)
+      startupUrl = extractReadyUrl(output)
+      acceptReady?.()
     }
 
     child.stdout.on('data', (chunk: Buffer) => { inspect(chunk, process.stdout) })
@@ -155,5 +173,24 @@ export function startDesktopService(options: StartDesktopServiceOptions): Deskto
     closed,
     ready,
     stop,
+    async stopAndVerifyExit() {
+      const deadline = { expired: false }
+      const timer = setTimeout(() => { deadline.expired = true; stop() }, shutdownTimeoutMs)
+      try {
+        await new Promise<void>((resolve, reject) => {
+          child.send({ type: 'mantur:update:exit' }, (error) => { if (error) reject(error); else resolve() })
+        })
+        await closed
+      } catch (error: unknown) {
+        stop()
+        await closed
+        throw error
+      } finally { clearTimeout(timer) }
+      if (deadline.expired) throw new Error('Saved Host did not finish update shutdown before the deadline')
+      if (logFailure) throw logFailure
+      if (child.exitCode !== 0 || child.signalCode !== null) {
+        throw new Error(`Saved Host did not exit normally (code ${String(child.exitCode)}, signal ${String(child.signalCode)})`)
+      }
+    },
   }
 }

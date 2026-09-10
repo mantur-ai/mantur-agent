@@ -163,7 +163,7 @@ export function ConversationSessionHeader({
  * @returns the active view area, or null while the Session remains blank.
  */
 export function ConversationSession({
-  useSession, useConversation, useConversationViews, useInput, inputActions, useStore, actions,
+  useSession, useConversation, useConversationViews, inputActions, useStore, actions,
   renderSlot, bindDraftMirror, openView,
 }: ConversationSessionProps) {
   const tabs = useConversationViews(value => value)
@@ -171,13 +171,11 @@ export function ConversationSession({
   const active = resolveActiveView(tabs, selectedId)
   const session = useSession(s => s)
   const conversation = useConversation(s => s)
-  const inputState = useInput(s => s)
   const storedDraft = useStore(s => s.draft)
   const viewRequest = useStore(s => s.viewRequest ?? null)
 
   useEffect(() => {
-    if (inputState.draft === '' && storedDraft !== '') inputActions.setDraft(storedDraft)
-    const unmirror = bindDraftMirror(actions.setDraft)
+    const unmirror = bindDraftMirror(actions.setDraft, storedDraft)
     return () => { unmirror() }
     // Mount-only (deps pinned to inputActions): later store writes come from
     // the machine mirror, not this seed effect.

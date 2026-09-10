@@ -91,7 +91,7 @@ type SkillSource = 'project-dsh' | 'project-agents' | 'runtime' | 'user-dsh' | '
 
 ## 摘要、候选项与完整定义
 
-`SkillSummary` 是注册表中与调用策略无关的摘要形状。消费方自行选择渲染哪些条目和字段；模型会话目录仅使用模型可调用 skill 的 `name` 和 `description`，从不使用正文或绝对文件路径。`SkillInvocationPolicy` 将两个独立调用控制规范化为正向布尔值，且每个已解析的摘要、候选项和定义都携带该策略，而不会把任意 frontmatter 纳入领域模型。
+`SkillSummary` 是注册表中与调用策略无关的摘要形状。消费方自行选择渲染哪些条目和字段；面向用户的目录可以显示 `title`，而所有调用仍使用 kebab-case 的 `name`。模型会话目录仅使用模型可调用 skill 的 `name` 和 `description`，从不使用标题、正文或绝对文件路径。`SkillInvocationPolicy` 将两个独立调用控制规范化为正向布尔值，且每个已解析的摘要、候选项和定义都携带该策略，而不会把任意 frontmatter 纳入领域模型。
 
 ```ts type-equiv
 /** Invocation controls shared by skill discovery consumers. */
@@ -108,6 +108,8 @@ interface SkillInvocationPolicy {
 interface SkillSummary {
   /** Kebab-case identifier used to address the skill. */
   readonly name: string
+  /** Optional human-facing title; invocation continues to use {@link name}. */
+  readonly title?: string
   /** Short routing description shown by discovery consumers. */
   readonly description: string
   /** Optional extra routing guidance. */
@@ -235,6 +237,8 @@ interface Config {
 面向模型的 `skill({ name })` 工具校验 kebab-case 名称，在与调用策略无关的目录中查找摘要，并在加载前通过 `isModelInvocable` 拒绝无权访问的 skill；随后它根据调用方 agent 的 cwd 重新读取完整定义，并在返回内容前再次检查策略。该工具将无法解析的 skill 报告为未知或已不可用，并返回包含 `<skill_content name="...">`、`<skill_resources>` 和 `<skill_instructions>` 的工具结果。`resourceBase` 仅按需解析显式引用的脚本、参考资料和资产；加载结果不枚举 skill 目录。因此，仅修改正文会改变后续工具调用，而不会生成目录消息或改写先前工具结果。
 
 ## 浏览器 Session 目录
+
+`SkillInvocationSource` 使用 `name` 与 `form: 'instructions'` 标识用户所选的指令消息。可选的 `bundled` 来源包含精确 App 引用的 `version` 与 `digest`；普通注册表调用不包含它。[漫途广场](../../packages/skill/manturhub-marketplace/README.zh.md)负责这些 App 引用的校验与加载。
 
 `SkillListRequest` 通过 `sessionId` 指定一个 Session；`SkillListValue` 返回允许用户调用的条目，其中包含名称、描述、可选使用提示与模型调用可用性。`SessionSkillCatalog` 在不激活 Agent 的前提下读取 Session cwd 与记录的 preset。live Agent 可以提供其作用域 registry，冷 Session 则使用 preset 的 standing scope。
 

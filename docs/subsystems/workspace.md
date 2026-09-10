@@ -2,7 +2,7 @@
 
 English | [中文](workspace.zh.md)
 
-A workspace is the persistent record of a directory the user works in: a stable id over a canonical path, a display title, and the ordered account of sessions that belong to it. The subsystem is one package ([dsh-workspace](../../packages/workspace/workspace), `ctx.workspaceRegistry`) — an optional host-side capability, not part of the agent-loop spine, and invisible to models (no tools, no prompt text, no session events). It stores its records through the [storage domain form](storage.md) and validates session membership against [`SessionHeader.cwd`](persistence.md#sessionheader--metadata-beside-the-log), so `storageDomain` and `sessionPersistence` are mandatory startup dependencies: an unavailable persistence peer leaves the plugin pending rather than being mistaken for an empty history. Design record: [domain KV storage Agent Note](../../.agents/notes/proposed/architecture/2026-07-24-domain-kv-storage-and-workspace.md); bootstrap and GUI ordering: [Workspace UI product-flow Agent Note](../../.agents/notes/implemented/feature/2026-07-25-workspace-ui-product-flow.md).
+A workspace is the persistent record of a directory the user works in: a stable id over a canonical path, a display title, and the ordered account of sessions that belong to it. [dsh-workspace](../../packages/workspace/workspace) owns `ctx.workspaceRegistry` — an optional host-side capability, not part of the agent-loop spine, and invisible to models (no tools, no prompt text, no session events). It stores its records through the [storage domain form](storage.md) and validates session membership against [`SessionHeader.cwd`](persistence.md#sessionheader--metadata-beside-the-log), so `storageDomain` and `sessionPersistence` are mandatory startup dependencies: an unavailable persistence peer leaves the plugin pending rather than being mistaken for an empty history. Design record: [domain KV storage Agent Note](../../.agents/notes/proposed/architecture/2026-07-24-domain-kv-storage-and-workspace.md); bootstrap and GUI ordering: [Workspace UI product-flow Agent Note](../../.agents/notes/implemented/feature/2026-07-25-workspace-ui-product-flow.md).
 
 Source: [`packages/workspace/workspace/src/types.ts`](../../packages/workspace/workspace/src/types.ts)
 
@@ -123,6 +123,10 @@ Sessions get their cwd at create time from whoever creates them, not from this r
 
 ## Consumers
 
+The [directory-picker service](../../packages/host/directory-picker/README.md) exposes a native-only `stopForShutdown()` capability for Host teardown. Its backend freezes new picks and waits for owned chooser processes and output readers; it does not expose shutdown over Remote or extend the browse capability.
+
+[Mantur project preparation](../../packages/workspace/mantur-projects/README.md) owns `ctx.manturProjects`. Its branded `ProjectCreationId` is a UUID retained by the native draft. `ProjectRootSettings` distinguishes an unconfigured root from an absolute desktop or custom root. `PreparedProject` returns `workspaceId`, deterministic `sessionId`, and the canonical directory `path`, without creating the Session. A stored reservation fixes the initial localized title and path across retries; directory conflicts and missing or replaced directories are explicit failures. [Types](../../packages/workspace/mantur-projects/src/types.ts) define the browser-safe results.
+
 [`dsh-workspace-controller`](../../packages/api/workspace-controller) serves workspace CRUD to GUI clients over `ctx.workspaceRegistry`, and [`dsh-session-controller`](../../packages/api/session-controller) performs the create-session-then-attach flow above. [dsh-agent-instructions](../../packages/context/agent-instructions) is **not** a consumer despite the name: it discovers AGENTS.md-style instruction files under an agent's own cwd and never touches `ctx.workspaceRegistry` — the shared word refers to the user's working directory, not to this registry's entities.
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
@@ -182,6 +186,100 @@ Host service backing the generated `ctx.remote.directoryPicker` namespace. The s
 ```
 
 Source: [`packages/api/workspace-controller/src/directory-picker.ts`](../../packages/api/workspace-controller/src/directory-picker.ts)
+
+<a id="ctxmanturediting--manturediting"></a>
+
+### `ctx.manturEditing` — `ManturEditing`
+
+Runtime and tools share the exact Agent identity resolved by the authenticated Remote gateway.
+
+```ts cordis-catalog
+/**
+ * Refuse new opens and MCP executions, then drain every acquired or opening editor before releasing its scope.
+ * The Host must retain accepted execution signals, its model and attachment services, HTTP and editor windows until completion.
+ * @returns The retained shutdown result; failed or unconfirmed work rejects and prevents installation.
+ */
+stopForShutdown(): Promise<void>
+
+/**
+ * Open the Session's workspace and connect its tools only to that Agent.
+ * @param agent - Live or resumed Agent resolved by the gateway from the Session id.
+ * @param parentOrigin - Mantur browser origin, checked against this Host's listening port.
+ * @returns Loopback editor address and canonical Session editing directory.
+ */
+@Remote('open') async open(agent: Agent, parentOrigin: string): Promise<EditingWorkspace>
+```
+
+Types: [Agent](core.md)
+
+Source: [`packages/client/ui-mantur-editing/src/index.ts`](../../packages/client/ui-mantur-editing/src/index.ts)
+
+<a id="ctxmanturprojects--manturprojectcontroller"></a>
+
+### `ctx.manturProjects` — `ManturProjectController`
+
+Prepare one project per first-send identity, without creating or sending a Session.
+
+```ts cordis-catalog
+/**
+ * Read the configured project location without creating directories.
+ * @returns the selected root or an explicit unconfigured state.
+ */
+@Remote settings(): ProjectRootSettings
+
+/**
+ * Select the root for future projects; existing directories remain untouched.
+ * @param path - absolute project root selected by the user.
+ * @returns the durable root selection.
+ */
+@Remote async setRoot(path: string): Promise<ProjectRootSettings>
+
+/**
+ * Create or resume the same first-send project. No Session or message is created here.
+ * @param creationId - UUID retained by the client until draft transfer succeeds.
+ * @param title - localized initial Workspace title, retained for this creation identity.
+ * @returns its durable Workspace and deterministic Session identity.
+ */
+@Remote prepare(creationId: ProjectCreationId, title: string): Promise<PreparedProject>
+```
+
+Source: [`packages/workspace/mantur-projects/src/index.ts`](../../packages/workspace/mantur-projects/src/index.ts)
+
+<a id="ctxmanturscript--manturscript"></a>
+
+### `ctx.manturScript` — `ManturScript`
+
+Remote operations never resolve paths against another Session or process cwd.
+
+```ts cordis-catalog
+/**
+ * List the selected project folder without recursive discovery.
+ * @param agent - Owning Session.
+ * @param directory - Project-relative or absolute folder.
+ * @returns Direct script files and folders.
+ */
+@Remote('list') async list(agent: Agent, directory: string): Promise<ScriptEntry[]>
+
+/**
+ * Read a bounded UTF-8 document from one observed file generation.
+ * @param agent - Owning Session.
+ * @param path - Script file within its project.
+ * @returns Consistently observed text and version.
+ */
+@Remote('read') async read(agent: Agent, path: string): Promise<ScriptDocument>
+
+/**
+ * Save a draft only while its observed generation remains current.
+ * @param agent - Owning Session.
+ * @param request - Versioned full draft.
+ * @returns Written text and new generation.
+ */
+@Remote('save') async save(agent: Agent, request: ScriptWrite): Promise<ScriptDocument>
+```
+
+Types: [Agent](core.md)
+
+Source: [`packages/client/ui-mantur-script/src/index.ts`](../../packages/client/ui-mantur-script/src/index.ts)
 
 <a id="ctxworkspacecontroller--workspacecontroller"></a>
 

@@ -58,6 +58,8 @@ export interface SkillInvocationPolicy {
 export interface SkillSummary {
   /** Kebab-case identifier used to address the skill. */
   readonly name: string
+  /** Optional human-facing title; invocation continues to use {@link name}. */
+  readonly title?: string
   /** Short routing description shown by discovery consumers. */
   readonly description: string
   /** Optional extra routing guidance. */
@@ -152,6 +154,8 @@ export interface SkillInvocationSource {
   readonly name: string
   /** Injected skill bodies are instructions for the model to follow. */
   readonly form: 'instructions'
+  /** Exact App resource selected by a homepage reference; ordinary name lookup omits it. */
+  readonly bundled?: { readonly version: string; readonly digest: string }
 }
 
 declare module '@deepseek-ai/dsh-llm' {
@@ -683,6 +687,7 @@ const RUNTIME_SKILL_PROVIDER: SkillProvider = {
 function runtimeCandidate(skill: SkillDefinition): SkillCandidate {
   return {
     name: skill.name,
+    ...skill.title !== undefined ? { title: skill.title } : {},
     description: skill.description,
     ...skill.whenToUse !== undefined ? { whenToUse: skill.whenToUse } : {},
     invocation: skill.invocation,
@@ -702,6 +707,9 @@ function validateCandidate(candidate: SkillCandidate, providerName: string): voi
   }
   if (!SKILL_NAME.test(candidate.name)) {
     throw new Error(`skill provider "${providerName}" returned invalid skill name "${candidate.name}"`)
+  }
+  if (candidate.title !== undefined && (typeof candidate.title !== 'string' || candidate.title.length === 0)) {
+    throw new TypeError(`skill provider "${providerName}" returned skill "${candidate.name}" with an invalid title`)
   }
   if (typeof candidate.description !== 'string') {
     throw new TypeError(`skill provider "${providerName}" returned skill "${candidate.name}" with a non-string description`)
@@ -739,6 +747,7 @@ function validateRuntimeSkill(skill: SkillRegistration): void {
 /** Validate a definition loaded from a provider-controlled parser or remote source. */
 function validateDefinition(skill: SkillDefinition): void {
   const name = skill.name
+  const title = skill.title
   const description = skill.description
   const whenToUse = skill.whenToUse
   const invocation = skill.invocation
@@ -748,6 +757,7 @@ function validateDefinition(skill: SkillDefinition): void {
   const path = skill.path
   if (typeof name !== 'string') throw new TypeError('loaded skill name must be a string')
   if (!SKILL_NAME.test(name)) throw new Error(`loaded skill has invalid name "${name}"`)
+  if (title !== undefined && (typeof title !== 'string' || title.length === 0)) throw new TypeError(`loaded skill "${name}" has an invalid title`)
   if (typeof description !== 'string') throw new TypeError(`loaded skill "${name}" description must be a string`)
   if (description.length === 0) throw new Error(`loaded skill "${name}" requires a description`)
   validateInvocation(invocation, `loaded skill "${name}"`)
@@ -759,9 +769,10 @@ function validateDefinition(skill: SkillDefinition): void {
 }
 
 function toSummary(skill: SkillDefinition | SkillCandidate): SkillSummary {
-  const { name, description, whenToUse, invocation, source, provider, resourceBase } = skill
+  const { name, title, description, whenToUse, invocation, source, provider, resourceBase } = skill
   return {
     name,
+    ...title !== undefined ? { title } : {},
     description,
     ...whenToUse !== undefined ? { whenToUse } : {},
     invocation,

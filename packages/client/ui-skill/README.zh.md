@@ -25,11 +25,11 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-在编辑器中输入 `/` 并从建议中选择 skill，或直接键入 `/name`；发出的消息携带字面文本，宿主对菜单 pick 与手动键入的 token 以同样方式加载 skill。与宿主命令同名的名称仍解析为命令——裁决在客户端把该行认领走，它根本不会成为提示词。
+在编辑器中输入 `/` 并从建议中选择 skill，或直接键入 `/name`。菜单 pick 会插入一个 skill 标签：存在 `title` 时以它作为标签文字，但剪贴板、持久化与模型投影仍是字面文本 `/name`；手动键入的 token 也发送同一字面文本。因此宿主通过两种入口以相同方式加载 skill。与宿主命令同名的名称仍解析为命令——裁决在客户端把该行认领走，它根本不会成为提示词。
 
 ### source 提供什么
 
-普通会话的候选来自 `skills/list` Remote；宿主提供每一个用户可调用的 skill，`modelInvocable: false` 的条目（即 `disable-model-invocation` skill，此路径是其唯一入口）会以当前语言把仅限用户标记作为描述前缀带上。结果按 `startsWith(query)` 过滤。`skills/list` 调用失败时会被记录并静默丢弃该菜单组——菜单只显示 pending/ready 状态。
+普通会话的候选来自 `skills/list` Remote；宿主提供每一个用户可调用的 skill，`modelInvocable: false` 的条目（即 `disable-model-invocation` skill，此路径是其唯一入口）会以当前语言把仅限用户标记作为描述前缀带上。存在 `title` 时菜单显示该标题，并同时按 `title` 与规范 `name` 搜索，但仍插入调用所需的字面文本 `/name `。`skills/list` 调用失败时会被记录并静默丢弃该菜单组——菜单只显示 pending/ready 状态。
 
 ### skill 工具行
 
@@ -43,7 +43,7 @@ kind: "package-reference"
 <details>
 <summary>实现细节——点击展开</summary>
 
-source 不实现任何裁决钩子，也没有引用 codec：pick 落下字面文本，发出的提示词中也是同一段字面文本，因此确定性在宿主侧（[slash 流水线笔记](../../../.agents/notes/implemented/architecture/2026-07-25-web-input-machine-and-slash-pipeline.zh.md)）。
+source 不实现任何裁决钩子。其引用 codec 把点选的标签投影回字面文本 `/name`，因此调用确定性仍在宿主侧（[slash 流水线笔记](../../../.agents/notes/implemented/architecture/2026-07-25-web-input-machine-and-slash-pipeline.zh.md)）。
 
 ### 候选流程
 
@@ -94,7 +94,7 @@ source 不实现任何裁决钩子，也没有引用 codec：pick 落下字面�
 这些限制定义引用与工具行何时回退到通用行为；它们是当前包约束。
 
 - **仅含工具结果的 history 页使用通用行**：键控分派要求配对的工具调用位于运行时窗口内；分页将工具调用留在窗口外时，工具结果没有工具身份。这项客户端呈现功能不会为了恢复该身份而扩展 history 协议约定。
-- **文本是唯一依据**：引用是普通的草稿文本；手动键入的相同 token 就是同一个引用，宿主手势边界评判的是发出的文本，而不是菜单交互。chip 视觉由 lexicon 扫描派生；提示词协议上没有 occurrence 身份、位置跟踪或结构化引用载荷。
+- **文本是唯一依据**：点选的标签与手动键入的 token 都序列化为同一字面文本 `/name`，宿主手势边界评判的是发出的文本，而不是菜单交互。手动键入 token 的 chip 视觉由 lexicon 扫描派生；提示词协议上没有结构化引用载荷。
 - **预热落定之前打开的菜单**：在那次击键下不显示 skill 候选；下一次击键会重新轮询已落定的缓存。
 
 <a id="dev-note"></a>

@@ -277,7 +277,6 @@ describe('reconnect supervisor', () => {
   it('bounds disposal while a resolving generation never reports that it closed', async () => {
     vi.useFakeTimers()
     try {
-      const { errors } = captureLogs(ctx)
       const gate: PromiseWithResolvers<void> = Promise.withResolvers()
       mockConnect.mockImplementation(() => gate.promise)
       mockClose.mockResolvedValue(undefined)
@@ -285,12 +284,13 @@ describe('reconnect supervisor', () => {
       await vi.advanceTimersByTimeAsync(0)
 
       const disposing = handle.dispose()
+      const rejected = expect(disposing).rejects.toThrow('shutdown timed out')
       await vi.advanceTimersByTimeAsync(5_000)
       gate.resolve()
-      await disposing
+      await rejected
+      await handle.ready
 
       expect(mockListTools).not.toHaveBeenCalled()
-      expect(errors.some(line => line.includes('server shutdown may be incomplete'))).toBe(true)
     } finally {
       vi.useRealTimers()
     }

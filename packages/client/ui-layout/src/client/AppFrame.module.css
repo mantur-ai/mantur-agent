@@ -50,6 +50,10 @@
   display: none;
 }
 
+.conversationSurface {
+  flex-direction: row;
+}
+
 .detailsCol {
   min-width: 0;
   overflow: hidden;
@@ -130,4 +134,41 @@
 
 .overlayLayer > * {
   pointer-events: auto;
+}
+
+.conversationPane {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.workbenchEdge {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+}
+
+.conversationSurface[data-workbench-open] .conversationPane {
+  flex: 0 0 auto;
+  width: clamp(280px, 28%, 380px);
+  min-width: min(280px, 45%);
+  max-width: 70%;
+  resize: horizontal;
+  overflow: auto;
+  border-right: 0.5px solid var(--dsw-alias-border-l3);
+}
+
+.workbenchPane {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.workbenchPane[hidden] {
+  display: none;
 }

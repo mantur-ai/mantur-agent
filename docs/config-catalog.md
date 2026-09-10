@@ -111,7 +111,7 @@ export interface Config {
 
 Depends on: [`AgentOptions`](subsystems/core.md) · [`SessionId`](subsystems/core.md)
 
-Source: [`packages/core/agent-loop/src/index.ts:318`](../packages/core/agent-loop/src/index.ts)
+Source: [`packages/core/agent-loop/src/index.ts:415`](../packages/core/agent-loop/src/index.ts)
 
 <a id="deepseek-aidsh-agent-presets"></a>
 
@@ -277,6 +277,10 @@ Requires: `authorization` · `credentials`
 ```ts config-catalog
 /** ManturHub deployment endpoint. */
 export interface Config {
+  /** Standalone credential storage or Electron Main ownership; no cross-mode credential lookup. */
+  readonly identity?: ManturIdentityMode
+  /** Explicit Main transport and command budgets, required for desktop-managed identity. */
+  readonly native?: Omit<NativeAccountConfiguration, 'origin' | 'environment'> | undefined
   /** Active ManturHub deployment; defaults to production. */
   readonly environment?: ManturEnvironment
   /** Production HTTP origin serving the ManturHub APIs. */
@@ -285,17 +289,38 @@ export interface Config {
   readonly testBaseUrl?: string
 }
 
+/** Explicit identity owner selected by the application profile, never an automatic fallback. */
+export type ManturIdentityMode = 'standalone' | 'desktop-managed'
+
+/** Profile-owned transport budgets sent to Main once, before account or command requests. */
+export interface NativeAccountConfiguration {
+  /** Canonical API origin selected by the machine-local profile. */
+  readonly origin: string
+  /** Named deployment owning this device grant. */
+  readonly environment: 'production' | 'test'
+  /** Human-readable deployment label included in each local broker descriptor. */
+  readonly environmentLabel: string
+  /** Complete network-operation and IPC-reply deadline in milliseconds. */
+  readonly requestTimeoutMs: number
+  /** Maximum buffered native-account protocol response bytes. */
+  readonly maxResponseBytes: number
+  /** Maximum command capability lifetime in milliseconds, capped by the original device expiry. */
+  readonly leaseMs: number
+  /** Interval between attempts to finish encrypted pending remote revocations. */
+  readonly revocationRetryMs: number
+}
+
 /** Named ManturHub deployment selected for every online Mantur request. */
 export type ManturEnvironment = 'production' | 'test'
 ```
 
-Source: [`packages/credentials/authorization-manturhub/src/index.ts:29`](../packages/credentials/authorization-manturhub/src/index.ts)
+Source: [`packages/credentials/authorization-manturhub/src/index.ts:32`](../packages/credentials/authorization-manturhub/src/index.ts)
 
 <a id="deepseek-aidsh-bash-local"></a>
 
 ## `@deepseek-ai/dsh-bash-local`
 
-Requires: `subprocess`
+Requires: `commandScopes`
 
 ```ts config-catalog
 /** Plugin config (all optional — `static Config` supplies the defaults). */
@@ -315,13 +340,13 @@ export interface Config {
 }
 ```
 
-Source: [`packages/shell/bash-local/src/index.ts:41`](../packages/shell/bash-local/src/index.ts)
+Source: [`packages/shell/bash-local/src/index.ts:42`](../packages/shell/bash-local/src/index.ts)
 
 <a id="deepseek-aidsh-bash-sandbox"></a>
 
 ## `@deepseek-ai/dsh-bash-sandbox`
 
-Requires: `subprocess` · `sandbox` · `sandboxPolicy`
+Requires: `commandScopes` · `sandbox` · `sandboxPolicy`
 
 ```ts config-catalog
 /**
@@ -381,6 +406,89 @@ export interface Config {
 
 Source: [`packages/client/hmr/src/index.ts:31`](../packages/client/hmr/src/index.ts)
 
+<a id="deepseek-aidsh-client-ui-mantur-editing"></a>
+
+## `@deepseek-ai/dsh-client-ui-mantur-editing`
+
+Requires: `typert` · `webServer` · `tools` · `systemPrompt`
+
+```ts config-catalog
+/** Editing deployment configuration; no browser-visible credentials. */
+export type Config = RuntimeConfig
+
+/** Deployment settings for the pinned editor source and Node runtime. */
+export interface RuntimeConfig {
+  /** Explicit development checkout or packaged production server selection. */
+  runtimeMode: 'development' | 'packaged'
+  /** Absolute development checkout or installed editor resource directory. */
+  editorRoot: string
+  /** Absolute Node executable for development, or packaged Electron executable. */
+  nodeExecutable: string
+  /** Maximum wait for the editor's ready handshake. */
+  startupTimeoutMs: number
+  /** Maximum wait for editor close acknowledgement and subprocess pipes. */
+  stopTimeoutMs: number
+  /** Maximum duration of one editing tool invocation or editor drain request. */
+  toolCallTimeoutMs: number
+}
+```
+
+Source: [`packages/client/ui-mantur-editing/src/index.ts:35`](../packages/client/ui-mantur-editing/src/index.ts)
+
+<a id="deepseek-aidsh-client-ui-mantur-navigation"></a>
+
+## `@deepseek-ai/dsh-client-ui-mantur-navigation`
+
+```ts config-catalog
+/** Product-owned recommendation IDs, independent of Agent configuration. */
+export type Config = GuideConfig
+
+/** Ordered real marketplace slugs selected by the product composition. */
+export interface GuideConfig {
+  /** Ordered marketplace Skill slugs for each creation mode. */
+  recommendations: Record<CreationMode, string[]>
+}
+
+/** Persisted creation-mode identifier; not an Agent preset. */
+export type CreationMode = typeof CREATION_MODES[number]
+```
+
+Source: [`packages/client/ui-mantur-navigation/src/index.ts:9`](../packages/client/ui-mantur-navigation/src/index.ts)
+
+<a id="deepseek-aidsh-client-ui-mantur-script"></a>
+
+## `@deepseek-ai/dsh-client-ui-mantur-script`
+
+Requires: `typert` · `fs` · `tools`
+
+```ts config-catalog
+/** Deployment limits for whole-document editing and directory discovery. */
+export interface Config {
+  /** Maximum UTF-8 bytes read or written for one script. */
+  readonly maxBytes: number
+  /** Maximum direct entries examined in one project folder. */
+  readonly maxEntries: number
+}
+```
+
+Source: [`packages/client/ui-mantur-script/src/index.ts:13`](../packages/client/ui-mantur-script/src/index.ts)
+
+<a id="deepseek-aidsh-client-ui-workspace"></a>
+
+## `@deepseek-ai/dsh-client-ui-workspace`
+
+Requires: `settings`
+
+```ts config-catalog
+/** Explicit selection leaves new conversations unassigned until the user chooses or sends. */
+export interface Config {
+  /** Whether an unscoped New Session inherits an existing Workspace. */
+  newSessionWorkspace: 'recent' | 'explicit'
+}
+```
+
+Source: [`packages/client/ui-workspace/src/navigation-settings.ts:8`](../packages/client/ui-workspace/src/navigation-settings.ts)
+
 <a id="deepseek-aidsh-code-runtime-worker-thread"></a>
 
 ## `@deepseek-ai/dsh-code-runtime-worker-thread`
@@ -417,6 +525,22 @@ export interface Config {
 ```
 
 Source: [`packages/code-runtime/code-runtime-worker-thread/src/index.ts:25`](../packages/code-runtime/code-runtime-worker-thread/src/index.ts)
+
+<a id="deepseek-aidsh-command-scopes"></a>
+
+## `@deepseek-ai/dsh-command-scopes`
+
+Requires: `subprocess`
+
+```ts config-catalog
+/** Deployment choice; required identity never silently becomes an unscoped command. */
+export interface Config {
+  /** Whether commands require one registered identity provider; defaults to none. */
+  readonly identity?: 'none' | 'required'
+}
+```
+
+Source: [`packages/shell/command-scopes/src/index.ts:9`](../packages/shell/command-scopes/src/index.ts)
 
 <a id="deepseek-aidsh-compaction-basic"></a>
 
@@ -1453,6 +1577,22 @@ export interface Config {
 
 Source: [`packages/bundle/mantur-app/src/index.ts:13`](../packages/bundle/mantur-app/src/index.ts)
 
+<a id="deepseek-aidsh-mantur-projects"></a>
+
+## `@deepseek-ai/dsh-mantur-projects`
+
+Requires: `storageDomain` · `workspaceRegistry`
+
+```ts config-catalog
+/** The desktop supplies its OS-resolved Documents project directory. */
+export interface Config {
+  /** Default root; omission requires an explicit user selection before creation. */
+  readonly defaultRoot?: string
+}
+```
+
+Source: [`packages/workspace/mantur-projects/src/index.ts:16`](../packages/workspace/mantur-projects/src/index.ts)
+
 <a id="deepseek-aidsh-manturhub-marketplace"></a>
 
 ## `@deepseek-ai/dsh-manturhub-marketplace`
@@ -1552,7 +1692,7 @@ export interface ReconnectConfig {
 }
 ```
 
-Source: [`packages/mcp/mcp-client/src/index.ts:98`](../packages/mcp/mcp-client/src/index.ts)
+Source: [`packages/mcp/mcp-client/src/index.ts:99`](../packages/mcp/mcp-client/src/index.ts)
 
 <a id="deepseek-aidsh-message-feedback"></a>
 
@@ -1669,7 +1809,7 @@ Source: [`packages/llm/plugin-package-inventory-deepseek/src/index.ts:31`](../pa
 
 ## `@deepseek-ai/dsh-pwsh-local`
 
-Requires: `subprocess`
+Requires: `commandScopes`
 
 ```ts config-catalog
 /** Plugin config (all optional — `static Config` supplies the defaults). */
@@ -1696,13 +1836,13 @@ export interface Config {
 }
 ```
 
-Source: [`packages/shell/pwsh-local/src/index.ts:58`](../packages/shell/pwsh-local/src/index.ts)
+Source: [`packages/shell/pwsh-local/src/index.ts:59`](../packages/shell/pwsh-local/src/index.ts)
 
 <a id="deepseek-aidsh-pwsh-sandbox"></a>
 
 ## `@deepseek-ai/dsh-pwsh-sandbox`
 
-Requires: `subprocess` · `sandbox` · `sandboxPolicy`
+Requires: `commandScopes` · `sandbox` · `sandboxPolicy`
 
 ```ts config-catalog
 /**
@@ -2157,7 +2297,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/skill/skill/src/index.ts:281`](../packages/skill/skill/src/index.ts)
+Source: [`packages/skill/skill/src/index.ts:283`](../packages/skill/skill/src/index.ts)
 
 <a id="deepseek-aidsh-skill-filesystem"></a>
 
@@ -2586,7 +2726,7 @@ Source: [`packages/core/system-prompt/src/index.ts:237`](../packages/core/system
 
 ## `@deepseek-ai/dsh-terminal-bash`
 
-Requires: `terminals` · `sandboxPolicy` · `sessionProjections` · `subprocess`
+Requires: `terminals` · `sandboxPolicy` · `sessionProjections` · `commandScopes`
 
 ```ts config-catalog
 /** Public plugin configuration. */
@@ -3423,7 +3563,6 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 - `@deepseek-ai/dsh-client-ui-jobs` ([`packages/client/ui-jobs/src/index.ts`](../packages/client/ui-jobs/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-layout` ([`packages/client/ui-layout/src/index.ts`](../packages/client/ui-layout/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-mantur-account` ([`packages/client/ui-mantur-account/src/index.ts`](../packages/client/ui-mantur-account/src/index.ts))
-- `@deepseek-ai/dsh-client-ui-mantur-navigation` ([`packages/client/ui-mantur-navigation/src/index.ts`](../packages/client/ui-mantur-navigation/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-message-feedback` ([`packages/client/ui-message-feedback/src/index.ts`](../packages/client/ui-message-feedback/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-model-selection` ([`packages/client/ui-model-selection/src/index.ts`](../packages/client/ui-model-selection/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-permission-presets` ([`packages/client/ui-permission-presets/src/index.ts`](../packages/client/ui-permission-presets/src/index.ts))
@@ -3445,7 +3584,6 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 - `@deepseek-ai/dsh-client-ui-trajectory` ([`packages/client/ui-trajectory/src/index.ts`](../packages/client/ui-trajectory/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-user-questions` ([`packages/client/ui-user-questions/src/index.ts`](../packages/client/ui-user-questions/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-workflow-run` ([`packages/client/ui-workflow-run/src/index.ts`](../packages/client/ui-workflow-run/src/index.ts))
-- `@deepseek-ai/dsh-client-ui-workspace` ([`packages/client/ui-workspace/src/index.ts`](../packages/client/ui-workspace/src/index.ts))
 - `@deepseek-ai/dsh-command-compact` — requires `commands` · `compaction` ([`packages/compaction/command-compact/src/index.ts`](../packages/compaction/command-compact/src/index.ts))
 - `@deepseek-ai/dsh-command-feedback` — requires `commands` ([`packages/feedback/command-feedback/src/index.ts`](../packages/feedback/command-feedback/src/index.ts))
 - `@deepseek-ai/dsh-command-goal` — requires `commands` · `goals` ([`packages/goal/command-goal/src/index.ts`](../packages/goal/command-goal/src/index.ts))

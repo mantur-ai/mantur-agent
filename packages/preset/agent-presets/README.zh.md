@@ -11,6 +11,8 @@ kind: "package-reference"
 
 `dsh-agent-presets` 让每个 agent（智能体）会话都从同一个 preset 组装：preset 是一个目录，内含一份 `agent.cordis.yml`，列出该会话运行的插件。命名某个 preset 的会话会获得该 preset 的工具、提示词段落与 skill（技能），而其他会话各自保持自己的，因此一个进程可以同时运行多个组装方式不同的 agent。本包维护 preset 名单：它列出已配置根目录提供的每个 preset——随附的与你自己放在 `<dshHome>/.agent-presets` 下的——在 preset 无法启动会话时给出原因，并允许你通过复制既有 preset 来创建新 preset。默认 preset 是一项可按部署或按用户覆盖的设置，会话只有在尚未产出任何内容时才能切换 preset。preset 的权限恰好等于它所引用插件的权限，因此你创作的 preset 与 shell 访问权限同级。
 
+`stopForShutdown()` 停止接收新的组合、切换、继承和编写调用，并等待已接收的操作结束。现有常驻插件树继续保留：Host 在排空后枚举 `livePresetMounts(ctx.fiber)`，分别停止其中的所有者，包括已被替代的旧代次。此方法等待操作结束，但不替换调用方收到的结果；它不关闭插件所有者，也不生成安装回执。
+
 ## 目录
 
 - [使用本包](#use-this-package)

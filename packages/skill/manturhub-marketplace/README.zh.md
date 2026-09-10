@@ -29,6 +29,8 @@ kind: "package-reference"
 
 目录接口接受线上使用的 `{ skills }` 封装和 CLI 兼容的原始数组；详情接受直接 Skill 或 `{ skill }`。`kind: suite` 条目会被排除，缺少 `kind` 时按 `skill` 处理。
 
+离线 `bundledSkillDir` 目录只读取 App 资源清单。名称、版本和内容摘要共同确定一个内置包，不受用户或项目同名副本影响。身份缺失、文件变化、无效指令或读取超限都会拒绝加载，不以在线内容替代。Host 在草稿引用序列化前校验身份，并在注入指令前再次校验资源；两次操作均不查询账号状态，也不写入用户 Skill 目录。
+
 -----
 
 <a id="understand-installation-safety"></a>
@@ -54,11 +56,19 @@ ZIP 读取器会在写入每个条目前先校验中央目录元数据。它会�
 <a id="model-experience"></a>
 ## 模型体验
 
-间接影响：安装完成的 Skill 会通过现有文件系统 provider 被发现，并进入后续目录工具输出。
+### 显式 App Skill 调用
+
+#### 模型看到什么
+
+直接用户消息中的 `/mantur-builtin:<name>@<version>#<digest>` 引用，使用现有 [`skill_content` 渲染](../skill/README.zh.md) 注入已校验指令。持久化的 `skill-invocation` 来源包含 `bundled.version` 与 `bundled.digest`；注入指令本身不能触发另一轮用户手势。普通 `/name` 和模型选择的 Skill 保留注册表解析规则。
+
+#### Token 影响
+
+每批被领取的用户消息中，每个已选 App Skill 添加一次完整指令正文。仅发现首页目录或选择引用不会增加模型上下文。
 
 #### KV Cache 影响
 
-安装提交新的 Skill 目录之前保持稳定；提交后，后续目录工具输出可以包含这个 Skill。
+已校验正文以持久化指令追加。已有历史保持不变；只有新的显式引用才会加入另一个 App 版本的指令。版本缺失时会被拒绝，不在运行中的请求里替换。
 
 ## 已知限制与延期工作
 

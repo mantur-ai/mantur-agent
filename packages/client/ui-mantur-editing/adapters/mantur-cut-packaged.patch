@@ -1,0 +1,57 @@
+diff --git a/desktop/embedded-server.ts b/desktop/embedded-server.ts
+--- a/desktop/embedded-server.ts
++++ b/desktop/embedded-server.ts
+@@ -79,7 +79,10 @@ export function mountAssemblyAiProxy(
+   app.use('/assemblyai', proxyMiddleware(route));
+ }
+
+-export async function startEmbeddedServer(distDir: string): Promise<EmbeddedServer> {
++export async function startEmbeddedServer(
++  distDir: string,
++  mantur?: { port: 0; parentOrigin: string },
++): Promise<EmbeddedServer> {
+   await seedFromEnvLocal();
+
+   const app = createMiniConnect((err) => {
+@@ -111,6 +114,24 @@ export async function startEmbeddedServer(distDir: string): Promise<EmbeddedServer>
+
+   // Static cover at the end: uploading assets at runtime takes precedence over dist's build-stage copy
+   app.use('/media/uploads', uploadsMiddleware());
++  if (mantur) {
++    const source = await readFile(resolve(distDir, 'index.html'), 'utf8');
++    if (!source.includes('<head>')) throw new Error('Packaged editor index has no head element');
++    const html = source.replace('<head>', `<head><script type="module">import { installManturTheme } from '/mantur-theme.mjs'; installManturTheme(window, ${JSON.stringify(mantur.parentOrigin)});</script>`);
++    app.use((req, res, next) => {
++      const pathname = (req.url ?? '/').split('?')[0];
++      if ((req.method !== 'GET' && req.method !== 'HEAD') || !['/', '/index.html'].includes(pathname)) {
++        next();
++        return;
++      }
++      res.writeHead(200, {
++        'Content-Type': 'text/html; charset=utf-8',
++        'Content-Length': String(Buffer.byteLength(html)),
++        'Cache-Control': 'no-store',
++      });
++      res.end(req.method === 'HEAD' ? undefined : html);
++    });
++  }
+   app.use(distStaticMiddleware(distDir));
+
+   // Port policy: canonical 5199 first (the documented external-MCP address),
+@@ -119,6 +140,15 @@ export async function startEmbeddedServer(distDir: string): Promise<EmbeddedServer>
+   // to be stable: a random port per launch silently broke registered agents.
+   const profile = runtimeProfile();
+-  const port = await listenWithAffinity(
++  const port = mantur ? await new Promise<number>((resolvePort, reject) => {
++    const onError = (error: Error) => reject(error);
++    server.once('error', onError);
++    server.listen(mantur.port, '127.0.0.1', () => {
++      server.off('error', onError);
++      const address = server.address();
++      if (!address || typeof address === 'string') { reject(new Error('Packaged editor did not bind TCP')); return; }
++      resolvePort(address.port);
++    });
++  }) : await listenWithAffinity(
+     server,
+     profile.mode === 'isolated-dev' ? { profileId: profile.id } : {},
+   );

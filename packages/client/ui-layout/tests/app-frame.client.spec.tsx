@@ -11,7 +11,7 @@
  * resizes are driven through the ResizeObserver stub.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { useSyncExternalStore } from 'react'
 import { AppFrame } from '@deepseek-ai/dsh-client-ui-layout/src/client/AppFrame.tsx'
 import type { AppFrameProps } from '@deepseek-ai/dsh-client-ui-layout/src/client/AppFrame.tsx'
@@ -62,6 +62,12 @@ function mountFrame() {
     slotCalls.push({ key, props: owner })
     if (key === 'sidebar') return <div data-testid="sidebar-content" />
     if (key === 'conversation') return <div data-testid="center-content" />
+    if (key === 'main.workbench') return <div data-testid="workbench-content" />
+    if (key === 'main.workbench.toggle') {
+      const toggle = owner as { expanded: boolean; openWorkbench: () => void; closeWorkbench: () => void }
+      return <button type="button" data-testid="workbench-toggle" aria-expanded={toggle.expanded}
+        onClick={toggle.expanded ? toggle.closeWorkbench : toggle.openWorkbench} />
+    }
     if (key === 'details') return <div data-testid="details-content" />
     if (key === 'main.page') return <div data-testid="main-page-content">marketplace</div>
     if (key === 'conversation.empty') return <div data-testid="empty-content" />
@@ -271,13 +277,101 @@ describe('AppFrame', () => {
     expect(typeof props.closeMainPage).toBe('function')
   })
 
+  it('hides and reopens the same workbench without mounting it before first use', () => {
+    selectedSession.current = undefined
+    const { instance, getByTestId, queryByTestId, slotCalls, unmount } = mountFrame()
+    const conversation = getByTestId('center-content')
+    expect(queryByTestId('workbench-content')).toBeNull()
+    act(() => { instance.actions.openWorkbench() })
+    const workbench = getByTestId('workbench-content')
+    const owner = slotCalls.filter(call => call.key === 'main.workbench').at(-1)?.props as { closeWorkbench: () => void }
+    for (let cycle = 0; cycle < 3; cycle++) {
+      workbench.tabIndex = 0
+      workbench.focus()
+      expect(document.activeElement).toBe(workbench)
+      act(() => { owner.closeWorkbench() })
+      expect(document.activeElement).not.toBe(workbench)
+      workbench.removeAttribute('tabindex')
+      expect(getByTestId('workbench-content')).toBe(workbench)
+      expect(workbench.parentElement?.hidden).toBe(true)
+      expect(getByTestId('center-content')).toBe(conversation)
+      act(() => { instance.actions.openWorkbench() })
+      expect(getByTestId('workbench-content')).toBe(workbench)
+      expect(workbench.parentElement?.hidden).toBe(false)
+    }
+    act(() => { owner.closeWorkbench() })
+    expect(workbench.parentElement).toMatchSnapshot()
+    unmount()
+    expect(workbench.isConnected).toBe(false)
+  })
+
+  it('retains the conversation and workbench when the resident boundary control hides and restores it', () => {
+    const { getByTestId, queryByTestId } = mountFrame()
+    const toggle = getByTestId('workbench-toggle')
+    const conversation = getByTestId('center-content')
+    expect(queryByTestId('workbench-content')).toBeNull()
+    toggle.focus()
+    fireEvent.click(toggle)
+    const workbench = getByTestId('workbench-content')
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    fireEvent.click(toggle)
+    expect(workbench.parentElement?.hidden).toBe(true)
+    expect(document.activeElement).toBe(toggle)
+    expect(toggle.closest('[hidden]')).toBeNull()
+    fireEvent.click(toggle)
+    expect(getByTestId('workbench-content')).toBe(workbench)
+    expect(workbench.parentElement?.hidden).toBe(false)
+    expect(getByTestId('center-content')).toBe(conversation)
+    expect(conversation.parentElement?.nextElementSibling).toBe(toggle.parentElement)
+    expect(toggle.parentElement?.nextElementSibling).toBe(workbench.parentElement)
+  })
+
+  it('remembers workbench visibility separately for each session and the home screen', () => {
+    const { instance, queryByTestId, rerenderFrame } = mountFrame()
+    act(() => { instance.actions.openWorkbench() })
+    const first = queryByTestId('workbench-content')
+    expect(first).not.toBeNull()
+    selectedSession.current = 's-other' as SessionId
+    rerenderFrame()
+    expect(first?.isConnected).toBe(false)
+    expect(queryByTestId('workbench-content')).toBeNull()
+    act(() => { instance.actions.openWorkbench() })
+    expect(queryByTestId('workbench-content')).not.toBeNull()
+    act(() => { instance.actions.closeWorkbench() })
+    selectedSession.current = 's-test' as SessionId
+    rerenderFrame()
+    expect(queryByTestId('workbench-content')).not.toBeNull()
+    selectedSession.current = undefined
+    rerenderFrame()
+    expect(queryByTestId('workbench-content')).toBeNull()
+    act(() => { instance.actions.openWorkbench() })
+    selectedSession.current = 's-other' as SessionId
+    rerenderFrame()
+    expect(queryByTestId('workbench-content')).toBeNull()
+    selectedSession.current = undefined
+    rerenderFrame()
+    expect(queryByTestId('workbench-content')).not.toBeNull()
+  })
+
+  it('retains the current workbench while a main page covers the conversation', () => {
+    const { instance, getByTestId } = mountFrame()
+    act(() => { instance.actions.openWorkbench() })
+    const workbench = getByTestId('workbench-content')
+    act(() => { instance.actions.openMainPage('skills' as never) })
+    expect(getByTestId('workbench-content')).toBe(workbench)
+    expect(workbench.closest('[hidden]')).not.toBeNull()
+    act(() => { instance.actions.closeMainPage() })
+    expect(getByTestId('workbench-content')).toBe(workbench)
+    expect(workbench.closest('[hidden]')).toBeNull()
+  })
+
   it('switches the center to a main page, keeps conversation state mounted, and returns', () => {
     const { instance, getByTestId, queryByTestId, slotCalls } = mountFrame()
     expect(queryByTestId('main-page-content')).toBeNull()
 
     act(() => { instance.actions.openMainPage('skills' as never) })
     expect(getByTestId('main-page-content')).toBeTruthy()
-    expect(getByTestId('center-content').parentElement?.hidden).toBe(true)
+    expect(getByTestId('center-content').parentElement?.parentElement?.hidden).toBe(true)
     const props = slotCalls.filter(call => call.key === 'main.page').at(-1)?.props as {
       activePage: unknown
       closePage: unknown
@@ -287,7 +381,7 @@ describe('AppFrame', () => {
 
     act(() => { instance.actions.closeMainPage() })
     expect(queryByTestId('main-page-content')).toBeNull()
-    expect(getByTestId('center-content').parentElement?.hidden).toBe(false)
+    expect(getByTestId('center-content').parentElement?.parentElement?.hidden).toBe(false)
   })
 
   it('sidebar drag widens through rAF-batched pointer moves', () => {

@@ -119,6 +119,13 @@ export type TypertGatewayErrorCode =
 
 /** Host dispatcher consumed by Connection adapters. */
 export interface TypertGateway {
+  /**
+   * Freeze requests, cancel stream observation, and join original invocations and iterator cleanup.
+   * Admitted unary calls retain their caller signal; shutdown does not replay or cancel remote work.
+   * @returns completion after owned calls settle; retained iterator cleanup failures reject.
+   */
+  stopForShutdown(): Promise<void>
+
   /** Carrier adapter shared by WebSocket and in-process transports. */
   readonly wireStream: TypertGatewayWireStream
 

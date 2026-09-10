@@ -28,6 +28,9 @@
     // not declaration path aliases, keep each package/vendor source compiled
     // under its own tsconfig boundary.
     "paths": {
+      "@deepseek-ai/dsh-authorization-manturhub/types": ["./packages/credentials/authorization-manturhub/src/types.ts"],
+      "@deepseek-ai/dsh-mantur-app/update-protocol": ["./packages/bundle/mantur-app/src/update-protocol.ts"],
+      "@deepseek-ai/dsh-mantur-app/update-shutdown": ["./packages/bundle/mantur-app/src/update-shutdown.ts"],
       "@deepseek-ai/cordis": ["./vendor/cordis/src"],
       "@deepseek-ai/cosmokit": ["./vendor/cosmokit/src"],
       "@deepseek-ai/schemastery": ["./vendor/schemastery/src"],
@@ -85,6 +88,7 @@
       "@deepseek-ai/dsh-pwsh-local": ["./packages/shell/pwsh-local/src/index.ts"],
       "@deepseek-ai/dsh-tool-pwsh": ["./packages/shell/tool-pwsh/src/index.ts"],
       "@deepseek-ai/dsh-shell-env": ["./packages/shell/shell-env/src/index.ts"],
+      "@deepseek-ai/dsh-command-scopes": ["./packages/shell/command-scopes/src/index.ts"],
       "@deepseek-ai/dsh-cordis-host-runner": ["./packages/extensions/cordis-host-runner/src/index.ts"],
       "@deepseek-ai/dsh-cordis-host-runner/types": ["./packages/extensions/cordis-host-runner/src/types.ts"],
       "@deepseek-ai/dsh-goal/types": ["./packages/goal/goal/src/types.ts"],
@@ -173,6 +177,9 @@
       "@deepseek-ai/dsh-client-ui-brand-mantur": ["./packages/client/ui-brand-mantur/src"],
       "@deepseek-ai/dsh-client-ui-mantur-account": ["./packages/client/ui-mantur-account/src"],
       "@deepseek-ai/dsh-client-ui-mantur-navigation": ["./packages/client/ui-mantur-navigation/src"],
+      "@deepseek-ai/dsh-client-ui-mantur-editing": ["./packages/client/ui-mantur-editing/src"],
+      "@deepseek-ai/dsh-client-ui-mantur-script": ["./packages/client/ui-mantur-script/src"],
+      "@deepseek-ai/dsh-client-ui-mantur-assets": ["./packages/client/ui-mantur-assets/src"],
       "@deepseek-ai/dsh-client-ui-approval": ["./packages/client/ui-approval/src"],
       "@deepseek-ai/dsh-client-ui-approval/client": ["./packages/client/ui-approval/src/client/index.ts"],
       "@deepseek-ai/dsh-client-ui-chat": ["./packages/client/ui-chat/src"],
@@ -307,6 +314,7 @@
       "@deepseek-ai/dsh-lsp": ["./packages/lsp/lsp/src"],
       "@deepseek-ai/dsh-lsp-stdio": ["./packages/lsp/lsp-stdio/src"],
       "@deepseek-ai/dsh-mantur-app": ["./packages/bundle/mantur-app/src"],
+      "@deepseek-ai/dsh-mantur-projects": ["./packages/workspace/mantur-projects/src"],
       "@deepseek-ai/dsh-manturhub-marketplace": ["./packages/skill/manturhub-marketplace/src"],
       "@deepseek-ai/dsh-mcp-client": ["./packages/mcp/mcp-client/src"],
       "@deepseek-ai/dsh-message-feedback": ["./packages/feedback/message-feedback/src"],

@@ -91,7 +91,7 @@ type SkillSource = 'project-dsh' | 'project-agents' | 'runtime' | 'user-dsh' | '
 
 ## Summaries, candidates, and complete definitions
 
-`SkillSummary` is the registry's invocation-neutral summary shape. Consumers choose which entries and fields to render; the model session catalog uses only model-invocable `name` and `description`, never the body or absolute file path. `SkillInvocationPolicy` normalizes the two independent invocation controls into positive booleans, and every resolved summary, candidate, and definition carries it without turning arbitrary frontmatter into the domain model.
+`SkillSummary` is the registry's invocation-neutral summary shape. Consumers choose which entries and fields to render; human-facing catalogs may show `title`, while every invocation continues to address the kebab-case `name`. The model session catalog uses only model-invocable `name` and `description`, never the title, body, or absolute file path. `SkillInvocationPolicy` normalizes the two independent invocation controls into positive booleans, and every resolved summary, candidate, and definition carries it without turning arbitrary frontmatter into the domain model.
 
 ```ts type-equiv
 /** Invocation controls shared by skill discovery consumers. */
@@ -108,6 +108,8 @@ interface SkillInvocationPolicy {
 interface SkillSummary {
   /** Kebab-case identifier used to address the skill. */
   readonly name: string
+  /** Optional human-facing title; invocation continues to use {@link name}. */
+  readonly title?: string
   /** Short routing description shown by discovery consumers. */
   readonly description: string
   /** Optional extra routing guidance. */
@@ -235,6 +237,8 @@ Before each later model step, the consumer applies exact tool visibility and dig
 The model-facing `skill({ name })` tool validates the kebab-case name, finds the summary in the invocation-neutral catalog, rejects it before loading unless `isModelInvocable` permits access, then rereads the complete definition for the calling agent cwd and rechecks the policy before returning content. It reports an unresolved skill as unknown or no longer available and returns a tool result containing `<skill_content name="...">`, `<skill_resources>`, and `<skill_instructions>`. `resourceBase` resolves explicitly referenced scripts, references, and assets only as needed; the loaded result does not enumerate a skill directory. Body-only edits therefore change later tool calls without producing catalog messages or rewriting earlier tool results.
 
 ## Browser Session catalog
+
+`SkillInvocationSource` identifies a user-selected instruction message with `name` and `form: 'instructions'`. Its optional `bundled` provenance contains `version` and `digest` for exact App references; ordinary registry invocation omits it. The [Mantur marketplace](../../packages/skill/manturhub-marketplace/README.md) owns validation and loading of these App references.
 
 `SkillListRequest` addresses one Session by `sessionId`; `SkillListValue` returns the user-invocable entries with name, description, optional usage guidance, and model-invocation availability. `SessionSkillCatalog` reads the Session cwd and recorded preset without activating an Agent. A live Agent may supply its scoped registry, while a cold Session uses the preset's standing scope.
 

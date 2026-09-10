@@ -90,6 +90,9 @@ export class SessionProjectionCache extends Service {
   private readonly dirty = new Map<Session, DirtyState>()
   /** Per-session checkpoint tail; captures enter in call order before asynchronous log flushing. */
   private readonly writeTails = new Map<Session, Promise<void>>()
+  private readonly puts = new Set<Promise<void>>()
+  private stopping = false
+  private shutdown: Promise<void> | undefined
 
   constructor(ctx: Context, public config: Config) {
     super(ctx, 'sessionProjectionCache')
@@ -205,6 +208,7 @@ export class SessionProjectionCache extends Service {
    * @returns resolution after durability and event emission.
    */
   async write(session: Session): Promise<void> {
+    this.assertOpen()
     const rows = this.ctx.sessionProjections.checkpoint(session)
     this.markClean(session)
     const previous = this.writeTails.get(session)
@@ -251,6 +255,7 @@ export class SessionProjectionCache extends Service {
     inheritedEventCount: SessionLogOffset,
     events: readonly SessionEvent[],
   ): ProjectionSnapshot {
+    this.assertOpen()
     const identity = identityOf(meta, inheritedEventCount)
     const restored = this.ctx.sessionProjections.restore(
       this.recordFor(meta.id, identity)?.rows ?? {},
@@ -273,15 +278,13 @@ export class SessionProjectionCache extends Service {
   private installWritePath(): void {
     // Registered before listeners so disposal removes every producer first,
     // then drains captured writes before the domain-close effect runs.
-    this.ctx.effect(() => async () => {
-      await Promise.allSettled(this.writeTails.values())
-      this.writeTails.clear()
-    }, 'sessionProjectionCache.writeDrain')
+    this.ctx.effect(() => () => this.stopForShutdown(), 'sessionProjectionCache.writeDrain')
 
     // Every committed event advances the dirty counter; turn/end is a
     // mandatory point (the durable value most reads want is the turn-final
     // one), count/interval throttle the in-turn stream.
     this.ctx.on('session/event', (session: Session, event: SessionEvent) => {
+      if (this.stopping) return
       if (event.type === 'turn/end') {
         void this.flushSoft(session, 'turn/end')
         return
@@ -336,6 +339,7 @@ export class SessionProjectionCache extends Service {
    * the counter) and the mandatory points write unconditionally.
    */
   private async flushSoft(session: Session, trigger: string): Promise<void> {
+    if (this.stopping) return
     try {
       await this.write(session)
     } catch (error) {
@@ -360,7 +364,36 @@ export class SessionProjectionCache extends Service {
     if (detached === undefined) {
       throw new TypeError('projection checkpoint is not losslessly JSON-serializable (a unit state violates the plain-JSON contract)')
     }
-    await this.requireTable().put(id, { identity, rows: detached as CheckpointRecord['rows'] })
+    const work = this.requireTable().put(id, { identity, rows: detached as CheckpointRecord['rows'] })
+    this.puts.add(work)
+    try {
+      await work
+    } finally {
+      this.puts.delete(work)
+    }
+  }
+
+  /**
+   * Freeze checkpoint producers and join live-session writes and cold-read write-back.
+   * Derived-cache write failures retain their existing caller or warning behavior.
+   * @returns completion after admitted writes settle; the storage owner closes the domain.
+   */
+  stopForShutdown(): Promise<void> {
+    this.stopping = true
+    for (const state of this.dirty.values()) {
+      if (state.timer !== undefined) clearTimeout(state.timer)
+    }
+    this.dirty.clear()
+    this.shutdown ??= (async () => {
+      while (this.writeTails.size > 0 || this.puts.size > 0) {
+        await Promise.allSettled([...this.writeTails.values(), ...this.puts])
+      }
+    })()
+    return this.shutdown
+  }
+
+  private assertOpen(): void {
+    if (this.stopping) throw new Error('session projection cache admission is closed')
   }
 
   private requireTable(): KvTable<SessionId, CheckpointRecord> {

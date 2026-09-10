@@ -340,6 +340,7 @@ export abstract class SettingsProvider extends Service {
   private readonly pendingTails = new Set<Promise<void>>()
   /** Set at service dispose: refuse new writes while queued ones drain. */
   private stopped = false
+  private shutdown: Promise<void> | undefined
 
   /** Opaque read of {@link stopped}: control flow cannot narrow it across awaits. */
   private isStopped(): boolean {
@@ -357,15 +358,19 @@ export abstract class SettingsProvider extends Service {
    * `yield* super[Service.init]()`; their disposers then run before the drain.
    */
   async* [Service.init](): AsyncGenerator<() => Promise<void> | void, void, void> {
-    yield async () => {
-      // Teardown: refuse new writes and new watcher starts, then wait until
-      // every queued write chain and every started watcher invocation settles
-      // so disposal completes only once storage and observers are quiescent.
-      // Invocations queued but not yet started skip via the stopped check.
-      this.stopped = true
-      await Promise.allSettled([...this.writeQueues.values(), ...this.pendingTails])
-    }
+    yield () => this.stopForShutdown()
     this.publish(await this.load())
+  }
+
+  /**
+   * Stop a ready provider's writes and watcher starts, then join admitted operation chains.
+   * Queued writes not yet started reject through their original caller promises.
+   * @returns completion after write queues and started watcher callbacks settle.
+   */
+  stopForShutdown(): Promise<void> {
+    this.stopped = true
+    this.shutdown ??= Promise.allSettled([...this.writeQueues.values(), ...this.pendingTails]).then(() => {})
+    return this.shutdown
   }
 
   /** Whether {@link update} may persist through this provider. */

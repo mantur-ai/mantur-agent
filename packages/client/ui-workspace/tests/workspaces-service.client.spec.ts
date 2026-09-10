@@ -10,7 +10,7 @@ import type { ClientRemote, DirectoryListing } from '@deepseek-ai/dsh-api-remote
 import { RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
 import type { RemoteResult } from '@deepseek-ai/dsh-api-remotes/client'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
-import { DirectoryBrowseError, UiWorkspaceService } from '../src/client/navigation.ts'
+import { DirectoryBrowseError, resolveDirectoryPicker, UiWorkspaceService } from '../src/client/navigation.ts'
 
 const sid = (id: string): SessionId => SessionId(id)
 const wid = (id: string): WorkspaceId => id as WorkspaceId
@@ -183,6 +183,7 @@ class FakeDirectoryPicker {
 }
 
 interface BenchOptions {
+  readonly policy?: 'recent' | 'explicit' | 'loading'
   readonly workspaces?: WorkspaceSnapshot
   readonly sessions?: SessionListState
 }
@@ -192,13 +193,17 @@ function bench(options: BenchOptions = {}) {
   const directoryPicker = new FakeDirectoryPicker()
   const workspaces = new FakeWorkspaces(options.workspaces ?? workspaceState([], [], 'pending'))
   const sessions = new FakeSessions(options.sessions ?? sessionState([], undefined, 'pending'))
+  const navigation = new MutableSource<'recent' | 'explicit' | undefined>(
+    options.policy === 'loading' ? undefined : options.policy ?? 'recent')
   const uiWorkspace = new UiWorkspaceService(
     ctx,
     directoryPicker.remote,
     workspaces,
     sessions as unknown as ISessions,
+    navigation,
+    resolveDirectoryPicker(directoryPicker.remote, undefined),
   )
-  return { ctx, directoryPicker, sessions, uiWorkspace, workspaces }
+  return { ctx, directoryPicker, sessions, uiWorkspace, workspaces, navigation }
 }
 
 async function flush(): Promise<void> {
@@ -207,6 +212,29 @@ async function flush(): Promise<void> {
 }
 
 describe('UiWorkspaceService', () => {
+  it('keeps explicit-policy startup and unscoped New Session unassigned', async () => {
+    const b = bench({ policy: 'explicit', workspaces: workspaceState([workspace('alpha')]), sessions: sessionState() })
+    await flush()
+    expect(b.sessions.create).not.toHaveBeenCalled()
+    b.uiWorkspace.startSession()
+    await flush()
+    expect(b.sessions.clear).toHaveBeenCalledOnce()
+    expect(b.sessions.create).not.toHaveBeenCalled()
+    b.uiWorkspace.startSession(wid('alpha'))
+    await flush()
+    expect(b.sessions.create).toHaveBeenCalledWith({ workspaceId: wid('alpha') })
+    await vi.waitFor(() => { expect(b.sessions.open).toHaveBeenCalledWith(sid('created-alpha')) })
+  })
+
+  it('waits for the Host policy before making an initial Workspace choice', async () => {
+    const b = bench({ policy: 'loading', workspaces: workspaceState([workspace('alpha')]), sessions: sessionState() })
+    await flush()
+    expect(b.sessions.create).not.toHaveBeenCalled()
+    b.navigation.set('explicit')
+    await flush()
+    expect(b.sessions.create).not.toHaveBeenCalled()
+  })
+
   it('reuses only an unarchived member blank and coalesces concurrent creation', async () => {
     const b = bench()
     const memberBlank = sid('member-blank')

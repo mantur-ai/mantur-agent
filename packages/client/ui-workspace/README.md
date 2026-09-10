@@ -29,6 +29,8 @@ Use the sidebar to browse Workspaces and their Sessions, reorder them, and start
 
 ### Reordering and view options
 
+The Host `newSessionWorkspace` configuration defaults to `recent`: initial entry and an unscoped New Session use the current or most recent Workspace. `explicit` leaves them unassigned until the user chooses a Workspace or a product preparation policy creates one. An explicit Workspace action still selects that target. The client waits for settings before automatic selection; it does not guess a recent target while configuration is loading.
+
 View options combine grouping with one browser-persisted Session order per account: **Manual** and **Last updated** apply in either presentation. Entering Last updated performs a complete recency sort and later user prompts or steers promote their Session once; entering Manual preserves every current position and disables later promotion. Dragging edits the current order in either mode; Manual-mode drags for real Workspaces also update the Host Session account, while Ungrouped and flat-list orders remain browser-local. In a collapsed group, drag boundaries follow rendered rows and place the source before intervening hidden rows, so a drag cannot hide its source. Workspace drag order is Host-durable in either Session order mode.
 
 ### Search
@@ -62,6 +64,8 @@ The package is one composition: both target slots are declared by other plugins,
 ### The directory-flow hole
 
 Each registration declares a **directory-flow child hole** (`single` kind: `conversation.hero.workspace.directoryFlow` / `sidebar.workspaces.directoryFlow`) that the composed picker package's client half fills with its picking interaction — the `-native` backend's renderless OS-chooser driver, an in-app browsing dialog under a `-browse` composition. The flat **Add workspace...** action renders only while the surface's hole is occupied; an empty hole means the composition has no picking affordance. This package owns the trigger and the adoption: the occupant reports one picked path per open through the hole's owner conversation (`open`/`busy`/`onPicked`/`onCancel`/`onError`), and the owner adopts it through the object layer, selecting the committed Workspace only after its list projection has refreshed.
+
+The native directory callback is selected when this plugin is composed: an Electron carrier supplies `window.manturDirectoryPicker`, while an ordinary browser uses the Host `directoryPicker.pick` RPC. Cancellation and errors from the selected callback never invoke the other implementation. Workspace adoption remains Host-owned in both cases.
 
 ### View state
 
@@ -106,7 +110,7 @@ These limits define the search depth, the archive surface, and the picking carri
 - **No fuzzy content search or event deep links** — the content backend uses literal token/phrase matching, and selecting a result opens the Session rather than the matching event.
 - **No Session deletion or unarchive control** — sessions can be archived, but archived sessions have no viewing or unarchive surface, and Workspace registration deletion does not delete Sessions.
 - **Pending user interaction is not aggregated into collapsed groups** — a waiting row inside a collapsed group lights no group-header indicator and becomes visible only after that group is expanded.
-- **Native folder selection depends on the local Host carrier** — under the `-native` composition, in-process or remote browser deployments cannot open a local operating-system dialog; remote-capable picking is the `-browse` composition's in-app flow.
+- **Native folder selection requires a local carrier** — Electron supplies its window-owned picker; ordinary browsers require the local Host picker. Remote-capable picking is the `-browse` composition's in-app flow.
 
 <a id="dev-note"></a>
 ### Dev Note

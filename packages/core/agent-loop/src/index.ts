@@ -93,13 +93,110 @@ export const turnBoundaryProjectionDefinition = {
   },
 } satisfies ProjectionDefinition<'turnBoundary', TurnBoundaryProjection>
 
+/** A closed writer's exclusive final event offset, verified after producer teardown. */
+export interface AgentShutdownCheckpoint {
+  /** Exact session whose writer closed. */
+  readonly sessionId: SessionId
+  /** Exclusive final event offset acknowledged by the closed writer. */
+  readonly nextSeq: SessionLogOffset
+}
+
 /** Factory-level ownership: live agent teardowns plus config startup work. */
 class FactoryOwnership {
   private accepting = true
   private readonly teardown = new AbortController()
   private readonly inactive = Promise.withResolvers<void>()
-  private readonly liveAgents = new Set<() => Promise<void>>()
+  private readonly liveAgents = new Map<() => Promise<void>, () => Promise<void>>()
   private startupTasks = new Set<Promise<void>>()
+  private readonly pendingOperations = new Set<Promise<void>>()
+  private readonly shutdownFailures: unknown[] = []
+  private readonly checkpoints: AgentShutdownCheckpoint[] = []
+  private readonly sealedSessions: Session[] = []
+  private shutdown: Promise<readonly AgentShutdownCheckpoint[]> | undefined
+  private quiescing: Promise<void> | undefined
+
+  get stoppingForShutdown(): boolean { return this.quiescing !== undefined }
+
+  recordSeal(session: Session): void {
+    this.sealedSessions.push(session)
+  }
+
+  recordCheckpoint(checkpoint: AgentShutdownCheckpoint): void {
+    this.checkpoints.push(Object.freeze(checkpoint))
+  }
+
+  recordFailures(failures: readonly unknown[]): void {
+    this.shutdownFailures.push(...failures)
+  }
+
+  trackOperation<T>(job: Promise<T>, retainFailure = false): Promise<T> {
+    const settled = job.then(() => {}, (error: unknown) => {
+      const cancelled = error === this.teardown.signal.reason
+        || (error instanceof Error && error.name === 'AbortError' && (error as NodeJS.ErrnoException).code === 'ABORT_ERR'
+          && error.cause === this.teardown.signal.reason)
+      if (retainFailure || (this.stoppingForShutdown && !cancelled)) this.shutdownFailures.push(error)
+    })
+    this.pendingOperations.add(settled)
+    void settled.then(() => { this.pendingOperations.delete(settled) })
+    return job
+  }
+
+  quiesceForShutdown(): Promise<void> {
+    if (this.quiescing !== undefined) return this.quiescing
+    const completion = Promise.withResolvers<void>()
+    this.quiescing = completion.promise
+    this.accepting = false
+    this.teardown.abort(new Error('agent loop is stopping for shutdown'))
+    this.inactive.resolve()
+    const stop = async (): Promise<void> => {
+      const outcomes = await Promise.allSettled([
+        ...[...this.liveAgents.values()].map(quiesce => quiesce()),
+        ...this.startupTasks,
+      ])
+      for (const outcome of outcomes) {
+        if (outcome.status === 'rejected') this.shutdownFailures.push(outcome.reason as unknown)
+      }
+      while (this.pendingOperations.size > 0) await Promise.all([...this.pendingOperations])
+      if (this.shutdownFailures.length > 0) throw new AggregateError(this.shutdownFailures, 'agent driver shutdown failed')
+    }
+    stop().then(completion.resolve, completion.reject)
+    return completion.promise
+  }
+
+  stopForShutdown(): Promise<readonly AgentShutdownCheckpoint[]> {
+    if (this.shutdown !== undefined) return this.shutdown
+    const completion = Promise.withResolvers<readonly AgentShutdownCheckpoint[]>()
+    this.shutdown = completion.promise
+    const quiescing = this.quiesceForShutdown()
+    const stop = async (): Promise<readonly AgentShutdownCheckpoint[]> => {
+      const outcomes = await Promise.allSettled([
+        quiescing,
+        ...[...this.liveAgents.keys()].map(dispose => dispose()),
+        ...this.startupTasks,
+      ])
+      for (const outcome of outcomes) {
+        if (outcome.status === 'rejected') this.shutdownFailures.push(outcome.reason as unknown)
+      }
+      this.verifySeals()
+      return Object.freeze([...this.checkpoints])
+    }
+    stop().then(completion.resolve, completion.reject)
+    return completion.promise
+  }
+
+  async verifyShutdown(): Promise<readonly AgentShutdownCheckpoint[]> {
+    if (this.shutdown === undefined) throw new Error('start agent shutdown before verifying writers')
+    const checkpoints = await this.shutdown
+    this.verifySeals()
+    return checkpoints
+  }
+
+  private verifySeals(): void {
+    for (const session of this.sealedSessions) {
+      try { session.seal() } catch (error: unknown) { this.shutdownFailures.push(error) }
+    }
+    if (this.shutdownFailures.length > 0) throw new AggregateError(this.shutdownFailures, 'agent factory shutdown failed')
+  }
 
   constructor(private readonly fiber: Context['fiber']) {}
 
@@ -113,8 +210,8 @@ class FactoryOwnership {
   }
 
   /** Track one live agent's shared teardown until it has run. */
-  track(dispose: () => Promise<void>): () => void {
-    this.liveAgents.add(dispose)
+  track(dispose: () => Promise<void>, quiesce: () => Promise<void>): () => void {
+    this.liveAgents.set(dispose, quiesce)
     return () => { this.liveAgents.delete(dispose) }
   }
 
@@ -140,7 +237,7 @@ class FactoryOwnership {
     this.teardown.abort(new Error('agent loop is not active'))
     this.inactive.resolve()
     await Promise.all([
-      ...[...this.liveAgents].map(dispose => dispose()),
+      ...[...this.liveAgents.keys()].map(dispose => dispose()),
       ...this.startupTasks,
     ])
   }
@@ -380,6 +477,36 @@ export class AgentLoop extends Service implements AgentFactory {
   /** Plain holder prevents Cordis from re-tracing the factory's dependency context through a caller shadow. */
   private readonly runtime: { ctx: Context }
 
+  /**
+   * Freeze admission and stop drivers while keeping published sessions available to admitted Host requests.
+   * @returns completion after drivers and startup work settle; writer closure still requires stopForShutdown.
+   */
+  quiesceForShutdown(): Promise<void> {
+    this.runtime.ctx.agents.freezeAdmission()
+    return this.ownership.quiesceForShutdown()
+  }
+
+  /**
+   * Freeze admission, join owned startup and teardown, and verify closed writer offsets.
+   * This covers agent-loop ownership only; the Host must separately stop other producers.
+   * @returns immutable checkpoints after all owned work settles; repeated calls share the result.
+   * @throws if any writer or owned cleanup failed, including a previously closed writer.
+   */
+  stopForShutdown(): Promise<readonly AgentShutdownCheckpoint[]> {
+    this.runtime.ctx.agents.freezeAdmission()
+    return this.ownership.stopForShutdown()
+  }
+
+  /**
+   * Recheck sealed writers after the Host has joined every other producer.
+   * Requires an existing shutdown; waits for its completion without starting one.
+   * @returns the original immutable checkpoints after a fresh seal check.
+   * @throws if shutdown has not started, failed, or a subsequent append was attempted.
+   */
+  verifyShutdown(): Promise<readonly AgentShutdownCheckpoint[]> {
+    return this.ownership.verifyShutdown()
+  }
+
   constructor(ctx: Context, config: Config) {
     super(ctx, 'agentLoop')
 
@@ -586,10 +713,17 @@ export class AgentLoop extends Service implements AgentFactory {
         // to drop the agent, so nothing should still hold it.
         if (machine === undefined) await machineReady.promise
         if (machine !== undefined) {
-          machine.cancel({ kind: 'disposed' })
-          await machine.whenIdle()
-          await machine.scope.dispose()
+          if (this.ownership.stoppingForShutdown) await machine.stopForShutdown()
+          else {
+            machine.cancel({ kind: 'disposed' })
+            await machine.whenIdle()
+          }
         }
+      } catch (error: unknown) {
+        failures.push(error)
+      }
+      try {
+        await machine?.scope.dispose()
       } catch (error: unknown) {
         failures.push(error)
       }
@@ -597,6 +731,18 @@ export class AgentLoop extends Service implements AgentFactory {
       // session; handle close drains them durably before releasing the write
       // path. The close drain can be the first operation that surfaces a
       // durability failure, so its error is retained, not logged away.
+      let finalOffset: SessionLogOffset | undefined
+      try {
+        finalOffset = session.seal()
+        this.ownership.recordSeal(session)
+      } catch (error: unknown) {
+        failures.push(error)
+      }
+      try {
+        if (detachSession !== undefined && handle !== undefined) await handle.flush()
+      } catch (error: unknown) {
+        failures.push(error)
+      }
       try {
         await handle?.close()
       } catch (error: unknown) {
@@ -605,16 +751,27 @@ export class AgentLoop extends Service implements AgentFactory {
       try {
         detachAgent?.()
         detachSession?.()
-      } finally {
-        untrack()
         if (!ownerTriggered) await unfollowOwner()
+        if (finalOffset !== undefined && detachSession !== undefined) {
+          session.seal()
+          if (handle !== undefined) this.ownership.recordCheckpoint({ sessionId: id, nextSeq: finalOffset })
+          else this.ownership.recordFailures([new Error(`session "${id}" has no durable writer`)])
+        }
+      } catch (error: unknown) {
+        failures.push(error)
+      } finally {
+        this.ownership.recordFailures(failures)
+        untrack()
       }
       if (failures.length === 1) throw failures[0]
       if (failures.length > 1) {
         throw new AggregateError(failures, `agent "${id}" disposal failed`)
       }
     })())
-    const untrack = this.ownership.track(dispose)
+    const untrack = this.ownership.track(dispose, async () => {
+      await machineReady.promise
+      await machine?.stopForShutdown()
+    })
     let unfollowOwner: () => Promise<void> | void
     try {
       unfollowOwner = ownerCtx.effect(() => () => {
@@ -687,13 +844,14 @@ export class AgentLoop extends Service implements AgentFactory {
    * @returns the published running agent.
    */
   async create(id: SessionId, options: AgentOptions = {}, meta: Pick<SessionHeader, 'cwd'> = {}): Promise<Agent> {
+    if (!this.ownership.isActive()) throw new Error('agent loop is not active')
     using preparation = SessionPreparation.create(this.runtime.ctx.sessions.prepare(id, { meta }))
     const stored = await this.createStoredSession(preparation.session)
     let prepared: PreparedAgent
     try {
       prepared = this.prepare(this.ctx, id, options, preparation.session, undefined, stored?.handle)
     } catch (error: unknown) {
-      await stored?.handle.close().catch(() => {})
+      if (stored !== undefined) await this.ownership.trackOperation(stored.handle.close(), true).catch(() => {})
       throw error
     }
     try {
@@ -720,10 +878,10 @@ export class AgentLoop extends Service implements AgentFactory {
   private async createStoredSession(session: Session, signal?: AbortSignal): Promise<StoredSession | undefined> {
     const persistence = this.runtime.ctx.get('sessionPersistence')
     if (persistence === undefined) return undefined
-    const handle = await persistence.create(session.header, {
+    const handle = await this.ownership.trackOperation(persistence.create(session.header, {
       inheritedEventCount: session.inheritedEventCount,
       ...signal === undefined ? {} : { signal },
-    })
+    }))
     return { handle, storedCount: 0 }
   }
 
@@ -752,6 +910,7 @@ export class AgentLoop extends Service implements AgentFactory {
    * @returns the published handle.
    */
   async createAgent(ownerCtx: Context, options: CreateAgentOptions): Promise<AgentHandle> {
+    if (!this.ownership.isActive()) throw new Error('agent loop is not active')
     const preparation = SessionPreparation.create(this.runtime.ctx.sessions.prepare(options.sessionId, {
       ...options.seed === undefined ? {} : { seed: options.seed },
       ...options.meta === undefined ? {} : { meta: options.meta },
@@ -768,7 +927,7 @@ export class AgentLoop extends Service implements AgentFactory {
             () => this.createStoredSession(preparation.session, options.signal),
             options.signal,
             options.sessionId,
-            (abandoned) => { void abandoned?.handle.close().catch(() => {}) },
+            (abandoned) => { if (abandoned !== undefined) void this.ownership.trackOperation(abandoned.handle.close(), true) },
           )
       } catch (error: unknown) {
         preparation[Symbol.dispose]()
@@ -806,11 +965,12 @@ export class AgentLoop extends Service implements AgentFactory {
     try {
       prepared = this.prepare(ownerCtx, id, agentOptions, session, signal, stored?.handle)
     } catch (error: unknown) {
-      await stored?.handle.close().catch(() => {})
+      if (stored !== undefined) await this.ownership.trackOperation(stored.handle.close(), true).catch(() => {})
       throw error
     }
     try {
-      const setupCommit = await raceAbort(setup?.(prepared.agent.ctx), prepared.signal, id)
+      const setupWork = this.ownership.trackOperation(Promise.resolve(setup?.(prepared.agent.ctx)))
+      const setupCommit = await raceAbort(setupWork, prepared.signal, id)
       setupCommit?.commit()
       await this.appendUnstoredSuffix(stored, session)
       return prepared.publish(source)
@@ -864,10 +1024,10 @@ export class AgentLoop extends Service implements AgentFactory {
           // Taking write ownership FIRST excludes a concurrent resume of the
           // same id (in this process, a live agent's handle holds the claim).
           handle = await raceAbortCall(
-            () => persistence.open(id, 'write', { signal: fused }),
+            () => this.ownership.trackOperation(persistence.open(id, 'write', { signal: fused })),
             fused,
             id,
-            (abandoned) => { void abandoned.close() },
+            (abandoned) => { void this.ownership.trackOperation(abandoned.close(), true) },
           )
           // Semantic crash repair is the agent layer's job: persistence hands
           // back the physically valid log; an interrupted final turn receives
@@ -904,7 +1064,7 @@ export class AgentLoop extends Service implements AgentFactory {
         )
       } finally {
         preparation?.[Symbol.dispose]()
-        await handle?.close().catch(() => {})
+        if (handle !== undefined) await this.ownership.trackOperation(handle.close(), true).catch(() => {})
       }
     })()
     this.ownership.trackWrapper(published)

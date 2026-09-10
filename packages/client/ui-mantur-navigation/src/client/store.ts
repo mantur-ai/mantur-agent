@@ -1,6 +1,7 @@
 /** Browser state for the ManturHub marketplaces. */
 
 import type { Context } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/dsh-client-ui-mantur-account/client'
 import type { ManturLoginAttemptId, ManturLoginStart } from '@deepseek-ai/dsh-authorization-manturhub/types'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {
@@ -22,8 +23,10 @@ export type ManturMarketplaceState =
     readonly detailError?: string | undefined
     readonly installing?: string | undefined
     readonly installError?: 'auth-required' | 'local-conflict' | 'failed' | undefined
+    readonly using?: string | undefined
+    readonly useError?: 'no-workspace' | 'failed' | undefined
     readonly login?: ManturLoginStart | undefined
-    readonly loginPhase?: 'starting' | 'authorizing' | 'failed' | undefined
+    readonly loginPhase?: 'starting' | 'authorizing' | 'failed' | 'unavailable' | undefined
   }
 
 /** Client-visible Recipe catalog, detail, and launch state. */
@@ -76,6 +79,7 @@ export class ManturMarketplaceStore {
   private recipeGeneration = 0
   private loginGeneration = 0
   private loginTimer: number | undefined
+  private pendingSkillSession: { readonly workspaceId: WorkspaceId; readonly sessionId: SessionId } | undefined
   private pendingRecipeSession: { readonly workspaceId: WorkspaceId; readonly sessionId: SessionId } | undefined
 
   /** @param ctx - client context carrying the generated marketplace Remote. */
@@ -288,22 +292,92 @@ export class ManturMarketplaceStore {
     })
   }
 
-  /** Begin ManturHub device login from the installation gate. */
+  /**
+   * Start a default-named Session in the current Workspace with an installed Skill command as its draft.
+   * @param slug - Installed Skill selected by the user.
+   * @returns whether the draft is ready in the newly opened Session.
+   */
+  async startSkill(slug: string): Promise<boolean> {
+    const current = this.store.getSnapshot()
+    const skill = current.phase === 'ready'
+      ? current.catalog.skills.find(candidate => candidate.slug === slug)
+      : undefined
+    if (current.phase !== 'ready' || skill?.installed !== true || current.using !== undefined) return false
+    const sessions = this.ctx.get('sessions')
+    const workspaces = this.ctx.get('workspaces')
+    if (sessions === undefined || workspaces === undefined) throw new Error('Skill launch services are unavailable')
+    const currentSessionId = sessions.list.getSnapshot().current
+    const workspace = currentSessionId === undefined
+      ? undefined
+      : workspaces.list.getSnapshot().items.find(item => item.sessionIds.includes(currentSessionId))
+    if (workspace === undefined) {
+      this.store.set({ ...current, useError: 'no-workspace' })
+      return false
+    }
+    this.store.set({ ...current, using: slug, useError: undefined })
+    try {
+      if (this.pendingSkillSession !== undefined
+        && this.pendingSkillSession.workspaceId !== workspace.workspaceId) {
+        await workspaces.archiveSession(this.pendingSkillSession.sessionId)
+        this.pendingSkillSession = undefined
+      }
+      const sessionId = this.pendingSkillSession?.sessionId
+        ?? await sessions.create({ workspaceId: workspace.workspaceId })
+      this.pendingSkillSession = { workspaceId: workspace.workspaceId, sessionId }
+      const binding = sessions.binding(sessionId)
+      if (binding === undefined) throw new Error(`Skill session "${sessionId}" resolved no binding`)
+      const conversation = binding.ctx.get('conversation')
+      if (conversation === undefined) throw new Error('Skill conversation service is unavailable')
+      conversation.input.for(binding.ctx).setDraft(`/${slug}`)
+      sessions.open(sessionId)
+      this.pendingSkillSession = undefined
+      const latest = this.store.getSnapshot()
+      if (latest.phase === 'ready') this.store.set({ ...latest, using: undefined, useError: undefined })
+      return true
+    } catch {
+      const latest = this.store.getSnapshot()
+      if (latest.phase === 'ready') this.store.set({ ...latest, using: undefined, useError: 'failed' })
+      return false
+    }
+  }
+
+  /** Open the Host-selected account flow; login never repeats installation or changes the current project. */
   async startLogin(): Promise<void> {
     const current = this.store.getSnapshot()
     if (current.phase !== 'ready' || current.loginPhase === 'starting' || current.loginPhase === 'authorizing') return
     const generation = ++this.loginGeneration
     this.clearLoginTimer()
     this.store.set({ ...current, installError: undefined, loginPhase: 'starting', login: undefined })
-    const result = await this.ctx.remote.manturAccount.startLogin()
-    const latest = this.store.getSnapshot()
-    if (generation !== this.loginGeneration || latest.phase !== 'ready') return
-    if (!result.ok) {
-      this.store.set({ ...latest, loginPhase: 'failed' })
-      return
+    let failurePhase: 'failed' | 'unavailable' = 'unavailable'
+    try {
+      const identity = await this.ctx.remote.manturAccount.identityMode()
+      const selected = this.store.getSnapshot()
+      if (generation !== this.loginGeneration || selected.phase !== 'ready') return
+      if (!identity.ok) throw new Error('Mantur account identity mode is unavailable')
+      if (identity.value === 'desktop-managed') {
+        const request = this.ctx.bail('mantur/native-account-open')
+        if (request === undefined) throw new Error('Native account dialog is unavailable')
+        const outcome = await request
+        const latest = this.store.getSnapshot()
+        if (generation !== this.loginGeneration || latest.phase !== 'ready') return
+        this.store.set({ ...latest, loginPhase: undefined,
+          catalog: { ...latest.catalog, signedIn: outcome === 'authenticated' || latest.catalog.signedIn } })
+        return
+      }
+      failurePhase = 'failed'
+      const result = await this.ctx.remote.manturAccount.startLogin()
+      const latest = this.store.getSnapshot()
+      if (generation !== this.loginGeneration || latest.phase !== 'ready') return
+      if (!result.ok) {
+        this.store.set({ ...latest, loginPhase: 'failed' })
+        return
+      }
+      this.store.set({ ...latest, login: result.value, loginPhase: 'authorizing' })
+      this.scheduleLoginPoll(result.value.attemptId, generation)
+    } catch {
+      const latest = this.store.getSnapshot()
+      if (generation === this.loginGeneration && latest.phase === 'ready') this.store.set({ ...latest, loginPhase: failurePhase })
     }
-    this.store.set({ ...latest, login: result.value, loginPhase: 'authorizing' })
-    this.scheduleLoginPoll(result.value.attemptId, generation)
   }
 
   /** Cancel the login attempt started from this marketplace. */

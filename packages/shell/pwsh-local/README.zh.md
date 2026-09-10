@@ -33,7 +33,7 @@ kind: "package-reference"
 
 ### 最小配置
 
-按你需要的预算加载执行器；每个字段都有默认值，因此最小的组合就是单独一个插件条目。当组合了设置提供方时，用户段会叠加在该条目之上，预算无需重载即可在运行时变更（见[运行时调整预算](#adjusting-budgets-at-runtime)）。
+按你需要的预算加载执行器；每个字段都有默认值；组合还需要 subprocess 提供方和 [command-scopes](../command-scopes/README.zh.md)。当组合了设置提供方时，用户段会叠加在该条目之上，预算无需重载即可在运行时变更（见[运行时调整预算](#adjusting-budgets-at-runtime)）。
 
 ```yaml
 - id: bash
@@ -66,7 +66,7 @@ if (result.timedOut) console.log('timed out after', result.timeoutMs)
 
 ### 后台进程
 
-调用 `start` 即可在后台运行命令；它立即返回句柄，且不应用任何超时。`readOutput()` 把流增量合并为一次消费式读取，并在 `[stderr]` 分段下标记 stderr；`kill()` 停止进程树；`done` 在进程关闭时结算且绝不 reject。job id、所有权、轮询与通知属于通用 `ctx.jobs` 运行时，工具层会把句柄注册进去。
+调用 `start` 即可在后台运行命令；它在异步身份准备后返回真实句柄，且不应用任何超时。`readOutput()` 把流增量合并为一次消费式读取，并在 `[stderr]` 分段下标记 stderr；`kill()` 停止进程树；`done` 在完整进程树退出和身份释放确认后结算；清理失败会 reject。job id、所有权、轮询与通知属于通用 `ctx.jobs` 运行时，工具层会把句柄注册进去。
 
 <a id="adjusting-budgets-at-runtime"></a>
 ### 运行时调整预算
@@ -98,14 +98,14 @@ if (result.timedOut) console.log('timed out after', result.timeoutMs)
 
 ### 主要流程
 
-一次调用分三步：`resolve()` 从配置填充 `workdir`/`timeoutMs`/`stdoutMaxBytes`（并限制每次调用的 `timeoutMs` 覆盖值）；执行器构建 pwsh argv——`pwsh -NoLogo -NoProfile -NonInteractive -Command <编码 preamble + 命令>`——把按配置钳位的超时与调用方的中止信号融合为一个 deadline，再以显式字节上限与 `graceMs` 通过 `ctx.subprocess` spawn；结算的结果被分类并投影为 `ShellRunResult`。Windows 把强制终止报告为退出码 1 且无信号，因此带信号标记的事实在那里仅限 POSIX；超时/取消分类则与平台无关。
+一次调用分三步：`resolve()` 从配置填充 `workdir`/`timeoutMs`/`stdoutMaxBytes`（并限制每次调用的 `timeoutMs` 覆盖值）；执行器构建 pwsh argv——`pwsh -NoLogo -NoProfile -NonInteractive -Command <编码 preamble + 命令>`——把按配置钳位的超时与调用方的中止信号融合为一个 deadline，再以显式字节上限与 `graceMs` 通过 `ctx.commandScopes` 异步准备身份并 spawn；结算的结果被分类并投影为 `ShellRunResult`。Windows 把强制终止报告为退出码 1 且无信号，因此带信号标记的事实在那里仅限 POSIX；超时/取消分类则与平台无关。
 
 ### 不变式与归属
 
 - `graceMs` 预算必须为正有限值且不大于 `MAX_TIMER_DELAY_MS`，这样 Node 就能用一个定时器表示它；无效值在写入处被拒绝。
-- 环境分层固定：先是终端覆盖值，然后是调用方的 `env`，最后才是受信任的 `dshEnv` 快照；subprocess 服务独立清除环境中的凭据与继承的 `DSH_*` 名称。
+- 环境分层固定：先是终端覆盖值，然后是调用方的 `env`，然后是受信任的 `dshEnv` 快照；commandScopes 最后附加身份环境覆盖值；subprocess 服务独立清除环境中的凭据与继承的 `DSH_*` 名称。
 - 可执行文件解析是 `(configured, env, platform)` 的纯函数，仅当存储的 `pwshPath` 与当前可执行文件所依据的值不同时才重新探测文件系统。
-- 后台进程属于 subprocess 服务：它能在仅重载执行器后存活，并在服务 dispose 时被终止并 join。
+- 后台进程属于 commandScopes 服务：它能在仅重载执行器后存活，并在服务 dispose 时被终止并 join。
 
 </details>
 

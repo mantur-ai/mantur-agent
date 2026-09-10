@@ -8,7 +8,7 @@
 
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import { StreamableHTTPClientTransport, StreamableHTTPError } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { scrubbedParentEnv } from '@deepseek-ai/dsh-subprocess'
 import type { Config } from './index.ts'
 
@@ -20,6 +20,19 @@ import type { Config } from './index.ts'
  */
 function buildChildEnv(extra: Record<string, string>): Record<string, string> {
   return { ...scrubbedParentEnv(), ...extra }
+}
+
+/**
+ * Recognize the SDK's HTTP 404 for a transport with an assigned MCP session.
+ * @param transport - The current generation's transport.
+ * @param error - Structured SDK transport error, not a tool or JSON-RPC error.
+ * @returns Whether the remote HTTP session is unavailable.
+ */
+export function isExpiredHttpSession(transport: Transport, error: Error): boolean {
+  return transport instanceof StreamableHTTPClientTransport
+    && transport.sessionId !== undefined
+    && error instanceof StreamableHTTPError
+    && error.code === 404
 }
 
 /**

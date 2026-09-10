@@ -131,6 +131,12 @@ export class WorkerRun implements WorkflowRun {
   private inputSignal: AbortSignal | undefined
   private inputSignalAbort: (() => void) | undefined
   private disposed: Promise<void> | undefined
+  private disposalSettled = false
+  private readonly cleanupFailures: unknown[] = []
+  private readonly release = Promise.withResolvers<readonly unknown[]>()
+  /** Resolves after ordinary disposal, thread exit, and all child cleanup, carrying retained failures. */
+  readonly released = this.release.promise
+  private shutdown: Promise<void> | undefined
 
   constructor(
     private readonly ctx: Context,
@@ -157,6 +163,7 @@ export class WorkerRun implements WorkflowRun {
     this.worker.on('exit', (code) => {
       this.workerGone = true
       this.onWorkerDeath(`workflow worker exited before the run settled (exit code ${code})`, true)
+      this.notifyRelease()
     })
     if (signal?.aborted) {
       this.cancel('workflow start signal already aborted')
@@ -247,11 +254,42 @@ export class WorkerRun implements WorkflowRun {
       await this.worker.terminate()
       this.reapChildren('workflow disposed')
     })().then(
-      () => { claimed.resolve(undefined) },
-      /* v8 ignore next -- result/quiescence never reject and Worker.terminate is the only external promise */
-      (error: unknown) => { claimed.reject(error) },
+      () => {
+        this.disposalSettled = true
+        this.notifyRelease()
+        claimed.resolve(undefined)
+      },
+      (error: unknown) => {
+        this.cleanupFailures.push(error)
+        this.disposalSettled = true
+        this.notifyRelease()
+        claimed.reject(error)
+      },
     )
     return this.disposed
+  }
+
+  /**
+   * Stop the thread and await child cleanup beyond the ordinary disposal grace.
+   * @returns one shared completion; rejects for retained child or thread cleanup failures.
+   */
+  stopForShutdown(): Promise<void> {
+    if (this.shutdown !== undefined) return this.shutdown
+    const completion = Promise.withResolvers<void>()
+    this.shutdown = completion.promise
+    const stop = async (): Promise<void> => {
+      await this.dispose()
+      await this.childQuiescence()
+      if (this.cleanupFailures.length > 0) throw new AggregateError(this.cleanupFailures, 'workflow shutdown failed')
+    }
+    stop().then(completion.resolve, completion.reject)
+    return completion.promise
+  }
+
+  private notifyRelease(): void {
+    if (this.disposalSettled && this.workerGone && this.children.size === 0 && this.pendingStarts.size === 0) {
+      this.release.resolve([...this.cleanupFailures])
+    }
   }
 
   /** Post one message to the worker (payload looked up from the tag's map entry), tolerating a thread that is already gone. */
@@ -380,6 +418,7 @@ export class WorkerRun implements WorkflowRun {
       try {
         await run.dispose()
       } catch (error: unknown) {
+        this.cleanupFailures.push(error)
         this.ctx.logger.warn(`workflow-worker-thread: refused child dispose failed: ${renderThrown(error)}`)
       }
       return
@@ -443,6 +482,7 @@ export class WorkerRun implements WorkflowRun {
     record.disposal = Promise.resolve()
       .then(() => record.run.dispose())
       .catch((error: unknown) => {
+        this.cleanupFailures.push(error)
         this.ctx.logger.warn(`workflow-worker-thread: child dispose failed: ${renderThrown(error)}`)
       })
       .then(() => { this.finishChild(callId) })
@@ -463,6 +503,7 @@ export class WorkerRun implements WorkflowRun {
 
   /** Release waiters only after both pending starts and published children end. */
   private notifyChildQuiescence(): void {
+    this.notifyRelease()
     if (this.children.size !== 0 || this.pendingStarts.size !== 0) return
     for (const waiter of this.quiescenceWaiters.splice(0)) waiter()
   }

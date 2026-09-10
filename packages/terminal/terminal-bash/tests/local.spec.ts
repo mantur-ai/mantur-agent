@@ -1,3 +1,4 @@
+import CommandScopes from '@deepseek-ai/dsh-command-scopes'
 import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
@@ -64,6 +65,7 @@ async function harness(
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SandboxPolicyService, { mode, workspaceRoot: root })
   await ctx.plugin(LocalSubprocessRuntime)
+  await ctx.plugin(CommandScopes, { identity: 'none' })
   const fiber = await ctx.plugin(ptyLocal, {
     shellDialect: dialect,
     pollIntervalMs: 10,

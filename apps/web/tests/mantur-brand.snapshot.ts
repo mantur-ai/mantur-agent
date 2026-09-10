@@ -1,5 +1,5 @@
 /** Mantur desktop product identity over the real shipped Web composition. */
-import { readFile } from 'node:fs/promises'
+import { mkdir, readFile } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { join } from 'node:path'
@@ -18,9 +18,7 @@ import {
   webSnapshotMode,
   type WebScaffold,
 } from './scaffold.ts'
-import {
-  connectFreshWorkspace, connectFreshWorkspaceZh, newEnglishPage, saveFailureShot, ZH_BROWSER_LOCALE,
-} from './support.ts'
+import { newEnglishPage, saveFailureShot, ZH_BROWSER_LOCALE } from './support.ts'
 
 const OVERLAY = fileURLToPath(new URL('../../../packages/bundle/mantur-app/cordis.patch.yml', import.meta.url))
 const INSTALL_ANCHOR = fileURLToPath(new URL('../../../packages/bundle/mantur-app/package.json', import.meta.url))
@@ -34,6 +32,24 @@ const TOOL_SCHEMAS_EXPECTED = fileURLToPath(
 const MARKETPLACE_EXPECTED = join(SNAPSHOT_DIR, 'marketplace.expected.md')
 const ACCOUNT_SETTINGS_EXPECTED = join(SNAPSHOT_DIR, 'account-settings.expected.md')
 const MODE = webSnapshotMode()
+
+/** Choose a Workspace from Mantur's resident root composer and await the real Session selection. */
+async function connectManturWorkspace(page: Page, root: string, locale: 'zh' | 'en'): Promise<void> {
+  const copy = locale === 'zh'
+    ? { choose: '选择工作区', dialog: '选择工作区目录', edit: '编辑路径', open: '打开' }
+    : { choose: 'Choose workspace', dialog: 'Select Workspace Directory', edit: 'Edit path', open: 'Open' }
+  const path = join(root, `workspace-${locale}`)
+  await mkdir(path)
+  await page.getByRole('button', { name: copy.choose, exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: copy.dialog })
+  await dialog.getByRole('button', { name: copy.edit }).click()
+  const input = dialog.getByRole('textbox', { name: copy.edit })
+  await input.fill(path)
+  await input.press('Enter')
+  await dialog.getByRole('button', { name: copy.open, exact: true }).click()
+  await expect.poll(() => page.getByRole('treeitem', { selected: true }).count()).toBe(1)
+  await page.locator('[data-composer-input][contenteditable="true"]').waitFor()
+}
 
 const marketplaceSkill = {
   slug: 'story-director',
@@ -188,8 +204,7 @@ describe.skipIf(MODE === 'record')('web snapshot: Mantur product identity', () =
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 }).catch(async () => {
       throw new Error(`Mantur Web frame did not mount. Body: ${await page.locator('body').innerText()}. Page errors: ${tripwire.pageErrors.map(String).join('; ')}`)
     })
-    await page.getByRole('heading', { name: '登录漫途账号' }).waitFor({ timeout: 10_000 })
-    await page.getByRole('button', { name: '暂时跳过' }).click()
+    expect(await page.getByRole('heading', { name: '登录漫途账号' }).count()).toBe(0)
   }, 120_000)
 
   afterAll(async () => {
@@ -218,7 +233,7 @@ describe.skipIf(MODE === 'record')('web snapshot: Mantur product identity', () =
     expect(await page.locator('img[src$="mantur-logo.png"]').count()).toBe(2)
     expect(await page.getByRole('button', { name: '标准模式' }).count()).toBe(0)
     expect(await page.getByRole('button', { name: /计划模式/ }).count()).toBe(0)
-    await connectFreshWorkspaceZh(page, scaffold.workspaceCwd)
+    await connectManturWorkspace(page, scaffold.workspaceCwd, 'zh')
     await page.getByRole('button', { name: '选择模型' }).waitFor({ timeout: 10_000 })
     await page.getByRole('button', { name: /访问模式/ }).waitFor({ timeout: 10_000 })
 
@@ -229,13 +244,14 @@ describe.skipIf(MODE === 'record')('web snapshot: Mantur product identity', () =
     await dialog.getByRole('button', { name: '模型' }).waitFor({ timeout: 10_000 })
     await dialog.getByRole('button', { name: '漫途账号' }).click()
     await dialog.getByText('尚未登录漫途账号', { exact: true }).waitFor({ timeout: 10_000 })
+    await expect.poll(() => dialog.getByRole('button', { name: '登录漫途账号', exact: true }).isEnabled()).toBe(true)
     const accountSettings = await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(ACCOUNT_SETTINGS_EXPECTED, accountSettings, MODE)
     await dialog.getByRole('button', { name: '关闭' }).click()
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
-  it('orders Mantur account choice before DeepSeek credential onboarding', async () => {
+  it('offers model credential setup without requiring a Mantur account choice', async () => {
     const firstRun = await launchWebScaffold({
       extraOverlayPath: OVERLAY,
       extraInstallAnchors: [INSTALL_ANCHOR],
@@ -248,12 +264,9 @@ describe.skipIf(MODE === 'record')('web snapshot: Mantur product identity', () =
     try {
       await firstRunPage.goto(firstRun.authenticatedUrl, { waitUntil: 'load' })
       await firstRunPage.waitForSelector('[class*="frame"]', { timeout: 30_000 })
-      await firstRunPage.getByRole('heading', { name: '登录漫途账号' }).waitFor({ timeout: 10_000 })
-      expect(await firstRunPage.getByText('内测声明', { exact: true }).count()).toBe(0)
-      expect(await firstRunPage.getByText('添加一个 API Key 开始使用', { exact: true }).count()).toBe(0)
-      await firstRunPage.getByRole('button', { name: '暂时跳过' }).click()
       await firstRunPage.getByRole('heading', { name: '添加一个 API Key 开始使用' })
         .waitFor({ timeout: 10_000 })
+      expect(await firstRunPage.getByRole('heading', { name: '登录漫途账号' }).count()).toBe(0)
     } finally {
       await firstRunPage.close()
       await firstRun.close()
@@ -350,9 +363,8 @@ describe.skipIf(MODE === 'record')('web snapshot: Mantur product identity', () =
     try {
       await recipePage.goto(recipeScaffold.authenticatedUrl, { waitUntil: 'load' })
       await recipePage.waitForSelector('[class*="frame"]', { timeout: 30_000 })
-      await recipePage.getByRole('heading', { name: '登录漫途账号' }).waitFor({ timeout: 10_000 })
-      await recipePage.getByRole('button', { name: '暂时跳过' }).click()
-      await connectFreshWorkspaceZh(recipePage, recipeScaffold.workspaceCwd)
+      expect(await recipePage.getByRole('heading', { name: '登录漫途账号' }).count()).toBe(0)
+      await connectManturWorkspace(recipePage, recipeScaffold.workspaceCwd, 'zh')
       const createRequestsBeforeRecipe = createRequests.length
       const initialIds = new Set((await recipeScaffold.ctx.sessionPersistence.list()).map(snapshot => snapshot.header.id))
 
@@ -412,9 +424,8 @@ describe.skipIf(MODE === 'record')('web snapshot: Mantur product identity', () =
     try {
       await englishPage.goto(englishScaffold.authenticatedUrl, { waitUntil: 'load' })
       await englishPage.waitForSelector('[class*="frame"]', { timeout: 30_000 })
-      await englishPage.getByRole('heading', { name: 'Sign in to Mantur' }).waitFor({ timeout: 10_000 })
-      await englishPage.getByRole('button', { name: 'Not now' }).click()
       await englishPage.getByText('漫途Agent', { exact: true }).waitFor({ timeout: 10_000 })
+      expect(await englishPage.getByRole('heading', { name: 'Sign in to Mantur' }).count()).toBe(0)
       await englishPage.getByText('Every story starts with an idea. Mantur handles the rest.', { exact: true })
         .waitFor({ timeout: 10_000 })
       expect(await englishPage.getByText('Preview', { exact: true }).count()).toBe(0)
@@ -423,7 +434,7 @@ describe.skipIf(MODE === 'record')('web snapshot: Mantur product identity', () =
       expect(await englishPage.getByText(/DeepSeek Harness/).count()).toBe(0)
       expect(await englishPage.getByRole('button', { name: 'Standard mode' }).count()).toBe(0)
       expect(await englishPage.getByRole('button', { name: /Plan mode/ }).count()).toBe(0)
-      await connectFreshWorkspace(englishPage, englishScaffold.workspaceCwd, 'workspace-en')
+      await connectManturWorkspace(englishPage, englishScaffold.workspaceCwd, 'en')
       await englishPage.getByRole('button', { name: 'Select model' }).waitFor({ timeout: 10_000 })
       await englishPage.getByRole('button', { name: /Access mode/ }).waitFor({ timeout: 10_000 })
       expect(englishTripwire.pageErrors).toEqual([])

@@ -1,0 +1,15 @@
+version: 1
+scenario: command-identity-required
+profile: headless
+composition: command-identity-required
+recording: authored
+header:
+  class: command-identity-required
+  pin: true
+  systemPromptSource: text-turn
+  toolSchemasSource: text-turn
+replay:
+  override: true
+platform: posix
+workspace:
+  final: true

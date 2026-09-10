@@ -29,7 +29,7 @@ Mount this executor when a composition needs Bash command execution on POSIX wit
 
 ### Minimal configuration
 
-Load the executor with the budgets you want; every field has a default, so the smallest composition is the plugin entry alone. The settings provider (when composed) layers a user section over this entry, so budgets can change at runtime without a reload (see [Adjusting budgets at runtime](#adjusting-budgets-at-runtime)).
+Load the executor with the budgets you want; every field has a default; the composition also needs a subprocess provider and [command-scopes](../command-scopes/README.md). The settings provider (when composed) layers a user section over this entry, so budgets can change at runtime without a reload (see [Adjusting budgets at runtime](#adjusting-budgets-at-runtime)).
 
 ```yaml
 - id: bash
@@ -61,7 +61,7 @@ if (result.timedOut) console.log('timed out after', result.timeoutMs)
 
 ### Background processes
 
-Call `start` to run a command in the background; it returns a handle immediately and no timeout applies. `readOutput()` merges the stream deltas into one consuming read, marking stderr under a `[stderr]` section; `kill()` stops the process group; `done` settles when the process closes and never rejects. Job ids, ownership, polling, and notices belong to the generic `ctx.jobs` runtime, which the tool layer registers the handle with.
+Call `start` to run a command in the background; it returns a real handle after asynchronous identity preparation and no timeout applies. `readOutput()` merges the stream deltas into one consuming read, marking stderr under a `[stderr]` section; `kill()` stops the process group; `done` settles after whole-tree exit and identity-release acknowledgment; cleanup failure rejects. Job ids, ownership, polling, and notices belong to the generic `ctx.jobs` runtime, which the tool layer registers the handle with.
 
 <a id="adjusting-budgets-at-runtime"></a>
 ### Adjusting budgets at runtime
@@ -93,13 +93,13 @@ The executor is a Service Provider for the `ctx.shell` seam built on the subproc
 
 ### Main flow
 
-A call runs through three steps: `resolve()` fills `workdir`/`timeoutMs`/`stdoutMaxBytes` from config (capping per-call overrides); `run` fuses the config-clamped timeout with the caller's abort signal into one deadline and spawns `['bash', '-c', command]` through `ctx.subprocess` with explicit byte caps and the `graceMs`; the settled subprocess outcome is classified — only the executor's own timeout reports `timedOut`, an upstream cancel reports `aborted`, a self-signaled command reports neither — and projected into a `ShellRunResult` with collected output.
+A call runs through three steps: `resolve()` fills `workdir`/`timeoutMs`/`stdoutMaxBytes` from config (capping per-call overrides); `run` fuses the config-clamped timeout with the caller's abort signal into one deadline and spawns `['bash', '-c', command]` through `ctx.commandScopes` after identity preparation with explicit byte caps and the `graceMs`; the settled subprocess outcome is classified — only the executor's own timeout reports `timedOut`, an upstream cancel reports `aborted`, a self-signaled command reports neither — and projected into a `ShellRunResult` with collected output.
 
 ### Invariants and ownership
 
 - The `graceMs` budget must be positive, finite, and no greater than `MAX_TIMER_DELAY_MS` so Node can represent it with one timer; invalid values are refused where they are written.
-- Environment layering is fixed: terminal overrides first, then the caller's `env`, then the trusted `dshEnv` snapshot last; the subprocess service scrubs ambient credentials and inherited `DSH_*` names independently.
-- A background process belongs to the subprocess service: it survives an executor-only reload and is killed and joined when the service disposes.
+- Environment layering is fixed: terminal overrides first, then the caller's `env`, then the trusted `dshEnv` snapshot; commandScopes adds identity environment overrides last; the subprocess service scrubs ambient credentials and inherited `DSH_*` names independently.
+- A background process belongs to the commandScopes service: it survives an executor-only reload and is killed and joined when the service disposes.
 
 </details>
 

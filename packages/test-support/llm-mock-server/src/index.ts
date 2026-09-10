@@ -8,7 +8,7 @@
 
 import { createServer } from 'node:http'
 import type { IncomingHttpHeaders, IncomingMessage, ServerResponse } from 'node:http'
-import { randomBytes } from 'node:crypto'
+import { randomBytes, randomUUID } from 'node:crypto'
 import { isIP, type AddressInfo } from 'node:net'
 import { setTimeout as delay } from 'node:timers/promises'
 
@@ -440,7 +440,7 @@ function toolCallChunks(options: ResolvedOptions): readonly unknown[] {
         delta: {
           tool_calls: [{
             index: 0,
-            id: 'mock-call-1',
+            id: `mock-call-${randomUUID()}`,
             type: 'function',
             function: { name: options.toolName, arguments: options.toolArguments.slice(0, midpoint) },
           }],

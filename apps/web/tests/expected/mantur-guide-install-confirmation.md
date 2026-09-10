@@ -1,0 +1,6 @@
+- dialog "剧本改编":
+  - heading "剧本改编" [level=2]
+  - button "关闭引导":
+    - img
+  - paragraph: 尚未安装此技能。安装后可添加到当前对话。
+  - button "登录后安装"

@@ -23,13 +23,28 @@ import css from './AppFrame.module.css'
 /** Full composed props: runtime share + child-slot render share + store share. */
 export type AppFrameProps =
   & PropsRuntime<'root'>
-  & PropsRenderSlots<'sidebar' | 'conversation' | 'details' | 'main.page' | 'shell.overlay'>
+  & PropsRenderSlots<'sidebar' | 'conversation' | 'details' | 'main.page' | 'main.workbench' | 'main.workbench.toggle' | 'shell.overlay'>
   & PropsStore<ReturnType<typeof createLayoutStore>>
   & PropsLocale<'common'>
 
 /** Center column grid item (session-body building block). */
 function CenterColumn(props: { children?: ReactNode }) {
   return <div className={css.centerCol}>{props.children}</div>
+}
+
+/** Retain an opened workbench until the selected Session changes or the shell unmounts. */
+function WorkbenchColumn({ open, children }: { open: boolean; children?: ReactNode }) {
+  const [opened, setOpened] = useState(open)
+  const column = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    if (open) setOpened(true)
+    else {
+      const focused = document.activeElement
+      if (focused instanceof HTMLElement && column.current?.contains(focused)) focused.blur()
+    }
+  }, [open])
+  if (!open && !opened) return null
+  return <div ref={column} className={css.workbenchPane} hidden={!open}>{children}</div>
 }
 
 /** Details column grid item; width 0 keeps the subtree mounted (never unmount on close). */
@@ -97,6 +112,9 @@ export function AppFrame({
   t,
 }: AppFrameProps) {
   const panels = useStore(s => s)
+  const workbenchSession = useSessions(s => s.current)
+  useLayoutEffect(() => { actions.setWorkbenchSession(workbenchSession) }, [actions, workbenchSession])
+  const sessionWorkbenchOpen = panels.workbenchSessions.includes(workbenchSession)
   const detailsSession = useSessions((s) => {
     const current = s.current
     return current !== undefined && s.byId[current]?.blank === false ? current : undefined
@@ -150,6 +168,7 @@ export function AppFrame({
     ? 0
     : panels.sidebar === 0 ? SIDEBAR_DEFAULT : panels.sidebar
   const mainPageOpen = panels.mainPage !== undefined
+  const workbenchOpen = sessionWorkbenchOpen && !mainPageOpen
   const detailsPreference = mainPageOpen || detailsSession === undefined ? 0 : panels.details
   const cols = computeColumns(viewport, sidebarPreference, detailsPreference)
   const colsRef = useRef(cols)
@@ -208,8 +227,18 @@ export function AppFrame({
             is session-maybe; SessionProvider withholds the strict details
             entry while no session is current. */}
         <CenterColumn>
-          <div className={css.conversationSurface} hidden={mainPageOpen}>
-            {renderSlot('conversation', {})}
+          <div className={css.conversationSurface} hidden={mainPageOpen} data-workbench-open={workbenchOpen || undefined}>
+            <div className={css.conversationPane}>{renderSlot('conversation', {})}</div>
+            <div className={css.workbenchEdge}>
+              {renderSlot('main.workbench.toggle', {
+                expanded: sessionWorkbenchOpen,
+                openWorkbench: actions.openWorkbench,
+                closeWorkbench: actions.closeWorkbench,
+              })}
+            </div>
+            <WorkbenchColumn key={workbenchSession} open={sessionWorkbenchOpen}>
+              {renderSlot('main.workbench', { closeWorkbench: actions.closeWorkbench })}
+            </WorkbenchColumn>
           </div>
           {panels.mainPage !== undefined && (
             <div className={css.mainPageSurface}>

@@ -25,6 +25,11 @@ describe('ReferenceChip', () => {
     expect(container.textContent).toBe('@commit-helper')
   })
 
+  it('renders a slash marker for a skill chip', () => {
+    const { container } = render(<ReferenceChip label="四维情感配音导演" marker="/" invalid={false} />)
+    expect(container.textContent).toBe('/四维情感配音导演')
+  })
+
   it('applies the invalid styling bit', () => {
     const { container } = render(<ReferenceChip label="gone" appearance="folder" invalid />)
     const chip = container.firstElementChild

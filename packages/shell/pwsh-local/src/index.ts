@@ -21,6 +21,7 @@ import { SHELL_SETTINGS_NAMESPACE, ShellExecutor } from '@deepseek-ai/dsh-shell'
 import type { ShellExecRequest, ShellExecSpec, ShellProcess, ShellProcessRead, ShellRunResult, CollectedOutput } from '@deepseek-ai/dsh-shell'
 import type { SubprocessCollect, SubprocessHandle, SubprocessOutputReader, SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
 import type {} from '@deepseek-ai/dsh-settings'
+import type {} from '@deepseek-ai/dsh-command-scopes'
 import { clampTimeout, deadline, MAX_TIMER_DELAY_MS, timeoutOf } from '@deepseek-ai/dsh-timeout'
 /* jscpd:ignore-end */
 import { resolvePwshPath } from './resolve.ts'
@@ -126,7 +127,7 @@ export function assertServiceablePwshConfig(config: Config): void {
  * this executor supplies their configured budgets per spawn.
  */
 export class PwshLocalExecutor extends ShellExecutor {
-  static inject = ['subprocess']
+  static inject = ['commandScopes']
 
   static Config: z<Config> = z.object({
     cwd: z.string(),
@@ -262,12 +263,13 @@ export class PwshLocalExecutor extends ShellExecutor {
   protected async runArgv(spec: ShellExecSpec, argv: readonly string[]): Promise<ShellRunResult> {
     // One deadline combines timeout and upstream cancellation; disposal clears its timer.
     using d = deadline(spec.signal, spec.timeoutMs, 'BASH_TIMEOUT')
-    const handle = this.ctx.subprocess.spawn(this.spawnSpec(spec, spec.stdoutMaxBytes, d.signal, argv))
-    const outcome = await handle.done
+    const handle = await this.ctx.commandScopes.spawn(this.spawnSpec(spec, spec.stdoutMaxBytes, d.signal, argv))
+    let outcome
+    try { outcome = await handle.done } finally { await handle.cleanup }
     const collected = PwshLocalExecutor.collected(handle)
     // Only this executor's timeout reason counts as timedOut; outer deadlines count as aborts.
-    const timedOut = timeoutOf(d.signal, 'BASH_TIMEOUT') !== undefined
-    const aborted = d.signal.aborted && !timedOut
+    const timedOut = timeoutOf(handle.signal, 'BASH_TIMEOUT') !== undefined
+    const aborted = handle.signal.aborted && !timedOut
     return {
       ...outcome,
       timedOut,
@@ -278,14 +280,14 @@ export class PwshLocalExecutor extends ShellExecutor {
     }
   }
 
-  start(spec: ShellExecSpec): ShellProcess {
+  async start(spec: ShellExecSpec): Promise<ShellProcess> {
     return this.startArgv(spec, this.argv(spec))
   }
 
   /** Background start of an exact argv (the confining subclass re-wraps it). */
-  protected startArgv(spec: ShellExecSpec, argv: readonly string[]): ShellProcess {
+  protected async startArgv(spec: ShellExecSpec, argv: readonly string[], onStarted?: (proc: ShellProcess) => void): Promise<ShellProcess> {
     // Background runs ignore timeoutMs; callers stop them through kill() or spec.signal.
-    const running = this.ctx.subprocess.spawn(this.spawnSpec(spec, this.config.maxOutputBytes, spec.signal, argv))
+    const running = await this.ctx.commandScopes.spawn(this.spawnSpec(spec, this.config.maxOutputBytes, spec.signal, argv))
     const collected = PwshLocalExecutor.collected(running)
 
     // A spawn failure produces no process output, so the subprocess service has nothing
@@ -303,15 +305,17 @@ export class PwshLocalExecutor extends ShellExecutor {
       status: 'running',
       exitCode: null,
       signal: null,
-      done: running.done.then((outcome) => {
+      done: running.done.then(async (outcome) => {
+        await running.cleanup
         // Any signal termination is killed, including a command signaling itself.
         if (proc.status === 'running') {
-          proc.status = spec.signal?.aborted === true || outcome.signal !== null ? 'killed' : 'completed'
+          proc.status = running.signal.aborted || outcome.signal !== null ? 'killed' : 'completed'
         }
         proc.exitCode = outcome.exitCode
         proc.signal = outcome.signal
         this.onProcessDone(proc, collected.stderr.readFrom(0).text, false)
-      }, (error: unknown) => {
+      }, async (error: unknown) => {
+        await running.cleanup
         // Background spawn failures settle as killed and surface through the read path.
         proc.status = 'killed'
         spawnFailureNote = `spawn failed: ${String(error)}`
@@ -345,6 +349,7 @@ export class PwshLocalExecutor extends ShellExecutor {
         return true
       },
     }
+    onStarted?.(proc)
     return proc
   }
 

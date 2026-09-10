@@ -323,7 +323,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       {
         signature: 'startSession(workspaceId?: WorkspaceId): void',
         description: 'Start a New Session flow and navigate to its Session.',
-        parameters: [{ name: 'workspaceId', description: 'explicit target; absent inherits the current or most recent Workspace.' }],
+        parameters: [{ name: 'workspaceId', description: 'explicit target; absent follows the deployment\'s selection policy.' }],
       },
       {
         signature: 'archiveSession(sessionId: SessionId): Promise<void>',
@@ -332,7 +332,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'pickDirectory(): Promise<string | null>',
-        description: 'Open the Host-native directory picker.',
+        description: 'Open the native directory picker selected by the application composition.',
         parameters: [],
         returns: 'the selected directory, or null when cancelled.',
       },

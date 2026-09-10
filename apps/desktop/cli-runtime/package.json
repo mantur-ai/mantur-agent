@@ -1,0 +1,13 @@
+{
+  "name": "@deepseek-ai/dsh-desktop-cli-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "dependencies": {
+    "@manturhub/cli": "file:manturhub-cli-0.11.0.tgz"
+  },
+  "overrides": {
+    "@vercel/detect-agent": "1.2.1"
+  }
+}

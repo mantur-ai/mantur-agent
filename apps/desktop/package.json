@@ -7,22 +7,45 @@
   "main": "lib/main.js",
   "scripts": {
     "bundle": "tsdown",
-    "dev": "tsx watch --clear-screen=false --include \"src/**/*\" --include \"resources/**/*\" --include package.json --include tsconfig.json --include tsdown.config.ts scripts/dev.ts",
-    "pack": "electron-builder --dir --publish never",
-    "dist:mac:arm64": "electron-builder --mac dmg zip --arm64 --publish never",
-    "dist:mac:x64": "electron-builder --mac dmg zip --x64 --publish never",
-    "dist:win:x64": "electron-builder --win nsis --x64 --publish never",
-    "smoke:packaged": "tsx scripts/smoke-packaged.ts"
+    "dev": "pnpm run prepare:skills && tsx watch --clear-screen=false --include \"src/**/*\" --include \"resources/**/*\" --include package.json --include tsconfig.json --include tsdown.config.ts scripts/dev.ts",
+    "pack": "pnpm run prepare:skills && pnpm run prepare:cli && pnpm run prepare:mantur-cut && electron-builder --dir --publish never",
+    "prepare:mantur-cut": "tsx ../../scripts/mantur-cut-distribution.ts",
+    "dist:mac:arm64": "pnpm run prepare:skills && pnpm run prepare:cli && pnpm run prepare:mantur-cut -- --target darwin-arm64 && electron-builder --mac zip --arm64 --publish never && tsx ../../scripts/create-macos-dmg.ts --arch arm64",
+    "dist:mac:arm64:local": "pnpm run prepare:skills && pnpm run prepare:cli && pnpm run prepare:mantur-cut -- --target darwin-arm64 && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac zip --arm64 --publish never --config.mac.identity=- --config.mac.notarize=false --config.mac.strictVerify=true && codesign --verify --deep --strict dist/mac-arm64/漫途Agent.app && tsx ../../scripts/create-macos-dmg.ts --arch arm64",
+    "dist:mac:x64": "pnpm run prepare:skills && pnpm run prepare:cli && pnpm run prepare:mantur-cut -- --target darwin-x64 && electron-builder --mac zip --x64 --publish never && tsx ../../scripts/create-macos-dmg.ts --arch x64",
+    "dist:win:x64": "pnpm run prepare:skills && pnpm run prepare:cli && pnpm run prepare:mantur-cut -- --target win32-x64 && electron-builder --win nsis --x64 --publish never",
+    "smoke:packaged": "tsx scripts/smoke-packaged.ts",
+    "prepare:cli": "tsx scripts/prepare-cli.ts",
+    "prepare:skills": "tsx scripts/prepare-skills.ts"
   },
   "license": "MIT",
   "dependencies": {
     "@deepseek-ai/cordis-plugin-group": "workspace:^",
     "@deepseek-ai/dsh": "workspace:^",
     "@deepseek-ai/dsh-session-title-llm": "workspace:^",
+    "@deepseek-ai/dsh-util-values": "workspace:^",
     "dsh-python-runtime-closure": "workspace:*",
-    "electron-updater": "6.8.9"
+    "electron-updater": "6.8.9",
+    "zod": "^4.4.3",
+    "@deepseek-ai/dsh-mantur-app": "workspace:^"
   },
   "devDependencies": {
+    "@deepseek-ai/dsh-agent": "workspace:^",
+    "@deepseek-ai/dsh-app-boot": "workspace:^",
+    "@deepseek-ai/dsh-authorization": "workspace:^",
+    "@deepseek-ai/dsh-authorization-manturhub": "workspace:^",
+    "@deepseek-ai/dsh-bash-local": "workspace:^",
+    "@deepseek-ai/dsh-brand": "workspace:^",
+    "@deepseek-ai/dsh-command-scopes": "workspace:^",
+    "@deepseek-ai/dsh-credentials-local": "workspace:^",
+    "@deepseek-ai/dsh-loader-smoke": "workspace:^",
+    "@deepseek-ai/dsh-shell": "workspace:^",
+    "@deepseek-ai/dsh-session": "workspace:^",
+    "@deepseek-ai/dsh-session-projection": "workspace:^",
+    "@deepseek-ai/dsh-sandbox-policy": "workspace:^",
+    "@deepseek-ai/dsh-subprocess-local": "workspace:^",
+    "@deepseek-ai/dsh-terminal": "workspace:^",
+    "@deepseek-ai/dsh-terminal-bash": "workspace:^",
     "@types/node": "^22.20.0",
     "electron": "43.4.0",
     "electron-builder": "26.15.7",
@@ -42,6 +65,24 @@
     "directories": {
       "output": "dist"
     },
+    "extraResources": [
+      {
+        "from": ".generated/mantur-skills",
+        "to": "mantur-skills"
+      },
+      {
+        "from": ".generated/mantur-cut",
+        "to": "mantur-cut"
+      },
+      {
+        "from": ".generated/mantur-cli/source.json",
+        "to": "mantur-cli/source.json"
+      },
+      {
+        "from": ".generated/mantur-cli/node_modules",
+        "to": "mantur-cli/node_modules"
+      }
+    ],
     "publish": [
       {
         "provider": "github",
@@ -53,7 +94,7 @@
     "mac": {
       "artifactName": "Mantur-Agent-macOS-${arch}.${ext}",
       "category": "public.app-category.productivity",
-      "icon": "resources/mantur-logo.png",
+      "icon": "resources/mantur-app-icon.png",
       "notarize": true,
       "target": [
         "dmg",
@@ -62,7 +103,7 @@
     },
     "win": {
       "artifactName": "Mantur-Agent-Windows-${arch}.${ext}",
-      "icon": "resources/mantur-logo.png",
+      "icon": "resources/mantur-app-icon.png",
       "target": [
         "nsis"
       ]

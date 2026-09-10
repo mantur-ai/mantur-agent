@@ -1,46 +1,169 @@
 import { Context } from '@deepseek-ai/cordis'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import {
-  MarketplaceNavigation, MarketplacePage, ProjectsHeading,
+  MarketplaceNavigation, MarketplacePage, ProjectsHeading, type MarketplaceNavigationInjected,
 } from '../src/client/MarketplaceNavigation.tsx'
 import * as clientEntry from '../src/client/index.ts'
 import { apply, inject } from '../src/client/index.ts'
 import { apply as hostApply } from '../src/index.ts'
+import { CreationGuide, CreationModes, type CreationGuideInjected, type GuidePreferencesInjected } from '../src/client/CreationGuide.tsx'
+import { ManturComposerLayout, type ManturComposerInjected } from '../src/client/ManturComposerLayout.tsx'
+import { ProjectPathSettings, type ProjectPathSettingsInjected } from '../src/client/ProjectPathSettings.tsx'
+import { GUIDE_NAMESPACE, GuideSettingsSchema, type GuideSettings } from '../src/guide-settings.ts'
+import type { ManturMarketplaceStore } from '../src/client/store.ts'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import { DesktopUpdate, type DesktopUpdateInjected } from '../src/client/DesktopUpdate.tsx'
+
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
 vi.mock('@deepseek-ai/dsh-manturhub-marketplace/remote', () => ({
   default: { package: '@deepseek-ai/dsh-manturhub-marketplace', descriptors: [] },
 }))
+vi.mock('@deepseek-ai/dsh-mantur-projects/remote', () => ({
+  default: { package: '@deepseek-ai/dsh-mantur-projects', descriptors: [] },
+}))
 
 async function bench() {
   const ctx = new Context()
-  const remote = new TestRemote(ctx, { manturMarketplace: {}, manturAccount: {} })
+  vi.stubGlobal('sessionStorage', { getItem: () => null, setItem: vi.fn(), removeItem: vi.fn() })
+  const resolveBundled = vi.fn(async (reference: string, signal: AbortSignal) => {
+    signal.throwIfAborted()
+    return { ok: true, value: { reference } }
+  })
+  const remote = new TestRemote(ctx, {
+    manturMarketplace: { bundled: () => ({ ok: true, value: [] }), resolveBundled }, manturAccount: {},
+    manturProjects: { settings: () => ({ ok: true, value: { source: 'unconfigured' } }) },
+  })
   remote.$mount = () => Promise.resolve(() => Promise.resolve())
   await ctx.plugin(SlotRegistry).await()
   const locale = new LocaleRuntime(ctx)
   locale.setLocale('zh')
   ctx.provide('locale', locale)
-  ctx.provide('sessions', {} as never)
+  const binding = vi.fn()
+  const appendReference = vi.fn(() => true)
+  const inputState = { getSnapshot: () => undefined, subscribe: () => () => {} }
+  const pickDirectory = vi.fn(async () => null)
+  ctx.provide('sessions', { binding } as never)
   ctx.provide('workspaces', {} as never)
-  ctx.provide('conversation', {} as never)
+  ctx.provide('conversation', { input: { for: () => ({ appendReference, state: inputState }) } } as never)
+  ctx.provide('conversationDrafts', { input: { appendReference, state: inputState }, register: () => () => {} } as never)
+  ctx.provide('uiWorkspace', { pickDirectory } as never)
+  const registerSource = vi.fn<Context['inputTriggers']['registerSource']>(() => () => {})
+  ctx.provide('inputTriggers', { registerSource } as never)
+  const preferences = {
+    getSnapshot: vi.fn(() => ({ value: undefined as GuideSettings | undefined })), subscribe: () => () => {}, set: vi.fn(),
+  }
+  ctx.provide('settingsScope', { bind: vi.fn(() => preferences) } as never)
   const slots = ctx.get('slots') as SlotRegistry
   slots.register({
     name: 'root',
     children: {
       'sidebar.navigation': { kind: 'single', scope: 'root' },
+      'sidebar.footer.action': { kind: 'list', scope: 'root' },
       'sidebar.workspaces.heading': { kind: 'single', scope: 'root' },
       'main.page': { kind: 'single', scope: 'root' },
+      'conversation.hero.modes': { kind: 'single', scope: 'root' },
+      'conversation.composer.guide': { kind: 'single', scope: 'session-maybe' },
+      'conversation.composer.layout': { kind: 'single', scope: 'session-maybe' },
+      'conversation.composer.bar.accessory': { kind: 'single', scope: 'session-maybe' },
+      'settings.general.item': { kind: 'list', scope: 'root' },
     },
   } as never, () => null)
-  return { ctx, locale, slots }
+  return { ctx, remote, locale, slots, preferences, binding, appendReference, inputState, pickDirectory, registerSource, resolveBundled }
 }
 
 describe('ui-mantur-navigation apply', () => {
-  it('keeps the host entry inert and declares browser services', () => {
-    expect(hostApply).not.toThrow()
-    expect(inject).toEqual(['slots', 'locale', 'remote', 'sessions', 'workspaces', 'conversation'])
+  it('serializes the selected bundled identity and rejects failed or cancelled resolution without a text fallback', async () => {
+    const subject = await bench()
+    const fiber = subject.ctx.plugin({ inject: [...inject], apply })
+    try {
+      await fiber.await()
+      const source = subject.registerSource.mock.calls.find(([entry]) => entry.name === 'mantur-bundled-skill')?.[0]
+      const codec = source?.codec
+      expect(codec).toBeDefined()
+      if (codec === undefined) throw new Error('Bundled reference codec was not registered')
+      const reference = `short-drama@1.0.0#${'a'.repeat(64)}`
+      const controller = new AbortController()
+      expect(codec.clipboardText(reference)).toBe(`/mantur-builtin:${reference}`)
+      await expect(codec.serialize(reference, controller.signal)).resolves.toBe(`/mantur-builtin:${reference}`)
+      expect(subject.resolveBundled).toHaveBeenLastCalledWith(reference, controller.signal)
+      subject.resolveBundled.mockRejectedValueOnce(new Error('Bundled identity unavailable'))
+      await expect(codec.serialize(reference, controller.signal)).rejects.toThrow('Bundled identity unavailable')
+      controller.abort(new Error('Send cancelled'))
+      await expect(codec.serialize(reference, controller.signal)).rejects.toThrow('Send cancelled')
+    } finally { await fiber.dispose() }
+  })
+
+  it('maps only the retired editing preference to production and preserves dismissal', () => {
+    const recommendations = { script: ['short-drama'], production: [], assets: [] }
+    // Persisted input includes pre-migration and invalid values, not only the resolved settings type.
+    const parse = GuideSettingsSchema as (input: unknown) => GuideSettings
+    expect(parse({ recommendations, mode: 'editing', closed: true })).toEqual({ recommendations, mode: 'production', closed: true })
+    expect(parse({ recommendations }).mode).toBe('script')
+    expect(() => parse({ recommendations, mode: 'unknown' })).toThrow()
+  })
+  it('releases native updates and the first Remote when the second mount fails and its owner closes', async () => {
+    const unsubscribe = vi.fn()
+    vi.stubGlobal('window', { manturUpdates: {
+      getSnapshot: async () => ({ revision: 1, enabled: true, currentVersion: '1.0.0', state: { kind: 'idle' } }),
+      subscribe: () => unsubscribe, check: async () => {}, download: async () => {}, install: async () => {},
+    } })
+    const subject = await bench()
+    const release = vi.fn(async () => {})
+    subject.remote.$mount = vi.fn()
+      .mockResolvedValueOnce(release)
+      .mockRejectedValueOnce(new Error('project Remote failed'))
+    try {
+      await expect(apply(subject.ctx)).rejects.toThrow('project Remote failed')
+      expect(subject.slots.entries('conversation.composer.layout')).toEqual([])
+    } finally {
+      await subject.ctx.fiber.dispose()
+    }
+    expect(release).toHaveBeenCalledOnce()
+    expect(unsubscribe).toHaveBeenCalledOnce()
+    expect(subject.slots.entries('sidebar.footer.action')).toEqual([])
+  })
+
+  it('owns the native update slot, subscription and dictionaries for its whole lifetime', async () => {
+    const unsubscribe = vi.fn()
+    const snapshot = { revision: 1, enabled: true, currentVersion: '1.0.0', state: { kind: 'idle' } }
+    vi.stubGlobal('window', { manturUpdates: {
+      getSnapshot: async () => snapshot, subscribe: () => unsubscribe,
+      check: async () => {}, download: async () => {}, install: async () => {},
+    } })
+    const subject = await bench()
+    const fiber = subject.ctx.plugin({ inject: [...inject], apply })
+    try {
+      await fiber.await()
+      const entry = subject.slots.entries('sidebar.footer.action')[0]
+      expect(entry?.component).toBe(DesktopUpdate)
+      const value = (entry?.inject as unknown as () => DesktopUpdateInjected)()
+      expect(value.hooks.updates.getSnapshot().snapshot).toEqual(snapshot)
+      expect(value.controller).toBeTruthy()
+      expect(subject.locale.bind('updates.mantur')('download')).toBe('下载更新')
+    } finally { await fiber.dispose() }
+    expect(unsubscribe).toHaveBeenCalledOnce()
+    expect(subject.slots.entries('sidebar.footer.action')).toEqual([])
+  })
+  it('omits native update registration when a browser has no preload capability', async () => {
+    vi.stubGlobal('window', {})
+    const subject = await bench()
+    const fiber = subject.ctx.plugin({ inject: [...inject], apply })
+    try {
+      await fiber.await()
+      expect(subject.slots.entries('sidebar.footer.action')).toEqual([])
+    } finally { await fiber.dispose() }
+  })
+  it('registers host preferences and declares browser services', () => {
+    const register = vi.fn()
+    const ctx = { inject: (_services: string[], callback: (scope: unknown) => void) => { callback({ settings: { register } }) } }
+    const config = { recommendations: { script: [], production: [], assets: [] } }
+    hostApply(ctx as unknown as Context, config)
+    expect(register).toHaveBeenCalledWith(GUIDE_NAMESPACE, expect.anything(), { base: { ...config, mode: 'script', closed: false } })
+    expect(inject).toEqual(['slots', 'locale', 'remote', 'sessions', 'workspaces', 'conversation', 'conversationDrafts', 'uiWorkspace', 'settingsScope', 'inputTriggers'])
     expect(Object.keys(clientEntry).sort()).toEqual(['apply', 'inject'])
   })
 
@@ -60,10 +183,108 @@ describe('ui-mantur-navigation apply', () => {
     expect(injected.hooks.marketplace).toBeTruthy()
     expect(injected.hooks.recipes).toBeTruthy()
     expect(subject.locale.bind('navigation.mantur')('projects')).toBe('项目')
+    expect(subject.slots.entries('conversation.hero.modes')[0]?.component).toBe(CreationModes)
+    expect(subject.slots.entries('conversation.composer.guide')[0]?.component).toBe(CreationGuide)
+    expect(subject.slots.entries('conversation.composer.layout')[0]?.component).toBe(ManturComposerLayout)
+    expect(subject.slots.spec('conversation.composer.bar.accessory.permissions')).toEqual({ kind: 'single', scope: 'session-maybe' })
+    const footer = (subject.slots.entries('conversation.composer.layout')[0]!.inject as unknown as () => ManturComposerInjected)()
+    const pathEntry = subject.slots.entries('settings.general.item')[0]!
+    expect(pathEntry.component).toBe(ProjectPathSettings)
+    expect(pathEntry.options.id).toBe('mantur.project-path')
+    const path = (pathEntry.inject as unknown as () => ProjectPathSettingsInjected)()
+    expect(path.hooks.automaticProject).toBe(footer.hooks.automaticProject)
+    await path.chooseRoot()
+    await footer.reloadRoot()
+    expect(subject.pickDirectory).toHaveBeenCalledOnce()
+    expect(footer.hooks.automaticProject.getSnapshot()).toMatchObject({ loading: false, settings: { source: 'unconfigured' } })
 
     await fiber.dispose()
     expect(subject.slots.entries('sidebar.navigation')).toEqual([])
     expect(subject.slots.entries('sidebar.workspaces.heading')).toEqual([])
     expect(subject.slots.entries('main.page')).toEqual([])
+    expect(subject.slots.entries('conversation.hero.modes')).toEqual([])
+    expect(subject.slots.entries('conversation.composer.guide')).toEqual([])
+    expect(subject.slots.entries('conversation.composer.layout')).toEqual([])
+    expect(subject.slots.entries('settings.general.item')).toEqual([])
+    expect(subject.slots.spec('conversation.composer.bar.accessory.permissions')).toBeUndefined()
+  })
+
+  it('confirms persisted choices and delegates guide actions to their existing owners', async () => {
+    const subject = await bench()
+    const fiber = subject.ctx.plugin({ inject: [...inject], apply })
+    try {
+      await fiber.await()
+      const selected = vi.fn()
+      subject.ctx.on('mantur/creation-mode-selected', selected)
+      const modeProps = (subject.slots.entries('conversation.hero.modes')[0]!.inject as unknown as () => GuidePreferencesInjected)()
+      expect(selected).not.toHaveBeenCalled()
+      expect(await modeProps.saveMode('production')).toBe(false)
+      expect(selected).not.toHaveBeenCalled()
+      expect(await modeProps.saveClosed(true)).toBe(false)
+      const value: GuideSettings = { mode: 'production', closed: true, recommendations: { script: [], production: [], assets: [] } }
+      subject.preferences.getSnapshot.mockReturnValue({ value })
+      expect(selected).not.toHaveBeenCalled()
+      expect(await modeProps.saveMode('production')).toBe(true)
+      expect(await modeProps.saveMode('production')).toBe(true)
+      expect(selected).toHaveBeenCalledTimes(2)
+      expect(selected).toHaveBeenLastCalledWith('production')
+      subject.preferences.set.mockRejectedValueOnce(new Error('write failed'))
+      await expect(modeProps.saveMode('production')).rejects.toThrow('write failed')
+      expect(selected).toHaveBeenCalledTimes(2)
+      expect(await modeProps.saveClosed(true)).toBe(true)
+      expect(subject.preferences.set).toHaveBeenCalledWith('mode', 'production')
+      expect(subject.preferences.set).toHaveBeenCalledWith('closed', true)
+      const createGuide = subject.slots.entries('conversation.composer.guide')[0]!.inject as unknown as
+        (id: SessionId | undefined) => CreationGuideInjected
+      const reference = { source: 'skill', ref: 'short-drama', label: '爽文短剧剧本创作', clipboardText: '/short-drama' }
+      expect(createGuide(undefined).appendReference(reference)).toBe(true)
+      const guide = createGuide('guide-session' as SessionId)
+      const navigation = (subject.slots.entries('sidebar.navigation')[0]!.inject as unknown as () => MarketplaceNavigationInjected)()
+      const changed = vi.fn()
+      const unsubscribe = guide.hooks.guideNavigation.subscribe(changed)
+      try {
+        expect(guide.navigationVersion()).toBe(0)
+        navigation.beforeOpenPage()
+        expect(guide.navigationVersion()).toBe(1)
+        expect(createGuide(undefined).hooks.guideNavigation.getSnapshot()).toBe(1)
+        expect(changed).toHaveBeenCalledOnce()
+      } finally { unsubscribe() }
+      expect(guide.hooks.guideInput.getSnapshot()).toBeUndefined()
+      guide.hooks.guideInput.subscribe(() => {})()
+      expect(guide.appendReference(reference)).toBe(false)
+      subject.binding.mockReturnValue({ ctx: subject.ctx })
+      expect(createGuide('guide-session' as SessionId).hooks.guideInput).toBe(subject.inputState)
+      expect(guide.appendReference(reference)).toBe(true)
+      expect(subject.appendReference).toHaveBeenCalledWith(reference)
+      const { controller } = (subject.slots.entries('main.page')[0]!.inject as () => { controller: ManturMarketplaceStore })()
+      const load = vi.spyOn(controller, 'load').mockResolvedValue()
+      const catalog = vi.spyOn(controller, 'ensureSkillCatalog').mockResolvedValue()
+      const detail = vi.spyOn(controller, 'openDetail').mockResolvedValue()
+      const close = vi.spyOn(controller, 'closeDetail').mockImplementation(() => {})
+      const login = vi.spyOn(controller, 'startLogin').mockResolvedValue()
+      const cancel = vi.spyOn(controller, 'cancelLogin').mockResolvedValue()
+      const install = vi.spyOn(controller, 'install').mockResolvedValue()
+      await guide.load()
+      await guide.ensureCatalog()
+      await guide.openDetail('short-drama')
+      guide.closeDetail()
+      await guide.startLogin()
+      await guide.cancelLogin()
+      expect(load).toHaveBeenCalledOnce()
+      expect(catalog).toHaveBeenCalledOnce()
+      expect(detail).toHaveBeenCalledWith('short-drama')
+      expect(close).toHaveBeenCalledOnce()
+      expect(login).toHaveBeenCalledOnce()
+      expect(cancel).toHaveBeenCalledOnce()
+      expect(await guide.install('short-drama')).toBe(false)
+      const skill = { slug: 'short-drama', name: '剧本', description: '', category: '', installed: false, version: '1', triggers: [] }
+      controller.store.set({ phase: 'ready', catalog: { skills: [{ ...skill, slug: 'different' }, skill], installedCount: 0, signedIn: true } })
+      expect(await guide.install('short-drama')).toBe(false)
+      controller.store.set({ phase: 'ready', catalog: { skills: [{ ...skill, installed: true }], installedCount: 1, signedIn: true } })
+      expect(await guide.install('short-drama')).toBe(true)
+      expect(install).toHaveBeenCalledWith('short-drama')
+    } finally {
+      await fiber.dispose()
+    }
   })
 })

@@ -10,6 +10,33 @@ import type {
   IWorkspaces, WorkspaceId, WorkspaceView,
 } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
+import type { Config } from '../navigation-settings.ts'
+
+declare global {
+  interface Window {
+    /** Parent-window directory chooser exposed only by the desktop preload. */
+    manturDirectoryPicker?: { pick(): Promise<string | null> }
+  }
+}
+
+/**
+ * Select the desktop chooser or the browser's Host-native picker at composition time.
+ * @param remote - Host directory-picking namespace for browser deployments.
+ * @param desktop - Desktop preload capability, absent in ordinary browsers.
+ * @returns the selected operation; native failures never invoke the other picker.
+ */
+export function resolveDirectoryPicker(
+  remote: ClientRemote['directoryPicker'],
+  desktop: Window['manturDirectoryPicker'],
+): () => Promise<string | null> {
+  if (desktop !== undefined) return () => desktop.pick()
+  return async () => {
+    const result = await remote.pick()
+    if (!result.ok) throw new Error(`directory picker failed: ${result.error.message}`)
+    return result.value
+  }
+}
 
 /** Workspace archive and directory operations consumed by Client UI domains. */
 export interface UiWorkspace {
@@ -21,7 +48,7 @@ export interface UiWorkspace {
   connectWorkspace(workspaceId: WorkspaceId): Promise<SessionId>
   /**
    * Start a New Session flow and navigate to its Session.
-   * @param workspaceId - explicit target; absent inherits the current or most recent Workspace.
+   * @param workspaceId - explicit target; absent follows the deployment's selection policy.
    */
   startSession(workspaceId?: WorkspaceId): void
   /**
@@ -30,7 +57,7 @@ export interface UiWorkspace {
    */
   archiveSession(sessionId: SessionId): Promise<void>
   /**
-   * Open the Host-native directory picker.
+   * Open the native directory picker selected by the application composition.
    * @returns the selected directory, or null when cancelled.
    */
   pickDirectory(): Promise<string | null>
@@ -76,12 +103,16 @@ class UiWorkspaceService extends Service implements UiWorkspace {
    * @param directoryPicker - the directory-picking Remote namespace.
    * @param workspaces - pure Workspace Controller.
    * @param sessions - pure Session Controller.
+   * @param navigation - resolved selection policy; undefined while Host settings load.
+   * @param chooseDirectory - native chooser selected by the application composition.
    */
   constructor(
     ctx: Context,
     private readonly directoryPicker: ClientRemote['directoryPicker'],
     private readonly workspaces: IWorkspaces,
     private readonly sessions: ISessions,
+    private readonly navigation: ObservableSnapshot<Config['newSessionWorkspace'] | undefined>,
+    private readonly chooseDirectory: () => Promise<string | null>,
   ) {
     super(ctx, 'uiWorkspace')
     ctx.effect(() => this.watchNavigation(), 'ui-workspace: Workspace navigation policy')
@@ -121,7 +152,7 @@ class UiWorkspaceService extends Service implements UiWorkspace {
     const recent = workspace.phase === 'ready' && sessions.phase === 'ready'
       ? recentWorkspace(workspace.items, sessions.byId)
       : undefined
-    const target = workspaceId ?? currentWorkspaceId ?? recent
+    const target = workspaceId ?? (this.navigation.getSnapshot() === 'recent' ? currentWorkspaceId ?? recent : undefined)
     if (target === undefined) {
       this.sessions.clear()
       return
@@ -137,9 +168,7 @@ class UiWorkspaceService extends Service implements UiWorkspace {
   }
 
   async pickDirectory(): Promise<string | null> {
-    const result = await this.directoryPicker.pick()
-    if (!result.ok) throw new Error(`directory picker failed: ${result.error.message}`)
-    return result.value
+    return this.chooseDirectory()
   }
 
   async listDirectory(path?: string, signal?: AbortSignal): Promise<DirectoryListing> {
@@ -161,6 +190,12 @@ class UiWorkspaceService extends Service implements UiWorkspace {
       if (disposed) return
       if (this.clearArchivedCurrent()) return
       if (initial !== 'waiting') return
+      const navigation = this.navigation.getSnapshot()
+      if (navigation === undefined) return
+      if (navigation === 'explicit') {
+        initial = 'done'
+        return
+      }
       const workspace = this.workspaces.list.getSnapshot()
       const sessions = this.sessions.list.getSnapshot()
       if (workspace.phase !== 'ready' || sessions.phase !== 'ready') return
@@ -177,7 +212,7 @@ class UiWorkspaceService extends Service implements UiWorkspace {
       void this.connectWorkspace(target).then(
         (sessionId) => {
           if (disposed) return
-          if (this.sessions.list.getSnapshot().current === undefined) {
+          if (this.navigation.getSnapshot() === 'recent' && this.sessions.list.getSnapshot().current === undefined) {
             this.sessions.open(sessionId)
           }
           initial = 'done'
@@ -191,9 +226,11 @@ class UiWorkspaceService extends Service implements UiWorkspace {
     }
     const disposeWorkspaces = this.workspaces.list.subscribe(reconcile)
     const disposeSessions = this.sessions.list.subscribe(reconcile)
+    const disposeNavigation = this.navigation.subscribe(reconcile)
     reconcile()
     return () => {
       disposed = true
+      disposeNavigation()
       disposeSessions()
       disposeWorkspaces()
     }

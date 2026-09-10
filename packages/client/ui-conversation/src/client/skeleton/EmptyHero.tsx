@@ -159,6 +159,7 @@ export function HeroShell({ t, renderSlot, children }: HeroShellProps) {
           })}
         </div>
         <div className={css.body}>
+          {renderSlot('conversation.hero.modes', {})}
           {/* The composer remains mounted outside this component. */}
         </div>
       </div>

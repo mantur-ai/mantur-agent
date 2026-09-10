@@ -124,7 +124,7 @@ export interface ShellRunResult {
    */
   timedOut: boolean
   /**
-   * True when the caller's `AbortSignal` was the FIRST cause to kill the command
+   * True when caller, owner or identity cancellation was the FIRST cause to kill the command
    * (and it was not the executor's own timeout). Mutually exclusive with
    * {@link timedOut} — see there for the first-cause classification.
    */
@@ -155,7 +155,7 @@ export interface ShellProcessRead {
 /**
  * A background process handle returned by {@link ShellExecutor.start}. It is the
  * only access path; buffered output remains readable after exit. Composition
- * teardown (the subprocess service's disposal) kills running processes and
+ * teardown (the command scope service's disposal) kills running processes and
  * awaits {@link done}; an executor-only reload leaves them running.
  */
 export interface ShellProcess {
@@ -165,7 +165,7 @@ export interface ShellProcess {
   exitCode: number | null
   /** Terminating signal name, when signal-killed. */
   signal: NodeJS.Signals | null
-  /** Resolves when the underlying process closes (never rejects — a spawn failure settles as `killed` with the error on stderr). */
+  /** Resolves after whole-tree exit and identity release; cleanup failure rejects. Spawn failure alone settles as killed with stderr. */
   readonly done: Promise<void>
   /** Sandbox facts, stamped once a confined process settles. */
   sandbox?: ShellSandboxInfo

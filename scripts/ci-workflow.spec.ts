@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
 import * as yaml from 'js-yaml'
 import { describe, expect, it } from 'vitest'
@@ -498,7 +499,28 @@ describe('E2B e2e workflow', () => {
 })
 
 describe('Desktop release workflow', () => {
-  it('separates protected native signing from explicit GitHub publication', () => {
+  it('keys each native Mantur Cut cache to the complete pinned source identity', () => {
+    for (const [file, jobName] of [
+      ['.github/workflows/desktop-package.yml', 'package'],
+      ['.github/workflows/desktop-release.yml', 'macos'],
+    ] as const) {
+      const job = workflowJob(loadWorkflow(file), jobName)
+      if (!Array.isArray(job.steps)) throw new TypeError(`${file} must define ${jobName} steps`)
+      const cache = job.steps.filter(isRecord).find(step => step.name === 'Restore pinned Mantur Cut source cache')
+      expect(cache).toMatchObject({
+        uses: 'actions/cache@v5',
+        with: {
+          path: '.cache/mantur-cut',
+          key: "mantur-cut-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('apps/desktop/mantur-cut/source.json', 'packages/client/ui-mantur-editing/adapters/mantur-cut.patch', 'packages/client/ui-mantur-editing/adapters/mantur-cut-packaged.patch') }}",
+        },
+      })
+      const compiler = job.steps.filter(isRecord).find(step => step.name === 'Require native compiler')
+      expect(compiler).toMatchObject({ run: 'xcrun clang --version' })
+      if (file.endsWith('desktop-package.yml')) expect(compiler?.if).toBe("runner.os == 'macOS'")
+    }
+  })
+
+  it('separates protected native signing from explicit GitHub publication', async () => {
     const workflow = loadWorkflow('.github/workflows/desktop-release.yml')
     const dispatch = workflowEvent(workflow, 'workflow_dispatch')
     const validate = workflowJob(workflow, 'validate')
@@ -524,7 +546,57 @@ describe('Desktop release workflow', () => {
         REF_TYPE: '${{ github.ref_type }}',
       },
     })
-    expect((authorize as { run?: string }).run).toContain('desktop-v$version')
+    const authorizeScript = (authorize as { run?: string }).run
+    expect(authorizeScript).toContain('"v$version"')
+    expect(authorizeScript).not.toContain('desktop-v$version')
+    expect(authorizeScript).toContain('sha256sum apps/desktop/mantur-cut/source.json')
+    const desktopVersion = (JSON.parse(readFileSync(resolve(root, 'apps/desktop/package.json'), 'utf8')) as {
+      version: string
+    }).version
+    const requireFromUpdater = createRequire(resolve(root, 'apps/desktop/node_modules/electron-updater/package.json'))
+    const updaterSemver = requireFromUpdater('semver') as {
+      SemVer: new(version: string) => unknown
+      valid: (version: string) => string | null
+    }
+    expect(updaterSemver.valid(`v${desktopVersion}`)).toBe(desktopVersion)
+    expect(updaterSemver.valid(`desktop-v${desktopVersion}`)).toBeNull()
+    const { GitHubProvider } = requireFromUpdater('./out/providers/GitHubProvider.js') as {
+      GitHubProvider: new(options: unknown, updater: unknown, runtime: unknown) => {
+        getLatestVersion: () => Promise<{ tag: string }>
+      }
+    }
+    const feed = (tag: string): string => `<?xml version="1.0" encoding="UTF-8"?>
+      <feed><entry><title>Mantur Agent</title><link href="https://github.com/mantur-ai/mantur-harness/releases/tag/${tag}"/><content>Release</content></entry></feed>`
+    const metadata = `version: ${desktopVersion}
+files:
+  - url: Mantur-Agent-macOS-arm64.zip
+    sha512: checksum
+path: Mantur-Agent-macOS-arm64.zip
+sha512: checksum
+releaseDate: '2026-09-03T00:00:00.000Z'
+`
+    const selectTag = async (tag: string): Promise<string> => {
+      const executor = {
+        request: async (request: { path?: string }) => request.path?.endsWith('.atom') === true
+          ? feed(tag)
+          : metadata,
+      }
+      const provider = new GitHubProvider(
+        { provider: 'github', owner: 'mantur-ai', repo: 'mantur-harness' },
+        {
+          allowPrerelease: true,
+          channel: null,
+          currentVersion: new updaterSemver.SemVer(desktopVersion),
+          fullChangelog: false,
+        },
+        { executor, isUseMultipleRangeRequest: false, platform: 'darwin' },
+      )
+      return (await provider.getLatestVersion()).tag
+    }
+    await expect(selectTag(`v${desktopVersion}`)).resolves.toBe(`v${desktopVersion}`)
+    await expect(selectTag(`desktop-v${desktopVersion}`)).rejects.toMatchObject({
+      code: 'ERR_UPDATER_NO_PUBLISHED_VERSIONS',
+    })
     expect(macos).toMatchObject({
       environment: 'macos-release',
       strategy: {
@@ -584,9 +656,12 @@ describe('Desktop release workflow', () => {
       needs: ['validate', 'assemble'],
       environment: 'macos-release',
       permissions: { contents: 'write' },
+      env: { MANTUR_CUT_DISTRIBUTION_APPROVAL: '${{ vars.MANTUR_CUT_DISTRIBUTION_APPROVAL }}' },
     })
     const publishSteps = JSON.stringify(publish.steps)
     expect(publishSteps).toContain('sha256sum -c SHA256SUMS')
+    expect(publishSteps).toContain('approved:')
+    expect(publishSteps).toContain('must approve the exact pinned distribution')
     expect(publishSteps).toContain('gh release view')
     expect(publishSteps).toContain('published desktop assets are never replaced')
     expect(publishSteps).toContain('gh release create')

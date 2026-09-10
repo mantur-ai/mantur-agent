@@ -228,6 +228,17 @@ class OutputLedger {
   }
 }
 
+const executionRoots = new WeakSet<Context>()
+
+/**
+ * Read monotonic execution history even after every provider has been removed.
+ * @param ctx - any context under the Host root being checked.
+ * @returns whether that root has attempted a worker start; another root has independent history.
+ */
+export function hasStartedWorkerPrograms(ctx: Context): boolean {
+  return executionRoots.has(ctx.root)
+}
+
 /**
  * The shipped {@link CodeRuntime} backend (`ctx.codeRuntime`). Registers as
  * the `codeRuntime` service; every cap comes from validated config. See the
@@ -246,12 +257,16 @@ export class WorkerThreadCodeRuntime extends CodeRuntime {
   readonly language = 'typescript'
   readonly isolation = 'worker-thread'
 
+  private readonly executionRoot: Context
   private readonly config: ResolvedConfig
   private readonly live = new Set<LiveRun>()
   private disposed = false
+  private shutdown: Promise<void> | undefined
+  private readonly cleanupFailures: unknown[] = []
 
   constructor(ctx: Context, config: Config) {
     super(ctx)
+    this.executionRoot = ctx.root
     // Schemastery filled the defaults; the cast records that. Positivity is a
     // semantic check the schema's plain number type does not carry.
     this.config = config as ResolvedConfig
@@ -267,19 +282,27 @@ export class WorkerThreadCodeRuntime extends CodeRuntime {
     if (this.config.maxWallMs > MAX_TIMER_DELAY_MS) {
       throw new Error(`dsh-code-runtime-worker-thread: config.maxWallMs must be at most ${MAX_TIMER_DELAY_MS} (Node clamps a longer setTimeout delay to 1ms), got ${String(this.config.maxWallMs)}`)
     }
-    ctx.effect(() => () => this.teardown(), 'worker code-runtime teardown')
+    ctx.effect(() => () => this.stopForShutdown(), 'worker code-runtime teardown')
+  }
+
+  /** Whether this Host root has attempted a worker start, across scoped and replaced providers. Never cleared by shutdown. */
+  get hasStartedPrograms(): boolean {
+    return executionRoots.has(this.executionRoot)
   }
 
   /**
-   * Dispose to quiescence: mark the service unusable, fail every in-flight
-   * run as aborted, and AWAIT each worker's exit so no worker outlives the
-   * fiber.
+   * Freeze execution and join worker termination, pipe drain, and admitted Host bindings.
+   * @returns completion after owned work settles; retained cleanup failures reject every call.
    */
-  private async teardown(): Promise<void> {
+  stopForShutdown(): Promise<void> {
     this.disposed = true
-    const runs = [...this.live]
-    for (const run of runs) run.settle({ kind: 'abort', message: 'runtime disposed' })
-    await Promise.all(runs.map(run => run.finished))
+    this.shutdown ??= (async () => {
+      const runs = [...this.live]
+      for (const run of runs) run.settle({ kind: 'abort', message: 'runtime disposed' })
+      await Promise.all(runs.map(run => run.finished))
+      if (this.cleanupFailures.length > 0) throw new AggregateError(this.cleanupFailures, 'Code runtime cleanup failed')
+    })()
+    return this.shutdown
   }
 
   /**
@@ -375,6 +398,7 @@ export class WorkerThreadCodeRuntime extends CodeRuntime {
       })),
       maxOutputBytes: this.config.maxOutputBytes,
     }
+    executionRoots.add(this.executionRoot)
     const worker = new Worker(WORKER_PATH, {
       workerData: bootData,
       // Model code gets NO ambient environment — stronger than the scrubbed
@@ -395,6 +419,7 @@ export class WorkerThreadCodeRuntime extends CodeRuntime {
     return new Promise<CodeRunResult>((resolve) => {
       let settled = false
       const answered = new Set<number>()
+      const calls = new Set<Promise<void>>()
       const logs: string[] = []
       const strayLogs: string[] = []
       const output = new OutputLedger(this.config.maxOutputBytes)
@@ -427,16 +452,24 @@ export class WorkerThreadCodeRuntime extends CodeRuntime {
         clearInterval(eluTimer)
         clearTimeout(wallTimer)
         request.signal?.removeEventListener('abort', onAbort)
-        this.live.delete(live)
         // Let the poll phase deliver pipe bytes already queued independently
         // of the terminal port message before termination closes the streams.
         void new Promise<void>((resume) => { setImmediate(resume) }).then(async () => {
           const stdoutDrained = waitForPipeDrain(worker.stdout)
           const stderrDrained = waitForPipeDrain(worker.stderr)
           await Promise.all([worker.terminate(), stdoutDrained, stderrDrained])
+        }).then(async () => {
           const result = terminalOverride ?? (typeof finalize === 'function' ? finalize() : finalize)
-          finishResolve()
           resolve(result)
+          await Promise.all(calls)
+          this.live.delete(live)
+          finishResolve()
+        }, async (error: unknown) => {
+          this.cleanupFailures.push(error)
+          resolve(output.failure([...logs, ...strayLogs], { kind: 'exception', message: `worker cleanup failed: ${messageOf(error)}` }))
+          await Promise.all(calls)
+          this.live.delete(live)
+          finishResolve()
         })
       }
 
@@ -486,7 +519,7 @@ export class WorkerThreadCodeRuntime extends CodeRuntime {
           reply({ type: 'reply', id: message.id, ok: false, message: 'binding arguments must be lossless JSON' })
           return
         }
-        void (async () => {
+        const call = (async () => {
           try {
             const resolved = await fn(args)
             let value: CodeJsonValue | undefined
@@ -504,6 +537,8 @@ export class WorkerThreadCodeRuntime extends CodeRuntime {
             reply({ type: 'reply', id: message.id, ok: false, message: messageOf(error) })
           }
         })()
+        calls.add(call)
+        void call.then(() => { calls.delete(call) })
       }
 
       worker.on('message', (raw: unknown) => {

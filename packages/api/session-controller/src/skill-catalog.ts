@@ -78,6 +78,7 @@ export class SessionSkillCatalog extends TypertRemoteService {
       return {
         skills: skills.map(skill => ({
           name: skill.name,
+          ...skill.title === undefined ? {} : { title: skill.title },
           description: skill.description,
           ...skill.whenToUse === undefined ? {} : { whenToUse: skill.whenToUse },
           modelInvocable: skill.invocation.modelInvocable,

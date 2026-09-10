@@ -20,6 +20,8 @@ The `random` script entry performs a new weighted selection for every request. T
 
 The server reports wire facts only and does not classify retryability. Real-composition tests route it through `dsh-llm-deepseek`, `dsh-agent-loop`, and `dsh-llm-retry`: connection refusal, hard disconnect, partial reset, idle timeout, and a valid content-less completion recover under the existing default policy; clean partial EOF remains `STREAM_CLOSED` and is not retried by default. The package does not change those policies.
 
+Tool-call responses use fresh UUID-based IDs across requests and server restarts. Reusing a fixed ID makes separate calls collide in a continuing App session's tool projection. These identifiers are independent of the seed used to reproduce behavior selection.
+
 ## Verification
 
 Package tests exercise every request behavior, split UTF-8 request decoding, HTTP validation without script consumption, script exhaustion/repetition, stalled-connection teardown, CLI parsing and delay bounds, IPv6 base URLs, random seed reproducibility, weight validation, single-result telemetry, lifecycle cleanup, and the invariant companion under the per-file coverage gate. The retry integration suite proves exact request counts, numbered retry steps, request-body identity, failed partial-chunk isolation, semantic-empty recovery, clean-EOF classification, timeout recovery, true refused-connection recovery after delayed listener startup, and bounded exhaustion through the real HTTP/SSE adapter.

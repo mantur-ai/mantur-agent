@@ -73,6 +73,146 @@ async function service(): Promise<{ ctx: Context; subagents: SubagentRuntime }> 
 }
 
 describe('SubagentRuntime', () => {
+  it('joins holder disposal and asynchronous lifecycle notices after provider removal', async () => {
+    const { ctx, subagents } = await service()
+    const closeGate = Promise.withResolvers<undefined>()
+    const noticeGate = Promise.withResolvers<undefined>()
+    const noticeEntered = Promise.withResolvers<undefined>()
+    const provider = new StubProvider('shutdown')
+    const raw: SubagentRun = {
+      id: SessionId('shutdown-child'), localAgent: undefined,
+      result: Promise.resolve({ output: [], stopReason: 'completed' }),
+      dispose: async () => {},
+    }
+    const dispose = vi.fn(async () => { await closeGate.promise })
+    vi.spyOn(provider, 'start').mockResolvedValue({ ...raw, dispose })
+    const remove = subagents.registerProvider(provider)
+    // oxlint-disable-next-line typescript/no-misused-promises -- The emitter joins async listeners despite void typing.
+    ctx.on('subagent/end', async () => { noticeEntered.resolve(undefined); await noticeGate.promise })
+    const run = await subagents.start('shutdown', baseRequest())
+    await noticeEntered.promise
+    remove()
+    const stopping = subagents.stopForShutdown()
+    expect(subagents.stopForShutdown()).toBe(stopping)
+    let stopped = false
+    void stopping.then(() => { stopped = true })
+    try {
+      await expect(subagents.start('shutdown', baseRequest())).rejects.toMatchObject({ code: 'CANCELLED' })
+      expect(() => subagents.registerProvider(new StubProvider('new'))).toThrow('stopping for shutdown')
+      expect(dispose).toHaveBeenCalledTimes(1)
+      expect(run.dispose()).toBe(run.dispose())
+      closeGate.resolve(undefined)
+      await run.dispose()
+      expect(stopped).toBe(false)
+    } finally {
+      closeGate.resolve(undefined)
+      noticeGate.resolve(undefined)
+      await stopping
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('joins a late provider handle through rollback without publishing it', async () => {
+    const { ctx, subagents } = await service()
+    const allocation = Promise.withResolvers<SubagentRun>()
+    const closeGate = Promise.withResolvers<undefined>()
+    const closeEntered = Promise.withResolvers<undefined>()
+    const provider = new StubProvider('late')
+    const start = vi.spyOn(provider, 'start').mockReturnValue(allocation.promise)
+    subagents.registerProvider(provider)
+    const published = vi.fn()
+    ctx.on('subagent/start', published)
+    const creating = subagents.start('late', baseRequest()).catch((error: unknown) => error)
+    const raw: SubagentRun = {
+      id: SessionId('late-child'), localAgent: undefined,
+      result: Promise.resolve({ output: [], stopReason: 'aborted' }),
+      dispose: async () => { closeEntered.resolve(undefined); await closeGate.promise },
+    }
+    const stopping = subagents.stopForShutdown()
+    let stopped = false
+    void stopping.then(() => { stopped = true })
+    try {
+      expect(start.mock.calls[0]![0].signal.aborted).toBe(true)
+      allocation.resolve(raw)
+      await closeEntered.promise
+      await new Promise<void>(resolve => setImmediate(resolve))
+      expect(stopped).toBe(false)
+      expect(published).not.toHaveBeenCalled()
+      closeGate.resolve(undefined)
+      expect(await creating).toMatchObject({ code: 'CANCELLED' })
+    } finally {
+      allocation.resolve(raw)
+      closeGate.resolve(undefined)
+      await creating
+      await stopping
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it.each(['dispose', 'result', 'sync-notice', 'async-notice'] as const)('retains a removed run\'s %s failure', async (phase) => {
+    const { ctx, subagents } = await service()
+    const failure = new Error(`${phase} failed`)
+    const provider = new StubProvider('failure')
+    vi.spyOn(provider, 'start').mockImplementation(async () => ({
+      id: SessionId('failed-child'), localAgent: undefined,
+      result: phase === 'result' ? Promise.reject(failure) : Promise.resolve({ output: [], stopReason: 'completed' }),
+      dispose: async () => { if (phase === 'dispose') throw failure },
+    }))
+    subagents.registerProvider(provider)
+    if (phase === 'sync-notice') ctx.on('subagent/end', () => { throw failure })
+    // oxlint-disable-next-line typescript/no-misused-promises -- The emitter retains async notice failures separately.
+    if (phase === 'async-notice') ctx.on('subagent/end', () => Promise.reject(failure))
+    try {
+      const run = await subagents.start('failure', baseRequest())
+      await run.dispose().catch((error: unknown) => { expect(error).toBe(failure) })
+      await expect(subagents.stopForShutdown()).rejects.toMatchObject({ errors: expect.arrayContaining([failure]) as unknown })
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('joins a provider that reenters shutdown before returning its start promise', async () => {
+    const { ctx, subagents } = await service()
+    const provider = new StubProvider('reentrant')
+    const dispose = vi.fn(async () => {})
+    vi.spyOn(provider, 'start').mockImplementation(async () => {
+      void subagents.stopForShutdown()
+      return { id: SessionId('reentrant'), localAgent: undefined, result: Promise.resolve({ output: [], stopReason: 'aborted' }), dispose }
+    })
+    subagents.registerProvider(provider)
+    try {
+      await expect(subagents.start('reentrant', baseRequest())).rejects.toMatchObject({ code: 'CANCELLED' })
+      await subagents.stopForShutdown()
+      expect(dispose).toHaveBeenCalledTimes(1)
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it.each(['before', 'during'] as const)('retains a provider start failure %s shutdown and keeps removal silent', async (phase) => {
+    const { ctx, subagents } = await service()
+    const failed = Promise.withResolvers<SubagentRun>()
+    const provider = new StubProvider('pending-failure')
+    vi.spyOn(provider, 'start').mockReturnValue(failed.promise)
+    const remove = subagents.registerProvider(provider)
+    const removed = vi.fn()
+    ctx.on('subagent/provider-removed', removed)
+    const creating = subagents.start(provider.name, baseRequest()).catch((error: unknown) => error)
+    const stopping = phase === 'during' ? subagents.stopForShutdown() : undefined
+    const failure = new Error('provider rollback failed')
+    try {
+      failed.reject(failure)
+      expect(await creating).toBe(failure)
+      await expect(stopping ?? subagents.stopForShutdown()).rejects.toMatchObject({ errors: [failure] })
+      remove()
+      expect(removed).not.toHaveBeenCalled()
+    } finally {
+      failed.reject(failure)
+      await creating
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('registers, lists, looks up, starts, and removes providers', async () => {
     const { ctx, subagents } = await service()
     const added: string[] = []
@@ -119,6 +259,7 @@ describe('SubagentRuntime', () => {
 
     expect(provider.lastRequest).toEqual({
       ...request,
+      signal: expect.any(AbortSignal) as AbortSignal,
       descriptor: {
         version: SUBAGENT_DESCRIPTOR_VERSION,
         mode: 'one-shot',

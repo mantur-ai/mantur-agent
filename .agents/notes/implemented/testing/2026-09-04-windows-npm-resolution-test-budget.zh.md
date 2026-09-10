@@ -10,15 +10,15 @@ Status: implemented
 
 ## Decision
 
-三个预期成功的 npm 解析用例共用一个明确测试时限：Windows 为 30 秒，其他平台保留原来的 10 秒。测试仍要求成功生成 package lock、发生 registry metadata 请求、不请求 archive、得到预期 alias 布局，并隔离继承的 npm 配置。生产 benchmark 默认值与命令超时行为均不改变。
+三个预期成功的 npm 解析用例共用一个明确测试时限：Windows 为 60 秒，其他平台保留原来的 10 秒。测试仍要求成功生成 package lock、发生 registry metadata 请求、不请求 archive、得到预期 alias 布局，并隔离继承的 npm 配置。生产 benchmark 默认值与命令超时行为均不改变。
 
-Windows 时限仍低于 coverage lane 的单测试 90 秒预算。它让真实 npm 子进程有时间正常完成并释放临时文件，同时不会把这组行为测试变成 resolver 速度检查。
+Windows 时限比 coverage lane 的单测试 90 秒预算少 30 秒，让 teardown 能在相同的测试预算内完成。它让真实 npm 子进程有时间正常完成并释放临时文件，同时不会把这组行为测试变成 resolver 速度检查。
 
 ## Verification
 
 - `pnpm exec vitest run scripts/benchmark-npm-resolution.spec.ts`
 - `pnpm run doc-sync`
-- 拉取请求中具有阻断作用的 `windows node 24 / coverage` 任务会执行 Windows 专属的 30 秒路径。
+- 拉取请求中具有阻断作用的 `windows node 24 / coverage` 任务会执行 Windows 专属的 60 秒路径。
 
 ## Alternatives considered
 
@@ -28,4 +28,4 @@ Windows 时限仍低于 coverage lane 的单测试 90 秒预算。它让真实 n
 
 ## Consequences
 
-Windows runner 争抢可能延长这三个测试，但不会再让无关拉取请求失败。真正卡住的 npm 进程仍会在 30 秒后失败，非 Windows 平台则保持原有 10 秒限制。
+Windows runner 争抢可能延长这三个测试，但不会再让无关拉取请求失败。真正卡住的 npm 进程仍会在 60 秒后失败，非 Windows 平台则保持原有 10 秒限制。

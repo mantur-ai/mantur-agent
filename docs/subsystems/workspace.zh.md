@@ -2,7 +2,7 @@
 
 [English](workspace.md) | 中文
 
-工作区（workspace）是用户工作目录的持久记录：一个建立在规范路径之上的稳定 id、一个显示标题，以及归属于它的会话的有序账本。该子系统是单个包（package）（[dsh-workspace](../../packages/workspace/workspace)，`ctx.workspaceRegistry`）——一项宿主侧可选能力，不属于 agent loop（智能体循环）主干，并且对模型不可见（没有工具、没有提示词文本、没有会话事件）。它通过[存储领域数据形式](storage.zh.md)存储自己的记录，并对照 [`SessionHeader.cwd`](persistence.zh.md#sessionheader--metadata-beside-the-log) 校验会话成员资格，因此 `storageDomain` 与 `sessionPersistence` 是必需的启动依赖：持久化这一依赖不可用时，插件保持 pending，而不是把这种不可用误当作空历史。设计记录：[领域 KV 存储 Agent Note（agent 决策记录）](../../.agents/notes/proposed/architecture/2026-07-24-domain-kv-storage-and-workspace.zh.md)；引导与 GUI 顺序：[Workspace UI 产品流程 Agent Note](../../.agents/notes/implemented/feature/2026-07-25-workspace-ui-product-flow.zh.md)。
+工作区（workspace）是用户工作目录的持久记录：一个建立在规范路径之上的稳定 id、一个显示标题，以及归属于它的会话的有序账本。[dsh-workspace](../../packages/workspace/workspace) 拥有 `ctx.workspaceRegistry`——一项宿主侧可选能力，不属于 agent loop（智能体循环）主干，并且对模型不可见（没有工具、没有提示词文本、没有会话事件）。它通过[存储领域数据形式](storage.zh.md)存储自己的记录，并对照 [`SessionHeader.cwd`](persistence.zh.md#sessionheader--metadata-beside-the-log) 校验会话成员资格，因此 `storageDomain` 与 `sessionPersistence` 是必需的启动依赖：持久化这一依赖不可用时，插件保持 pending，而不是把这种不可用误当作空历史。设计记录：[领域 KV 存储 Agent Note（agent 决策记录）](../../.agents/notes/proposed/architecture/2026-07-24-domain-kv-storage-and-workspace.zh.md)；引导与 GUI 顺序：[Workspace UI 产品流程 Agent Note](../../.agents/notes/implemented/feature/2026-07-25-workspace-ui-product-flow.zh.md)。
 
 源码：[`packages/workspace/workspace/src/types.ts`](../../packages/workspace/workspace/src/types.ts)
 
@@ -123,6 +123,10 @@ interface Workspace {
 
 ## 消费方
 
+[目录选择服务](../../packages/host/directory-picker/README.zh.md)为 Host 释放提供原生能力专有的 `stopForShutdown()`。后端冻结新请求并等待所持有的选择器进程和输出读取结束；它不通过 Remote 暴露停止操作，也不扩展浏览能力。
+
+[漫途项目准备](../../packages/workspace/mantur-projects/README.zh.md)拥有 `ctx.manturProjects`。其品牌化 `ProjectCreationId` 是由原生草稿保留的 UUID。`ProjectRootSettings` 区分未配置根目录与桌面或自定义绝对根目录。`PreparedProject` 返回 `workspaceId`、确定的 `sessionId` 和规范目录 `path`，但不创建 Session。持久预留记录在重试间固定初始本地化标题和路径；目录冲突、删除或替换均明确失败。[类型](../../packages/workspace/mantur-projects/src/types.ts)定义浏览器安全的返回值。
+
 [`dsh-workspace-controller`](../../packages/api/workspace-controller) 经 `ctx.workspaceRegistry` 向 GUI 客户端提供工作区 CRUD，[`dsh-session-controller`](../../packages/api/session-controller) 执行上文「先建会话再 attach」的流程。[dsh-agent-instructions](../../packages/context/agent-instructions) 尽管名字如此，却**不是**消费方：它在 agent 自己的 cwd 下发现 AGENTS.md 风格的指令文件，从不触碰 `ctx.workspaceRegistry`——两者共用的这个词指的是用户的工作目录，而非本注册表的实体。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
@@ -182,6 +186,100 @@ Host service backing the generated `ctx.remote.directoryPicker` namespace. The s
 ```
 
 Source: [`packages/api/workspace-controller/src/directory-picker.ts`](../../packages/api/workspace-controller/src/directory-picker.ts)
+
+<a id="ctxmanturediting--manturediting"></a>
+
+### `ctx.manturEditing` — `ManturEditing`
+
+Runtime and tools share the exact Agent identity resolved by the authenticated Remote gateway.
+
+```ts cordis-catalog
+/**
+ * Refuse new opens and MCP executions, then drain every acquired or opening editor before releasing its scope.
+ * The Host must retain accepted execution signals, its model and attachment services, HTTP and editor windows until completion.
+ * @returns The retained shutdown result; failed or unconfirmed work rejects and prevents installation.
+ */
+stopForShutdown(): Promise<void>
+
+/**
+ * Open the Session's workspace and connect its tools only to that Agent.
+ * @param agent - Live or resumed Agent resolved by the gateway from the Session id.
+ * @param parentOrigin - Mantur browser origin, checked against this Host's listening port.
+ * @returns Loopback editor address and canonical Session editing directory.
+ */
+@Remote('open') async open(agent: Agent, parentOrigin: string): Promise<EditingWorkspace>
+```
+
+Types: [Agent](core.zh.md)
+
+Source: [`packages/client/ui-mantur-editing/src/index.ts`](../../packages/client/ui-mantur-editing/src/index.ts)
+
+<a id="ctxmanturprojects--manturprojectcontroller"></a>
+
+### `ctx.manturProjects` — `ManturProjectController`
+
+Prepare one project per first-send identity, without creating or sending a Session.
+
+```ts cordis-catalog
+/**
+ * Read the configured project location without creating directories.
+ * @returns the selected root or an explicit unconfigured state.
+ */
+@Remote settings(): ProjectRootSettings
+
+/**
+ * Select the root for future projects; existing directories remain untouched.
+ * @param path - absolute project root selected by the user.
+ * @returns the durable root selection.
+ */
+@Remote async setRoot(path: string): Promise<ProjectRootSettings>
+
+/**
+ * Create or resume the same first-send project. No Session or message is created here.
+ * @param creationId - UUID retained by the client until draft transfer succeeds.
+ * @param title - localized initial Workspace title, retained for this creation identity.
+ * @returns its durable Workspace and deterministic Session identity.
+ */
+@Remote prepare(creationId: ProjectCreationId, title: string): Promise<PreparedProject>
+```
+
+Source: [`packages/workspace/mantur-projects/src/index.ts`](../../packages/workspace/mantur-projects/src/index.ts)
+
+<a id="ctxmanturscript--manturscript"></a>
+
+### `ctx.manturScript` — `ManturScript`
+
+Remote operations never resolve paths against another Session or process cwd.
+
+```ts cordis-catalog
+/**
+ * List the selected project folder without recursive discovery.
+ * @param agent - Owning Session.
+ * @param directory - Project-relative or absolute folder.
+ * @returns Direct script files and folders.
+ */
+@Remote('list') async list(agent: Agent, directory: string): Promise<ScriptEntry[]>
+
+/**
+ * Read a bounded UTF-8 document from one observed file generation.
+ * @param agent - Owning Session.
+ * @param path - Script file within its project.
+ * @returns Consistently observed text and version.
+ */
+@Remote('read') async read(agent: Agent, path: string): Promise<ScriptDocument>
+
+/**
+ * Save a draft only while its observed generation remains current.
+ * @param agent - Owning Session.
+ * @param request - Versioned full draft.
+ * @returns Written text and new generation.
+ */
+@Remote('save') async save(agent: Agent, request: ScriptWrite): Promise<ScriptDocument>
+```
+
+Types: [Agent](core.zh.md)
+
+Source: [`packages/client/ui-mantur-script/src/index.ts`](../../packages/client/ui-mantur-script/src/index.ts)
 
 <a id="ctxworkspacecontroller--workspacecontroller"></a>
 

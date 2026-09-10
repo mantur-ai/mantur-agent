@@ -25,11 +25,11 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Type `/` in the composer and pick a skill from the suggestions, or type `/name` directly; the sent message carries the literal text, and the host loads the skill the same way for a menu pick or a hand-typed token. A name shared with a host command still resolves to the command — adjudication claims the line client-side before it ever becomes a prompt.
+Type `/` in the composer and pick a skill from the suggestions, or type `/name` directly. A menu pick inserts a skill chip whose label uses `title` when available, while its clipboard, persistence, and model projections remain the literal `/name`; a hand-typed token sends the same literal text. The host therefore loads the skill identically through either entry point. A name shared with a host command still resolves to the command — adjudication claims the line client-side before it ever becomes a prompt.
 
 ### What the source offers
 
-Ordinary-session candidates come from the `skills/list` Remote; the host serves every user-invocable skill, and a `modelInvocable: false` entry (a `disable-model-invocation` skill, whose only entry point is this path) wears the user-only marker as a description prefix in the active language. Results filter by `startsWith(query)`. A failed `skills/list` call is logged and folded into a silent menu-group drop — the menu shows only pending/ready states.
+Ordinary-session candidates come from the `skills/list` Remote; the host serves every user-invocable skill, and a `modelInvocable: false` entry (a `disable-model-invocation` skill, whose only entry point is this path) wears the user-only marker as a description prefix in the active language. The menu displays a skill's `title` when present, searches both `title` and canonical `name`, and still inserts the literal `/name ` required for invocation. A failed `skills/list` call is logged and folded into a silent menu-group drop — the menu shows only pending/ready states.
 
 ### The skill tool row
 
@@ -43,7 +43,7 @@ A collapsed row renders the skill glyph, `Skill` title, and requested skill name
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The source implements no adjudication hooks and no reference codec: the pick lands literal text and the prompt ships the same literal, so determinism lives host-side ([slash pipeline note](../../../.agents/notes/implemented/architecture/2026-07-25-web-input-machine-and-slash-pipeline.md)).
+The source implements no adjudication hooks. Its reference codec projects a picked chip back to literal `/name` text, so invocation determinism remains host-side ([slash pipeline note](../../../.agents/notes/implemented/architecture/2026-07-25-web-input-machine-and-slash-pipeline.md)).
 
 ### Candidate flow
 
@@ -94,7 +94,7 @@ Append-only: the injected message lands after the reusable history prefix. This 
 These limits define where the reference and the row fall back to generic behavior; they are current package constraints.
 
 - **Result-only history pages use the generic row** — keyed dispatch needs the paired call in the runtime window; pagination that leaves the call outside has no tool identity. This client presentation feature does not extend the history wire contract to recover it.
-- **Text is the truth** — the reference is plain draft text; a hand-typed identical token is the same reference, and the host gesture boundary judges the sent text, not the menu interaction. Chip visuals derive from the lexicon scan; no occurrence identity, position tracking, or structured reference payload exists on the prompt wire.
+- **Text is the truth** — a picked chip serializes to the same literal `/name` as a hand-typed token, and the host gesture boundary judges the sent text, not the menu interaction. Hand-typed chip visuals derive from the lexicon scan; the prompt wire carries no structured reference payload.
 - **A menu opened before the prewarm settles** shows no skill candidates for that keystroke; the next keystroke re-polls the settled cache.
 
 <a id="dev-note"></a>

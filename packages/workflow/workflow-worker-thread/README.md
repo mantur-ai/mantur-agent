@@ -11,6 +11,8 @@ English | [中文](README.zh.md)
 
 `dsh-workflow-worker-thread` implements the workflow engine with one Node worker thread per run: the orchestration script executes inside a fresh worker while its `agent()` calls reach host subagents over a typed host/worker protocol. A synchronous script loop cannot block the harness event loop, and a script that ignores cancellation can be terminated with its worker. The isolation is containment, not a security boundary — a model-written script has the same trust premise as the model's existing bash access, and escaping the `node:vm` context recovers the worker's process authority. Mount this engine to give `ctx.workflowEngine` a concrete implementation; a composition that loads it with `dsh-tool-workflow` gives the model the `workflow` tool.
 
+The engine’s `stopForShutdown()` freezes new runs and waits for thread termination, late child starts, and child disposal beyond the ordinary disposal grace. Cleanup failures remain available after completed runs leave the engine’s ownership set. Ordinary disposal still follows its documented bounded behavior. This result covers the engine’s resources; Host shutdown must separately prove other producers and durable session writes.
+
 ## Table of Contents
 
 - [Use this package](#use-this-package)

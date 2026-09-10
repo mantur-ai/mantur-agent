@@ -20,11 +20,21 @@
     },
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./src/*": "./src/*",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./update-protocol": {
+      "types": "./lib/types/update-protocol.d.ts",
+      "default": "./lib/update-protocol.js"
+    },
+    "./update-shutdown": {
+      "types": "./lib/types/update-shutdown.d.ts",
+      "default": "./lib/update-shutdown.js"
+    }
   },
   "files": [
     "lib/index.js",
     "cordis.patch.yml",
+    "lib/update-protocol.js",
+    "lib/update-shutdown.js",
     "lib/types/**/*.d.ts"
   ],
   "license": "MIT",
@@ -38,18 +48,45 @@
     "@deepseek-ai/dsh-authorization-manturhub": "workspace:^",
     "@deepseek-ai/dsh-client-ui-brand-mantur": "workspace:^",
     "@deepseek-ai/dsh-client-ui-mantur-account": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-mantur-assets": "workspace:^",
     "@deepseek-ai/dsh-client-ui-mantur-navigation": "workspace:^",
     "@deepseek-ai/dsh-manturhub-marketplace": "workspace:^",
+    "@deepseek-ai/dsh-mantur-projects": "workspace:^",
     "@deepseek-ai/dsh-system-prompt": "workspace:^",
-    "@deepseek-ai/schemastery": "workspace:^"
+    "@deepseek-ai/schemastery": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-mantur-editing": "workspace:^",
+    "@deepseek-ai/dsh-agent": "workspace:^",
+    "@deepseek-ai/dsh-agent-loop": "workspace:^",
+    "@deepseek-ai/dsh-agent-presets": "workspace:^",
+    "@deepseek-ai/dsh-app-boot": "workspace:^",
+    "@deepseek-ai/dsh-brand": "workspace:^",
+    "@deepseek-ai/dsh-host-directory-picker": "workspace:^",
+    "@deepseek-ai/cordis-plugin-hmr": "workspace:^",
+    "@deepseek-ai/cordis-plugin-loader": "workspace:^",
+    "@deepseek-ai/dsh-llm": "workspace:^",
+    "@deepseek-ai/dsh-code-runtime-worker-thread": "workspace:^",
+    "@deepseek-ai/dsh-cordis-host-runner": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-mantur-script": "workspace:^"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:^"
   },
   "devDependencies": {
     "@deepseek-ai/cordis-plugin-include": "workspace:^",
+    "@deepseek-ai/cordis-plugin-loader": "workspace:^",
     "@deepseek-ai/dsh-system-prompt": "workspace:^",
     "@deepseek-ai/cordis": "workspace:^",
-    "js-yaml": "^4.1.1"
+    "js-yaml": "^4.1.1",
+    "@deepseek-ai/dsh-session": "workspace:^",
+    "@deepseek-ai/dsh-session-projection": "workspace:^",
+    "@deepseek-ai/dsh-tools": "workspace:^",
+    "@deepseek-ai/dsh-session-persistence-jsonl": "workspace:^",
+    "@deepseek-ai/dsh-typert-registry": "workspace:^",
+    "@deepseek-ai/dsh-api-gateway": "workspace:^",
+    "zod": "^4.4.3",
+    "@deepseek-ai/dsh-typert-protocol": "workspace:^",
+    "@deepseek-ai/cordis-plugin-group": "workspace:^",
+    "@deepseek-ai/dsh-session-telemetry-otel": "workspace:^",
+    "@deepseek-ai/dsh-attachment-local": "workspace:^"
   }
 }

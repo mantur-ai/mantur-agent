@@ -40,6 +40,89 @@ async function harness(options?: { pool?: MemoryMediaPool; config?: Partial<Conf
   return { ctx, backend, facility, changes }
 }
 
+describe('Host shutdown', () => {
+  it('keeps closeAll reusable and freezes existing domains during Host shutdown', async () => {
+    const { ctx, facility } = await harness()
+    try {
+      await facility.open(spec)
+      await facility.closeAll()
+      const reopened = await facility.open(spec)
+      const stopping = facility.stopForShutdown()
+      await expect(reopened.table('items').put('late', { label: 'late', count: 1 })).rejects.toThrow()
+      await stopping
+      await expect(facility.open(spec)).rejects.toThrow('admission is closed')
+    } finally {
+      await facility.closeAll()
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it.each([false, true])('joins late domain allocation and unit close (failure: %s)', async (fails) => {
+    const { ctx, backend, facility } = await harness()
+    const unit = await backend.kv.open(descriptorOf(spec))
+    const allocated = Promise.withResolvers<undefined>()
+    const releaseOpen = Promise.withResolvers<undefined>()
+    const closing = Promise.withResolvers<undefined>()
+    const releaseClose = Promise.withResolvers<undefined>()
+    const failure = new Error('unit close failed')
+    const originalClose = unit.close.bind(unit)
+    vi.spyOn(backend.kv, 'open').mockImplementation(async () => {
+      allocated.resolve(undefined)
+      await releaseOpen.promise
+      return unit
+    })
+    const close = vi.spyOn(unit, 'close').mockImplementation(async () => {
+      closing.resolve(undefined)
+      await releaseClose.promise
+      if (fails) throw failure
+      await originalClose()
+    })
+    const opening = facility.open(spec)
+    await allocated.promise
+    const stopping = facility.stopForShutdown()
+    expect(facility.stopForShutdown()).toBe(stopping)
+    let stopped = false
+    const result = stopping.then(() => { stopped = true }, (error: unknown) => { stopped = true; return error })
+    try {
+      await expect(facility.open(bareSpec)).rejects.toThrow('admission is closed')
+      await new Promise<void>(resolve => setImmediate(resolve))
+      expect(stopped).toBe(false)
+      releaseOpen.resolve(undefined)
+      const domain = await opening
+      await closing.promise
+      await expect(domain.table('items').put('late', { label: 'late', count: 1 })).rejects.toThrow()
+      expect(stopped).toBe(false)
+      releaseClose.resolve(undefined)
+      if (fails) expect(await result).toMatchObject({ errors: [failure] })
+      else expect(await result).toBeUndefined()
+      expect(close).toHaveBeenCalledTimes(1)
+    } finally {
+      releaseOpen.resolve(undefined)
+      releaseClose.resolve(undefined)
+      await Promise.allSettled([opening, stopping])
+      await originalClose()
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('retains failed allocation rollback after the open caller receives its error', async () => {
+    const { ctx, backend, facility } = await harness()
+    const unit = await backend.kv.open(descriptorOf(spec))
+    const failure = new Error('allocation rollback failed')
+    const originalClose = unit.close.bind(unit)
+    vi.spyOn(backend.kv, 'open').mockResolvedValue(unit)
+    vi.spyOn(unit, 'loadAll').mockRejectedValue(new Error('load failed'))
+    vi.spyOn(unit, 'close').mockRejectedValue(failure)
+    try {
+      await expect(facility.open(spec)).rejects.toBe(failure)
+      await expect(facility.stopForShutdown()).rejects.toMatchObject({ errors: [failure] })
+    } finally {
+      await originalClose()
+      await ctx.fiber.dispose()
+    }
+  })
+})
+
 describe('defineDomain', () => {
   it('rejects invalid names and versions loudly', () => {
     expect(() => defineDomain({ name: 'Bad-Name', version: 1, tables: {} })).toThrow(/must match/)

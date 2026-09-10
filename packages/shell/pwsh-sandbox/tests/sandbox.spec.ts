@@ -6,6 +6,7 @@
  * pwsh-local's suites); the helpers block is pure and always runs.
  */
 
+import CommandScopes from '@deepseek-ai/dsh-command-scopes'
 import { spawnSync } from 'node:child_process'
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -69,6 +70,7 @@ async function setup(
   await ctx.plugin(FakeSandboxProvider)
   await ctx.plugin(SandboxPolicyService, { mode: 'workspace-write', workspaceRoot: spillDir })
   await ctx.plugin(subprocess)
+  await ctx.plugin(CommandScopes, { identity: 'none' })
   if (ctx.subprocess instanceof LocalSubprocessRuntime) {
     ctx.subprocess.internals = { spillDir }
   }
@@ -261,13 +263,13 @@ describe.skipIf(!pwshAvailable())('SandboxPwshExecutor', () => {
       denialSignatures: [],
       runnerFailureRules: [{ fatalSignatures: ['fake-runner: '] }],
     }), throwingSubprocessRuntime(attributable))
-    expect(() => closed.start(closed.resolve({ command: 'echo never', sandboxPolicy: RO })))
-      .toThrow(SandboxUnavailableError)
+    await expect(closed.start(closed.resolve({ command: 'echo never', sandboxPolicy: RO })))
+      .rejects.toThrow(SandboxUnavailableError)
 
     const foreign = Object.assign(new Error('sync-emfile-start'), { code: 'EMFILE', syscall: 'spawn', path: 'node' })
     const { executor: passthroughError } = await setup(undefined, throwingSubprocessRuntime(foreign))
-    expect(() => passthroughError.start(passthroughError.resolve({ command: 'echo never', sandboxPolicy: RO })))
-      .toThrow('sync-emfile-start')
+    await expect(passthroughError.start(passthroughError.resolve({ command: 'echo never', sandboxPolicy: RO })))
+      .rejects.toThrow('sync-emfile-start')
   }, 30_000)
 
   it('a runner that REFUSES at runtime (fatal signature, nonzero exit) fails closed too', async () => {
@@ -283,7 +285,7 @@ describe.skipIf(!pwshAvailable())('SandboxPwshExecutor', () => {
 
   it('background confined runs stamp clean facts at settlement', async () => {
     const { executor } = await setup()
-    const clean = executor.start(executor.resolve({ command: 'echo background-ok', sandboxPolicy: RO }))
+    const clean = await executor.start(executor.resolve({ command: 'echo background-ok', sandboxPolicy: RO }))
     await clean.done
     expect(clean.sandbox).toEqual({ mode: 'read-only', denied: false, enforcement: 'full' })
   }, 30_000)
@@ -292,7 +294,7 @@ describe.skipIf(!pwshAvailable())('SandboxPwshExecutor', () => {
   // coverage lives in tests/acl.e2e.ts.
   it.skipIf(process.platform === 'win32')('background denied writes stamp denied facts at settlement', async () => {
     const { executor } = await setup()
-    const denied = executor.start(executor.resolve({
+    const denied = await executor.start(executor.resolve({
       command: deniedWriteCommand,
       sandboxPolicy: RO,
     }))
@@ -307,7 +309,7 @@ describe.skipIf(!pwshAvailable())('SandboxPwshExecutor', () => {
       denialSignatures: [],
       runnerFailureRules: [{ fatalSignatures: ['fake-runner: '] }],
     }))
-    const proc = executor.start(executor.resolve({ command: 'echo never', sandboxPolicy: RO }))
+    const proc = await executor.start(executor.resolve({ command: 'echo never', sandboxPolicy: RO }))
     await proc.done
     expect(proc.sandbox).toEqual({ mode: 'read-only', denied: false, enforcement: 'full', runnerFailed: true })
     // The failure note surfaces through the read path.
@@ -317,7 +319,7 @@ describe.skipIf(!pwshAvailable())('SandboxPwshExecutor', () => {
 
   it('danger-full-access background runs bypass confine and carry no facts', async () => {
     const { executor, calls } = await setup()
-    const proc = executor.start(executor.resolve({
+    const proc = await executor.start(executor.resolve({
       command: 'echo full-bg',
       sandboxPolicy: { mode: 'danger-full-access', workspaceRoot: '/ws' },
     }))

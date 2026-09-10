@@ -29,6 +29,8 @@ Compose this package through [`dsh-mantur-app`](../../bundle/mantur-app/README.m
 
 The list endpoint accepts the deployed `{ skills }` envelope and the CLI-compatible raw array. Detail accepts a direct Skill or `{ skill }`. Entries with `kind: suite` are excluded; a missing `kind` means `skill`.
 
+The offline `bundledSkillDir` catalog reads only the App resource manifest. Exact name, version and content digest identify a bundle independently of user or project copies. Missing identities, changed files, invalid instructions and read-limit violations reject loading without online substitution. The Host verifies a draft reference before serialization and verifies the resource again before instruction injection; neither operation requests account state or writes user Skill directories.
+
 -----
 
 <a id="understand-installation-safety"></a>
@@ -54,11 +56,19 @@ Installer state stores content and bundle SHA-256 values outside the discoverabl
 <a id="model-experience"></a>
 ## Model Experience
 
-Indirectly, through the existing filesystem provider that discovers a committed Skill for later catalog tool output.
+### Explicit App Skill invocation
+
+#### What the model sees
+
+A direct user `/mantur-builtin:<name>@<version>#<digest>` reference injects verified instructions using the existing [`skill_content` rendering](../skill/README.md). The durable `skill-invocation` source includes `bundled.version` and `bundled.digest`; injected instructions cannot themselves trigger another user gesture. Ordinary `/name` and model-selected Skills keep registry resolution.
+
+#### Token effect
+
+Each selected App Skill adds its complete instruction body once per claimed user message batch. Homepage discovery and reference selection alone add no model context.
 
 #### KV Cache effect
 
-Stable until installation commits a new Skill directory; later catalog tool output can then include that Skill.
+The verified body is appended as durable instructions. Earlier history remains intact; selecting another App version adds different instructions only through a new explicit reference. A missing version is rejected rather than replaced during a running request.
 
 ## Known Limitations and Deferred Work
 

@@ -18,6 +18,7 @@ import type { ConfinedArgv, SandboxPolicy } from '@deepseek-ai/dsh-sandbox'
 import SandboxPolicyService from '@deepseek-ai/dsh-sandbox-policy'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
+import CommandScopes from '@deepseek-ai/dsh-command-scopes'
 import * as TerminalLocal from '@deepseek-ai/dsh-terminal-bash'
 import * as ToolPty from '@deepseek-ai/dsh-tool-terminal'
 
@@ -76,6 +77,9 @@ suite('terminal real Loader composition through cordis.yml', () => {
       '    mode: danger-full-access',
       `    workspaceRoot: ${JSON.stringify(root)}`,
       "- name: '@deepseek-ai/dsh-subprocess-local'",
+      "- name: '@deepseek-ai/dsh-command-scopes'",
+      '  config:',
+      '    identity: none',
       "- name: '@deepseek-ai/dsh-terminal-bash'",
       '  config:',
       '    pollIntervalMs: 10',
@@ -101,6 +105,7 @@ suite('terminal real Loader composition through cordis.yml', () => {
       ['@deepseek-ai/dsh-session-projection', SessionProjectionRegistry],
       ['@deepseek-ai/dsh-sandbox-policy', SandboxPolicyService],
       ['@deepseek-ai/dsh-subprocess-local', LocalSubprocessRuntime],
+      ['@deepseek-ai/dsh-command-scopes', CommandScopes],
       ['@deepseek-ai/dsh-terminal-bash', TerminalLocal],
       ['@deepseek-ai/dsh-tool-terminal', ToolPty],
     ])

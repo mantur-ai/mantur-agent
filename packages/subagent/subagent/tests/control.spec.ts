@@ -147,6 +147,57 @@ describe('subagent catalog Remote', () => {
 })
 
 describe('subagent prompt Remote', () => {
+  it.each([false, true])('joins admitted image storage during shutdown (storage failure: %s)', async (fails) => {
+    const { ctx, subagents } = await bench({ [PARENT]: { status: 'idle' } })
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const failure = new Error('attachment write failed')
+    const saveImages = vi.fn(async () => {
+      entered.resolve(undefined)
+      await release.promise
+      if (fails) throw failure
+      return [IMAGE_REF]
+    })
+    ctx.provide('attachments', { saveImages } as never)
+    const prompting = subagents.prompt({
+      ...promptRequest(),
+      content: [{ type: 'image', mediaType: 'image/png', data: 'aGk=' }],
+    }, signal).catch((error: unknown) => error)
+    await entered.promise
+    let stopped = false
+    const stopping = subagents.stopForShutdown().then(
+      () => { stopped = true; return undefined },
+      (error: unknown) => { stopped = true; return error },
+    )
+    try {
+      await new Promise<void>(resolve => setImmediate(resolve))
+      expect(stopped).toBe(false)
+      release.resolve(undefined)
+      expect(await prompting).toMatchObject({ code: fails ? 'gateway/internal' : 'gateway/cancelled' })
+      if (fails) expect(await stopping).toMatchObject({ errors: [failure] })
+      else expect(await stopping).toBeUndefined()
+    } finally {
+      release.resolve(undefined)
+      await Promise.all([prompting, stopping])
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('refuses an image prompt after shutdown before touching attachment storage', async () => {
+    const { ctx, subagents } = await bench({ [PARENT]: { status: 'idle' } })
+    const saveImages = vi.fn(async () => [IMAGE_REF])
+    ctx.provide('attachments', { saveImages } as never)
+    await subagents.stopForShutdown()
+    try {
+      await expect(subagents.prompt({
+        ...promptRequest(), content: [{ type: 'image', mediaType: 'image/png', data: 'aGk=' }],
+      }, signal)).rejects.toMatchObject({ code: 'gateway/cancelled' })
+      expect(saveImages).not.toHaveBeenCalled()
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('rejects empty parent and child ids before delivery', async () => {
     const { subagents } = await bench({ [PARENT]: { status: 'idle' } })
     const delivery = promptDelivery(subagents)

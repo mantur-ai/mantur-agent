@@ -54,6 +54,8 @@ interface TrackedTask {
   reported: boolean
   /** Resolves once the terminal snapshot is recorded and listeners notified. */
   settled: Promise<void>
+  /** Asynchronous completion notices that must finish before shutdown releases this owner. */
+  notices: Set<Promise<void>>
   /** Resolver for {@link settled}, called by the first effective settlement. */
   markSettled: () => void
   /** Live waits; settlement with a waiter marks the job reported. */
@@ -115,6 +117,9 @@ export class LocalJobRegistry extends JobRegistry {
    */
   private readonly layers = new ScopedLayers<JobLayer>(() => new JobLayer(), () => {})
   private listenersClosed = false
+  private shutdown: Promise<void> | undefined
+  private readonly pendingWork = new Set<Promise<void>>()
+  private readonly cleanupFailures: unknown[] = []
   /** Owner agents with attached scope cleanup, mapped to the exact disposer. */
   private ownerCleanups = new Map<Agent, () => Promise<void> | void>()
   /** Service context used by detached settlement continuations and teardown. */
@@ -128,7 +133,28 @@ export class LocalJobRegistry extends JobRegistry {
     ctx.effect(() => () => this.disposeAll(), 'jobs teardown')
   }
 
+  /**
+   * Freeze new jobs and join producer resource release and completion listeners without cancellation.
+   * Other owners must stop local work; remote work is not cancelled by this registry.
+   * @returns one shared completion; rejects for retained producer, listener, or cleanup failures.
+   */
+  stopForShutdown(): Promise<void> {
+    if (this.shutdown !== undefined) return this.shutdown
+    const completion = Promise.withResolvers<void>()
+    this.shutdown = completion.promise
+    for (const job of this.store.values()) job.reported = true
+    const join = async (): Promise<void> => {
+      // A synchronous run hook can request shutdown before returning its owned promise.
+      await Promise.resolve()
+      while (this.pendingWork.size > 0) await Promise.all([...this.pendingWork])
+      if (this.cleanupFailures.length > 0) throw new AggregateError(this.cleanupFailures, 'background job shutdown failed')
+    }
+    join().then(completion.resolve, completion.reject)
+    return completion.promise
+  }
+
   start(spec: JobStart): JobId {
+    if (this.shutdown !== undefined) throw new Error('background job admission is closed for shutdown')
     if (!this.servesOwner(spec.owner)) {
       throw new Error('background jobs unavailable: no job controller serves this agent (load @deepseek-ai/dsh-tool-jobs in its composition)')
     }
@@ -169,24 +195,34 @@ export class LocalJobRegistry extends JobRegistry {
       finishedAt: undefined,
       reported: false,
       settled,
+      notices: new Set(),
       markSettled,
       waiters: 0,
       waitResolvers: new Set(),
     }
     this.store.set(id, job)
 
-    void hooks.done.then(
+    const producer = hooks.done.then(
       (outcome) => { this.settle(job, outcome) },
       (error: unknown) => {
+        this.cleanupFailures.push(error)
         // Contain a producer contract violation (`done` rejected) so cleanup and waiters cannot hang.
         this.selfCtx.logger.warn(`jobs: job ${job.id} producer done promise rejected (producer contract violation): ${String(error)}`)
         this.settle(job, { status: 'failed', detail: String(error) })
       },
     )
+    this.trackCompletion(producer)
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- The synchronous producer run hook can reenter stopForShutdown.
+    if (this.shutdown !== undefined) job.reported = true
     // Registration is complete and cannot fail from here, so the visible set
     // has genuinely changed.
     this.notifyChanged(job.owner)
     return id
+  }
+
+  private trackCompletion(work: Promise<void>): void {
+    this.pendingWork.add(work)
+    void work.then(() => { this.pendingWork.delete(work) })
   }
 
   list(caller?: Agent): JobSnapshot[] {
@@ -400,6 +436,7 @@ export class LocalJobRegistry extends JobRegistry {
       try {
         listener(owner)
       } catch (error: unknown) {
+        this.cleanupFailures.push(error)
         this.selfCtx.logger.warn(`jobs: onJobsChanged listener threw: ${String(error)}`)
       }
     }
@@ -430,10 +467,15 @@ export class LocalJobRegistry extends JobRegistry {
     for (const listener of this.listenersFor(job.owner)) {
       try {
         const returned = listener(snapshot, job.owner)
-        void Promise.resolve(returned).catch((error: unknown) => {
+        const notice = Promise.resolve(returned).catch((error: unknown) => {
+          this.cleanupFailures.push(error)
           this.selfCtx.logger.warn(`jobs: onJobDone listener rejected for ${job.id}: ${String(error)}`)
         })
+        job.notices.add(notice)
+        void notice.then(() => { job.notices.delete(notice) })
+        this.trackCompletion(notice)
       } catch (error: unknown) {
+        this.cleanupFailures.push(error)
         this.selfCtx.logger.warn(`jobs: onJobDone listener threw for ${job.id}: ${String(error)}`)
       }
     }
@@ -466,8 +508,9 @@ export class LocalJobRegistry extends JobRegistry {
   /** Cancel, await terminal records, and drop every job owned by one exact agent lifecycle. */
   private async disposeOwned(owner: Agent): Promise<void> {
     const owned = [...this.store.values()].filter(job => job.owner === owner)
-    this.cancelForTeardown(owned, 'owner disposed')
+    if (this.shutdown === undefined) this.cancelForTeardown(owned, 'owner disposed')
     await Promise.all(owned.map(job => job.settled))
+    if (this.shutdown !== undefined) await Promise.all(owned.flatMap(job => [...job.notices]))
     for (const job of owned) this.store.delete(job.id)
     // Removal is the one visible-set change no per-job record carries, so it
     // must be announced here or an observer keeps the dropped rows forever.
@@ -483,8 +526,9 @@ export class LocalJobRegistry extends JobRegistry {
     // that registered it, so this service may not drop them on its own way out.
     this.listenersClosed = true
     const all = [...this.store.values()]
-    this.cancelForTeardown(all, 'jobs service disposed')
+    if (this.shutdown === undefined) this.cancelForTeardown(all, 'jobs service disposed')
     await Promise.all(all.map(job => job.settled))
+    if (this.shutdown !== undefined) await Promise.all(all.flatMap(job => [...job.notices]))
     // Distinct owners whose records just disappeared. A change observer files
     // into the layer of the context that registered it, so a consumer mounted
     // outside this service — the api-proxy carrier registers from the mux
@@ -523,6 +567,7 @@ export class LocalJobRegistry extends JobRegistry {
         // observer from showing `running` for that whole window.
         this.notifyChanged(job.owner)
       } catch (error: unknown) {
+        this.cleanupFailures.push(error)
         const detail = `cancel threw during teardown; work may be orphaned: ${String(error)}`
         this.selfCtx.logger.warn(`jobs: cancel of ${job.id} threw during teardown; job record forced failed and work may be orphaned: ${String(error)}`)
         this.settle(job, { status: 'failed', detail })

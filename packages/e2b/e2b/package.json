@@ -39,6 +39,7 @@
     "@deepseek-ai/dsh-agent": "workspace:^",
     "@deepseek-ai/dsh-app-boot": "workspace:^",
     "@deepseek-ai/dsh-bash-local": "workspace:^",
+    "@deepseek-ai/dsh-command-scopes": "workspace:^",
     "@deepseek-ai/dsh-fs-e2b": "workspace:^",
     "@deepseek-ai/dsh-loader-smoke": "workspace:^",
     "@deepseek-ai/dsh-lsp": "workspace:^",

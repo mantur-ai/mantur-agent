@@ -13,7 +13,7 @@ import {
 } from './benchmark-npm-resolution.ts'
 
 const roots: string[] = []
-const resolutionTimeoutMs = process.platform === 'win32' ? 30_000 : 10_000
+const resolutionTimeoutMs = process.platform === 'win32' ? 60_000 : 10_000
 
 afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })

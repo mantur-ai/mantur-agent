@@ -240,6 +240,7 @@ describe('FileSystemSkillProvider', () => {
     await writeFile(join(root, 'rich-skill.md'), [
       '---',
       'name: rich-skill',
+      'title: 丰富技能',
       'description: rich description',
       'whenToUse: For richer local parsing',
       'disable-model-invocation: off',
@@ -291,6 +292,7 @@ describe('FileSystemSkillProvider', () => {
       content: 'Model-only.',
     })
     expect(await ctx.skills.get('rich-skill')).toMatchObject({
+      title: '丰富技能',
       whenToUse: 'For richer local parsing',
       invocation: { modelInvocable: true, userInvocable: true },
       metadata: { owner: 'tests' },

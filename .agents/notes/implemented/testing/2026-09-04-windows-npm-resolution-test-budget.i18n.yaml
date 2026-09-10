@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/testing/2026-09-04-windows-npm-resolution-test-budget.md
-2026-09-04-windows-npm-resolution-test-budget.md: 320cba050a065a283ab58b3db49f4f844f0ecb50
-2026-09-04-windows-npm-resolution-test-budget.zh.md: a79e4d858e27b821bfcdb31fed52842723416312
+2026-09-04-windows-npm-resolution-test-budget.md: 5eabf615fb8613d974230b9f25bb04bb5e540a71
+2026-09-04-windows-npm-resolution-test-budget.zh.md: 57e5dbc21846c0a34644b2b3c7d57fa626f05bd3

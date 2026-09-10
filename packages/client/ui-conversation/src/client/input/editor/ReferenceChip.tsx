@@ -14,6 +14,8 @@ export interface ReferenceChipProps {
   readonly label: string
   /** Domain glyph; absent renders the trigger marker instead of an icon. */
   readonly appearance?: ReferenceIconKind | undefined
+  /** Trigger marker used when no domain glyph is present. */
+  readonly marker?: '@' | '/'
   /** Owner-resolution failure styling bit. */
   readonly invalid: boolean
 }
@@ -23,11 +25,11 @@ export interface ReferenceChipProps {
  * @param props - label, optional domain glyph, and the invalid bit.
  * @returns the chip body (icon + truncating label).
  */
-export function ReferenceChip({ label, appearance, invalid }: ReferenceChipProps): ReactNode {
+export function ReferenceChip({ label, appearance, marker = '@', invalid }: ReferenceChipProps): ReactNode {
   return (
     <span className={clsx(css.chip, invalid && css.invalid)} title={label}>
       {appearance === undefined
-        ? <span className={css.marker} aria-hidden>@</span>
+        ? <span className={css.marker} aria-hidden>{marker}</span>
         : <ReferenceIcon kind={appearance} size={14} className={css.icon} />}
       <span className={css.label}>{label}</span>
     </span>
