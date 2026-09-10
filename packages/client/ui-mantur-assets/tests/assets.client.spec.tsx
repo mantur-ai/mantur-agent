@@ -1,14 +1,15 @@
 // @vitest-environment jsdom
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
+import type { ComponentProps } from 'react'
 import { AssetsPanel } from '../src/client/AssetsPanel.tsx'
 import type { AssetSnapshot } from '../src/types.ts'
 
-const snapshot = { source: { path: 'assets-report.json', version: 'v' as never, sha256: 's' }, stateVersion: null, state: { format: 1, path: 'assets-report.json', drafts: [], proposals: [], history: [], pending: null }, projectState: null, rows: [{ key: '角色资产/CHAR-001-V01', id: 'CHAR-001-V01', name: '林夏', table: '角色资产', fingerprint: 'f', kind: 'image' as const, prompt: '原提示词', negative: '', media: '', template: '', actualRequest: '', actualPrompt: '' }] } satisfies AssetSnapshot
+const snapshot = { source: { path: 'assets-report.json', version: 'v' as never, sha256: 's' }, stateVersion: null, state: { format: 1, path: 'assets-report.json', drafts: [], proposals: [], history: [], pending: null }, projectState: null, rows: [{ key: '角色资产/CHAR-001-V01', id: 'CHAR-001-V01', name: '林夏', table: '角色资产', fingerprint: 'f', kind: 'image' as const, prompt: '原提示词', negative: '', media: '', template: '', actualRequest: '', actualPrompt: '' }] } as unknown as AssetSnapshot
 
 it('mounts the Chinese asset panel and drives load, save, and apply through production commands', async () => {
   const load = vi.fn(async () => snapshot); const save = vi.fn(async () => snapshot); const request = vi.fn(async () => 'request-1'); const apply = vi.fn(async () => snapshot)
-  const view = render(<AssetsPanel {...({ useSessions: (select: (value: { current: string }) => unknown) => select({ current: 'session-1' }), t: (key: string) => ({ assets: '资产', source: '流水线报告', load: '读取', refresh: '刷新', prompt: '提示词', save: '保存草稿', request: '发送提案请求', apply: '应用提案', noMedia: '未绑定明确媒体', actual: '已保留实际请求', error: '资产操作失败' }[key] ?? key), closeWorkbench: vi.fn(), load, save, request, apply } as never)} />)
+  const view = render(<AssetsPanel {...({ useSessions: (select: (value: { current: string }) => unknown) => select({ current: 'session-1' }), t: (key: string) => ({ assets: '资产', source: '流水线报告', load: '读取', refresh: '刷新', prompt: '提示词', save: '保存草稿', request: '发送提案请求', apply: '应用提案', noMedia: '未绑定明确媒体', actual: '已保留实际请求', error: '资产操作失败' }[key] ?? key), closeWorkbench: vi.fn(), load, save, request, apply } as unknown as ComponentProps<typeof AssetsPanel>)} />)
   expect(screen.getByText('资产')).toBeTruthy(); fireEvent.click(screen.getByText('读取')); await waitFor(() => expect(load).toHaveBeenCalled())
   fireEvent.click(screen.getByText('CHAR-001-V01 林夏')); fireEvent.click(screen.getByText('保存草稿')); await waitFor(() => expect(save).toHaveBeenCalled())
   fireEvent.click(screen.getAllByRole('button', { name: '发送提案请求' })[0]!); await waitFor(() => expect(request).toHaveBeenCalled()); fireEvent.click(screen.getByText('应用提案')); await waitFor(() => expect(apply).toHaveBeenCalled())
@@ -17,14 +18,14 @@ it('mounts the Chinese asset panel and drives load, save, and apply through prod
 
 it('shows a provider error without crashing the asset panel', async () => {
   const load = vi.fn(async () => { throw new Error('FS_STALE_VERSION') })
-  const view = render(<AssetsPanel {...({ useSessions: (select: (value: { current: string }) => unknown) => select({ current: 'session-1' }), t: (key: string) => key, closeWorkbench: vi.fn(), load, save: vi.fn(), request: vi.fn(), apply: vi.fn() } as never)} />)
+  const view = render(<AssetsPanel {...({ useSessions: (select: (value: { current: string }) => unknown) => select({ current: 'session-1' }), t: (key: string) => key, closeWorkbench: vi.fn(), load, save: vi.fn(), request: vi.fn(), apply: vi.fn() } as unknown as ComponentProps<typeof AssetsPanel>)} />)
   fireEvent.click(screen.getByText('load')); await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('FS_STALE_VERSION'))
   view.unmount()
 })
 
 it('shows persisted unfinished writes and requested proposals after loading', async () => {
   const pendingSnapshot = { ...snapshot, state: { ...snapshot.state, pending: { proposal: 'pending-1' }, proposals: [{ id: 'request-1', status: 'requested' }] } }
-  const view = render(<AssetsPanel {...({ useSessions: (select: (value: { current: string }) => unknown) => select({ current: 'session-1' }), t: (key: string) => key, closeWorkbench: vi.fn(), load: vi.fn(async () => pendingSnapshot), save: vi.fn(), request: vi.fn(), apply: vi.fn() } as never)} />)
+  const view = render(<AssetsPanel {...({ useSessions: (select: (value: { current: string }) => unknown) => select({ current: 'session-1' }), t: (key: string) => key, closeWorkbench: vi.fn(), load: vi.fn(async () => pendingSnapshot), save: vi.fn(), request: vi.fn(), apply: vi.fn() } as unknown as ComponentProps<typeof AssetsPanel>)} />)
   fireEvent.click(view.getByText('load'))
   await waitFor(() => expect(view.getByRole('status').textContent).toBe('unfinished pending-1'))
   expect(view.getByText('pending request-1')).toBeTruthy()
@@ -34,7 +35,7 @@ it('shows persisted unfinished writes and requested proposals after loading', as
 it('scans candidates and renders an explicit image preview', async () => {
   const candidates = vi.fn(async () => [{ assetId: 'CHAR-001-V01', path: '候选/CHAR-001-V01-V01.png', name: 'CHAR-001-V01-V01.png', kind: 'image' as const, size: 10 }])
   const preview = vi.fn(async () => ({ id: null, name: 'CHAR-001-V01-V01.png', url: '/api/mantur-assets.media?token=preview', kind: 'image' as const }))
-  const view = render(<AssetsPanel {...({ useSessions: (select: (value: { current: string }) => unknown) => select({ current: 'session-1' }), t: (key: string) => ({ assets: '资产', source: '流水线报告', load: '读取', candidateDirectory: '候选目录', scan: '扫描候选', candidates: '候选资产', preview: '预览', prompt: '提示词', save: '保存草稿', request: '发送提案请求', apply: '应用提案', noMedia: '未绑定明确媒体', actual: '已保留实际请求', error: '资产操作失败' }[key] ?? key), closeWorkbench: vi.fn(), load: vi.fn(async () => snapshot), save: vi.fn(), request: vi.fn(), apply: vi.fn(), candidates, preview } as never)} />)
+  const view = render(<AssetsPanel {...({ useSessions: (select: (value: { current: string }) => unknown) => select({ current: 'session-1' }), t: (key: string) => ({ assets: '资产', source: '流水线报告', load: '读取', candidateDirectory: '候选目录', scan: '扫描候选', candidates: '候选资产', preview: '预览', prompt: '提示词', save: '保存草稿', request: '发送提案请求', apply: '应用提案', noMedia: '未绑定明确媒体', actual: '已保留实际请求', error: '资产操作失败' }[key] ?? key), closeWorkbench: vi.fn(), load: vi.fn(async () => snapshot), save: vi.fn(), request: vi.fn(), apply: vi.fn(), candidates, preview } as unknown as ComponentProps<typeof AssetsPanel>)} />)
   fireEvent.click(screen.getByText('读取')); await waitFor(() => expect((screen.getByText('扫描候选') as HTMLButtonElement).disabled).toBe(false))
   fireEvent.click(screen.getByText('扫描候选')); await waitFor(() => expect(candidates).toHaveBeenCalledWith('session-1', '资产/生成图片'))
   fireEvent.click(screen.getByText('CHAR-001-V01-V01.png (CHAR-001-V01)')); await waitFor(() => expect(preview).toHaveBeenCalledWith('session-1', '候选/CHAR-001-V01-V01.png'))

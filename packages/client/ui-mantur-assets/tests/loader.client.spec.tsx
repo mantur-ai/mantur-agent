@@ -32,7 +32,7 @@ it('loads asset slots before their shell, resolves Chinese copy, mounts on click
     const locale = new LocaleRuntime(ctx)
     locale.setLocale('zh')
     ctx.provide('locale', locale)
-    ctx.provide('layout', { closeWorkbench: vi.fn() } as Context['layout'])
+    ctx.provide('layout', { closeWorkbench: vi.fn() } as unknown as Context['layout'])
     ctx.provide('uiConversation', {} as Context['uiConversation'])
     const session = 'asset-loader-session' as SessionId
     const sessionState = { current: session, byId: {} }
@@ -46,7 +46,7 @@ it('loads asset slots before their shell, resolves Chinese copy, mounts on click
     ctx.provide('remote', remote as unknown as Context['remote'])
     ctx.provide('remote.manturAssets', remote.manturAssets)
     ctx.provide('remote.manturScript', remote.manturScript)
-    ctx.slots.register({ name: 'root', children: {
+    ;(ctx.slots.register as unknown as (options: unknown, component: unknown) => () => void)({ name: 'root', children: {
       'main.workbench': { kind: 'single', scope: 'root' },
       'main.workbench.toggle': { kind: 'single', scope: 'root' },
     } }, () => null)
@@ -74,23 +74,25 @@ it('loads asset slots before their shell, resolves Chinese copy, mounts on click
         if (!entry) return null
         type TabProps = PropsRuntime<'main.workbench.assets.tab'> & PropsLocale<'assets.mantur'>
         const Tab = entry.component as ComponentType<TabProps>
-        return <Tab {...owner as TabProps} {...standard} t={locale.bind('assets.mantur')} />
+        return <Tab {...owner as unknown as TabProps} {...standard as unknown as TabProps} t={locale.bind('assets.mantur')} />
       }
       if (name === 'main.workbench.assets.content') {
         const entry = slots.entries(name)[0]
         if (!entry) return options?.fallback ?? null
         const Panel = entry.component as typeof AssetsPanel
-        const commands = (entry.inject as () => AssetCommands)()
-        return <Panel {...owner as ComponentProps<typeof AssetsPanel>} {...standard} {...commands} t={locale.bind('assets.mantur')} />
+        const commands = (entry.inject as unknown as () => AssetCommands)()
+        return <Panel {...owner as unknown as ComponentProps<typeof AssetsPanel>} {...standard as unknown as ComponentProps<typeof AssetsPanel>} {...commands} t={locale.bind('assets.mantur')} />
       }
       return null
     }
     const props = {
       ...standard, t: locale.bind('script.mantur'), closeWorkbench: vi.fn(),
-      useStore: select => select(useSyncExternalStore(listener => state.subscribe(listener), () => state.getSnapshot())),
+      useStore: (select: (value: ReturnType<typeof state.getSnapshot>) => unknown) => select(
+        useSyncExternalStore(listener => state.subscribe(listener), () => state.getSnapshot()),
+      ),
       actions: state.actions, renderSlot,
-      ...(shell.inject as () => script.ScriptCommands)(),
-    } satisfies ShellProps
+      ...(shell.inject as unknown as () => script.ScriptCommands)(),
+    } as unknown as ShellProps
     const view = render(<Workbench {...props} />)
     fireEvent.click(view.getByRole('button', { name: '资产' }))
     expect(view.getByLabelText('流水线报告')).toBeTruthy()
