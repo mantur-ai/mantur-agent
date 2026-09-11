@@ -59,7 +59,7 @@ if (!existsSync(packaged.updateConfig)) {
   throw new Error(`packaged updater configuration is missing: ${packaged.updateConfig}`)
 }
 const updateConfig = readFileSync(packaged.updateConfig, 'utf8')
-for (const expected of ['provider: github', 'owner: mantur-ai', 'repo: mantur-harness']) {
+for (const expected of ['provider: github', 'owner: mantur-ai', 'repo: mantur-agent']) {
   if (!updateConfig.includes(expected)) {
     throw new Error(`packaged updater configuration is missing ${expected}`)
   }
