@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-desktop",
   "description": "Thin Electron carrier for the Mantur Agent desktop installers",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "private": true,
   "type": "module",
   "main": "lib/main.js",
@@ -87,7 +87,7 @@
       {
         "provider": "github",
         "owner": "mantur-ai",
-        "repo": "mantur-harness",
+        "repo": "mantur-agent",
         "releaseType": "release"
       }
     ],

@@ -10,7 +10,7 @@ Hiding the sidebar entry before update discovery makes manual checks depend on t
 
 ## Decision
 
-Every enabled desktop snapshot renders the installed version and a check action above Settings in either sidebar width. Only a successful native check displays the up-to-date status. Failures retain a retry action. This partially supersedes idle-card suppression in the [native update entry decision](2026-09-06-desktop-update-entry.md); controller ownership, explicit download, and installation confirmation remain unchanged.
+Every enabled desktop snapshot renders the installed version and a check action above Settings in either sidebar width. Only a successful native version check displays no available update; the [release-version decision](../bug-fix/2026-09-12-github-update-version-check.md) defines older-release handling. Failures retain a retry action. This partially supersedes idle-card suppression in the [native update entry decision](2026-09-06-desktop-update-entry.md); controller ownership, explicit download, and installation confirmation remain unchanged.
 
 The packaging workflow retains generated update metadata and blockmaps alongside installers. CI attachment availability is separate from publishing a signed release to the configured feed.
 

@@ -18,12 +18,35 @@ function start(overrides: Partial<StartAutoUpdatesOptions> = {}) {
   const updater = new FakeUpdater()
   const confirmInstall = vi.fn(async () => false)
   const beforeInstall = vi.fn(async () => {})
-  const controller = startAutoUpdates({ updater, currentVersion: '1.0.0', prompts: { confirmInstall }, beforeInstall, onStateChange: vi.fn(), log: vi.fn(), ...overrides })
+  const controller = startAutoUpdates({ updater, currentVersion: '1.0.0', prompts: { confirmInstall }, beforeInstall, onStateChange: vi.fn(), log: vi.fn(), describeError: error => error instanceof Error ? error.message : String(error), ...overrides })
   disposers.push(controller.dispose)
   return { updater, confirmInstall, beforeInstall, controller }
 }
 
 describe('desktop updates', () => {
+  it('treats an older GitHub release as no update for both event and promise delivery', async () => {
+    const { updater, controller } = start()
+    const result = Object.assign(new Error('No newer GitHub release (v0.1.3)'), { code: 'ERR_UPDATER_NO_NEWER_RELEASE' })
+    updater.checkForUpdates.mockImplementationOnce(async () => { updater.emit('error', result); throw result })
+    controller.checkNow()
+    await setImmediate()
+    expect(controller.getState()).toEqual({ kind: 'up-to-date', requestedByUser: true })
+    expect(updater.downloadUpdate).not.toHaveBeenCalled()
+    updater.checkForUpdates.mockRejectedValueOnce(result)
+    controller.checkNow()
+    await setImmediate()
+    expect(controller.getState()).toEqual({ kind: 'up-to-date', requestedByUser: true })
+  })
+
+  it('logs raw failures while publishing only the supplied user description', async () => {
+    const log = vi.fn()
+    const { updater, controller } = start({ log, describeError: () => 'Update service unavailable' })
+    updater.checkForUpdates.mockRejectedValueOnce(new Error('HTTP 404 with raw headers'))
+    controller.checkNow()
+    await setImmediate()
+    expect(controller.getState()).toEqual({ kind: 'error', detail: 'Update service unavailable', requestedByUser: true })
+    expect(log).toHaveBeenCalledWith('desktop update: HTTP 404 with raw headers')
+  })
   it.each([['1.2.3', false], ['1.2.3-alpha.4', true], ['1.2.3-beta.2', true], ['1.2.3-rc.1', true], ['1.2.3-preview.1', false]])('selects the release channel for %s', (version, expected) => {
     expect(allowsPrerelease(version)).toBe(expected)
     expect(start({ currentVersion: version }).updater.allowPrerelease).toBe(expected)

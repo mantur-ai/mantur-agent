@@ -6,8 +6,8 @@
 
 ## Current
 
-- region "已是最新版本":
-  - paragraph: 已是最新版本
+- region "暂无可用更新":
+  - paragraph: 暂无可用更新
   - paragraph: 当前版本 1.0.0
   - button "检查更新"
 

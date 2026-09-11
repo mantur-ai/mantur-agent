@@ -59,6 +59,8 @@ export interface StartAutoUpdatesOptions {
   beforeInstall: () => Promise<void>
   onStateChange: (state: DesktopUpdateState) => void
   log: (message: string) => void
+  /** Describe updater failures for users; raw details remain in the diagnostic log. */
+  describeError: (error: unknown) => string
   checkDelayMs?: number
   checkIntervalMs?: number
 }
@@ -108,8 +110,12 @@ export function startAutoUpdates(options: StartAutoUpdatesOptions): DesktopUpdat
 
   const fail = (error: unknown, requestedByUser: boolean): void => {
     if (!active) return
-    const detail = error instanceof Error ? error.message : String(error)
-    options.log(`desktop update: ${detail}`)
+    if (state.kind === 'checking' && error instanceof Error && 'code' in error && error.code === 'ERR_UPDATER_NO_NEWER_RELEASE') {
+      publish({ kind: 'up-to-date', requestedByUser })
+      return
+    }
+    options.log(`desktop update: ${error instanceof Error ? error.message : String(error)}`)
+    const detail = options.describeError(error)
     if (state.kind === 'ready') {
       installAttempt += 1
       publish({ kind: 'ready', version: state.version, prompting: false, error: detail })

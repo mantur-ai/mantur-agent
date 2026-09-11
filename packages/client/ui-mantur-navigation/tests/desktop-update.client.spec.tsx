@@ -82,7 +82,7 @@ describe('desktop update footer', () => {
     expect(view.container.innerHTML).toContain('1.0.0')
     view.rerender(<DesktopUpdate {...props({ kind: 'up-to-date', requestedByUser: false }, wide)} />)
     expect(screen.getByRole('button', { name: /检查更新/u })).toBeTruthy()
-    expect(view.container.innerHTML).toContain('已是最新版本')
+    expect(view.container.innerHTML).toContain('暂无可用更新')
     const failed = props({ kind: 'error', detail: 'feed unavailable', requestedByUser: false }, wide)
     const retryRun = vi.spyOn(failed.controller, 'run')
     view.rerender(<DesktopUpdate {...failed} />)
@@ -90,7 +90,7 @@ describe('desktop update footer', () => {
     expect(screen.queryByRole('alert')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: /重新检查/u }))
     expect(retryRun).toHaveBeenCalledExactlyOnceWith('check')
-    expect(view.container.innerHTML).not.toContain('已是最新版本')
+    expect(view.container.innerHTML).not.toContain('暂无可用更新')
   })
   it.each([true, false])('offers an explicit download in wide=%s mode', (wide) => {
     const value = props({ kind: 'available', version: '1.2.0', prompting: false }, wide)

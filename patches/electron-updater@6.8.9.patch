@@ -1,0 +1,13 @@
+diff --git a/out/providers/GitHubProvider.js b/out/providers/GitHubProvider.js
+--- a/out/providers/GitHubProvider.js
++++ b/out/providers/GitHubProvider.js
+@@ -110,6 +110,9 @@
+         if (tag == null) {
+             throw (0, builder_util_runtime_1.newError)(`No published versions on GitHub`, "ERR_UPDATER_NO_PUBLISHED_VERSIONS");
+         }
++        if (!this.updater.allowDowngrade && semver.valid(tag) && semver.lte(tag, this.updater.currentVersion)) {
++            throw (0, builder_util_runtime_1.newError)(`No newer GitHub release (${tag})`, "ERR_UPDATER_NO_NEWER_RELEASE");
++        }
+         let rawData;
+         let channelFile = "";
+         let channelFileUrl = "";

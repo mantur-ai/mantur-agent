@@ -39,11 +39,14 @@ const zh = {
   downloadProgress: (version: string, percent: number | null) => `正在下载 ${version}${percent === null ? '' : `（${percent}%）`}`,
   updateReadyStatus: (version: string) => `${version} 已可安装`,
   installUpdate: (version: string) => `重启并更新 ${version}`,
-  upToDateStatus: '已是最新版本',
+  upToDateStatus: '暂无可用更新',
   updateErrorStatus: '检查更新失败',
-  upToDateTitle: '已是最新版本',
-  upToDateMessage: (version: string) => `漫途Agent ${version} 已是最新版本。`,
-  updateErrorTitle: '更新失败',
+  upToDateTitle: '暂无可用更新',
+  upToDateMessage: (version: string) => `当前版本为 ${version}，暂未发现更高版本的更新。`,
+  updateFeedUnavailable: '更新服务暂未发布完整的安装包，请稍后重试。当前版本可以继续使用。',
+  updateTransferFailed: '暂时无法检查或下载更新，请稍后重试。详细信息已写入应用日志。',
+  updateVerificationFailed: '更新文件未通过校验，请重新下载。当前版本未被替换。',
+  updateErrorTitle: '更新暂不可用',
   updateErrorMessage: (detail: string) => `无法完成更新。\n\n${detail}`,
   okButton: '好',
 } as const
@@ -93,11 +96,14 @@ const en = {
   downloadProgress: (version: string, percent: number | null) => `Downloading ${version}${percent === null ? '' : ` (${percent}%)`}`,
   updateReadyStatus: (version: string) => `Version ${version} is ready to install`,
   installUpdate: (version: string) => `Restart and update ${version}`,
-  upToDateStatus: 'Mantur Agent is up to date',
+  upToDateStatus: 'No updates available',
   updateErrorStatus: 'Update check failed',
-  upToDateTitle: 'Mantur Agent is up to date',
-  upToDateMessage: (version: string) => `Mantur Agent ${version} is the latest version.`,
-  updateErrorTitle: 'Update failed',
+  upToDateTitle: 'No updates available',
+  upToDateMessage: (version: string) => `Current version: ${version}. No newer update is available.`,
+  updateFeedUnavailable: 'The update service has not published a complete installer. Please try again later. You can keep using the current version.',
+  updateTransferFailed: 'Unable to check or download updates right now. Please try again later. Details are recorded in the application log.',
+  updateVerificationFailed: 'The update did not pass verification. Please download it again. The installed version has not been replaced.',
+  updateErrorTitle: 'Update unavailable',
   updateErrorMessage: (detail: string) => `Mantur Agent could not complete the update.\n\n${detail}`,
   okButton: 'OK',
 } satisfies DesktopCopy
@@ -105,4 +111,13 @@ const en = {
 /** Resolve native-window copy for one operating-system locale. */
 export function desktopCopy(locale: string): DesktopCopy {
   return locale.toLowerCase().startsWith('zh') ? zh : en
+}
+
+/** Return localized updater feedback without exposing HTTP headers, paths, or stack traces. */
+export function describeUpdateError(error: unknown, locale: string): string {
+  const copy = desktopCopy(locale)
+  const code = error instanceof Error && 'code' in error ? error.code : undefined
+  if (code === 'ERR_UPDATER_CHANNEL_FILE_NOT_FOUND' || code === 'ERR_UPDATER_LATEST_VERSION_NOT_FOUND' || code === 'ERR_UPDATER_NO_PUBLISHED_VERSIONS') return copy.updateFeedUnavailable
+  if (code === 'ERR_UPDATER_INVALID_SIGNATURE' || code === 'ERR_UPDATER_CHECKSUM_MISMATCH') return copy.updateVerificationFailed
+  return copy.updateTransferFailed
 }

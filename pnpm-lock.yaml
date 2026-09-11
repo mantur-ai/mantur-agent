@@ -14,6 +14,7 @@ overrides:
 patchedDependencies:
   '@electron/osx-sign@1.3.3': 1ca1f34d91fe3c8244aff8ad694429d7420f8638eab57b38b290286a35b0a597
   '@yao-pkg/pkg@6.21.0': 28edd2180c36691c481522ef81f6f6614505f45e491aad542ac4663d4e6b3ff8
+  electron-updater@6.8.9: 0cef58c7be443e1955cd8d1692d3795afad05711483e0627a321551c8b845433
   node-pty@1.2.0-beta.15: b40ae545608897914bd25fb009c97eeac478c34e8a910298ddcb01b746534bb0
 
 importers:
@@ -500,7 +501,7 @@ importers:
         version: link:../../python/sdk-runtime
       electron-updater:
         specifier: 6.8.9
-        version: 6.8.9
+        version: 6.8.9(patch_hash=0cef58c7be443e1955cd8d1692d3795afad05711483e0627a321551c8b845433)
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -21309,7 +21310,7 @@ snapshots:
 
   electron-to-chromium@1.5.393: {}
 
-  electron-updater@6.8.9:
+  electron-updater@6.8.9(patch_hash=0cef58c7be443e1955cd8d1692d3795afad05711483e0627a321551c8b845433):
     dependencies:
       builder-util-runtime: 9.7.0
       fs-extra: 10.1.0

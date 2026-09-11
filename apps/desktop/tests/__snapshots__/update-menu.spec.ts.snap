@@ -349,7 +349,7 @@ exports[`desktop update menu > places update controls in the macOS app menu and 
       {
         "enabled": false,
         "id": "desktop-update-status",
-        "label": "已是最新版本",
+        "label": "暂无可用更新",
         "visible": true,
       },
       {

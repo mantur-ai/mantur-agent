@@ -21,7 +21,7 @@ import {
   prepareDesktopPaths,
   resetProjectionCache,
 } from './desktop-state.ts'
-import { desktopCopy } from './locales.ts'
+import { desktopCopy, describeUpdateError } from './locales.ts'
 import { startDesktopService, type DesktopService } from './runtime.ts'
 import { buildApplicationMenu } from './update-menu.ts'
 import { startAutoUpdates, type DesktopUpdateController, type DesktopUpdateState } from './updater.ts'
@@ -284,6 +284,7 @@ function startUpdates(): void {
     updater: autoUpdater,
     currentVersion: app.getVersion(),
     log: writeDesktopLog,
+    describeError: error => describeUpdateError(error, app.getLocale()),
     onStateChange: (state) => {
       updateState = state
       updateBridge.publish(state)

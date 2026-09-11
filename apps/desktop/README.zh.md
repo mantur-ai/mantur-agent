@@ -69,7 +69,7 @@ smoke 还会检查内置 CLI 的固定来源记录、包版本、许可证和依
 
 ## 发布已签名的 macOS release
 
-手动触发的 `Desktop release` GitHub Actions 工作流会在原生 macOS runner 上分别构建 arm64 与 x64。两个任务都会先在进程文件描述符上限为 64 时验证有界签名扫描，再使用 Developer ID Application 身份签名应用、提交 Apple notarization，并验证签名、Gatekeeper 评估与 stapled ticket；它们还会在产物进入组装步骤前运行 packaged smoke。
+手动触发的 `Desktop release` 工作流默认选择 `architectures=both`，也可明确选择 `arm64`，在对应原生 macOS runner 上构建。每个选中任务都会先在进程文件描述符上限为 64 时验证有界签名扫描，再使用 Developer ID Application 身份签名应用、提交 Apple notarization，并验证签名、Gatekeeper 评估与 stapled ticket；它们还会在产物进入组装步骤前运行 packaged smoke。
 
 对外发布前，先在仓库设置中启用 Release Immutability。然后在 GitHub 的 `macos-release` 环境中配置两个变量和四个加密 secret：
 
@@ -82,7 +82,7 @@ smoke 还会检查内置 CLI 的固定来源记录、包版本、许可证和依
 | Secret | `APPLE_ID` | 用于 notarization 的 Apple ID |
 | Secret | `APPLE_APP_SPECIFIC_PASSWORD` | 该 Apple ID 的 App 专用密码 |
 
-工作流会把两份原生 `latest-mac.yml` 合并为一份可区分架构的更新通道，并把完整候选产物与 `SHA256SUMS` 保留七天。必须从精确匹配 `v<apps/desktop 版本>` 的 tag 运行；electron-updater 可以从 GitHub feed 中选择这种兼容 semver 的预发布 tag。`publish=false` 会在组装候选产物后停止。`publish=true` 还要求审批变量指向完整固定源码配置的 SHA-256 摘要，之后才会创建 GitHub release，并同时上传 DMG、更新 ZIP、blockmap、更新元数据与哈希。工作流会拒绝使用已有 release 的 tag，不会替换已发布文件；仓库级 Release Immutability 则会继续阻止之后修改 tag 或产物。
+工作流会把选中的原生 `latest-mac.yml` 合并为一份可区分架构的更新通道，并把完整候选产物与 `SHA256SUMS` 保留七天。必须从精确匹配 `v<apps/desktop 版本>` 的 tag 运行；electron-updater 可以从 GitHub feed 中选择这种兼容 semver 的预发布 tag。`publish=false` 会在组装候选产物后停止。`publish=true` 还要求审批变量指向完整固定源码配置的 SHA-256 摘要，之后才会创建 GitHub release，并同时上传 DMG、更新 ZIP、blockmap、更新元数据与哈希。工作流会拒绝使用已有 release 的 tag，不会替换已发布文件；仓库级 Release Immutability 则会继续阻止之后修改 tag 或产物。
 
 ## 运行时设计
 
@@ -103,6 +103,8 @@ Main 持有 browser-account-v2 授权及操作系统加密的 profile 存储。�
 永久应用标识为 `ai.mantur.agent`。Electron 就绪前，载体会在操作系统的应用数据根目录下设置稳定的 `mantur-agent` 用户数据目录。其 `harness` 子目录是已安装应用使用的唯一 `DSH_HOME`，因此 `~/.dsh` 中的 CLI 或开发数据不会影响桌面启动。子进程从应用自有的中性目录启动，并把 stdout、stderr、恢复与 updater 诊断追加到同一用户数据根下的 `logs/harness.log`。
 
 如果启动错误只识别到过期的 `session_projcache` schema，载体会先关闭失败的子进程并完成日志写入，再由本地化原生对话框在用户明确同意后删除这份可丢弃的投影缓存并重试。它不会删除会话日志、设置、凭据、profile 或 workspace。其他启动错误只提供查看日志与退出，不猜测修复方式。
+
+GitHub 检查先比较已选发行标签，再请求更新文件。相同或更旧的发行显示暂无可用更新。不完整的更高发行和网络故障显示简短本地化反馈；原始诊断保留在日志中。参见[版本检查决策](../../.agents/notes/implemented/bug-fix/2026-09-12-github-update-version-check.zh.md)。
 
 已打包应用会在 macOS 的原生应用菜单和 Windows 的帮助菜单中显示当前版本与**检查更新…**。菜单会显示检查中、下载进度、可安装、已是最新版与失败状态；手动检查还会打开本地化的结果或错误对话框。应用启动后会开始检查，并每六小时重复。stable 构建只接收 stable release，版本号含 `alpha`、`beta` 或 `rc` 的构建可以接收预发布版本。后台发现新版本时保持安静。漫途侧栏在展开与收起状态下都在设置上方显示更新入口；空闲或已是最新版时保留已安装版本和手动检查按钮；检查失败会显示错误，不会声称已是最新版。只有用户点击下载才开始传输，显示实际字节数，仅在已知时显示百分比。下载并校验完成后，准备重启前会请求确认。确认安装后，Main 保存原生草稿，通过所属 IPC 通道请求 Host 停机回执，再关闭账号通道并请求 Host 正常退出。Main 等待进程真正退出和诊断日志关闭后才调用安装器。不支持的 Host 组合、保存失败、取消、异常退出和超时都会阻止安装；检查和下载不会冻结工作。等待失败后 Host 清理可能继续，工作不会自动恢复。参见 [Host 更新策略](../../packages/bundle/mantur-app/README.zh.md#use-this-package)。选择稍后会保留重启安装入口，不重复弹窗。侧栏和原生菜单共用主进程确认；保存失败会保留已校验的下载并报告错误。关闭 updater 会抑制后续安装。
 
