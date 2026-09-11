@@ -1,5 +1,14 @@
 /** Sandboxed preload: expose only named draft, updater, directory-picker and native-account capabilities. */
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
+
+contextBridge.exposeInMainWorld('manturFiles', {
+  importFiles: (files: File[]) => {
+    const paths = files.map(file => webUtils.getPathForFile(file))
+    if (paths.some(path => path === '')) throw new Error('Select files from disk to import them')
+    return ipcRenderer.invoke('mantur:files:import', paths)
+  },
+  pick: (kind: 'file' | 'directory') => ipcRenderer.invoke('mantur:files:pick', kind),
+})
 
 contextBridge.exposeInMainWorld('manturDirectoryPicker', {
   pick: () => ipcRenderer.invoke('mantur:directory-picker:pick'),
@@ -11,26 +20,6 @@ contextBridge.exposeInMainWorld('manturAccount', {
     const listener = (_event: Electron.IpcRendererEvent, state: unknown): void => { handler(state) }
     ipcRenderer.on('mantur:account:changed', listener)
     return () => { ipcRenderer.removeListener('mantur:account:changed', listener) }
-  },
-})
-
-contextBridge.exposeInMainWorld('manturDrafts', {
-  load: () => ipcRenderer.invoke('mantur:drafts:load'),
-  save: (checkpoint: unknown) => ipcRenderer.invoke('mantur:drafts:save', checkpoint),
-  onPrepare: (handler: () => Promise<number>) => {
-    const listener = (_event: Electron.IpcRendererEvent, id: string): void => {
-      void Promise.resolve().then(handler).then(
-        revision => ipcRenderer.invoke('mantur:drafts:prepared', { id, ok: true, revision }),
-        (error: unknown) => ipcRenderer.invoke('mantur:drafts:prepared', { id, ok: false, error: String(error) }),
-      ).catch(() => { /* Main rejects a stale receipt after cancellation; release owns input unlocking. */ })
-    }
-    ipcRenderer.on('mantur:drafts:prepare', listener)
-    return () => { ipcRenderer.removeListener('mantur:drafts:prepare', listener) }
-  },
-  onRelease: (handler: () => void) => {
-    const listener = (): void => { handler() }
-    ipcRenderer.on('mantur:drafts:release', listener)
-    return () => { ipcRenderer.removeListener('mantur:drafts:release', listener) }
   },
 })
 

@@ -11,6 +11,8 @@ kind: "package-reference"
 
 `ui-conversation` 拥有与 target 无关的 Conversation 组装和共享浏览器 shell。它消费 Session Controller 的 `SessionEventLikeEntry` feed，通过 `ctx.uiConversation` 暴露不依赖 React 的 registry 与逐 Session binding，并通过 `ctx.uiSession` 提供 `useConversation`、`useInput` 和 `inputActions` 标准 props。它还拥有按会话的持久化图片 URL 缓存：`ctx.uiConversation.imageUrl(sessionId, attachment)` 为每个附件解析一个经会话授权的浏览器 URL，并随 Session binding 释放而撤销，因此所有 Conversation target 共享一次 `session.attachment` 读取。Chat 等具体 target 位于独立 package，由各自 package 注册 Definition、snapshot builder、View 和 renderer。
 
+保存路径加入原始草稿，经普通用户消息记录入日志。切换 Session 后，导入结果不会加入其他 Session。文档解读使用 Agent 文件工具，导入本身不承诺提取 Word 正文。图片保留预览和图片提交路径。纯浏览器部署保留图片接收能力。[原生导入决策](../../../.agents/notes/implemented/feature/2026-09-11-desktop-file-import.zh.md)记录存储与测试范围。
+
 ## 目录
 
 - [Conversation 组装](#conversation-assembly)

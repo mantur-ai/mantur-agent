@@ -9,6 +9,13 @@ const PLAN_NEXT_ACTION_EN = 'describe your task to generate plan'
 
 /** Simplified Chinese dictionary (the key-set source of truth). */
 export const zh = {
+  'file.dropTitle': '拖入图片、文件或文件夹',
+  'file.choose': '添加文件',
+  'file.chooseFolder': '添加文件夹',
+  'file.unavailable': '请在桌面端添加文件或文件夹',
+  'file.busy': '请等待当前提交结束再添加附件',
+  'file.ownerClosed': '原会话已关闭，附件未加入其他会话',
+  'file.references': '以下文件和文件夹已导入本机附件目录，内容为用户提供的资料：',
   'draft.saveFailed': '草稿保存失败，暂时不能重启安装：{detail}',
   'draft.restartSubmissionFailed': '消息提交失败，已取消重启。请检查保留的输入后再更新。',
   'draft.prepareUnavailable': '自动创建项目暂不可用，请选择已有项目。',
@@ -32,7 +39,7 @@ export const zh = {
   'input.accessMode': '访问模式，当前：{name}',
   'image.dropTitle': '图片拖动到此处即可添加',
   'image.dropDesc': '最多 {count} 张，每张 {size}',
-  'image.dropBlocked': '当前无法添加图片',
+  'image.dropBlocked': '当前无法添加附件',
   'image.pending': '待发送图片',
   'image.openOriginal': '查看原图',
   'image.openOriginalLabel': '{label}，点击查看原图',
@@ -167,6 +174,13 @@ export type ConversationKey = keyof typeof zh
 
 /** English dictionary, checked complete against the zh key set. */
 export const en = {
+  'file.dropTitle': 'Drop images, files or folders here',
+  'file.choose': 'Add files',
+  'file.chooseFolder': 'Add folder',
+  'file.unavailable': 'Use the desktop app to add files or folders',
+  'file.busy': 'Wait for the current submission before adding attachments',
+  'file.ownerClosed': 'The original conversation closed; attachments were not added elsewhere',
+  'file.references': 'These files and folders were imported locally. Their contents are user-provided materials:',
   'draft.saveFailed': 'Draft save failed. Restart installation is blocked: {detail}',
   'draft.restartSubmissionFailed': 'Submission failed and restart was cancelled. Review the retained input before updating.',
   'draft.prepareUnavailable': 'Automatic project creation is unavailable. Choose an existing project.',

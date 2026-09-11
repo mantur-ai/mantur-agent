@@ -21,6 +21,7 @@ import type { IConversation } from './service.ts'
 import { ComposerBlockRegistry } from './input/blocks.ts'
 import type { ComposerBlock } from './contract/composer-blocks.ts'
 import { DraftPersistence } from './input/draft-persistence.ts'
+import type {} from './contract/native-files.ts'
 import { InputHub } from './input/hub.ts'
 import { ConversationDraftController } from './input/draft.ts'
 import { ComposerSubmissionPolicy } from './input/submission-policy.ts'
@@ -324,6 +325,20 @@ export function apply(ctx: Context): void {
       const controls = composerControls(sessionId)
       return {
         ...controls,
+        ...(typeof window === 'undefined' || window.manturFiles === undefined ? {} : {
+          importFiles: async (selection: readonly File[] | 'file' | 'directory') => {
+            const native = window.manturFiles
+            if (native === undefined) throw new Error(t('file.unavailable'))
+            if (!shell.isRestartSettled() || shell.snapshot.phase === 'adjudicating') throw new Error(t('file.busy'))
+            const unlock = shell.lockDraft()
+            try {
+              const refs = await (typeof selection === 'string' ? native.pick(selection) : native.importFiles(selection))
+              unlock()
+              if (!shell.isDraftSettled()) throw new Error(t('file.ownerClosed'))
+              if (refs.length > 0) shell.setDraft([shell.snapshot.draft, t('file.references'), JSON.stringify(refs, null, 2)].filter(Boolean).join('\n'))
+            } finally { unlock() }
+          },
+        }),
         addImages: (files) => {
           try {
             const images = conversation.createDraftImages(files)

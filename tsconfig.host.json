@@ -13,6 +13,7 @@
     "apps/web/tests/mcp-http-recovery.snapshot.ts",
     "apps/web/tests/mcp-shutdown.snapshot.ts",
     "apps/web/tests/desktop-drafts.e2e.ts",
+    "apps/web/tests/desktop-files.e2e.ts",
     "apps/web/tests/desktop-updates.e2e.ts",
     "apps/web/tests/default-model.e2e.ts",
     "apps/web/tests/github-ready-review.e2e.ts",

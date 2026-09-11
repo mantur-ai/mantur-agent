@@ -16,7 +16,7 @@ interface ComposerRailItem extends AttachmentRailItem {
 
 /** Draft-image rail, document drop target, and original-image preview slot entry. */
 export function ComposerAttachments({
-  attachments, canAcceptDrop, onAddImages, onRemoveImage, dropLimits, t,
+  attachments, canAcceptDrop, filesSupported, onAddImages, onRemoveImage, dropLimits, t,
 }: ComposerAttachmentsProps) {
   const [preview, setPreview] = useState<ComposerAttachment | null>(null)
   const [dragActive, setDragActive] = useState(false)
@@ -91,7 +91,7 @@ export function ComposerAttachments({
       {dragActive && (
         <DropOverlay
           disabled={!canAcceptDrop}
-          labels={dropOverlayLabels(t, canAcceptDrop, dropLimits)}
+          labels={filesSupported ? { title: t(canAcceptDrop ? 'file.dropTitle' : 'image.dropBlocked') } : dropOverlayLabels(t, canAcceptDrop, dropLimits)}
         />
       )}
       {railItems.length > 0 && (

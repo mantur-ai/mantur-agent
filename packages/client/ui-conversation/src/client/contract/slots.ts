@@ -40,6 +40,8 @@ export interface ComposerAttachmentsOwnerProps {
   attachments: readonly ComposerAttachment[]
   /** Whether a document-level file drop may add images now. */
   canAcceptDrop: boolean
+  /** Native file and folder import is available in this carrier. */
+  filesSupported?: boolean
   /** Add one dropped batch through the composer's validation path. */
   onAddImages: (files: readonly File[]) => void
   /** Remove one draft image through the Conversation service. */
@@ -289,6 +291,8 @@ export interface ComposerControlInjected {
 
 /** Package-private operations injected into the resident composer bar. */
 export interface ComposerBarInjected extends ComposerControlInjected {
+  /** Copy desktop attachments and append their saved paths to the owning draft. */
+  importFiles?: (files: readonly File[] | 'file' | 'directory') => Promise<void>
   addImages: ((files: readonly File[]) => string | null) | undefined
   removeImage: ((id: DraftAttachmentId) => void) | undefined
   draftImages: ((ids: readonly DraftAttachmentId[]) => readonly ComposerAttachment[]) | undefined

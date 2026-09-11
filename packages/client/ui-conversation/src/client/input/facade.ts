@@ -629,6 +629,7 @@ export class SessionInputShell implements SessionInput {
    * @returns - An idempotent input-lock release callback.
    */
   lockDraft(): () => void {
+    if (!this.isDraftSettled()) throw new Error('Draft submission is still in progress')
     this.draftLocks += 1
     this.editor.setEditable(false)
     this.publish()
@@ -667,6 +668,7 @@ export class SessionInputShell implements SessionInput {
    * @returns - The complete editor document and selected image identities.
    */
   captureDraft(): DraftDocument {
+    if (!this.isDraftSettled()) throw new Error('Draft submission is still in progress')
     return {
       editor: JSON.stringify(this.editor.getEditorState().toJSON()),
       occurrenceIds: this.projection.occurrences.map(item => item.occurrenceId),

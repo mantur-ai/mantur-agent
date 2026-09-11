@@ -7,10 +7,8 @@ import { fileURLToPath } from 'node:url'
 import { app, BrowserWindow, dialog, ipcMain, Menu, safeStorage, shell } from 'electron'
 import electronUpdater from 'electron-updater'
 import { requestUpdateSave } from './update-save.ts'
-import { prepareDesktopUpdate, saveDraftsWithPrompt } from './prepare-update.ts'
-import { DesktopDraftStorage } from './draft-storage.ts'
-import { installDraftBridge } from './draft-bridge.ts'
 import { installUpdateBridge } from './update-bridge.ts'
+import { installFileImportBridge } from './file-import-bridge.ts'
 import { installDirectoryPickerBridge } from './directory-picker-bridge.ts'
 import { NativeAccountHost } from './auth/host.ts'
 import { prepareNativeAccountUpgrade } from './auth/upgrade.ts'
@@ -50,14 +48,15 @@ const accountBridge = installNativeAccountBridge({ ipc: ipcMain, window: () => m
   origin: () => serviceUrl === undefined ? undefined : new URL(serviceUrl).origin,
   controller: () => nativeAccount,
 })
-const drafts = installDraftBridge({ ipc: ipcMain, window: () => mainWindow,
-  origin: () => serviceUrl === undefined ? undefined : new URL(serviceUrl).origin,
-  storage: new DesktopDraftStorage(paths.userData),
-})
-
 const updateBridge = installUpdateBridge({ ipc: ipcMain, window: () => mainWindow,
   origin: () => serviceUrl === undefined ? undefined : new URL(serviceUrl).origin,
   controller: () => updates, version: app.getVersion(),
+})
+
+installFileImportBridge({ ipc: ipcMain, window: () => mainWindow,
+  origin: () => serviceUrl === undefined ? undefined : new URL(serviceUrl).origin,
+  root: join(paths.userData, 'attachments'),
+  showOpenDialog: (window, options) => dialog.showOpenDialog(window, options),
 })
 
 const directoryPicker = installDirectoryPickerBridge({ ipc: ipcMain, window: () => mainWindow,
@@ -143,10 +142,10 @@ function createWindow(target = STARTUP_PAGE): BrowserWindow {
     openExternal(target)
   })
   window.webContents.on('did-start-navigation', (_event, _url, _isInPlace, isMainFrame) => {
-    if (isMainFrame) { drafts.release(); directoryPicker.invalidate() }
+    if (isMainFrame) { directoryPicker.invalidate() }
   })
   window.once('ready-to-show', () => { window.show() })
-  window.on('closed', () => { drafts.release(); directoryPicker.invalidate(); mainWindow = undefined })
+  window.on('closed', () => { directoryPicker.invalidate(); mainWindow = undefined })
   if (target === STARTUP_PAGE) void window.loadFile(target)
   else void window.loadURL(target)
   mainWindow = window
@@ -298,25 +297,14 @@ function startUpdates(): void {
       const window = mainWindow
       if (window === undefined || window.isDestroyed()) throw new Error(copy.updateShutdownUnavailable)
       preparingUpdate = true
-      try { await prepareDesktopUpdate({
-        saveDrafts: () => saveDraftsWithPrompt({
-          save: () => drafts.prepare(), cancel: () => { drafts.release() },
-          show: async (signal) => {
-            await dialog.showMessageBox(window, {
-              type: 'info', title: copy.updateSavingTitle, message: copy.updateSavingMessage,
-              buttons: [copy.cancelUpdateButton], defaultId: 0, cancelId: 0, noLink: true, signal,
-            })
-          },
-        }),
-        releaseDrafts: () => { drafts.release() },
-        saveHost: () => requestUpdateSave({ child: active.child, timeoutMs: 30_000 }),
-        closeAccount: async () => { await accountHost?.close(); accountHost = undefined },
-        stopHost: async () => {
-          await active.stopAndVerifyExit()
-          if (service === active) service = undefined
-        },
-        cancelled: () => quitting,
-      }) } finally { preparingUpdate = false }
+      try {
+        await requestUpdateSave({ child: active.child, timeoutMs: 30_000 })
+        if (quitting) throw new Error(copy.updateShutdownUnavailable)
+        await accountHost?.close()
+        accountHost = undefined
+        await active.stopAndVerifyExit()
+        if (service === active) service = undefined
+      } finally { preparingUpdate = false }
     },
     prompts: {
       confirmInstall: async (version) => {

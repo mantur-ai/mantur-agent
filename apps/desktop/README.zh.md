@@ -108,13 +108,11 @@ macOS Intel、macOS Apple Silicon 与 Windows 使用同一个更新控制器。m
 
 <a id="draft-checkpoints"></a>
 
-确认更新后，应用等待消息提交与自动项目准备结束，再锁定并保存草稿。提交失败会取消本次更新并保留输入。原生等待窗口提供“取消更新”；取消不影响正在运行的 Host，renderer 回执期限仍限制等待时间。等待期间改变草稿归属也会取消请求。已取消、失败或过期的回执不能放行安装。
+桌面端使用原版逐 Session 浏览器草稿存储，不再暴露原生草稿检查点桥，也不在切换 Session 时锁定草稿。未发送草稿不保证在 loopback origin 改变后保留；已发送消息仍存于 Session 日志。旧原生检查点文件保留在磁盘上，但不自动恢复。
 
-沙箱化 preload 仅暴露具名的草稿读取、保存、重启准备及更新状态与操作消息。主进程只接受当前本地主 frame 的调用，并在 `userData/drafts` 下写入完整检查点，不依赖随机 loopback origin。检查点保留完整编辑器文档、Skill 引用标识，以及用户已经选择的图片原始字节和 SHA-256 摘要。一个 revision 覆盖所有草稿归属以及未关联草稿转入 Session 的两端。过期 revision、附件不完整、存储错误或 renderer 无响应都会阻止重启准备；取消会释放输入锁。
+桌面对话框接受本机文件与文件夹拖拽，并提供添加文件和添加文件夹按钮。文档逐字节复制到 `userData/attachments` 下的独立目录，保留嵌套路径和空目录。文件名不限定接受类型：Markdown、Word、音频等资料均保留原始字节。失败批次被清理并显示错误，不修改原文件。符号链接及包含附件存储目录的导入会被拒绝。
 
-在 macOS 上，保存回执仅在检查点文件与父目录同步后返回。Windows 尚未实现原生持久发布路径，保存会明确失败；Node 未提供所需的目录 fsync 操作。恢复只读取应用检查点和当前 origin 中存在的旧文本草稿。发生冲突会明确报告，不扫描其他浏览器 origin，也不替换其数据。漫途 profile 在启用首次发送准备前将未关联输入框接入此检查点。
-
-载体将 `app.getPath('documents')` 下的 `漫途项目` 子目录作为 `DSH_MANTUR_PROJECTS_ROOT` 传给 Host。该值只指定默认根目录，不提前创建目录。[项目所有者](../../packages/workspace/mantur-projects/README.zh.md)持久保存用户明确更改的位置，仅在首次发送时创建子目录。
+保存路径加入原始草稿，经普通用户消息记录入日志。切换 Session 后，导入结果不会加入其他 Session。文档解读使用 Agent 文件工具，导入本身不承诺提取 Word 正文。图片保留预览和图片提交路径。纯浏览器部署保留图片接收能力。[原生导入决策](../../.agents/notes/implemented/feature/2026-09-11-desktop-file-import.zh.md)记录存储与测试范围。
 
 ## 已知限制
 
