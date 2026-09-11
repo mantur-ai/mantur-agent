@@ -49,7 +49,7 @@ it('returns from both native marketplace entrypoints with the selected detail an
     let revision = 0
     const preparing = Promise.withResolvers<NativeAccountReply>()
     let holdPreparation = true
-    let nextFailure: 'local' | 'network' | undefined
+    let nextFailure: 'local' | 'network' | 'endpoint-unavailable' | 'protocol' | undefined
     const operations: NativeAccountAction['kind'][] = []
     await page.exposeFunction('invokeNativeAccountFixture', (action: NativeAccountAction) => {
       operations.push(action.kind)
@@ -122,7 +122,7 @@ it('returns from both native marketplace entrypoints with the selected detail an
     await page.keyboard.press('Escape')
     await detail.getByRole('button', { name: '登录后安装' }).waitFor()
     await expectDetailFocus('登录后安装')
-    for (const kind of ['local', 'network'] as const) {
+    for (const kind of ['local', 'network', 'endpoint-unavailable', 'protocol'] as const) {
       await detail.getByRole('button', { name: '登录后安装' }).click()
       nextFailure = kind
       await account.getByRole('button', { name: '登录漫途账号', exact: true }).click()
@@ -131,6 +131,9 @@ it('returns from both native marketplace entrypoints with the selected detail an
         await expect.poll(() => account.getByRole('button', { name, exact: true }).isEnabled()).toBe(true)
       }
       expect(snapshot).toMatchObject({ busy: false, authenticated: false, failure: { kind } })
+      if (kind === 'endpoint-unavailable' || kind === 'protocol') {
+        captures.push(`## ${kind}\n\n${await account.ariaSnapshot()}`)
+      }
       await account.getByRole('button', { name: '返回创作' }).click()
       await detail.getByRole('button', { name: '登录后安装' }).waitFor()
       await expectDetailFocus('登录后安装')
@@ -184,7 +187,7 @@ it('returns from both native marketplace entrypoints with the selected detail an
     expect(legacy).not.toHaveBeenCalled()
     expect(requests.every(request => request === 'GET /api/v1/skills' || request === 'GET /api/v1/skills/short-drama')).toBe(true)
     expect(prompts).toBe(0)
-    expect(operations).toEqual(['refresh', 'browser', 'browser', 'browser', 'skip', 'browser'])
+    expect(operations).toEqual(['refresh', 'browser', 'browser', 'browser', 'browser', 'browser', 'skip', 'browser'])
     expect(console.pageErrors).toEqual([])
     await mkdir(images, { recursive: true })
     await page.screenshot({ path: join(images, 'native-entrypoints.png') })
@@ -269,15 +272,15 @@ it('opens optional account Settings and renders browser authorization failure an
     await page.setViewportSize({ width: 880, height: 600 })
     await page.getByRole('button', { name: '登录漫途账号', exact: true }).focus()
     await page.keyboard.press('Enter')
-    await page.getByRole('alert').waitFor()
-    expect(await page.getByRole('alert').innerText()).toBe('暂时无法连接漫途，请检查网络后重试。')
+    await page.getByRole('region', { name: '登录漫途账号', exact: true }).getByRole('alert').waitFor()
+    expect(await page.getByRole('region', { name: '登录漫途账号', exact: true }).getByRole('alert').innerText()).toBe('暂时无法连接漫途，请检查网络后重试。')
     expect(await page.getByRole('button', { name: '重新检查登录状态' }).count()).toBe(1)
     await page.getByRole('button', { name: '重新检查登录状态' }).scrollIntoViewIfNeeded()
     await page.screenshot({ path: join(images, 'login-error-880.png') })
     for (const theme of ['light', 'dark'] as const) {
       await page.emulateMedia({ colorScheme: theme })
       await expect.poll(() => page!.locator('body').getAttribute('data-ds-dark-theme')).toBe(theme === 'dark' ? '' : null)
-      const colors = await page.getByRole('alert').evaluate((element) => {
+      const colors = await page.getByRole('region', { name: '登录漫途账号', exact: true }).getByRole('alert').evaluate((element) => {
         const layers: number[][] = []
         for (let parent: Element | null = element; parent !== null; parent = parent.parentElement) {
           const color = getComputedStyle(parent).backgroundColor.match(/[\d.]+/g)?.map(Number)

@@ -7,6 +7,8 @@ kind: "package-library"
 
 English | [中文](README.zh.md)
 
+For text-editor intent, Windows opens the document with system Notepad instead of a file-extension association; translated WSL paths use the same editor. The path is passed as one quoted argument and the opener returns after launching the editor.
+
 ## Summary
 
 `dsh-native-command` runs host executables without a shell and opens Host filesystem paths through the desktop. The command runner captures utf8 output, propagates cancellation, and hides transient Windows consoles. The path opener supports default-application and text-editor intents, browser-renderable documents, WSL translation, and desktop availability checks. It is a library, not a plugin: no `ctx`, no state, no events.

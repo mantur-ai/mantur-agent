@@ -53,7 +53,7 @@ export class NativeHttpFailure extends Error {
    * @param retryAfterMs - server-provided authorization throttling delay.
    */
   constructor(
-    readonly kind: 'network' | 'cancelled' | 'protocol' | 'remote',
+    readonly kind: 'network' | 'cancelled' | 'protocol' | 'remote' | 'endpoint-unavailable',
     readonly status?: number,
     readonly code?: z.infer<typeof errorCode>,
     readonly retryAfterMs?: number,
@@ -208,6 +208,10 @@ export class NativeHttpClient {
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
         signal: lifetime, redirect: 'error', credentials: 'omit', cache: 'no-store', referrerPolicy: 'no-referrer',
       })
+      if (response.status === 404 && path === '/api/v1/client-auth/attempts') {
+        await response.body?.cancel()
+        throw new NativeHttpFailure('endpoint-unavailable', response.status)
+      }
       value = response.status === 204 ? undefined : await this.readJson(response)
       lifetime.throwIfAborted()
     } catch (error) {

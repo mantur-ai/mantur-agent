@@ -26,6 +26,23 @@ function bench(origin = 'https://auth.example') {
 }
 
 describe('browser account HTTP', () => {
+  it.each(['{"error":"NOT_FOUND"}', '<html>not found</html>'])('reports a missing create endpoint without exposing its body: %s', async (body) => {
+    const b = bench()
+    const cancel = vi.fn()
+    b.transport.mockResolvedValueOnce(new Response(new ReadableStream({ start(controller) {
+      controller.enqueue(new TextEncoder().encode(body))
+    }, cancel }), { status: 404 }))
+    await expect(b.client.create(b.secrets, signal())).rejects.toMatchObject({ kind: 'endpoint-unavailable', status: 404 })
+    expect(cancel).toHaveBeenCalledOnce()
+    expect(b.transport).toHaveBeenCalledOnce()
+  })
+
+  it('keeps a missing attempt distinct from a missing create route', async () => {
+    const b = bench()
+    b.transport.mockResolvedValueOnce(Response.json({ error: 'ATTEMPT_NOT_FOUND' }, { status: 404 }))
+    await expect(b.client.cancel(b.secrets, b.attempt, signal())).rejects.toMatchObject({ kind: 'remote', code: 'ATTEMPT_NOT_FOUND' })
+  })
+
   it('sends only device proof hashes during create and accepts only the exact authorization URL', async () => {
     const b = bench()
     b.transport.mockResolvedValueOnce(Response.json(b.receipt, { status: 201 }))

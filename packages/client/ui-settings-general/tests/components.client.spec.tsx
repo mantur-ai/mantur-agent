@@ -88,7 +88,8 @@ describe('SettingsDocumentAction', () => {
       controller={controller}
       useSnapshot={bindSnapshotSelector(controller.store)}
     />)
-    const action = await screen.findByRole('button', { name: 'Open configuration file' })
+    const action = await screen.findByRole('button', { name: 'Advanced configuration file' })
+    expect(action.title).toBe('For advanced settings only; a new file may be empty. Account sign-in does not require editing this file.')
     fireEvent.click(action)
     await waitFor(() => { expect(openDocument).toHaveBeenCalledWith() })
   })
@@ -107,7 +108,7 @@ describe('SettingsDocumentAction', () => {
       useSnapshot={bindSnapshotSelector(controller.store)}
     />)
     await waitFor(() => { expect(controller.store.getSnapshot().status).toBe('unavailable') })
-    expect(screen.queryByRole('button', { name: 'Open configuration file' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Advanced configuration file' })).toBeNull()
     first.unmount()
     render(<SettingsDocumentAction
       {...kit}
@@ -120,7 +121,7 @@ describe('SettingsDocumentAction', () => {
     await waitFor(() => { expect(controller.store.getSnapshot().status).toBe('unavailable') })
     expect(describe).toHaveBeenCalledTimes(1)
     await mirror.load()
-    expect(await screen.findByRole('button', { name: 'Open configuration file' })).toBeTruthy()
+    expect(await screen.findByRole('button', { name: 'Advanced configuration file' })).toBeTruthy()
     expect(describe).toHaveBeenCalledTimes(2)
   })
 
@@ -143,8 +144,8 @@ describe('SettingsDocumentAction', () => {
       controller={controller}
       useSnapshot={bindSnapshotSelector(controller.store)}
     />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Open configuration file' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Advanced configuration file' }))
     expect((await screen.findByRole('alert')).textContent).toBe('Could not open configuration file')
-    expect(screen.getByRole('button', { name: 'Open configuration file' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Advanced configuration file' })).toBeTruthy()
   })
 })

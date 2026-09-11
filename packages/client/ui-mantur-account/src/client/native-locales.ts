@@ -64,6 +64,8 @@ export const nativeZh = {
   nativeInvalidCredentials: '账号或登录凭据不正确，请检查后重试。',
   nativeRateLimited: '尝试次数过多，请稍后重试。',
   nativeAuthUnavailable: '漫途登录服务暂时不可用，请稍后重试。',
+  nativeEndpointUnavailable: '当前服务器尚未提供桌面登录接口，请联系发布人完成服务部署。无需修改本地配置文件。',
+  nativeProtocolError: '登录服务返回了不兼容的数据，请联系发布人核对客户端与服务端版本。',
   nativeDisabled: '账号已停用，暂时无法登录。',
   nativeExpired: '此设备登录已到期，请重新登录。',
   nativeAttemptExpired: '本次授权已过期，请重新发起。',
@@ -125,6 +127,8 @@ export const nativeEn = {
   nativeInvalidCredentials: 'The account or credentials were not accepted. Check them and try again.',
   nativeRateLimited: 'Too many attempts. Please try again later.',
   nativeAuthUnavailable: 'Mantur sign-in services are temporarily unavailable. Try again later.',
+  nativeEndpointUnavailable: 'This server does not provide the desktop sign-in endpoint. Contact the publisher to deploy the service. No local configuration edit is needed.',
+  nativeProtocolError: 'The sign-in service returned incompatible data. Contact the publisher to check the client and server versions.',
   nativeDisabled: 'This account is disabled and cannot sign in.',
   nativeExpired: 'Device sign-in has expired. Sign in again.',
   nativeAttemptExpired: 'This authorization attempt has expired. Start a new attempt.',
@@ -140,6 +144,7 @@ export const nativeEn = {
 } satisfies Record<keyof typeof nativeZh, string>
 
 const failures: Readonly<Record<string, keyof typeof nativeZh | undefined>> = {
+  'endpoint-unavailable': 'nativeEndpointUnavailable', protocol: 'nativeProtocolError',
   network: 'nativeNetworkError', transport: 'nativeUnavailable', unavailable: 'nativeUnavailable',
   browser: 'nativeBrowserFailure', denied: 'nativeCancelled',
   GRANT_SUPERSEDED: 'nativeRevoked', GRANT_REVOKED: 'nativeRevoked', INVALID_GRANT: 'nativeRevoked',

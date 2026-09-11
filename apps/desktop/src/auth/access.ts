@@ -13,7 +13,7 @@ interface ActiveRequest {
 export interface NativeRevocationResult {
   readonly revoked: number
   readonly expired: number
-  readonly failures: ReadonlyArray<{ requestId: NativeRequestId; kind: 'network' | 'cancelled' | 'protocol' | 'remote' | 'storage' }>
+  readonly failures: ReadonlyArray<{ requestId: NativeRequestId; kind: NativeHttpFailure['kind'] | 'storage' }>
 }
 
 /** Keeps a request owned until its caller finishes consuming the response or stopping its process scope. */

@@ -116,6 +116,15 @@ describe('native account controls', () => {
     expect((b.getByRole('button', { name: '暂时跳过' }) as HTMLButtonElement).disabled).toBe(false)
   })
 
+  it.each([
+    ['endpoint-unavailable', '当前服务器尚未提供桌面登录接口，请联系发布人完成服务部署。无需修改本地配置文件。'],
+    ['protocol', '登录服务返回了不兼容的数据，请联系发布人核对客户端与服务端版本。'],
+  ])('explains %s without asking the user to edit credentials', (kind, text) => {
+    const b = bench({ online: true, snapshot: signedOut, failure: { kind } })
+    expect(b.getByRole('alert').textContent).toBe(text)
+    expect(b.getByRole('button', { name: '登录漫途账号' })).toBeTruthy()
+  })
+
   it('keeps an unknown check visible and never prints raw failure values', () => {
     const b = bench({ online: true })
     expect(b.getByText(zh.nativeChecking)).toBeTruthy()

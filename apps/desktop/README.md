@@ -4,6 +4,8 @@ English | [中文](README.zh.md)
 
 The desktop application is 漫途Agent, built by Mantur to create and produce comic dramas locally. Electron owns the native window and one child process; the child starts the shipped `dsh --profile mantur` application on a random loopback port. Development and packaged applications use the approved blue infinity-loop logo for the native window, macOS Dock, About panel, and installer assets. The desktop package does not implement another agent runtime.
 
+Windows uses the NSIS installation wizard with a selectable application directory. The EXE carries the application resources; its extraction progress is not a second application download. A missing browser-login create endpoint reports an unavailable server route separately from network and incompatible-response failures. Successful packaging does not verify production login availability or provide a Windows signing identity.
+
 ## Develop without packaging
 
 After `pnpm install`, build the repository artifacts once on a clean checkout:

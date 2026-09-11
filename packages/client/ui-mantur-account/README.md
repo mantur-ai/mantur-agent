@@ -7,6 +7,8 @@ kind: "package-reference"
 
 English | [中文](README.zh.md)
 
+Native login distinguishes a missing create endpoint from network and incompatible-response errors. Missing-endpoint copy directs users to the publisher for server deployment and does not ask them to edit local credentials. Neither a catalog response nor a package smoke proves account authorization works.
+
 ## Summary
 
 This browser package adds optional Mantur account Settings and requested dialogs. It does not register a session onboarding step, so local session creation does not depend on account status. The Host's explicit identity mode selects desktop browser authorization or standalone device login. The desktop entry opens the system browser, where ordinary Mantur login and device consent take place. Cloud requests still require valid credentials.
