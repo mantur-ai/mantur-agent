@@ -259,12 +259,15 @@ export function sourceBuildEnvironment(
       || name === 'APPLE_ID'
       || name === 'APPLE_TEAM_ID'
       || name === 'CSC_LINK'
-      || name.startsWith('OPENCHATCUT_'))
+      || name.startsWith('OPENCHATCUT_')
+      || name.toUpperCase() === 'PATH')
   )))
   environment.ELECTRON_SKIP_BINARY_DOWNLOAD = '1'
   environment.npm_config_cache = join(cacheDir, 'npm')
   environment.npm_config_registry = 'https://registry.npmjs.org/'
-  environment.PATH = [...toolDirectories, environment.PATH].filter((value): value is string => value !== undefined).join(delimiter)
+  const pathKey = Object.keys(ambient).find(name => name.toUpperCase() === 'PATH')
+  const inheritedPath = pathKey === undefined ? undefined : ambient[pathKey]
+  environment.PATH = [...toolDirectories, inheritedPath].filter((value): value is string => value !== undefined).join(delimiter)
   return environment
 }
 

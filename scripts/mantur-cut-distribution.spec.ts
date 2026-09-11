@@ -55,6 +55,13 @@ function sourceConfig(): unknown {
 }
 
 describe('Mantur Cut distribution', () => {
+  it('preserves Windows Path when preparing child build commands', () => {
+    const result = sourceBuildEnvironment('cache', { Path: 'node-bin', API_KEY: 'hidden' }, ['tools'])
+    expect(result.PATH).toBe(['tools', 'node-bin'].join(delimiter))
+    expect(result.Path).toBeUndefined()
+    expect(result.API_KEY).toBeUndefined()
+  })
+
   it('keeps the Chrome cache version out of the upstream archive filename', async () => {
     const source = await readFile(new URL('./mantur-cut-distribution.ts', import.meta.url), 'utf8')
     expect(source).toContain('const chromeArchive = `chrome-headless-shell-${target.chromePlatform}-${target.chromeVersion}.zip`')
