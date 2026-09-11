@@ -1,84 +1,95 @@
-# DeepSeek Harness
+---
+description: "漫途 Agent 桌面端的产品介绍、安装使用、创作流程与开发贡献入口。"
+---
+
+# Mantur Agent · 漫途 Agent
 
 [English](README.md) | 中文
 
-DeepSeek Harness（`dsh`）是由 [DeepSeek AI](https://deepseek.com) 开发的开源 agent harness（智能体框架）。
+面向剧本创作、AI 漫剧制作和素材生产的桌面工作台。带上剧本与参考素材，用自然语言描述目标，与 Agent 一起完成方案整理、资产准备、生成和剪辑。
 
-它构建于**一切皆插件**的架构之上，由 [Cordis](https://github.com/cordiverse/cordis) 驱动，其设计参见论文 [_A Programming Paradigm for Spatiotemporal Composability_](https://arxiv.org/abs/2608.25512)。
+[下载安装与使用指南](https://guiyi2023.feishu.cn/docx/Iq3id4fr8o2uo9xKfpEcIck9nRf) · [ManturHub](https://hub.mantur.ai) · [反馈问题](https://github.com/mantur-ai/mantur-agent/issues)
 
-文档：[https://deepseek-harness.github.io/deepseek-harness/](https://deepseek-harness.github.io/deepseek-harness/)
+![漫途 Agent 首页与文件导入](docs/assets/mantur-agent/home.png)
 
-## 开发者预览
+## 可以用它做什么
 
-DeepSeek Harness 处于 _开发者预览_ 阶段，正在快速迭代。**未来将出现破坏兼容性的变更。**
+| 你的任务 | 漫途如何协助 |
+| --- | --- |
+| 创作剧本 | 在项目对话中讨论题材、人物、分集结构与剧本修改。 |
+| 筹备制作 | 导入剧本和参考素材文件夹，让 Agent 整理角色、场景、道具及分镜提示词。 |
+| 生成创作素材 | 选择技能，通过关联的 ManturHub 算子调用任务所需的生成能力。 |
+| 复用创作方法 | 在配方广场选择参考效果，将配方要求应用到自己的内容。 |
+| 进入剪辑 | 打开内置剪辑工作台，继续处理制作素材。 |
 
-运行本项目前，请阅读[安全说明](SAFETY.zh.md)。
+实际结果取决于所选技能、模型、算子、权限及输入素材。交付前请审核剧本和生成素材；发起对话并不代表成片已经完成。
+
+<details>
+<summary>产品截图：技能广场与配方广场</summary>
+
+![技能广场](docs/assets/mantur-agent/skills.png)
+
+![配方广场](docs/assets/mantur-agent/recipes.png)
+
+截图来自使用空白演示配置的实际桌面应用。广场内容与数量随服务更新而变化。
+
+</details>
 
 <a id="run"></a>
 
-## 运行
+## 安装与开始使用
 
-### 通过 `npm` 运行
+1. 打开[安装使用指南](https://guiyi2023.feishu.cn/docx/Iq3id4fr8o2uo9xKfpEcIck9nRf)，下载适合自己电脑的附件，以指南标注的可用版本为准。
+2. **macOS Apple Silicon**：打开 DMG，将应用拖入“应用程序”。**Windows x64**：运行 EXE，按安装程序提示完成安装。该指南目前不提供 Intel Mac 安装包。
+3. 打开漫途 Agent，在设置中配置模型提供商并选择模型。请使用自己的提供商凭证；安装包不附带供所有用户共用的模型 API Key。
+4. 选择工作区，创建对话，添加剧本或参考素材。发送具体要求，检查 Agent 返回的结果。
 
-安装 `Node.js`，然后运行：
+Windows 安装包包含应用运行环境，解压进度并不是再次下载应用。所提供的 Windows 安装包尚无 Windows 签名证书，系统可能提示“未知发布者”；所提供的 Mac 包具有 Developer ID 签名，但尚未公证。具体文件及安装说明请查看指南。
 
-```sh
-npx @deepseek-ai/dsh web
-```
+## 导入剧本或整个文件夹
 
-该命令默认会在 `http://127.0.0.1:3080` 启动 Web UI，本机启动时还会用默认浏览器打开页面。通过 SSH 启动时只打印宿主机 URL，因为本地转发地址由 SSH 客户端或编辑器持有。传入 `--no-open` 可仅运行服务器而不打开浏览器。详见 [Web UI 指南](docs/user/guide/index.zh.md)。
+在桌面端，将文件或文件夹从访达或资源管理器拖入对话输入区，也可以点击**添加文件**或**添加文件夹**。支持导入 Markdown（`.md`）、Word（`.doc` / `.docx`）、图片、音频及其他普通文件，并保留嵌套目录和空文件夹。
+
+应用会创建本地副本，并将路径加入草稿；发送消息后，再由 Agent 按要求读取。导入 Word 文档会保留原始文件，正文解析取决于 Agent 可用的文档工具。导入不等于自动同步到云端；调用云端模型或算子时，任务所需的内容可能发送至对应服务。
+
+不支持符号链接，也不能导入包含应用自身附件存储目录的文件夹。导入失败会撤销该批副本，不修改原文件。纯浏览器部署仍使用图片导入方式，不具备桌面端的文件夹导入能力。
+
+可以先发送这样一条需求：
+
+> 请读取我添加的剧本和参考素材文件夹，整理分集、角色、场景和道具，列出缺失信息，再给出第一集的制作方案。等我确认后再生成素材。
+
+## ManturHub 账号与模型设置
+
+**漫途账号**用于关联 [hub.mantur.ai](https://hub.mantur.ai)。在设置的账号页面选择浏览器登录，在网站完成登录与设备授权，然后返回应用检查账号是否显示已登录。仅打开浏览器不代表授权完成。云端操作需要有效授权，并按平台展示的规则计费。
+
+**模型设置**用于选择对话使用的语言模型并配置提供商凭证，与漫途账号登录相互独立。未登录漫途账号时也可以创建本地对话；调用云端能力仍需相应授权。
+
+## 常见问题
+
+| 问题 | 如何处理 |
+| --- | --- |
+| 为什么模型配置已经有内容？ | 应用会保留本地设置，重启或更新后仍可读取。看到已有配置不代表安装包内置了凭证。 |
+| 为什么高级配置文件是空的？ | 首次创建时可以为空。日常配置请使用账号与模型页面，登录不需要编辑 YAML 文件。 |
+| 登录报错怎么办？ | 保留错误原文和应用版本。接口缺失或响应不兼容需要发布方排查，修改本地模型密钥无法修复。 |
+| 为什么只能添加图片？ | 检查是否使用带“添加文件／添加文件夹”的桌面安装版，而非纯浏览器部署。 |
+| `latest-mac.yml` 和 `.blockmap` 是什么？ | 它们是更新元数据，不是安装包。安装请下载指南指定的 DMG 或 EXE。 |
+
+反馈问题时，请附上应用版本、操作系统及芯片架构、复现步骤、错误原文或截图。发布到 [GitHub Issues](https://github.com/mantur-ai/mantur-agent/issues) 前，请去除凭证和私人剧本内容。
 
 <a id="run-from-source"></a>
 
-### 从源码运行
+## 开发与贡献
 
-如需从仓库源码运行：
+仓库使用 Node.js（`^22.19.0 || >=24.0.0`）与 pnpm 11.7.0，桌面 CI 使用 Node.js 24。漫途产品通过 `mantur` 配置启动；上游 npm 包并非漫途桌面安装包。按下方开发指南准备源码和依赖后，使用以下命令构建漫途配置：
 
 ```sh
-git clone https://github.com/deepseek-ai/deepseek-harness.git
-cd deepseek-harness
-pnpm install
-pnpm run build
-pnpm dsh web
+pnpm run build:mantur
 ```
 
-`pnpm run build` 会准备仓库产物。`pnpm dsh web` 会直接使用这些已构建产物，不会重新构建。
+原生打包、签名前置条件和安装包启动检查见[桌面开发指南](apps/desktop/README.zh.md)。修改代码前请阅读[开发指南](docs/development.zh.md)、[架构文档](docs/architecture.zh.md)、[贡献指南](CONTRIBUTING.zh.md)及[仓库规则](AGENTS.md)。漫剧功能应尽量通过插件、技能和配置扩展，并随修改提供针对性测试。
 
-## 社区与支持
+## 开源基础与许可证
 
-- 通过 [GitHub Discussions](https://github.com/deepseek-ai/deepseek-harness/discussions) 提交反馈或 bug 报告。
-- 为你的插件仓库添加 [`dsh-plugin`](https://github.com/topics/dsh-plugin) 话题，便于被发现。
-- 欢迎加入 DeepSeek Harness 企微群：扫码添加企微小助手并填写入群问卷，完成后小助手会邀请你入群。
+漫途 Agent 是基于 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 构建的漫途漫剧制作版本，沿用 DeepSeek AI 开发的上游框架及其 [Cordis](https://github.com/cordiverse/cordis) 插件架构。本仓库维护漫途产品适配。
 
-<table>
-  <thead>
-    <tr>
-      <th align="center">企微小助手</th>
-      <th align="center">入群问卷</th>
-      <th align="center">微信公众号</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td align="center"><img src="https://cdn.deepseek.com/harness/readme/community-wecom-assistant.png" alt="DeepSeek Harness 企微小助手二维码" width="180" height="180"></td>
-      <td align="center"><a href="https://trtgsjkv6r.feishu.cn/share/base/form/shrcnIt5twSVdLGD52KJBckGCgg"><img src="https://cdn.deepseek.com/harness/readme/community-wecom-survey.png" alt="DeepSeek Harness 入群问卷二维码" width="180" height="180"></a></td>
-      <td align="center"><img src="https://cdn.deepseek.com/harness/readme/community-wechat-official-account.png" alt="DeepSeek Harness 团队微信公众号二维码" width="180" height="180"></td>
-    </tr>
-  </tbody>
-</table>
-
-## 参与贡献
-
-参见 [CONTRIBUTING.md](CONTRIBUTING.zh.md)。
-
-## 开发
-
-请先阅读[开发指南](docs/development.zh.md)与[架构文档](docs/architecture.zh.md)。
-
-面向 agent：请遵循 [AGENTS.md](AGENTS.md)。
-
-## 许可证
-
-[MIT](LICENSE)
-
-第三方依赖及其许可证见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+仓库代码采用 [MIT 许可证](LICENSE)。第三方组件保留各自许可证，详见[第三方声明](THIRD_PARTY_NOTICES.md)及[桌面分发要求](apps/desktop/README.zh.md)。仓库许可证不替代内置剪辑、媒体组件或云服务自身的条款。从源码运行前请阅读[安全说明](SAFETY.zh.md)。
