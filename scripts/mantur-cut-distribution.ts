@@ -667,7 +667,7 @@ async function prepare(targetKey: ManturCutTarget, cacheDir: string, outputDir: 
     await mkdir(join(source, 'desktop-dist'), { recursive: true })
     await cp(cachedChrome, join(source, 'desktop-dist', `chs-${target.chromePlatform}-${target.chromeVersion}.zip`))
     run('npm', ['run', 'desktop:prepare', '--', targetKey], source, environment)
-    run(join(source, 'node_modules/.bin/esbuild'), ['desktop/embedded-server.ts', '--bundle', '--platform=node', '--format=esm', '--packages=external', '--outfile=desktop-dist/mantur-embedded-server.mjs'], source, environment)
+    run('npm', ['exec', '--offline', '--no', '--', 'esbuild', 'desktop/embedded-server.ts', '--bundle', '--platform=node', '--format=esm', '--packages=external', '--outfile=desktop-dist/mantur-embedded-server.mjs'], source, environment)
     run('npm', ['prune', '--omit=dev'], source, environment)
     await mkdir(staging, { recursive: true })
     const paths = await copyProductionProgram(source, staging, auditReport, targetKey, target)
