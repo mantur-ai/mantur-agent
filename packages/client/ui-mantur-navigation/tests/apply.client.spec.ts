@@ -14,7 +14,7 @@ import { ManturComposerLayout, type ManturComposerInjected } from '../src/client
 import { ProjectPathSettings, type ProjectPathSettingsInjected } from '../src/client/ProjectPathSettings.tsx'
 import { GUIDE_NAMESPACE, GuideSettingsSchema, type GuideSettings } from '../src/guide-settings.ts'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import { DesktopUpdate, type DesktopUpdateInjected } from '../src/client/DesktopUpdate.tsx'
+import { DesktopUpdate, DesktopUpdateSettings, type DesktopUpdateInjected } from '../src/client/DesktopUpdate.tsx'
 
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
@@ -139,6 +139,7 @@ describe('ui-mantur-navigation apply', () => {
       await fiber.await()
       const entry = subject.slots.entries('sidebar.footer.action')[0]
       expect(entry?.component).toBe(DesktopUpdate)
+      expect(subject.slots.entries('settings.general.item').find(entry => entry.options.id === 'mantur.desktop-update')?.component).toBe(DesktopUpdateSettings)
       const value = (entry?.inject as unknown as () => DesktopUpdateInjected)()
       expect(value.hooks.updates.getSnapshot().snapshot).toEqual(snapshot)
       expect(value.controller).toBeTruthy()

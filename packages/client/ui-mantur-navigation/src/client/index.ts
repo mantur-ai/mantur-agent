@@ -32,7 +32,7 @@ import { en, zh, type ManturNavigationKey } from './locales.ts'
 import { ManturMarketplaceStore } from './store.ts'
 import { BundledSkills } from './bundled-skills.ts'
 import { NativeUpdates } from './desktop-updates.ts'
-import { DesktopUpdate } from './DesktopUpdate.tsx'
+import { DesktopUpdate, DesktopUpdateSettings } from './DesktopUpdate.tsx'
 import { en as updateEn, zh as updateZh, type UpdateKey } from './update-locales.ts'
 
 declare module '@deepseek-ai/cordis' {
@@ -76,6 +76,10 @@ export async function apply(ctx: Context): Promise<void> {
       name: 'sidebar.footer.action', id: 'mantur.desktop-update', locale: 'updates.mantur',
       inject: () => ({ controller: native, hooks: { updates: native.store } }),
     }, DesktopUpdate))
+    ctx.slots.inject('settings.general.item', () => ctx.slots.register({
+      name: 'settings.general.item', id: 'mantur.desktop-update', order: 90, locale: 'updates.mantur',
+      inject: () => ({ controller: native, hooks: { updates: native.store } }),
+    }, DesktopUpdateSettings))
   }
   const disposeMarketplace = await ctx.remote.$mount(manturMarketplaceRemote)
   ctx.effect(() => disposeMarketplace, 'ui-mantur-navigation: marketplace Remote')

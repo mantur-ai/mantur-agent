@@ -18,7 +18,8 @@
   - paragraph: 当前版本 1.0.0
   - button "重新检查"
 
-## Collapsed idle
+## Collapsed settings
 
-- button "当前版本 1.0.0 · 检查更新":
-  - img
+- region "当前版本 1.0.0":
+  - paragraph: 当前版本 1.0.0
+  - button "检查更新"

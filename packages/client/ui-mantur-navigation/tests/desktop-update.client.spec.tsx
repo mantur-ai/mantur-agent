@@ -3,7 +3,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
-import { DesktopUpdate, type DesktopUpdateProps } from '../src/client/DesktopUpdate.tsx'
+import { DesktopUpdate, DesktopUpdateSettings, type DesktopUpdateProps } from '../src/client/DesktopUpdate.tsx'
 import type { NativeUpdateView, NativeUpdateState } from '../src/client/desktop-updates.ts'
 import { zh } from '../src/client/update-locales.ts'
 
@@ -28,14 +28,19 @@ describe('desktop update footer', () => {
     view.rerender(<DesktopUpdate {...disabled} />)
     expect(view.container.textContent).toBe('')
   })
-  it('keeps checks busy and lets an explicit failed check retry', () => {
-    const view = render(<DesktopUpdate {...props({ kind: 'checking' })} />)
+  it('keeps manual checks, no-update results and retries inside settings', () => {
+    const idle = props({ kind: 'idle' })
+    const checkRun = vi.spyOn(idle.controller, 'run')
+    const view = render(<DesktopUpdateSettings {...idle} />)
+    fireEvent.click(screen.getByRole('button'))
+    expect(checkRun).toHaveBeenCalledExactlyOnceWith('check')
+    view.rerender(<DesktopUpdateSettings {...props({ kind: 'checking' })} />)
     expect(screen.queryByRole('button')).toBeNull()
-    view.rerender(<DesktopUpdate {...props({ kind: 'checking' }, false)} />)
-    expect(screen.getByRole('button').hasAttribute('disabled')).toBe(true)
+    view.rerender(<DesktopUpdateSettings {...props({ kind: 'up-to-date', requestedByUser: true })} />)
+    expect(screen.getByRole('button')).toBeTruthy()
     const retry = props({ kind: 'error', detail: 'feed offline', requestedByUser: true })
     const retryRun = vi.spyOn(retry.controller, 'run')
-    view.rerender(<DesktopUpdate {...retry} />)
+    view.rerender(<DesktopUpdateSettings {...retry} />)
     expect(screen.getByRole('alert').textContent).toContain('feed offline')
     fireEvent.click(screen.getByRole('button'))
     expect(retryRun).toHaveBeenCalledExactlyOnceWith('check')
@@ -73,24 +78,18 @@ describe('desktop update footer', () => {
     view.rerender(<DesktopUpdate {...props({ kind: 'downloading', version: '1.2.0', percent: null, transferred: 1048576, total: null })} />)
     expect(screen.getByText('已下载 1.0 MiB')).toBeTruthy()
   })
-  it.each([true, false])('keeps manual checks available before and after discovery in wide=%s mode', (wide) => {
-    const idle = props({ kind: 'idle' }, wide)
-    const checkRun = vi.spyOn(idle.controller, 'run')
-    const view = render(<DesktopUpdate {...idle} />)
-    fireEvent.click(screen.getByRole('button', { name: /检查更新/u }))
-    expect(checkRun).toHaveBeenCalledExactlyOnceWith('check')
-    expect(view.container.innerHTML).toContain('1.0.0')
-    view.rerender(<DesktopUpdate {...props({ kind: 'up-to-date', requestedByUser: false }, wide)} />)
-    expect(screen.getByRole('button', { name: /检查更新/u })).toBeTruthy()
-    expect(view.container.innerHTML).toContain('暂无可用更新')
-    const failed = props({ kind: 'error', detail: 'feed unavailable', requestedByUser: false }, wide)
-    const retryRun = vi.spyOn(failed.controller, 'run')
-    view.rerender(<DesktopUpdate {...failed} />)
-    expect(view.container.innerHTML).toContain('更新未完成')
-    expect(screen.queryByRole('alert')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: /重新检查/u }))
-    expect(retryRun).toHaveBeenCalledExactlyOnceWith('check')
-    expect(view.container.innerHTML).not.toContain('暂无可用更新')
+  it.each([true, false])('hides the footer without a discovered update in wide=%s mode', (wide) => {
+    const states: NativeUpdateState[] = [
+      { kind: 'idle' }, { kind: 'checking' },
+      { kind: 'up-to-date', requestedByUser: false },
+      { kind: 'error', detail: 'feed unavailable', requestedByUser: false },
+      { kind: 'error', detail: 'feed unavailable', requestedByUser: true },
+    ]
+    const view = render(<DesktopUpdate {...props(states[0]!, wide)} />)
+    for (const state of states) {
+      view.rerender(<DesktopUpdate {...props(state, wide)} />)
+      expect(view.container.textContent).toBe('')
+    }
   })
   it.each([true, false])('offers an explicit download in wide=%s mode', (wide) => {
     const value = props({ kind: 'available', version: '1.2.0', prompting: false }, wide)
