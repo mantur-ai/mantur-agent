@@ -361,20 +361,27 @@ function verifyWhisperExecutables(source: string, targetKey: ManturCutTarget, ta
 }
 
 function run(command: string, args: readonly string[], cwd: string, environment: NodeJS.ProcessEnv = process.env): void {
-  const result = spawnSync(command, args, { cwd, env: environment, stdio: 'inherit' })
+  // npm.cmd needs the Windows command processor; npm arguments here are literals or validated target enums.
+  const result = spawnSync(command, args, {
+    cwd, env: environment, stdio: 'inherit', shell: process.platform === 'win32' && command === 'npm',
+  })
   if (result.error !== undefined) throw result.error
   if (result.status !== 0) throw new Error(`${command} ${args.join(' ')} exited with ${String(result.status ?? result.signal)}`)
 }
 
 function capture(command: string, args: readonly string[], cwd: string, environment: NodeJS.ProcessEnv = process.env): string {
-  const result = spawnSync(command, args, { cwd, env: environment, encoding: 'utf8' })
+  const result = spawnSync(command, args, {
+    cwd, env: environment, encoding: 'utf8', shell: process.platform === 'win32' && command === 'npm',
+  })
   if (result.error !== undefined) throw result.error
   if (result.status !== 0) throw new Error(`${command} ${args.join(' ')} exited with ${String(result.status ?? result.signal)}: ${result.stderr.trim()}`)
   return result.stdout.trim()
 }
 
 async function auditProductionDependencies(source: string, targetKey: ManturCutTarget, environment: NodeJS.ProcessEnv): Promise<string> {
-  const result = spawnSync('npm', ['audit', '--json', '--omit=dev'], { cwd: source, env: environment, encoding: 'utf8' })
+  const result = spawnSync('npm', ['audit', '--json', '--omit=dev'], {
+    shell: process.platform === 'win32', cwd: source, env: environment, encoding: 'utf8',
+  })
   if (result.error !== undefined) throw result.error
   if (result.status !== 0 && result.status !== 1) throw new Error(`npm audit exited with ${String(result.status ?? result.signal)}: ${result.stderr.trim()}`)
   let report: unknown
@@ -404,7 +411,7 @@ async function replaceDirectory(staging: string, outputDir: string): Promise<voi
     if (hadOutput) await rename(backup, outputDir)
     throw error
   }
-  if (hadOutput) await rm(backup, { recursive: true, force: true })
+  if (hadOutput) await rm(backup, { recursive: true, force: true, maxRetries: 3 })
 }
 
 function inside(rootDir: string, candidate: string): boolean {
