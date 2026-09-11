@@ -153,7 +153,6 @@ export async function apply(ctx: Context): Promise<void> {
       name: 'conversation.composer.guide', locale: 'guide.mantur',
       inject: (sessionId: SessionId | undefined) => ({
         ...guidePreferences,
-        navigationVersion: () => guideNavigation.getSnapshot(),
         appendReference: (reference: ReferenceInsert) => {
           if (sessionId === undefined) return scope.conversationDrafts.input.appendReference(reference)
           const binding = scope.sessions.binding(sessionId)
@@ -161,25 +160,14 @@ export async function apply(ctx: Context): Promise<void> {
           return scope.conversation.input.for(binding.ctx).appendReference(reference)
         },
         hooks: {
-          preferences, marketplace: controller.store, guideNavigation, bundledSkills: bundled.store,
+          preferences, guideNavigation, bundledSkills: bundled.store,
           guideInput: sessionId === undefined ? scope.conversationDrafts.input.state : (() => {
             const binding = scope.sessions.binding(sessionId)
             return binding === undefined ? ABSENT_GUIDE_INPUT : scope.conversation.input.for(binding.ctx).state
           })(),
         },
         marketplaceText: scope.locale.bind(NS),
-        load: () => controller.load(),
-        ensureCatalog: () => controller.ensureSkillCatalog(),
         loadBundled: () => bundled.load(),
-        openDetail: (slug: string) => controller.openDetail(slug),
-        closeDetail: () => { controller.closeDetail() },
-        install: async (slug: string) => {
-          await controller.install(slug)
-          const state = controller.store.getSnapshot()
-          return state.phase === 'ready' && state.catalog.skills.some(skill => skill.slug === slug && skill.installed)
-        },
-        startLogin: () => controller.startLogin(),
-        cancelLogin: () => controller.cancelLogin(),
       }),
     }, CreationGuide))
     scope.slots.inject('sidebar.navigation', () =>

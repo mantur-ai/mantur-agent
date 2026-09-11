@@ -13,7 +13,6 @@ import { CreationGuide, CreationModes, type CreationGuideInjected, type GuidePre
 import { ManturComposerLayout, type ManturComposerInjected } from '../src/client/ManturComposerLayout.tsx'
 import { ProjectPathSettings, type ProjectPathSettingsInjected } from '../src/client/ProjectPathSettings.tsx'
 import { GUIDE_NAMESPACE, GuideSettingsSchema, type GuideSettings } from '../src/guide-settings.ts'
-import type { ManturMarketplaceStore } from '../src/client/store.ts'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { DesktopUpdate, type DesktopUpdateInjected } from '../src/client/DesktopUpdate.tsx'
 
@@ -243,9 +242,9 @@ describe('ui-mantur-navigation apply', () => {
       const changed = vi.fn()
       const unsubscribe = guide.hooks.guideNavigation.subscribe(changed)
       try {
-        expect(guide.navigationVersion()).toBe(0)
+        expect(guide.hooks.guideNavigation.getSnapshot()).toBe(0)
         navigation.beforeOpenPage()
-        expect(guide.navigationVersion()).toBe(1)
+        expect(guide.hooks.guideNavigation.getSnapshot()).toBe(1)
         expect(createGuide(undefined).hooks.guideNavigation.getSnapshot()).toBe(1)
         expect(changed).toHaveBeenCalledOnce()
       } finally { unsubscribe() }
@@ -256,33 +255,6 @@ describe('ui-mantur-navigation apply', () => {
       expect(createGuide('guide-session' as SessionId).hooks.guideInput).toBe(subject.inputState)
       expect(guide.appendReference(reference)).toBe(true)
       expect(subject.appendReference).toHaveBeenCalledWith(reference)
-      const { controller } = (subject.slots.entries('main.page')[0]!.inject as () => { controller: ManturMarketplaceStore })()
-      const load = vi.spyOn(controller, 'load').mockResolvedValue()
-      const catalog = vi.spyOn(controller, 'ensureSkillCatalog').mockResolvedValue()
-      const detail = vi.spyOn(controller, 'openDetail').mockResolvedValue()
-      const close = vi.spyOn(controller, 'closeDetail').mockImplementation(() => {})
-      const login = vi.spyOn(controller, 'startLogin').mockResolvedValue()
-      const cancel = vi.spyOn(controller, 'cancelLogin').mockResolvedValue()
-      const install = vi.spyOn(controller, 'install').mockResolvedValue()
-      await guide.load()
-      await guide.ensureCatalog()
-      await guide.openDetail('short-drama')
-      guide.closeDetail()
-      await guide.startLogin()
-      await guide.cancelLogin()
-      expect(load).toHaveBeenCalledOnce()
-      expect(catalog).toHaveBeenCalledOnce()
-      expect(detail).toHaveBeenCalledWith('short-drama')
-      expect(close).toHaveBeenCalledOnce()
-      expect(login).toHaveBeenCalledOnce()
-      expect(cancel).toHaveBeenCalledOnce()
-      expect(await guide.install('short-drama')).toBe(false)
-      const skill = { slug: 'short-drama', name: '剧本', description: '', category: '', installed: false, version: '1', triggers: [] }
-      controller.store.set({ phase: 'ready', catalog: { skills: [{ ...skill, slug: 'different' }, skill], installedCount: 0, signedIn: true } })
-      expect(await guide.install('short-drama')).toBe(false)
-      controller.store.set({ phase: 'ready', catalog: { skills: [{ ...skill, installed: true }], installedCount: 1, signedIn: true } })
-      expect(await guide.install('short-drama')).toBe(true)
-      expect(install).toHaveBeenCalledWith('short-drama')
     } finally {
       await fiber.dispose()
     }

@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { load as parseYaml } from 'js-yaml'
 import { entryListSchema } from '@deepseek-ai/cordis-plugin-include'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { CreationGuide, CreationModes, type CreationGuideProps, type CreationModesProps } from '../src/client/CreationGuide.tsx'
 import { en, GUIDE_SKILL_LABELS, zh } from '../src/client/guide-locales.ts'
@@ -43,11 +43,6 @@ function props(preferences = settings, market = ready) {
   }
 }
 function guide(input: ReturnType<typeof props>) { return <CreationGuide {...input as unknown as CreationGuideProps} /> }
-function openOnlineSkill(): void {
-  fireEvent.click(screen.getByRole('button', { name: zh.more }))
-  fireEvent.click(screen.getByRole('button', { name: skill.name }))
-}
-
 describe('Mantur creation guide', () => {
   it('uses the pinned offline entry while marketplace access has failed, without login or installation', () => {
     const local = props()
@@ -63,34 +58,6 @@ describe('Mantur creation guide', () => {
     expect(p.inputActions.submit).not.toHaveBeenCalled()
   })
 
-  it.each([false, true])('restores the requested detail action after login with signedIn=%s', (signedIn) => {
-    const detail = { ...skill, installed: false, usesOperators: [] }
-    const state = { phase: 'ready' as const, catalog: { skills: [detail], installedCount: 0, signedIn: false }, detail }
-    const p = props(settings, state)
-    const view = render(guide(p))
-    openOnlineSkill()
-    fireEvent.click(screen.getByRole('button', { name: '登录后安装' }))
-    view.rerender(guide(props(settings, { ...state, loginPhase: 'starting' })))
-    view.rerender(guide(props(settings, { ...state, catalog: { ...state.catalog, signedIn } })))
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: signedIn ? '安装后使用' : '登录后安装' }))
-    expect(p.install).not.toHaveBeenCalled()
-    expect(p.inputActions.submit).not.toHaveBeenCalled()
-  })
-
-  it('does not restore focus to a detail after the current Session changes during login', () => {
-    const detail = { ...skill, installed: false, usesOperators: [] }
-    const state = { phase: 'ready' as const, catalog: { skills: [detail], installedCount: 0, signedIn: false }, detail }
-    const view = render(guide(props(settings, state)))
-    openOnlineSkill()
-    fireEvent.click(screen.getByRole('button', { name: '登录后安装' }))
-    view.rerender(guide(props(settings, { ...state, loginPhase: 'starting' })))
-    view.rerender(guide({ ...props(settings, { ...state, loginPhase: 'starting' }), sessionId: 's2' }))
-    const before = document.activeElement
-    view.rerender(guide({ ...props(settings, state), sessionId: 's2' }))
-    expect(screen.queryByRole('dialog')).toBeNull()
-    expect(document.activeElement).toBe(before)
-  })
-
   it('shows the first welcome and never inserts invented catalog entries', () => {
     const p = props()
     render(guide(p))
@@ -99,6 +66,7 @@ describe('Mantur creation guide', () => {
     expect(screen.getByRole('button', { name: '馒头仔' }).querySelector('img')?.getAttribute('src')).toBe('./mantoo-script-peek@3x.png')
     expect(screen.getByRole('button', { name: '剧本改编' }).getAttribute('title')).toBe(skill.name)
     expect(screen.queryByText('not-in-catalog')).toBeNull()
+    expect(screen.queryByRole('button', { name: zh.more })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: '剧本改编' }))
     expect(p.inputActions.appendReference).toHaveBeenCalledWith({ source: 'mantur-bundled-skill', ref: reference, label: '剧本改编', clipboardText: `/mantur-builtin:${reference}` })
     expect(p.openDetail).not.toHaveBeenCalled()
@@ -148,100 +116,6 @@ describe('Mantur creation guide', () => {
     expect(p.inputActions.submit).not.toHaveBeenCalled()
   })
 
-  it('shows a brief confirmation and only inserts after explicit successful installation', async () => {
-    const uninstalled = { ...skill, installed: false }
-    const p = props(settings, { phase: 'ready', catalog: { skills: [uninstalled], installedCount: 0, signedIn: true } })
-    const view = render(guide(p))
-    openOnlineSkill()
-    expect(p.openDetail).toHaveBeenCalledWith(skill.slug)
-    expect(p.install).not.toHaveBeenCalled()
-    const detailProps = props(settings, { phase: 'ready', catalog: { skills: [uninstalled], installedCount: 0, signedIn: true }, detail: { ...uninstalled, usesOperators: [] } })
-    detailProps.install.mockResolvedValueOnce(false)
-    view.rerender(guide(detailProps))
-    expect(screen.getByText(zh.notInstalled)).toBeTruthy()
-    expect(screen.queryByText(skill.description)).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: '安装后使用' }))
-    await waitFor(() => { expect(screen.getByText(zh.installFailed)).toBeTruthy() })
-    expect(detailProps.inputActions.appendReference).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: '安装后使用' }))
-    await waitFor(() => { expect(detailProps.inputActions.appendReference).toHaveBeenCalledTimes(1) })
-    expect(detailProps.inputActions.submit).not.toHaveBeenCalled()
-  })
-
-  it('does not insert into a changed conversation when installation settles late', async () => {
-    const uninstalled = { ...skill, installed: false }
-    const p = props(settings, { phase: 'ready', catalog: { skills: [uninstalled], installedCount: 0, signedIn: true }, detail: { ...uninstalled, usesOperators: [] } })
-    let finish!: (value: boolean) => void
-    p.install.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
-    const view = render(guide(p))
-    openOnlineSkill()
-    fireEvent.click(screen.getByRole('button', { name: '安装后使用' }))
-    view.rerender(guide({ ...p, sessionId: 's2' }))
-    finish(true)
-    await waitFor(() => { expect(p.install).toHaveBeenCalledTimes(1) })
-    expect(p.inputActions.appendReference).not.toHaveBeenCalled()
-  })
-
-  it('does not install on cancellation or insert after a cancelled pending installation', async () => {
-    const uninstalled = { ...skill, installed: false }
-    const p = props(settings, {
-      phase: 'ready', catalog: { skills: [uninstalled], installedCount: 0, signedIn: true },
-      detail: { ...uninstalled, description: '很长的说明'.repeat(100), introduction: '完整介绍'.repeat(100), usesOperators: [] },
-    })
-    const pending = Promise.withResolvers<boolean>()
-    p.install.mockReturnValue(pending.promise)
-    render(guide(p))
-    openOnlineSkill()
-    const dialog = screen.getByRole('dialog', { name: '剧本改编' })
-    expect(dialog.textContent).toContain(zh.notInstalled)
-    expect(dialog.textContent).not.toContain('很长的说明')
-    expect(dialog.textContent).not.toContain('完整介绍')
-    fireEvent.click(screen.getByRole('button', { name: zh.close }))
-    expect(p.install).not.toHaveBeenCalled()
-    openOnlineSkill()
-    fireEvent.click(screen.getByRole('button', { name: zh.installAndUse }))
-    fireEvent.click(screen.getByRole('button', { name: zh.close }))
-    await act(async () => { pending.resolve(true) })
-    expect(p.appendReference).not.toHaveBeenCalled()
-    expect(screen.queryByRole('dialog')).toBeNull()
-    expect(screen.queryByText(zh.installFailed)).toBeNull()
-  })
-
-  it('keeps an unmapped complete-list title and its real reference without inventing a short name', () => {
-    const another = { ...skill, slug: 'another-real-skill', name: '更多列表中的完整中文技能标题' }
-    const p = props(settings, { phase: 'ready', catalog: { skills: [another], installedCount: 1, signedIn: true } })
-    render(guide(p))
-    fireEvent.click(screen.getByRole('button', { name: zh.more }))
-    fireEvent.click(screen.getByRole('button', { name: another.name }))
-    expect(p.appendReference).toHaveBeenCalledWith({
-      source: 'skill', ref: another.slug, label: another.name, clipboardText: `/${another.slug}`,
-    })
-    expect(p.openDetail).not.toHaveBeenCalled()
-    expect(p.inputActions.submit).not.toHaveBeenCalled()
-  })
-
-  it('invalidates a pending insertion before rendering navigation and never revives it on return', async () => {
-    const uninstalled = { ...skill, installed: false }
-    let navigation = 0
-    const p = { ...props(settings, { phase: 'ready', catalog: { skills: [uninstalled], installedCount: 0, signedIn: true },
-      detail: { ...uninstalled, usesOperators: [] } }),
-    useGuideNavigation: (select: (value: unknown) => unknown) => select(navigation), navigationVersion: () => navigation }
-    const pending = Promise.withResolvers<boolean>()
-    p.install.mockReturnValue(pending.promise)
-    const view = render(guide(p))
-    openOnlineSkill()
-    fireEvent.click(screen.getByRole('button', { name: zh.installAndUse }))
-    navigation += 1
-    await act(async () => { pending.resolve(true) })
-    expect(p.appendReference).not.toHaveBeenCalled()
-    view.rerender(guide(p))
-    expect(screen.queryByRole('dialog')).toBeNull()
-    expect(screen.queryByText(zh.installFailed)).toBeNull()
-    expect(p.closeDetail).not.toHaveBeenCalled()
-    view.rerender(guide(p))
-    expect(p.appendReference).not.toHaveBeenCalled()
-  })
-
   it('shows empty and failed catalog states with an explicit retry', () => {
     const p = props(settings, { phase: 'failed' })
     const view = render(guide(p))
@@ -253,16 +127,6 @@ describe('Mantur creation guide', () => {
 
   it('keeps marketplace details outside the guide until a guide shortcut opens them', () => {
     render(guide(props(settings, { ...ready, detail: { ...skill, usesOperators: [] } })))
-    expect(screen.queryByRole('dialog')).toBeNull()
-  })
-
-  it('shows an explicit empty search and closes guide dialogs when conversations change', () => {
-    const p = props()
-    const view = render(guide(p))
-    fireEvent.click(screen.getByRole('button', { name: zh.more }))
-    fireEvent.change(screen.getByRole('textbox', { name: marketZh['skills.search'] }), { target: { value: 'no-such-skill' } })
-    expect(screen.getByText(marketZh['skills.noMatches'])).toBeTruthy()
-    view.rerender(guide({ ...p, sessionId: 's2' }))
     expect(screen.queryByRole('dialog')).toBeNull()
   })
 
@@ -354,7 +218,7 @@ describe('Mantur creation guide', () => {
     expect(p.inputActions.submit).not.toHaveBeenCalled()
   })
 
-  it('reads occurrence identity, tolerates no input binding, and closes the complete Skill list', () => {
+  it('reads occurrence identity and tolerates no input binding', () => {
     const p = props()
     const withOccurrences = { ...p, useGuideInput: (select: (value: unknown) => unknown) => select({ occurrences: [
       { source: 'file', ref: reference }, { source: 'skill', ref: skill.slug }, { source: 'mantur-bundled-skill', ref: reference },
@@ -363,86 +227,6 @@ describe('Mantur creation guide', () => {
     expect(screen.getByRole('button', { name: '剧本改编' }).getAttribute('aria-pressed')).toBe('true')
     view.rerender(guide({ ...p, useGuideInput: (select: (value: unknown) => unknown) => select(undefined) }))
     expect(screen.getByRole('button', { name: '剧本改编' }).getAttribute('aria-pressed')).toBe('false')
-    fireEvent.click(screen.getByRole('button', { name: zh.more }))
-    fireEvent.click(screen.getByRole('button', { name: zh.close }))
-    expect(screen.queryByRole('dialog')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: zh.more }))
-    fireEvent.click(screen.getByRole('button', { name: skill.name }))
-    expect(p.appendReference).toHaveBeenCalledOnce()
-    expect(screen.queryByRole('dialog')).toBeNull()
-  })
-
-  it.each(['idle', 'loading', 'failed'] as const)('shows the real %s catalog state in the complete list', (phase) => {
-    const p = props(settings, { phase })
-    render(guide(p))
-    fireEvent.click(screen.getByRole('button', { name: zh.more }))
-    const dialog = screen.getByRole('dialog')
-    expect(dialog.textContent).toContain(marketZh[phase === 'failed' ? 'skills.failed' : 'skills.loading'])
-    if (phase === 'failed') {
-      fireEvent.click(dialog.querySelector('button:not([aria-label])')!)
-      expect(p.load).toHaveBeenCalledOnce()
-    }
-  })
-
-  it('retries detail failures, uses installed details, and closes detail explicitly', () => {
-    const uninstalled = { ...skill, installed: false }
-    const p = props(settings, { ...ready, detailError: skill.slug, catalog: { skills: [uninstalled], installedCount: 0, signedIn: true } })
-    const view = render(guide(p))
-    fireEvent.click(screen.getByRole('button', { name: zh.more }))
-    fireEvent.click(screen.getByRole('button', { name: skill.name }))
-    fireEvent.click(screen.getByRole('button', { name: marketZh['skills.retry'] }))
-    expect(p.openDetail).toHaveBeenCalledTimes(2)
-    view.rerender(guide(props(settings, { ...ready, detail: { ...skill, introduction: '完整使用说明', usesOperators: [] } })))
-    expect(screen.queryByText('完整使用说明')).toBeNull()
-    expect(screen.queryByText(skill.description)).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: zh.use }))
-    expect(screen.queryByRole('dialog')).toBeNull()
-    view.rerender(guide(p))
-    openOnlineSkill()
-    fireEvent.click(screen.getByRole('button', { name: zh.close }))
-    expect(p.closeDetail).toHaveBeenCalled()
-  })
-
-  it('shows installation conflicts and login progress without hiding the failure', () => {
-    const uninstalled = { ...skill, installed: false }
-    const state = { phase: 'ready', catalog: { skills: [uninstalled], installedCount: 0, signedIn: false }, detail: { ...uninstalled, usesOperators: [] } } as const
-    const p = props(settings, state)
-    const view = render(guide(p))
-    openOnlineSkill()
-    fireEvent.click(screen.getByRole('button', { name: marketZh['skills.loginToInstall'] }))
-    expect(p.startLogin).toHaveBeenCalledOnce()
-    view.rerender(guide(props(settings, { ...state, loginPhase: 'starting' })))
-    expect(screen.queryByRole('dialog')).toBeNull()
-    view.rerender(guide(props(settings, { ...state, loginPhase: 'authorizing' })))
-    expect(screen.queryByRole('link')).toBeNull()
-    view.rerender(guide({ ...p, useMarketplace: (select: (value: unknown) => unknown) => select({ ...state, loginPhase: 'authorizing', login: { userCode: 'TEST-CODE', verificationUrl: 'https://example.test/login' } }) }))
-    expect(screen.getByRole('link').getAttribute('href')).toBe('https://example.test/login')
-    fireEvent.click(screen.getByRole('button', { name: marketZh['skills.cancelLogin'] }))
-    expect(p.cancelLogin).toHaveBeenCalledOnce()
-    view.rerender(guide(props(settings, { ...state, loginPhase: 'failed', installError: 'local-conflict' })))
-    expect(screen.getByText(marketZh['skills.loginFailed'])).toBeTruthy()
-    expect(screen.getByText(zh.installFailed + marketZh['skills.localConflict'])).toBeTruthy()
-    view.rerender(guide(props(settings, { ...state, loginPhase: 'unavailable' })))
-    expect(screen.getByRole('alert').textContent).toBe(marketZh['skills.loginUnavailable'])
-    view.rerender(guide(props(settings, { ...state, installError: 'failed' })))
-    expect(screen.getByText(zh.installFailed)).toBeTruthy()
-    view.rerender(guide(props(settings, { ...state, catalog: { ...state.catalog, signedIn: true }, installing: skill.slug })))
-    expect(screen.getByRole('button', { name: marketZh['skills.installing'] }).hasAttribute('disabled')).toBe(true)
-  })
-
-  it.each([true, false])('does not insert after a late installation resolves %s into a changed composer', async (result) => {
-    const uninstalled = { ...skill, installed: false }
-    const p = props(settings, {
-      ...ready, catalog: { skills: [uninstalled], installedCount: 0, signedIn: true }, detail: { ...uninstalled, usesOperators: [] },
-    })
-    let finish!: (value: boolean) => void
-    p.install.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
-    const view = render(guide(p))
-    openOnlineSkill()
-    fireEvent.click(screen.getByRole('button', { name: zh.installAndUse }))
-    view.rerender(guide({ ...p, sessionId: 's2' }))
-    await act(async () => { finish(result) })
-    expect(p.appendReference).not.toHaveBeenCalled()
-    expect(screen.queryByText(zh.installFailed)).toBeNull()
+    expect(screen.queryByRole('button', { name: zh.more })).toBeNull()
   })
 })

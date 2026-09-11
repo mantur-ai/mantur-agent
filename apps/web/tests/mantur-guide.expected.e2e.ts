@@ -56,6 +56,7 @@ it('keeps offline homepage guidance inside the real conversation column with the
     const console = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl)
     await page.getByRole('button', { name: '剧本改编', exact: true }).waitFor()
+    expect(await page.getByRole('button', { name: '更多技能', exact: true }).count()).toBe(0)
     await page.getByRole('button', { name: '展开剪辑工作台', exact: true }).click()
     await page.getByText('请先选择项目和对话，再打开剪辑。', { exact: true }).waitFor()
     const editor = page.locator('[data-composer-input][contenteditable="true"]').first()
@@ -129,59 +130,6 @@ it('does not display Mantur artwork or mode controls without the Mantur plugin',
   }
 })
 
-it('keeps online installation confirmation brief and leaves the current draft untouched on cancel', async () => {
-  const detail = { ...skill, description: '这是一段很长的技能说明。'.repeat(100), introduction: '完整技能正文不在首页展示。'.repeat(100) }
-  const server = createServer((request, response) => {
-    response.writeHead(200, { 'content-type': 'application/json' })
-    response.end(JSON.stringify(request.url === '/api/v1/skills' ? { skills: [detail] } : { skill: detail }))
-  })
-  await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve) })
-  let scaffold: Awaited<ReturnType<typeof launchWebScaffold>> | undefined
-  let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
-  try {
-    scaffold = await launchWebScaffold({ extraOverlayPath: overlay, extraInstallAnchors: [anchor],
-      manturHubBaseUrl: `http://127.0.0.1:${(server.address() as AddressInfo).port}` })
-    await prepareBundledSkills(bundledSource, join(scaffold.workspaceCwd, '.bundled-skills'))
-    browser = await chromium.launch()
-    const page = await browser.newPage({ viewport: { width: 880, height: 600 }, locale: ZH_BROWSER_LOCALE })
-    const console = watchConsole(page)
-    const writes: string[] = []
-    page.on('request', (request) => {
-      const path = new URL(request.url()).pathname
-      if (path === '/api/session/prompt' || path === '/api/manturMarketplace/installSkill') writes.push(path)
-    })
-    await page.goto(scaffold.authenticatedUrl)
-    await page.locator('[data-composer-input][contenteditable="true"]').first().waitFor()
-    expect(await page.getByRole('button', { name: '暂时跳过', exact: true }).count()).toBe(0)
-    const editor = page.locator('[data-composer-input][contenteditable="true"]').first()
-    await editor.fill('保留未发送的创作需求')
-    await page.getByRole('button', { name: '更多技能', exact: true }).click()
-    await page.getByRole('button', { name: skill.name, exact: true }).click()
-    const dialog = page.getByRole('dialog', { name: '剧本改编', exact: true })
-    await dialog.getByRole('button', { name: '登录后安装', exact: true }).waitFor()
-    expect(await dialog.innerText()).toContain('尚未安装此技能。安装后可添加到当前对话。')
-    expect(await dialog.innerText()).not.toContain(detail.description)
-    expect(await dialog.innerText()).not.toContain(detail.introduction)
-    expect(await dialog.evaluate((element) => {
-      const box = element.getBoundingClientRect()
-      return box.top >= 0 && box.bottom <= innerHeight && box.left >= 0 && box.right <= innerWidth
-    })).toBe(true)
-    await mkdir(images, { recursive: true })
-    await page.screenshot({ path: join(images, 'skill-install-confirmation.png') })
-    const aria = await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd)
-    await dialog.getByRole('button', { name: '关闭引导', exact: true }).click()
-    expect(await editor.innerText()).toBe('保留未发送的创作需求')
-    expect(scaffold.ctx.workspaceRegistry.list()).toHaveLength(0)
-    expect(writes).toEqual([])
-    expect(console.pageErrors).toEqual([])
-    await compareOrRefreshGolden(fileURLToPath(new URL('./expected/mantur-guide-install-confirmation.md', import.meta.url)), aria, webSnapshotMode())
-  } finally {
-    await browser?.close()
-    await scaffold?.close()
-    await new Promise<void>((resolve, reject) => server.close((error) => { if (error === undefined) resolve(); else reject(error) }))
-  }
-})
-
 it('keeps guidance readable at the desktop minimum without moving the composer or covering controls', async () => {
   const skills = [skill, ...[
     'drama-asset-seedance-pipeline', 'mantur-copyhit', 'mantur-smartclip',
@@ -204,6 +152,7 @@ it('keeps guidance readable at the desktop minimum without moving the composer o
     await page.locator('[data-composer-input][contenteditable="true"]').first().waitFor()
     expect(await page.getByRole('button', { name: '暂时跳过', exact: true }).count()).toBe(0)
     await page.getByRole('button', { name: '剧本改编', exact: true }).waitFor()
+    expect(await page.getByRole('button', { name: '更多技能', exact: true }).count()).toBe(0)
     const positions = () => page.locator('[data-composer-seat]').evaluate(element =>
       ['[data-composer-card]', '[data-skill-rail]'].map((selector) => {
         const rect = element.querySelector(selector)!.getBoundingClientRect()
@@ -568,6 +517,7 @@ it('preserves a live draft, attachments and controls with desktop checkpoints wh
     )).toBe('rgba(0, 0, 0, 0)')
     await page.getByRole('tab', { name: '剧本创作' }).click()
     await page.getByRole('button', { name: '剧本改编', exact: true }).waitFor()
+    expect(await page.getByRole('button', { name: '更多技能', exact: true }).count()).toBe(0)
     expect((await composerPositions()).card).toEqual(narrowPositions.card)
     await page.screenshot({ path: join(images, 'narrow-recommendations.png') })
     await workspaceButton.click()

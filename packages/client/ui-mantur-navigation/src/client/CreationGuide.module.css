@@ -129,7 +129,6 @@
 .noRecommendations { flex-wrap: wrap; overflow-x: visible; }
 
 .shortcuts button,
-.moreList button,
 .detail button {
   padding: 8px 12px;
   border: 0.5px solid var(--dsw-alias-border-l1);
@@ -169,14 +168,9 @@
 .guide button.helper:hover:not(:disabled) { background: transparent; }
 .guide button:disabled { opacity: 0.5; cursor: not-allowed; }
 .guide button:hover:not(:disabled), .modes button:hover:not([aria-selected='true']) { background: var(--dsw-alias-interactive-bg-hover); }
-.guide button:focus-visible, .modes button:focus-visible, .search:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 2px; }
+.guide button:focus-visible, .modes button:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 2px; }
 .status { margin: 0 0 8px; line-height: 1.5; color: var(--dsw-alias-label-secondary); }
 .modeRegion .status { text-align: center; margin-top: 8px; }
-.moreList, .detail { display: flex; flex-direction: column; align-items: start; gap: 12px; }
-.moreList { margin-top: 16px; }
-.moreList button { text-align: left; }
-.detail p { margin: 0; line-height: 1.6; white-space: pre-wrap; }
-.search { width: 100%; padding: 10px; box-sizing: border-box; border: 0.5px solid var(--dsw-alias-border-l1); border-radius: 8px; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); font: inherit; }
 
 .workspaceFooter {
   display: flex;
