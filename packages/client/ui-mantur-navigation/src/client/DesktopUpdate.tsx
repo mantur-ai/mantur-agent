@@ -20,30 +20,32 @@ function bytes(value: number, t: DesktopUpdateProps['t']): string {
   return `${(value / (1024 * 1024)).toFixed(1)} ${t('unit.mebibytes')}`
 }
 
-/** Render only actionable or active native update status; normal browser pages render nothing. */
+/** Keep native checks available in every update state; normal browser pages render nothing. */
 export function DesktopUpdate({ wide, controller, useUpdates, t }: DesktopUpdateProps) {
   const { snapshot, failure } = useUpdates(value => value)
   if (snapshot === undefined || !snapshot.enabled) return null
   const state = snapshot.state
-  if (state.kind === 'idle' || state.kind === 'up-to-date' || (state.kind === 'error' && !state.requestedByUser)) return null
+  const currentVersion = t('currentVersion').replace('{version}', snapshot.currentVersion)
   const version = 'version' in state ? state.version : ''
   const title = state.kind === 'available' ? t('available').replace('{version}', version)
     : state.kind === 'downloading' ? t('downloading').replace('{version}', version)
-      : state.kind === 'ready' ? t('ready') : state.kind === 'checking' ? t('checking') : t('failed')
+      : state.kind === 'ready' ? t('ready') : state.kind === 'checking' ? t('checking')
+        : state.kind === 'idle' ? currentVersion : state.kind === 'up-to-date' ? t('upToDate') : t('failed')
   const busy = state.kind === 'checking' || state.kind === 'downloading' || (state.kind === 'ready' && state.prompting)
   const action = state.kind === 'available' ? 'download' : state.kind === 'ready' ? 'install' : 'check'
-  const label = state.kind === 'available' ? t('download') : state.kind === 'ready' ? (state.prompting ? t('preparing') : t('install')) : t('retry')
-  const detail = failure ?? (state.kind === 'ready' ? state.error : state.kind === 'error' ? state.detail : undefined)
+  const label = state.kind === 'available' ? t('download') : state.kind === 'ready' ? (state.prompting ? t('preparing') : t('install'))
+    : state.kind === 'error' ? t('retry') : t('check')
+  const detail = failure ?? (state.kind === 'ready' ? state.error : state.kind === 'error' && state.requestedByUser ? state.detail : undefined)
   const progress = state.kind === 'downloading' ? (
     <div className={css.progress} role="progressbar" aria-label={t('progress')} aria-valuemin={0} aria-valuemax={100} aria-valuenow={state.percent ?? undefined}>
       {state.percent !== null && <span style={{ width: `${state.percent}%` }} />}
     </div>
   ) : null
   if (!wide) return (
-    <Tooltip label={`${title}${detail === undefined ? '' : ` · ${detail}`}`}>
+    <Tooltip label={`${title} · ${label}${detail === undefined ? '' : ` · ${detail}`}`}>
       <div className={css.rail}>
         <button type="button" aria-label={`${title} · ${label}`} disabled={busy} onClick={() => { controller.run(action) }}>
-          {state.kind === 'ready' ? <IconRefreshOutline16 /> : <IconDownloadOutline16 />}
+          {action === 'download' || state.kind === 'downloading' ? <IconDownloadOutline16 /> : <IconRefreshOutline16 />}
         </button>
         {state.kind === 'downloading' && <span className={css.railPercent}>{state.percent === null ? '…' : `${state.percent}%`}</span>}
         {progress}
@@ -53,6 +55,7 @@ export function DesktopUpdate({ wide, controller, useUpdates, t }: DesktopUpdate
   return (
     <section className={css.update} aria-label={title}>
       <p className={css.title}>{title}</p>
+      {state.kind !== 'idle' && <p className={css.bytes}>{currentVersion}</p>}
       {state.kind === 'downloading' && <>
         {progress}
         <p className={css.bytes}>{state.percent !== null && `${state.percent}% · `}{state.total === null

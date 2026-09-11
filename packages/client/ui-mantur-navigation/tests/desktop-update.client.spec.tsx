@@ -16,7 +16,7 @@ function props(state: NativeUpdateState, wide = true): DesktopUpdateProps {
 }
 
 describe('desktop update footer', () => {
-  it('hides unsupported builds, missing snapshots and silent background errors', () => {
+  it('hides unsupported builds and missing snapshots', () => {
     const absent = props({ kind: 'idle' })
     absent.useUpdates = ((selector: (value: NativeUpdateView) => unknown) => selector({})) as DesktopUpdateProps['useUpdates']
     const view = render(<DesktopUpdate {...absent} />)
@@ -26,8 +26,6 @@ describe('desktop update footer', () => {
       snapshot: { revision: 1, enabled: false, currentVersion: '1', state: { kind: 'idle' } },
     })) as DesktopUpdateProps['useUpdates']
     view.rerender(<DesktopUpdate {...disabled} />)
-    expect(view.container.textContent).toBe('')
-    view.rerender(<DesktopUpdate {...props({ kind: 'error', detail: 'background', requestedByUser: false })} />)
     expect(view.container.textContent).toBe('')
   })
   it('keeps checks busy and lets an explicit failed check retry', () => {
@@ -75,11 +73,24 @@ describe('desktop update footer', () => {
     view.rerender(<DesktopUpdate {...props({ kind: 'downloading', version: '1.2.0', percent: null, transferred: 1048576, total: null })} />)
     expect(screen.getByText('已下载 1.0 MiB')).toBeTruthy()
   })
-  it('leaves no persistent card when idle or current', () => {
-    const view = render(<DesktopUpdate {...props({ kind: 'idle' })} />)
-    expect(view.container.textContent).toBe('')
-    view.rerender(<DesktopUpdate {...props({ kind: 'up-to-date', requestedByUser: false })} />)
-    expect(view.container.textContent).toBe('')
+  it.each([true, false])('keeps manual checks available before and after discovery in wide=%s mode', (wide) => {
+    const idle = props({ kind: 'idle' }, wide)
+    const checkRun = vi.spyOn(idle.controller, 'run')
+    const view = render(<DesktopUpdate {...idle} />)
+    fireEvent.click(screen.getByRole('button', { name: /检查更新/u }))
+    expect(checkRun).toHaveBeenCalledExactlyOnceWith('check')
+    expect(view.container.innerHTML).toContain('1.0.0')
+    view.rerender(<DesktopUpdate {...props({ kind: 'up-to-date', requestedByUser: false }, wide)} />)
+    expect(screen.getByRole('button', { name: /检查更新/u })).toBeTruthy()
+    expect(view.container.innerHTML).toContain('已是最新版本')
+    const failed = props({ kind: 'error', detail: 'feed unavailable', requestedByUser: false }, wide)
+    const retryRun = vi.spyOn(failed.controller, 'run')
+    view.rerender(<DesktopUpdate {...failed} />)
+    expect(view.container.innerHTML).toContain('更新未完成')
+    expect(screen.queryByRole('alert')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /重新检查/u }))
+    expect(retryRun).toHaveBeenCalledExactlyOnceWith('check')
+    expect(view.container.innerHTML).not.toContain('已是最新版本')
   })
   it.each([true, false])('offers an explicit download in wide=%s mode', (wide) => {
     const value = props({ kind: 'available', version: '1.2.0', prompting: false }, wide)

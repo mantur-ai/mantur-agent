@@ -16,7 +16,7 @@ The native controller owns the single installation confirmation used by menu and
 
 ## Alternatives considered
 
-A separate renderer updater would duplicate download and confirmation ownership. Automatic download would remove explicit consent. Permanent idle cards would occupy space without an available action. Guessing percentage from time would misrepresent progress.
+A separate renderer updater would duplicate download and confirmation ownership. Automatic download would remove explicit consent. Idle-card suppression is partially superseded by the [persistent check decision](2026-09-11-desktop-update-check.md), which keeps manual discovery available before a version is found. Guessing percentage from time would misrepresent progress.
 
 ## Consequences
 
