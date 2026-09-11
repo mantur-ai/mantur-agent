@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-brand-mantur",
   "description": "Mantur brand occupants for the Web client's sidebar and conversation hero slots",
-  "version": "0.1.2-rc.1",
+  "version": "0.1.3",
   "publishConfig": {
     "access": "public"
   },

@@ -1,9 +1,76 @@
 {
-  "name":"@deepseek-ai/dsh-client-ui-mantur-assets","version":"0.1.0-rc.1","type":"module","main":"lib/index.js","types":"lib/types/index.d.ts",
-  "exports":{".":{"types":"./lib/types/index.d.ts","default":"./lib/index.js"},"./client":{"types":"./lib/types/client/index.d.ts","default":"./lib/client.js"},"./remote":{"types":"./lib/typert.remote-client.d.ts","default":"./lib/typert.remote-client.js"},"./typert":{"types":"./lib/typert.host.d.ts","default":"./lib/typert.host.js"},"./types":{"types":"./lib/types/types.d.ts","default":"./lib/types.js"},"./src/*":"./src/*","./package.json":"./package.json"},
-  "dsh":{"client":{"inject":["@deepseek-ai/dsh-client-ui-mantur-script","@deepseek-ai/dsh-client-ui-session"],"platform":"web"}},
-  "files":["lib/index.js","lib/client.js","lib/types","lib/typert.host.js","lib/typert.host.d.ts","lib/typert.remote-client.js","lib/typert.remote-client.d.ts"],"scripts":{"bundle":"tsdown"},
-  "dependencies":{"@deepseek-ai/dsh-typert-protocol":"workspace:^","@deepseek-ai/dsh-tools":"workspace:^","@deepseek-ai/schemastery":"workspace:^","zod":"^4.4.3"},
-  "peerDependencies":{"@deepseek-ai/cordis":"workspace:^","@deepseek-ai/dsh-fs":"workspace:^"},
-  "devDependencies":{"@deepseek-ai/cordis":"workspace:^","@deepseek-ai/dsh-agent":"workspace:^","@deepseek-ai/dsh-fs":"workspace:^","@deepseek-ai/dsh-brand":"workspace:^","@deepseek-ai/dsh-typert-protocol":"workspace:^","@deepseek-ai/dsh-tools":"workspace:^","@deepseek-ai/dsh-client-ui-session":"workspace:^","@deepseek-ai/dsh-client-ui-mantur-script":"workspace:^","@deepseek-ai/dsh-client-ui-slots":"workspace:^","@deepseek-ai/dsh-client-locale":"workspace:^","@types/react":"~18.3.1","react":"^18.2.0"}
+  "name": "@deepseek-ai/dsh-client-ui-mantur-assets",
+  "version": "0.1.3",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "types": "./lib/types/client/index.d.ts",
+      "default": "./lib/client.js"
+    },
+    "./remote": {
+      "types": "./lib/typert.remote-client.d.ts",
+      "default": "./lib/typert.remote-client.js"
+    },
+    "./typert": {
+      "types": "./lib/typert.host.d.ts",
+      "default": "./lib/typert.host.js"
+    },
+    "./types": {
+      "types": "./lib/types/types.d.ts",
+      "default": "./lib/types.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-mantur-script",
+        "@deepseek-ai/dsh-client-ui-session"
+      ],
+      "platform": "web"
+    }
+  },
+  "files": [
+    "lib/index.js",
+    "lib/client.js",
+    "lib/types",
+    "lib/typert.host.js",
+    "lib/typert.host.d.ts",
+    "lib/typert.remote-client.js",
+    "lib/typert.remote-client.d.ts"
+  ],
+  "scripts": {
+    "bundle": "tsdown"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-typert-protocol": "workspace:^",
+    "@deepseek-ai/dsh-tools": "workspace:^",
+    "@deepseek-ai/schemastery": "workspace:^",
+    "zod": "^4.4.3"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/dsh-fs": "workspace:^"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/dsh-agent": "workspace:^",
+    "@deepseek-ai/dsh-fs": "workspace:^",
+    "@deepseek-ai/dsh-brand": "workspace:^",
+    "@deepseek-ai/dsh-typert-protocol": "workspace:^",
+    "@deepseek-ai/dsh-tools": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-session": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-mantur-script": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-slots": "workspace:^",
+    "@deepseek-ai/dsh-client-locale": "workspace:^",
+    "@types/react": "~18.3.1",
+    "react": "^18.2.0"
+  }
 }
