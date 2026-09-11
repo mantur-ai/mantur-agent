@@ -69,7 +69,7 @@ Packaging copies the CLI source record and its `node_modules` directory as separ
 
 ## Publish a signed macOS release
 
-The manual `Desktop release` GitHub Actions workflow builds arm64 and x64 on native macOS runners. Both jobs sign the application with a Developer ID Application identity, submit it to Apple's notarization service, validate the signature, Gatekeeper assessment, and stapled ticket, and run the packaged smoke before their artifacts can be assembled.
+The manual `Desktop release` GitHub Actions workflow builds arm64 and x64 on native macOS runners. Both jobs first exercise bounded signing discovery under a 64-descriptor process limit, then sign the application with a Developer ID Application identity, submit it to Apple's notarization service, validate the signature, Gatekeeper assessment, and stapled ticket, and run the packaged smoke before their artifacts can be assembled.
 
 Before public distribution, enable Release Immutability in the repository settings. Configure the `macos-release` GitHub environment with two variables and four encrypted secrets:
 

@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-11-bounded-macos-signing.md
+2026-09-11-bounded-macos-signing.md: 94644d387e983b3a20d76a33abfb941f2e48abcf
+2026-09-11-bounded-macos-signing.zh.md: 7b76f1f423a75e024e00e2dfd688e7ff2692a3ff

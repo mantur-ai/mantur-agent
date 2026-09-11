@@ -102,7 +102,7 @@ jobs:
         run: pnpm run build:mantur
 
       - name: Test desktop launch contract
-        run: pnpm exec vitest run apps/desktop/tests/runtime.spec.ts scripts/client-build-environment.client.spec.ts
+        run: pnpm exec vitest run apps/desktop/tests/runtime.spec.ts scripts/client-build-environment.client.spec.ts scripts/desktop-signing-scan.spec.ts
 
       - name: Restore pinned Mantur Cut source cache
         uses: actions/cache@v5
