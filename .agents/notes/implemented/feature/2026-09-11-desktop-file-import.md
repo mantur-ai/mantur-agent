@@ -4,6 +4,10 @@ Status: implemented
 
 English | [中文](2026-09-11-desktop-file-import.zh.md)
 
+## Problem
+
+The shipped desktop composer rejects non-image files and does not retain dropped directory trees. Native draft persistence also blocks Windows saves and changes Session switching behavior.
+
 ## Decision
 
 The desktop imports explicitly selected local documents and directories as durable copies and appends their paths to the originating composer. These references use ordinary logged user text; no unlogged model context is added. Import preserves original bytes and directory structure without depending on MIME detection or document conversion.
@@ -12,9 +16,13 @@ The importer owns a unique batch directory and publishes its results only after 
 
 The carrier removes native draft-checkpoint exposure and uses original browser draft persistence as requested. Existing checkpoint files are not deleted. Origin-independent recovery is no longer promised. Host save and exit verification still precede update installation. Internal draft-lock guards remain intact for attachment import and other explicit transactions.
 
-## Alternatives
+## Alternatives considered
 
 Backporting the newer upstream generic upload service requires a separate multi-package migration. This change targets the native DMG and EXE: it copies local material and logs references, rather than introducing another remote upload protocol. A browser-only deployment still accepts images. Import does not perform Word text extraction.
+
+## Consequences
+
+Local copies consume disk space until explicitly removed. File paths in sent messages refer to this computer. Word extraction remains a separate tool operation; browser-origin changes may lose unsent drafts.
 
 ## Verification
 
