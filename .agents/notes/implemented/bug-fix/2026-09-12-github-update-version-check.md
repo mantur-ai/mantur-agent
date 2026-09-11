@@ -16,6 +16,8 @@ Updater failures retain raw diagnostics in the application log and expose concis
 
 The signed macOS workflow explicitly selects `arm64` or defaults to `both`. Every selected architecture must pass signing, notarization, and packaged smoke. Apple Silicon selection does not advertise Intel support. Exact-distribution approval and immutable-release requirements still govern publication.
 
+Each architecture downloads by explicit artifact name into its own directory. Assembly paths do not depend on how many artifacts match a pattern.
+
 ## Alternatives considered
 
 Treating all metadata 404s as current hides incomplete higher releases. The patch uses the provider's existing version selection instead of duplicating release discovery. Editing an installed signed application would invalidate its signature.

@@ -172,10 +172,18 @@ jobs:
       - name: Install immutable dependencies
         run: pnpm install --frozen-lockfile
 
-      - uses: actions/download-artifact@v8
+      - name: Download Apple Silicon artifacts
+        uses: actions/download-artifact@v8
         with:
-          pattern: desktop-macos-*
-          path: release-input
+          name: desktop-macos-arm64
+          path: release-input/desktop-macos-arm64
+
+      - name: Download Intel artifacts
+        if: inputs.architectures == 'both'
+        uses: actions/download-artifact@v8
+        with:
+          name: desktop-macos-x64
+          path: release-input/desktop-macos-x64
 
       - name: Merge native artifacts and update metadata
         env:
