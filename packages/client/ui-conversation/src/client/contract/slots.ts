@@ -246,7 +246,7 @@ export interface ConversationSessionInjected {
   /** Package-owned View roster source bound only for the Conversation body. */
   readonly hooks: { readonly conversationViews: ObservableSnapshot<readonly ViewTab[]> }
   /** Bind input draft persistence to the Session-owned store instance. */
-  bindDraftMirror: (write: (text: string) => void, seed?: string) => () => void
+  bindDraftMirror: (write: (text: string) => void) => () => void
   /** Select and activate one View while addressing an opaque focus request to it. */
   openView: (view: string, focus: string) => void
 }

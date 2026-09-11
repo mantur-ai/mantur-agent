@@ -9,8 +9,6 @@
  */
 import { Service } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
-import { saveDraftImage, restoreDraftImage } from './input/draft-images.ts'
-import type { ConversationDraftPersistence, PersistedDraftImage } from './contract/draft-persistence.ts'
 import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
 // Type-only imports: a plugin-to-plugin value import is a bundle purity
 // error, so scope resolution goes through the sessions service (scopeOf
@@ -34,8 +32,6 @@ import type { InputSubmitMode } from './contract/composer-submission.ts'
  * test fake must supply.
  */
 export interface IConversation {
-  /** Native draft transactions; absent in a browser without application-owned storage. */
-  readonly draftPersistence?: ConversationDraftPersistence
   /** The per-session input machine registry (SessionInputResolver face). */
   readonly input: SessionInputResolver
   /**
@@ -151,11 +147,8 @@ export class UnsupportedImageMediaTypeError extends Error {
 export class ConversationController extends Service implements IConversation {
   /** The per-session input machine registry (SessionInputResolver face). */
   readonly input: SessionInputResolver
-  /** Native draft identity and transfer transactions. */
-  readonly draftPersistence?: ConversationDraftPersistence
   /** The per-session composer-block registry. */
   readonly blocks: ComposerBlocks
-  private readonly savedDraftImages = new Map<DraftAttachmentId, Promise<PersistedDraftImage>>()
   private readonly draftAttachments = new Map<DraftAttachmentId, ComposerAttachment>()
 
   /**
@@ -165,17 +158,15 @@ export class ConversationController extends Service implements IConversation {
    * constructed by the plugin apply (the same instances the slot inject
    * factories close over).
    */
-  constructor(ctx: Context, config: { input: SessionInputResolver; blocks: ComposerBlocks; persistence?: ConversationDraftPersistence }) {
+  constructor(ctx: Context, config: { input: SessionInputResolver; blocks: ComposerBlocks }) {
     super(ctx, 'conversation')
     this.input = config.input
-    if (config.persistence !== undefined) this.draftPersistence = config.persistence
     this.blocks = config.blocks
     ctx.effect(() => () => {
       for (const attachment of this.draftAttachments.values()) {
         revokePreview(attachment.previewUrl)
       }
       this.draftAttachments.clear()
-      this.savedDraftImages.clear()
     }, 'conversation draft attachments')
   }
 
@@ -301,45 +292,6 @@ export class ConversationController extends Service implements IConversation {
   }
 
   /**
-   * Save selected images with their original identities and verified bytes.
-   * @param ids - Selected image identities in input order.
-   * @returns - Complete images and verified bytes in that order.
-   */
-  async captureDraftImages(ids: readonly DraftAttachmentId[]): Promise<PersistedDraftImage[]> {
-    const attachments = this.draftImages(ids)
-    if (attachments.length !== ids.length) throw new Error('A selected draft image is missing')
-    return Promise.all(attachments.map((attachment) => {
-      const existing = this.savedDraftImages.get(attachment.id)
-      if (existing !== undefined) return existing
-      const saved = saveDraftImage(attachment)
-      this.savedDraftImages.set(attachment.id, saved)
-      void saved.catch(() => { this.savedDraftImages.delete(attachment.id) })
-      return saved
-    }))
-  }
-
-  /**
-   * Restore verified images into the registry without changing their stable identities.
-   * @param images - Saved image bytes and metadata.
-   * @returns - Restored image identities in input order.
-   */
-  async restoreDraftImages(images: PersistedDraftImage[]): Promise<DraftAttachmentId[]> {
-    const decoded = await Promise.all(images.map(async (image) => {
-      const file = await restoreDraftImage(image)
-      imageMediaType(file.type)
-      const id = image.id as DraftAttachmentId
-      if (this.draftAttachments.has(id)) throw new Error('Saved draft image identity conflicts with current input')
-      return { file, id }
-    }))
-    const restored = decoded.map(({ file, id }) => ({ kind: 'image' as const, id, file, previewUrl: URL.createObjectURL(file) }))
-    for (const attachment of restored) {
-      this.draftAttachments.set(attachment.id, attachment)
-      probeDimensions(attachment)
-    }
-    return restored.map(attachment => attachment.id)
-  }
-
-  /**
    * Release one browser-owned draft image and preview URL.
    * @param id - draft attachment id.
    */
@@ -347,7 +299,6 @@ export class ConversationController extends Service implements IConversation {
     const attachment = this.draftAttachments.get(id)
     if (attachment === undefined) return
     this.draftAttachments.delete(id)
-    this.savedDraftImages.delete(id)
     revokePreview(attachment.previewUrl)
   }
 
