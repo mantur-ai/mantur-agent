@@ -43,6 +43,20 @@ describe('browser account HTTP', () => {
     await expect(b.client.cancel(b.secrets, b.attempt, signal())).rejects.toMatchObject({ kind: 'remote', code: 'ATTEMPT_NOT_FOUND' })
   })
 
+  it.each([599, 1, 0])('accepts an idempotent create receipt with %i remaining seconds', async (expiresIn) => {
+    const b = bench()
+    b.transport.mockResolvedValueOnce(Response.json({ ...b.receipt, expires_in: expiresIn }, { status: 200 }))
+    const receipt = await b.client.create(b.secrets, signal())
+    expect(receipt.expires_in).toBe(expiresIn)
+    expect(receipt.attempt_expires_at).toBe(Date.parse(b.receipt.attempt_expires_at))
+  })
+
+  it.each([-1, 601, 599.5])('rejects a create receipt with invalid remaining lifetime %s', async (expiresIn) => {
+    const b = bench()
+    b.transport.mockResolvedValueOnce(Response.json({ ...b.receipt, expires_in: expiresIn }, { status: 200 }))
+    await expect(b.client.create(b.secrets, signal())).rejects.toMatchObject({ kind: 'protocol' })
+  })
+
   it('sends only device proof hashes during create and accepts only the exact authorization URL', async () => {
     const b = bench()
     b.transport.mockResolvedValueOnce(Response.json(b.receipt, { status: 201 }))

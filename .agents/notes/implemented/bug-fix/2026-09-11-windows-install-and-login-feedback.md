@@ -4,6 +4,8 @@ Status: implemented
 
 English | [中文](2026-09-11-windows-install-and-login-feedback.zh.md)
 
+Production-clone acceptance also reproduced a strict 600-second receipt check rejecting valid retries. The client accepts bounded remaining seconds; PostgreSQL acceptance covers a fixed microsecond-precision deadline and decreasing lifetime.
+
 ## Problem
 
 The Windows installer bypassed directory selection. Opening YAML used file associations, so a machine without a YAML editor offered software installation. Missing desktop-login routes appeared as an undifferentiated failure.

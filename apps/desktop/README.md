@@ -6,6 +6,8 @@ The desktop application is 漫途Agent, built by Mantur to create and produce co
 
 Windows uses the NSIS installation wizard with a selectable application directory. The EXE carries the application resources; its extraction progress is not a second application download. A missing browser-login create endpoint reports an unavailable server route separately from network and incompatible-response failures. Successful packaging does not verify production login availability or provide a Windows signing identity.
 
+Create-attempt retries accept the server's remaining lifetime from zero to 600 seconds while retaining the original absolute expiry.
+
 ## Develop without packaging
 
 After `pnpm install`, build the repository artifacts once on a clean checkout:

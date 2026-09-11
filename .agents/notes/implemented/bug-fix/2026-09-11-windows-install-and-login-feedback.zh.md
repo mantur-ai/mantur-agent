@@ -4,6 +4,8 @@ Status: implemented
 
 [English](2026-09-11-windows-install-and-login-feedback.md) | 中文
 
+正式站副本验收还复现了客户端将有效期限定为 600 秒，导致正常重试被拒绝的问题。客户端改为接受有界的剩余秒数；PostgreSQL 验收覆盖微秒精度的固定截止时间和递减有效期。
+
 ## Problem
 
 Windows 安装器跳过目录选择。打开 YAML 依赖文件关联，未关联 YAML 编辑器的电脑会提示安装软件。桌面登录路由不存在时只显示笼统错误。

@@ -17,7 +17,7 @@ const timestamp = z.iso.datetime({ offset: true }).transform(value => Date.parse
 const account = z.strictObject({ id: accountId, display_name: z.string() })
 const receipt = z.strictObject({
   attempt_id: attemptId, authorization_uri: z.url(), issuer: z.url(), environment: z.enum(['production', 'test']),
-  attempt_expires_at: timestamp, expires_in: z.literal(600), status: z.literal('pending'),
+  attempt_expires_at: timestamp, expires_in: z.number().int().min(0).max(600), status: z.literal('pending'),
 })
 const active = z.strictObject({
   status: z.literal('active'), grant_id: credentialId, grant_generation: z.number().int().positive(),
