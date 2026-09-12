@@ -1,0 +1,74 @@
+/* Onboarding owns a body portal and makes #root inert; its palette stays independent. */
+body[data-mantur-theme='storyboard']:not([data-ds-dark-theme]):not(:has(#root[inert])) {
+  --dsw-alias-bg-base: #fffcf7;
+  --dsw-alias-bg-layer-1: #fffdf9;
+  --dsw-alias-bg-layer-2: #fffdf9;
+  --dsw-alias-bg-layer-3: #fffdf9;
+  --dsw-alias-bg-raised: #fffdf9;
+  --dsw-alias-bg-overlay: #f0eee9;
+  --dsw-alias-bg-module-platform: #f0eee9;
+  --dsw-alias-border-l1: #eee8df;
+  --dsw-alias-border-l2: #ddd4c7;
+  --dsw-alias-border-l2-darkmode-thin: #ddd4c7;
+  --dsw-alias-border-l3: #ddd4c7;
+  --dsw-alias-border-l4: #b4a99b;
+  --dsw-alias-label-primary: #27231f;
+  --dsw-alias-label-secondary: #6b645c;
+  --dsw-alias-label-tertiary: #6b645c;
+  --dsw-alias-label-caption: #6b645c;
+  --dsw-alias-brand-primary: #2359d7;
+  --dsw-alias-brand-text: #2359d7;
+  --dsw-alias-brand-primary-new-colorprimary-new-color: #2359d7;
+  --dsw-alias-button-primary-fill: #2359d7;
+  --dsw-alias-button-primary-hover: #1d4dbe;
+  --dsw-alias-button-info-fill: #2359d7;
+  --dsw-alias-button-info-hover: #1d4dbe;
+  --dsw-alias-button-elevated-fill: #fffdf9;
+  --dsw-alias-button-floating-fill: #fffdf9;
+  --dsw-alias-button-floating-hover: #f0eee9;
+  --dsw-alias-interactive-bg-active: #e4e9f7;
+  --dsw-alias-interactive-bg-hover: #f0eee9;
+  --dsw-alias-interactive-bg-hover-solid: #f0eee9;
+  --dsw-alias-interactive-bg-hover-accent: #e4e9f7;
+  --dsw-alias-state-business-primary: #2359d7;
+  --dsw-alias-state-business-secondary: #2359d7;
+  --dsw-alias-state-business-tertiary: #e4e9f7;
+  --dsw-alias-state-error-primary: #b14637;
+  --dsw-alias-state-error-secondary: #c75a45;
+  --dsw-alias-state-success-primary: #26745c;
+  --dsw-alias-state-success-secondary: #38886e;
+  --dsw-alias-state-warn-label: #8e590f;
+  --dsw-alias-state-warn-primary: #8e590f;
+  --dsw-alias-state-warn-secondary: #c88a2c;
+  --dsw-alias-markdown-code-block: #f0eee9;
+  --dsw-alias-markdown-code-block-banner: #f0eee9;
+  --dsw-alias-markdown-inline-code: #f0eee9;
+  --dsw-specific-sidebar-fill: #eee8de;
+  --dsw-specific-sidebar-nav-item-active: #e4e9f7;
+  --dsw-specific-sidebar-nav-item-active-accent: #e4e9f7;
+  --dsw-specific-sidebar-nav-item-hover: #e6e1d5;
+  --dsw-specific-input-major: #fffdf9;
+  --dsw-specific-selector: #f0eee9;
+  --dsw-specific-bubble: #edf0f8;
+  --dsw-specific-bubble-highlight: #e4e9f7;
+  --dsh-media-preview-background: #f1f2f4;
+}
+
+body[data-mantur-theme='storyboard']:not([data-ds-dark-theme]):not(:has(#root[inert])) [data-workspace-frame]::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: url('./mantur-storyboard-background.svg') center / cover no-repeat;
+  opacity: 0.55;
+  mask-image: linear-gradient(#000 0 12px, transparent 12px calc(100% - 12px), #000 calc(100% - 12px)),
+    linear-gradient(90deg, transparent 0 calc(100% - 16px), #000 calc(100% - 16px));
+  mask-composite: add;
+}
+
+@media (max-width: 900px) {
+  body[data-mantur-theme='storyboard'] [data-workspace-frame]::before {
+    display: none;
+  }
+}

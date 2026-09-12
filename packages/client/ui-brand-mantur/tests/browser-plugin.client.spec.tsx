@@ -44,10 +44,15 @@ describe('Mantur browser-brand plugin', () => {
     const subject = await bench()
     const fiber = subject.ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
+    expect(document.body.dataset.manturTheme).toBe('storyboard')
+    const palette = document.querySelector('style[data-plugin-css="@deepseek-ai/dsh-client-ui-brand-mantur/storyboard.css"]')
+    expect(palette).not.toBeNull()
     for (const hole of HOLES) expect(subject.slots.entries(hole)).toHaveLength(1)
     subject.disposeHoles()
     for (const hole of HOLES) expect(subject.slots.entries(hole)).toHaveLength(0)
     await fiber.dispose()
+    expect(palette?.isConnected).toBe(false)
+    expect(document.body.hasAttribute('data-mantur-theme')).toBe(false)
   })
 
   it('renders the approved logo with the localized product copy', () => {
