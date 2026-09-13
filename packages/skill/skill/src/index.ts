@@ -154,6 +154,8 @@ export interface SkillInvocationSource {
   readonly name: string
   /** Injected skill bodies are instructions for the model to follow. */
   readonly form: 'instructions'
+  /** Exact App resource selected by a homepage reference; ordinary name lookup omits it. */
+  readonly bundled?: { readonly version: string; readonly digest: string }
 }
 
 declare module '@deepseek-ai/dsh-llm' {

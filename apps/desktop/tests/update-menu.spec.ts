@@ -16,7 +16,7 @@ const updateItemIds = new Set([
 
 function menuFor(platform: NodeJS.Platform, state: DesktopUpdateState, overrides = {}) {
   return buildApplicationMenu({
-    appName: '漫途Agent',
+    appName: 'ManTur Agent',
     version: '1.2.3',
     platform,
     updatesEnabled: true,

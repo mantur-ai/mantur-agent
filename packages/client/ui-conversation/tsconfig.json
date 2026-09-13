@@ -91,6 +91,9 @@
     },
     {
       "path": "../../util/workspace-path"
+    },
+    {
+      "path": "../../context/file-reference"
     }
   ],
   "exclude": [

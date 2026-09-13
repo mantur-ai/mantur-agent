@@ -44,10 +44,14 @@
     },
     {
       "path": "../ui-conversation"
+    },
+    {
+      "path": "../ui-mantur-script/tsconfig.client.json"
     }
   ],
   "files": [
     "src/client/index.ts",
+    "src/client/agent-opening.ts",
     "src/client/Workbench.tsx",
     "src/client/locales.ts",
     "src/types.ts",

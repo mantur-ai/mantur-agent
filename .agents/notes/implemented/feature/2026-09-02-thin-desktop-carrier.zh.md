@@ -14,7 +14,7 @@ Status: implemented
 
 Electron 还通过 `ELECTRON_RUN_AS_NODE=1` 提供子进程的 Node 运行时。这样每个安装包只含一套运行时，并保留所有受支持 Node 应用都通过具名 `dsh` profile 启动的规则。桌面依赖根包含既有 Python 部署闭包、Web 应用闭包与必需的 session-title peer；electron-builder 会为目标 Electron 运行时重建原生依赖。
 
-client 构建 profile `mantur` 会把 `DSH_CLIENT_TITLE` 固定为 `漫途Agent`，并同时写入仓库版本与 commit 元数据。Mantur 应用 profile 提供应用内身份。原生窗口、macOS Dock、关于面板和两个原生打包目标都使用带白色圆角底和透明外角的蓝色无限环图标；Web 客户端保留透明 Logo。载体声明稳定应用标识 `ai.mantur.agent`，并在 Electron 就绪前把其用户数据路径设为操作系统应用数据根目录下的 `mantur-agent` 目录。子进程只接收该目录的 `harness` 子目录作为 `DSH_HOME`，并从应用自有的中性目录启动；`~/.dsh` 下的 CLI 状态不会进入桌面启动。
+client 构建 profile `mantur` 会把 `DSH_CLIENT_TITLE` 固定为 `ManTur Agent`，并同时写入仓库版本与 commit 元数据。Mantur 应用 profile 提供应用内身份。原生窗口、macOS Dock、打包版关于面板和两个原生打包目标都使用奶白色吉祥物图标，带黄色螺旋和水平居中的蓝色无限环徽记，圆角底板外侧透明；Web 客户端保留透明 Logo。载体声明稳定应用标识 `ai.mantur.agent`，并在 Electron 就绪前把其用户数据路径设为操作系统应用数据根目录下的 `mantur-agent` 目录。子进程只接收该目录的 `harness` 子目录作为 `DSH_HOME`，并从应用自有的中性目录启动；`~/.dsh` 下的 CLI 状态不会进入桌面启动。
 
 同一用户数据根目录还持有 Harness 与桌面诊断的持久合并日志。启动失败会先关闭子进程并完成日志写入。只有错误指向 schema 无效的 `session_projcache` 时，才会提供一项窄范围恢复：在用户通过原生对话框明确同意后，载体只删除该投影缓存并重试。会话日志、设置、凭据、profile 与 workspace 保持不变。其他错误只提供日志与退出。
 
@@ -24,9 +24,13 @@ client 构建 profile `mantur` 会把 `DSH_CLIENT_TITLE` 固定为 `漫途Agent`
 
 根目录的 `desktop:dev` 命令负责本地编辑循环，不会调用 electron-builder。监听器会重新运行桌面端 TypeScript 增量项目、bundle Electron 入口，并直接启动 Electron。源码或资源改动会终止活动 Electron 进程；Electron 先等待其 dsh 子进程关闭，再开始下一轮。开发 dsh 输出会同步显示在终端，同时保留在持久日志中。开发模式选用 `mantur-agent-dev` 用户数据目录，不会触及已安装应用的 `mantur-agent` 状态；`app.isPackaged` 会保持 updater 不活动。
 
+Main 负责目录对话框，因为只有 Electron 载体能将其父窗口设为当前活动窗口。无参数、仅限当前主 frame 的 preload 能力返回一个绝对目录或 `null`；共享 Workspace 插件在组合时选择此回调，接纳仍由 Host 负责。普通浏览器保留 [Host 选择器](2026-07-27-native-workspace-directory-picker.zh.md)。原生错误不会启动第二种实现。Main 在 Electron 调用结束前持续保留对话框待完成状态，期间拒绝重复请求和更新准备，并在导航、关闭或退出后使结果失效。结果失效不表示 OS 对话框已取消。无密钥的桥接与 Main 接线测试覆盖这些规则；原生可见性需要操作系统 GUI 验证。
+
+Main 在导航到每个新启动的 Host 前，移除自身浏览器存储中 `127.0.0.1` 根路径下的 `dsh-auth-` Cookie。Cookie 不按端口隔离，按 authority 命名的 Cookie 因随机端口重启而累积。受影响的开发配置有 61 条 Cookie，贡献 13,908 字节的请求头；加上插件组合地址后超出 HTTP 解析限制并返回 431。清理先于 token 交换完成，保留账号存储和无关 Cookie。提高服务端请求头上限只能推迟这种无界累积造成的故障。
+
 ## Packaging and verification
 
-原生矩阵会从同一个检出 commit 运行 macOS arm64、macOS x64 与 Windows x64。每个 runner 都会执行完整漫途构建，对启动语法和品牌构建环境运行单元测试，只创建自己的原生安装包，再从解包应用的依赖目录启动 DSH。smoke 会执行进程 token 交换、请求已认证页面，并要求 HTTP 200、Web boot payload、`漫途Agent` 文档标题、包内 updater 依赖与预期的 release feed 配置同时存在。
+原生矩阵会从同一个检出 commit 运行 macOS arm64、macOS x64 与 Windows x64。每个 runner 都会执行完整漫途构建，对启动语法和品牌构建环境运行单元测试，只创建自己的原生安装包，再从解包应用的依赖目录启动 DSH。smoke 会执行进程 token 交换、请求已认证页面，并要求 HTTP 200、Web boot payload、`ManTur Agent` 文档标题、包内 updater 依赖与预期的 release feed 配置同时存在。
 
 内部打包工作流会生成未签名的 DMG、macOS 更新 ZIP 与一键 NSIS 安装包。私有 desktop workspace 仍不属于 npm release family；该工作流只把文件作为私有 Actions artifact 保留，不创建 tag 或 GitHub release。只有某个目标的原生打包和 packaged smoke 都通过后，才可认为该目标完成验证。
 
@@ -39,6 +43,8 @@ macOS release 工作流通过受保护的 GitHub 环境 secret 为原生 arm64 �
 内嵌 Mantur Cut 的生产依赖树会在上游构建完成后复制。打包会在依赖清单生成和签名前，从暂存依赖树中移除包管理器可执行目录与构建缓存目录。这些文件不是运行时输入；保留它们会扩大签名范围，并可能带入已有签名不符合发布 timestamp 策略的缓存二进制文件。
 
 ## Alternatives considered
+
+**由后台 Host helper 打开桌面文件夹选择器。** 否决。该进程不拥有 Electron 窗口，无法为选择器指定应用父窗口。窄范围 Main 能力保留既有 Workspace 流程，不把工作区存储移入 Electron，也不把结果失效当成原生对话框取消。
 
 **内嵌 Harness Host，并用 Electron IPC 替代 HTTP。** 否决。这样会创建桌面专用应用组装与 transport，重复既有 Web 认证和生命周期行为，并在一键安装证明需求之前造成更大的上游差异。
 

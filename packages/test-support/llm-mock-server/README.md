@@ -51,7 +51,7 @@ The repository script writes JSONL to stdout: a `ready` record carries the `/v1`
 
 ### Scripting behaviors
 
-`--sequence` is a comma-separated FIFO. Exhaustion returns a structured HTTP 500; `--repeat-last` explicitly reuses the last entry.
+`--sequence` is a comma-separated FIFO. Exhaustion returns a structured HTTP 500; `--repeat-last` explicitly reuses the last entry. Each `tool_call_success` response has a fresh UUID-based tool-call ID, including after server restarts; the random behavior seed does not determine these IDs.
 
 | Behavior | Wire result |
 |---|---|

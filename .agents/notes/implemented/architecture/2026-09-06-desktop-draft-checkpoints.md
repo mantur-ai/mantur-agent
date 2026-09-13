@@ -16,9 +16,13 @@ Each restart preparation owns a distinct set of input-lock releases. Cancellatio
 
 The update installer refuses to proceed without a verified final Host checkpoint. It does not treat draft persistence, process closure, log messages, or `fiber.dispose()` resolution as that checkpoint. The refusal stops neither local tasks nor remote work. Windows draft durability remains an explicit limitation without simulated success. The [automatic-project policy](../feature/2026-09-06-mantur-automatic-project.md) owns the unassigned-composer integration and validates cancellation immediately before its two-owner transfer is published.
 
+Restart preparation observes submission and automatic-project completion before acquiring input locks. A failed attempt cancels that restart and retains the input for review. A native waiting dialog can cancel the request; its closure after a successful save does not cancel installation. Owner attachment or detachment during the wait cancels it rather than changing the set of drafts under a pending request. No timer guesses that submission is complete; the native receipt deadline still bounds an unresponsive renderer.
+
 ## Alternatives considered
 
 Keeping localStorage as the only copy loses origin-independent recovery and attachment bytes. Saving only clipboard text loses reference metadata. Separate source and destination writes can duplicate or lose an unassigned draft during transfer. Accepting a teardown promise hides failures contained by Cordis. Changing vendored teardown behavior or adding a global task-admission freeze would exceed this bounded draft change.
+
+**Capture pending submissions or clear their flags.** A pending admission can still restore failed text or images. Waiting for its actual result preserves that content without resending, discarding drafts, or treating a delay as proof of success.
 
 ## Consequences
 

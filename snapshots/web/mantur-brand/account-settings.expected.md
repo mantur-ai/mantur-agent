@@ -13,7 +13,7 @@
     - button "插件":
       - img
       - text: 插件
-  - button "打开配置文件"
+  - button "高级配置文件"
   - button "关闭":
     - img
     - text: 关闭

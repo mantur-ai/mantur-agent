@@ -4,6 +4,10 @@ import { nativeEn, nativeZh } from './native-locales.ts'
 /** Simplified Chinese copy and key source for Mantur account surfaces. */
 export const zh = {
   ...nativeZh,
+  balanceTitle: '剩余馒头',
+  balanceLoading: '正在读取…',
+  balanceFailed: '余额读取失败',
+  balanceSignedOut: '登录后查看',
   nav: '漫途账号',
   onboardingTitle: '登录漫途账号',
   onboardingDescription: '登录后可在后续版本中直接使用与你账号绑定的漫途算子。',
@@ -28,6 +32,10 @@ export type ManturAccountKey = keyof typeof zh
 /** English copy checked against the Chinese key set. */
 export const en = {
   ...nativeEn,
+  balanceTitle: 'Mantou remaining',
+  balanceLoading: 'Loading…',
+  balanceFailed: 'Balance unavailable',
+  balanceSignedOut: 'Sign in to view',
   nav: 'Mantur account',
   onboardingTitle: 'Sign in to Mantur',
   onboardingDescription: 'Sign in now to use Mantur operators linked to your account in a future release.',

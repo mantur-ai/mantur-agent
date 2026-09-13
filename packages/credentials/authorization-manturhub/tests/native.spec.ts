@@ -134,11 +134,18 @@ function transport() {
 
 it('requires a connected Electron parent', () => {
   transport()
-  Object.defineProperty(process, 'connected', { configurable: true, value: false })
-  expect(() => new NativeAccountConnection(config)).toThrow('Electron parent')
-  Object.defineProperty(process, 'connected', { configurable: true, value: true })
-  Object.defineProperty(process, 'send', { configurable: true, value: undefined })
-  expect(() => new NativeAccountConnection(config)).toThrow('Electron parent')
+  const send = Object.getOwnPropertyDescriptor(process, 'send')!
+  try {
+    Object.defineProperty(process, 'connected', { configurable: true, value: false })
+    expect(() => new NativeAccountConnection(config)).toThrow('Electron parent')
+    Object.defineProperty(process, 'connected', { configurable: true, value: true })
+    Object.defineProperty(process, 'send', { configurable: true, value: undefined })
+    expect(() => new NativeAccountConnection(config)).toThrow('Electron parent')
+  } finally {
+    // Vitest reports between the case and async cleanup through this same process channel.
+    Object.defineProperty(process, 'connected', { configurable: true, value: true })
+    Object.defineProperty(process, 'send', send)
+  }
 })
 
 it('validates public snapshots and ignores unrelated or stale IPC replies', async () => {
@@ -437,8 +444,8 @@ it('projects Main identity and refuses browser-owned login mutations', async () 
   const { account } = await bootNative()
   expect(account.identityMode()).toBe('desktop-managed')
   ipc.handle((frame) => { ipc.reply(frame, { phase: 'signed-in', busy: false, authenticated: true, skipped: false, pendingRevocations: 0,
-    account: { email: 'artist@example.com', expiresAt: Date.now() + 60000 } }) })
-  expect(await account.status()).toEqual({ status: 'signed-in', account: { email: 'artist@example.com' } })
+    account: { displayName: 'Test artist', expiresAt: Date.now() + 60000 } }) })
+  expect(await account.status()).toEqual({ status: 'signed-in', account: { displayName: 'Test artist' } })
   ipc.handle((frame) => { ipc.reply(frame, { phase: 'signed-out', busy: false, authenticated: false, skipped: false, pendingRevocations: 0 }) })
   expect(await account.status()).toEqual({ status: 'signed-out' })
   ipc.handle((frame) => { ipc.reply(frame, { phase: 'signed-in', busy: false, authenticated: true, skipped: false, pendingRevocations: 0 }) })

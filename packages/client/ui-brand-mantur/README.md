@@ -1,5 +1,5 @@
 ---
-description: "Mantur Agent logo and product-copy occupants for the sidebar and blank-session hero, for maintainers composing the Mantur desktop client."
+description: "ManTur Agent logo and product-copy occupants for the sidebar and blank-session hero, for maintainers composing the Mantur desktop client."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This package fills the generic sidebar and blank-session hero with the approved blue infinity-loop logo, the localized `漫途Agent` product name, and the Mantur product promise. The collapsed sidebar shows the same logo until hover reveals its ordinary panel control, while the empty hero badge occupant keeps the Web Preview badge out of the Mantur composition. It changes no layout, conversation, model, permission, or agent capability.
+This package fills the generic sidebar and blank-session hero with the approved blue infinity-loop logo, the localized `ManTur Agent` product name, and the Mantur product promise. The collapsed sidebar shows the same logo until hover reveals its ordinary panel control, while the empty hero badge occupant keeps the Web Preview badge out of the Mantur composition. It changes no layout, conversation, model, permission, or agent capability.
 
 ## Table of Contents
 
@@ -23,7 +23,7 @@ This package fills the generic sidebar and blank-session hero with the approved 
 <a id="use-this-package"></a>
 ## Use this package
 
-Compose this row only through [`dsh-mantur-app`](../../bundle/mantur-app/README.md). The browser half registers `sidebar.brand.mark`, `sidebar.brand.name`, `conversation.hero.brand.mark`, `conversation.hero.headline`, and `conversation.hero.badge` after their owners declare them. Both locales render the confirmed product name `漫途Agent` in the sidebar, while the hero places the approved logo before the Chinese headline `故事起于一念，余下交给漫途` or its English equivalent. The Mantur Web application must serve `mantur-logo.png` beside its built page.
+Compose this row only through [`dsh-mantur-app`](../../bundle/mantur-app/README.md). The browser half registers `sidebar.brand.mark`, `sidebar.brand.name`, `conversation.hero.brand.mark`, `conversation.hero.headline`, and `conversation.hero.badge` after their owners declare them. Both locales render the confirmed product name `ManTur Agent` in the sidebar, while the hero places the approved logo before the Chinese headline `故事起于一念，余下交给漫途` or its English equivalent. The Mantur Web application must serve `mantur-logo.png` beside its built page.
 
 <a id="model-experience"></a>
 ## Model Experience
@@ -39,7 +39,7 @@ None; no text from this package reaches a provider request.
 <a id="known-limitations-and-deferred-work"></a>
 
 - **The approved source is raster artwork** — Web and native packaging use byte-identical 1024 px PNG files until Mantur approves a vector source.
-- **The complete product name remains visible** — the logo supplements `漫途Agent` in the expanded sidebar instead of replacing its localized name.
+- **The complete product name remains visible** — the logo supplements `ManTur Agent` in the expanded sidebar instead of replacing its localized name.
 
 <a id="dev-note"></a>
 ### Dev Note

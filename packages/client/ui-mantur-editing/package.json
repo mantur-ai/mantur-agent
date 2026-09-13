@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-mantur-editing",
   "description": "Mantur embedded local editing workbench",
-  "version": "0.1.2-rc.1",
+  "version": "0.1.3",
   "publishConfig": {
     "access": "public"
   },
@@ -38,7 +38,7 @@
     },
     "./types": {
       "types": "./lib/types/types.d.ts",
-      "default": "./lib/types/types.js"
+      "default": "./lib/types.js"
     }
   },
   "dsh": {
@@ -51,7 +51,8 @@
         "@deepseek-ai/dsh-client-ui-theme",
         "@deepseek-ai/dsh-api-gateway",
         "@deepseek-ai/dsh-client-ui-session",
-        "@deepseek-ai/dsh-client-ui-conversation"
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-mantur-script"
       ],
       "platform": "web"
     }
@@ -64,7 +65,8 @@
   "dependencies": {
     "@deepseek-ai/dsh-typert-protocol": "workspace:^",
     "@deepseek-ai/schemastery": "workspace:^",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "@deepseek-ai/dsh-tools": "workspace:^"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:^",
@@ -92,7 +94,8 @@
     "@deepseek-ai/dsh-client-ui-session": "workspace:^",
     "@deepseek-ai/dsh-scope": "workspace:^",
     "@deepseek-ai/dsh-client-ui-conversation": "workspace:^",
-    "@deepseek-ai/dsh-system-prompt": "workspace:^"
+    "@deepseek-ai/dsh-system-prompt": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-mantur-script": "workspace:^"
   },
   "files": [
     "lib/index.js",
@@ -108,7 +111,7 @@
     "adapters/mantur-cut-packaged.patch",
     "adapters/mantur-cut-shutdown.patch",
     "lib/types/**/*.css",
-    "lib/types/**/*.js",
+    "lib/types.js",
     "lib/types/**/*.d.ts",
     "lib/typert.host.js",
     "lib/typert.host.d.ts",

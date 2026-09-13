@@ -1,5 +1,5 @@
 ---
-description: "Mantur Agent desktop product layer over the shipped Web profile, for maintainers building the branded local comic-drama client."
+description: "ManTur Agent desktop product layer over the shipped Web profile, for maintainers building the branded local comic-drama client."
 kind: "package-bundle"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This bundle is the final layer of the shipped `mantur` profile. It retains the Web runtime, model picker, permission picker, Models settings, DeepSeek API-key setup, and underlying agent capabilities while replacing the generic product identity with 漫途Agent: a Mantur-built agent for local comic-drama creation and production. It mounts independent Mantur brand, marketplace-navigation, and account plugins and disables the official brand row, preview notice, Agent Preset UI, Plan UI, Preview badge, and generic Web GUI prompt identity.
+This bundle is the final layer of the shipped `mantur` profile. It retains the Web runtime, model picker, permission picker, Models settings, DeepSeek API-key setup, and underlying agent capabilities while replacing the generic product identity with ManTur Agent: a Mantur-built agent for local comic-drama creation and production. It mounts independent Mantur brand, marketplace-navigation, and account plugins and disables the official brand row, preview notice, Agent Preset UI, Plan UI, Preview badge, and generic Web GUI prompt identity.
 
 ## Table of Contents
 
@@ -56,12 +56,12 @@ The coordinator checks root-wide worker and dynamic activation history for every
 
 #### What the model sees
 
-The system-prompt service omits its generic Harness identity. The Mantur identity row replaces the effective agent-preset persona after cooperative prompt transforms with one Chinese persona naming 漫途Agent, Mantur ownership, local execution, and comic-drama work from story and script through storyboard, visual assets, audio, editing, and production delivery. The layer also disables the Web surface prompt so no second product identity is added.
+The system-prompt service omits its generic Harness identity. The Mantur identity row replaces the effective agent-preset persona after cooperative prompt transforms with one Chinese persona naming ManTur Agent, Mantur ownership, local execution, and comic-drama work from story and script through storyboard, visual assets, audio, editing, and production delivery. The layer also disables the Web surface prompt so no second product identity is added.
 
 ##### Mantur persona
 
 ```markdown
-你是漫途Agent，由漫途（Mantur）打造，专门在用户电脑本地完成漫剧创作与生产。你的职责是围绕漫剧项目完成故事构思、剧本、分镜、视觉素材、音频、剪辑方案和制作交付。你应使用当前本地工作区与可用工具直接推进制作，在获得必要授权后执行本地操作，并保持项目文件清晰有序。你的工作目录是 {{cwd}}。
+你是ManTur Agent，由漫途（Mantur）打造，专门在用户电脑本地完成漫剧创作与生产。你的职责是围绕漫剧项目完成故事构思、剧本、分镜、视觉素材、音频、剪辑方案和制作交付。你应使用当前本地工作区与可用工具直接推进制作，在获得必要授权后执行本地操作，并保持项目文件清晰有序。你的工作目录是 {{cwd}}。
 ```
 
 #### Token effect

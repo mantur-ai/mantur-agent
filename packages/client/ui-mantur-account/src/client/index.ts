@@ -1,4 +1,4 @@
-/** Mantur account onboarding and Settings occupants. */
+/** Optional Mantur account Settings and explicitly requested dialogs. */
 
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
@@ -6,11 +6,13 @@ import manturAccountRemote from '@deepseek-ai/dsh-authorization-manturhub/remote
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
-import { AccountOnboarding, type AccountOnboardingInjected } from './AccountOnboarding.tsx'
+import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
+import { AccountBalanceClient } from './balance.ts'
+import { AccountBalance } from './AccountBalance.tsx'
 import { AccountSection, type AccountSectionInjected } from './AccountSection.tsx'
 import { ManturAccountStore } from './store.ts'
 import { NativeAccountClient } from './native-account.ts'
-import { NativeAccountOnboarding, NativeAccountSection, type NativeAccountInjected } from './NativeAccountSurfaces.tsx'
+import { NativeAccountSection, type NativeAccountInjected } from './NativeAccountSurfaces.tsx'
 import { NativeAccountDialog, type NativeAccountDialogInjected } from './NativeAccountDialog.tsx'
 import { createNativeAccountDialogStore, NativeAccountDialogController, type NativeAccountDialogOutcome } from './native-dialog.ts'
 import { en, zh, type ManturAccountKey } from './locales.ts'
@@ -30,7 +32,7 @@ declare module '@deepseek-ai/cordis' {
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
-    /** Mantur account onboarding and Settings copy. */
+    /** Mantur account Settings and dialog copy. */
     'settings.manturAccount': ManturAccountKey
   }
 }
@@ -41,7 +43,7 @@ export const NS = 'settings.manturAccount'
 /** Services required by the account surfaces. */
 export const inject = ['slots', 'locale', 'remote']
 
-/** Register Mantur account onboarding before model credentials and expose later sign-out. */
+/** Register optional account Settings and dialogs without blocking session creation on account state. */
 export async function apply(ctx: Context): Promise<void> {
   const disposeRemote = await ctx.remote.$mount(manturAccountRemote)
   ctx.effect(() => disposeRemote, 'ui-mantur-account: Remote contribution')
@@ -52,15 +54,24 @@ export async function apply(ctx: Context): Promise<void> {
     if (!identity.ok || identity.value === 'desktop-managed') {
       const client = new NativeAccountClient(identity.ok ? window.manturAccount : undefined)
       scope.effect(() => client.connect(), 'ui-mantur-account: native account observation')
+      const cadence = await scope.remote.manturAccount.balanceRefreshIntervalMs()
+      if (!cadence.ok) throw new Error('Mantur balance refresh configuration unavailable')
+      const balance = new AccountBalanceClient(() => scope.remote.manturAccount.balance(), cadence.value)
+      scope.effect(() => balance.connect(client.store), 'ui-mantur-account: balance observation')
+      scope.slots.inject('sidebar.footer.action', () => scope.slots.register({
+        name: 'sidebar.footer.action', id: 'mantur.balance', order: -10, locale: NS,
+        inject: () => ({ hooks: { balance: balance.store },
+          formatBalance: (value: number) => new Intl.NumberFormat(scope.locale.getSnapshot().active, {
+            maximumFractionDigits: 8,
+          }).format(value) }),
+      }, AccountBalance))
+
       const injected = (): NativeAccountInjected => ({
         run: action => client.run(action), hooks: { nativeAccount: client.store }, t,
         formatExpiry: time => new Intl.DateTimeFormat(scope.locale.getSnapshot().active, {
           dateStyle: 'medium', timeStyle: 'short',
         }).format(time),
       })
-      scope.slots.inject('settings.onboarding', () => scope.slots.register({
-        name: 'settings.onboarding', id: 'mantur-account', order: -100, locale: NS, inject: injected,
-      }, NativeAccountOnboarding))
       scope.slots.inject('settings.section', () => scope.slots.register({
         name: 'settings.section', id: 'mantur-account', order: 5,
         label: () => t('nav'), locale: NS, inject: injected,
@@ -83,15 +94,12 @@ export async function apply(ctx: Context): Promise<void> {
       return
     }
     const controller = new ManturAccountStore(scope)
-    const injected = (): AccountOnboardingInjected & AccountSectionInjected => ({
+    const injected = (): AccountSectionInjected => ({
       controller,
       hooks: { account: controller.store },
       t,
     })
     scope.effect(() => () => { controller.dispose() }, 'ui-mantur-account: controller')
-    scope.slots.inject('settings.onboarding', () => scope.slots.register({
-      name: 'settings.onboarding', id: 'mantur-account', order: -100, locale: NS, inject: injected,
-    }, AccountOnboarding))
     scope.slots.inject('settings.section', () => scope.slots.register({
       name: 'settings.section', id: 'mantur-account', order: 5,
       label: () => t('nav'), locale: NS, inject: injected,

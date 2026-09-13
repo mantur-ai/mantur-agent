@@ -30,6 +30,8 @@ constructor 身份或模块状态必须共享的导出列入 `peerRequiredHostEx
 
 Client bundle 使用的 workspace import、纯类型 import、模块扩充、`dsh.client.inject`、invariant companion 和仅有元数据的现存 peer 只属于 `devDependencies`。Host 运行时导入的普通第三方包属于 `dependencies`；其他第三方关系保持原区段。Workspace 引用使用 `workspace:^`。
 
+剪辑 Host 导入的 `connectMcpServer` 属于 peer-required，因为模块本地的服务器名称预留必须在同一 Agent 的 MCP 客户端之间共享。其公开 `./types` 入口单独打包为 `lib/types.js`；发布该入口不会发布 `lib/types/client/` 下的私有浏览器编译中间文件。Manifest 门禁要求包含该 bundle，publint 检查其已发布的相对导入闭包。
+
 部分开发期关系只存在于 `dsh.client.inject` 或 TypeScript project reference 中。策略的 `configurationOnlyDevDependencies` 表只列出这些已评审的依赖边，并将它们保留在 `devDependencies` 中。
 
 验证器读取源码 manifest 和源码文件，因此可以在没有已构建 `lib/` 的干净工作树上运行。每个被选中的 Host face 都必须存在 `src/index.ts`。未分类的 Host 运行期导出属于策略违规，会阻止 `--fix` 的全部写入；维护者必须审查该导出，并选择分类该导出、修改源码关系或修改选包范围。源码安全检查通过后，`--fix` 只执行分类所确定的区段与范围变更，并删除失效的 peer 元数据。
@@ -75,6 +77,8 @@ pnpm run benchmark:npm-resolution:next -- --runs=1 --finalist-runs=5 --finalists
 [`verify-npm-install-layout`](../../../../scripts/verify-npm-install-layout.ts) 是 `Release (dsh)` workflow 在每个 pull request 和 master push 上运行的确定性包路径与版本检查；它不限制 resolver 耗时。[`benchmark-npm-resolution`](../../../../scripts/benchmark-npm-resolution.ts) 与 [`benchmark-next-package-dependency`](../../../../scripts/benchmark-next-package-dependency.ts) 保持为手动工具，因为 resolver 耗时会随机器负载和 metadata 完成顺序变化。它们通过全新 consumer 和仅 metadata 的运行，把 npm 依赖树计算与 registry 延迟、包归档下载分离，因此相对结果可以定位 peer 中继，但不构成发布时性能承诺。
 
 生成后的策略目前在 13 个包中留下 27 条位于 `dependencies` 的受管 Host 运行时边。两条边仍位于 `peerDependencies`：`dsh-api-remotes → dsh-scope` 使用 `carrierKeyOf`，`dsh-session → dsh-scope` 使用 `scopeOf` 与 `scopeTarget`。
+
+双版本 npm 安装布局检查从 CLI 包遍历 DSH 依赖。闭包外独立版本的应用保留其注册表元数据；可达包缺少核心发行版本时仍报错。
 
 ## 考虑过的替代方案
 

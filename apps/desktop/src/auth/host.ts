@@ -33,6 +33,7 @@ export interface NativeAccountHostOptions {
   readonly deviceName: string
   readonly platform: NativeSecrets['platform']
   readonly openBrowser: (url: string) => Promise<void>
+  readonly onAuthorized?: () => void
   readonly onController: (controller: NativeAccountController | undefined) => void
   readonly onSnapshot: () => void
 }
@@ -143,7 +144,8 @@ export class NativeAccountHost {
     const store = new NativeAccountStore(this.options.userData, this.options.cipher)
     const controller = new NativeAccountController(store, http, {
       environment: config.environment, deviceName: this.options.deviceName, platform: this.options.platform,
-      now: Date.now, openBrowser: this.options.openBrowser,
+      now: Date.now, openBrowser: this.options.openBrowser, requestTimeoutMs: config.requestTimeoutMs,
+      ...(this.options.onAuthorized === undefined ? {} : { onAuthorized: this.options.onAuthorized }),
     })
     this.controller = controller
     this.broker = new NativeCommandBroker(controller, { ...config, origin: http.origin, now: Date.now }, fetch)

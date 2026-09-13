@@ -149,6 +149,7 @@ describe('package dependency scope', () => {
       '@deepseek-ai/dsh-util-values',
     ])
     expect(PACKAGE_DEPENDENCY_POLICY.safeHostDependencyExports['@deepseek-ai/dsh-deque']).toEqual(['Deque'])
+    expect(PACKAGE_DEPENDENCY_POLICY.safeHostDependencyExports['@deepseek-ai/dsh-tools']).toEqual(['defineTool'])
     expect(PACKAGE_DEPENDENCY_POLICY.safeHostDependencyExports['@deepseek-ai/dsh-mcp-client']).toBeUndefined()
     expect(PACKAGE_DEPENDENCY_POLICY.safeHostDependencyExports['@deepseek-ai/schemastery']).toEqual(['default'])
     expect(PACKAGE_DEPENDENCY_POLICY.safeHostDependencyExports['@deepseek-ai/dsh-session/types']).toBeUndefined()
@@ -256,7 +257,7 @@ describe('package dependency scope', () => {
 })
 
 describe('face-aware source classification', () => {
-  it('requires an MCP connection consumer to retain the shared peer instance', () => {
+  it('requires an MCP connector consumer to retain the shared peer instance', () => {
     const root = mkdtempSync(join(tmpdir(), 'dsh-package-mcp-peer-'))
     roots.push(root)
     const mcp = '@deepseek-ai/dsh-mcp-client'
@@ -267,7 +268,7 @@ describe('face-aware source classification', () => {
     })
     const directory = join(root, subject.dir, 'src')
     mkdirSync(directory, { recursive: true })
-    writeFileSync(join(directory, 'index.ts'), `import { connectMcpServer } from '${mcp}'; export const plugin = { connectMcpServer }`)
+    writeFileSync(join(directory, 'index.ts'), `export { connectMcpServer } from '${mcp}'`)
     const workspaceNames = new Set([CORDIS, mcp, subject.name])
     const observed = readPackageDependencyFacts(root, subject, 'configured-host', workspaceNames)
     expect(observed.peerRequiredHostDependencies).toEqual(new Set([mcp]))

@@ -62,7 +62,7 @@ describe('native path opener', () => {
         [
           '-NoProfile',
           '-Command',
-          "Invoke-Item -LiteralPath '\\\\wsl.localhost\\Ubuntu\\home\\test user\\settings.yaml'",
+          "Start-Process -FilePath (Join-Path $env:SystemRoot 'System32\\notepad.exe') -ArgumentList '\"\\\\wsl.localhost\\Ubuntu\\home\\test user\\settings.yaml\"'",
         ],
         requestSignal,
       ],
@@ -99,12 +99,22 @@ describe('native path opener', () => {
     )
   })
 
-  it('uses the Windows desktop association for text documents', async () => {
+  it('opens Windows text documents in Notepad without an extension association', async () => {
     const run = vi.fn<PathOpenerRunner>(async () => ({ stdout: '', stderr: '' }))
     await openNativeTextFile('C:\\work\\settings.yaml', signal(), { platform: 'win32', run })
     expect(run).toHaveBeenCalledWith(
       'powershell.exe',
-      ['-NoProfile', '-Command', "Invoke-Item -LiteralPath 'C:\\work\\settings.yaml'"],
+      ['-NoProfile', '-Command', "Start-Process -FilePath (Join-Path $env:SystemRoot 'System32\\notepad.exe') -ArgumentList '\"C:\\work\\settings.yaml\"'"],
+      expect.any(AbortSignal),
+    )
+  })
+
+  it('keeps a Windows text path with spaces and quotes in one Notepad argument', async () => {
+    const run = vi.fn<PathOpenerRunner>(async () => ({ stdout: '', stderr: '' }))
+    await openNativeTextFile("C:\\work files\\o'reilly\\settings.yaml", signal(), { platform: 'win32', run })
+    expect(run).toHaveBeenCalledWith(
+      'powershell.exe',
+      ['-NoProfile', '-Command', "Start-Process -FilePath (Join-Path $env:SystemRoot 'System32\\notepad.exe') -ArgumentList '\"C:\\work files\\o''reilly\\settings.yaml\"'"],
       expect.any(AbortSignal),
     )
   })

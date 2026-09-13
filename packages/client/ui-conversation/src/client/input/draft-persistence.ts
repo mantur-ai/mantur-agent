@@ -13,6 +13,7 @@ export interface DraftImages {
 export class DraftPersistence {
   private checkpoint: DraftCheckpoint = { format: 1, revision: 0, drafts: [] }
   private readonly shells = new Map<string, SessionInputShell>()
+  private ownerRevision = 0
   private readonly ready: Promise<void>
   private pending: Promise<void> = Promise.resolve()
   private readonly blockedOwners = new Set<string>()
@@ -20,15 +21,22 @@ export class DraftPersistence {
   private readonly initializing = new Set<string>()
   private scheduled = false
   private releases: (() => void)[] | undefined
+  private checkRestart: (() => void) | undefined
+  private cancelRestartWait: (() => void) | undefined
   private readonly off: (() => void)[]
   private error: unknown
   private disposed = false
   private recoveryRequired = false
 
-  /** @param bridge - Native capability. @param images - Browser image registry. */
+  /**
+   * @param bridge - Native capability.
+   * @param images - Browser image registry.
+   * @param submissionFailed - Localized restart refusal after a failed submission.
+   */
   constructor(
     private readonly bridge: DesktopDraftBridge,
     private readonly images: DraftImages,
+    private readonly submissionFailed: () => string,
     private readonly onError: (error: unknown) => void = () => {},
   ) {
     this.ready = bridge.load().then((checkpoint) => { this.checkpoint = checkpoint })
@@ -45,6 +53,8 @@ export class DraftPersistence {
   async attachDraft(owner: string, shell: SessionInputShell): Promise<void> {
     if (this.disposed) throw new Error('Draft persistence is closed')
     if (this.shells.has(owner) || this.initializing.has(owner)) throw new Error('Draft owner is already attached')
+    this.cancelRestartWait?.()
+    this.ownerRevision += 1
     shell.useNativeDraftPersistence()
     const unlock = shell.lockDraft()
     this.shells.set(owner, shell)
@@ -68,12 +78,13 @@ export class DraftPersistence {
         shell.restoreDraft({ ...saved, imageIds }, legacy)
       }
       if (saved === undefined && legacy !== undefined) { unlock(); shell.setDraft(legacy) }
+      if (this.releases !== undefined) this.releases.push(shell.lockDraft())
       this.shellSubscriptions.set(owner, shell.state.subscribe(() => { this.schedule() }))
     } catch (error) {
       if (this.owns(owner, shell)) this.blockedOwners.add(owner)
       this.error = error
       throw error
-    } finally { this.initializing.delete(owner); unlock() }
+    } finally { this.initializing.delete(owner); unlock(); this.checkRestart?.() }
   }
 
   private owns(owner: string, shell: SessionInputShell): boolean {
@@ -87,8 +98,9 @@ export class DraftPersistence {
   detachDraft(owner: string): void {
     this.shellSubscriptions.get(owner)?.()
     this.shellSubscriptions.delete(owner)
-    this.shells.delete(owner)
+    if (this.shells.delete(owner)) this.ownerRevision += 1
     this.blockedOwners.delete(owner)
+    this.cancelRestartWait?.()
   }
 
   /**
@@ -153,6 +165,7 @@ export class DraftPersistence {
   }
 
   private schedule(): void {
+    this.checkRestart?.()
     if (this.scheduled || this.disposed || this.releases !== undefined) return
     this.scheduled = true
     queueMicrotask(() => {
@@ -180,7 +193,8 @@ export class DraftPersistence {
       for (const { shell, document } of documents) {
         if (JSON.stringify(shell.captureDraft()) !== JSON.stringify(document)) throw new Error('Draft changed while saving; retry with the current draft')
       }
-      const next = this.checkpoint.drafts.filter(draft => !this.shells.has(draft.owner)).concat(replacements)
+      const capturedOwners = new Set(documents.map(({ owner }) => owner))
+      const next = this.checkpoint.drafts.filter(draft => !capturedOwners.has(draft.owner)).concat(replacements)
       if (JSON.stringify(next) !== JSON.stringify(this.checkpoint.drafts)) await this.commit(next)
       this.error = undefined
     })
@@ -200,16 +214,49 @@ export class DraftPersistence {
     this.checkpoint = candidate
   }
 
+  private lockSettledDrafts(releases: (() => void)[], failures: ReadonlyMap<SessionInputShell, number>): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const clear = () => {
+        this.checkRestart = undefined
+        this.cancelRestartWait = undefined
+      }
+      this.cancelRestartWait = () => {
+        clear()
+        reject(new Error('Draft save preparation was cancelled'))
+      }
+      this.checkRestart = () => {
+        if ([...failures].some(([shell, revision]) => shell.submissionFailureRevision !== revision)) {
+          clear()
+          reject(new Error(this.submissionFailed()))
+          return
+        }
+        if (this.initializing.size !== 0 || [...this.shells.values()].some(shell => !shell.isRestartSettled())) return
+        // Stop observation before locking: each lock publishes input state synchronously.
+        clear()
+        try {
+          for (const shell of this.shells.values()) releases.push(shell.lockDraft())
+          resolve()
+        } catch (error) { reject(error instanceof Error ? error : new Error(String(error))) }
+      }
+      this.checkRestart()
+    })
+  }
+
   /**
-   * Lock current composers and return only the exact revision committed for this restart request.
+   * Wait for submissions and project preparation, then atomically lock composers and save their settled drafts.
    * @returns - The committed checkpoint revision; cancellation rejects without releasing a newer request's locks.
    */
   async prepare(): Promise<number> {
     if (this.releases !== undefined) throw new Error('Draft save is already preparing a restart')
     const releases: (() => void)[] = []
     this.releases = releases
+    const ownerRevision = this.ownerRevision
+    const failures = new Map([...this.shells.values()].map(shell => [shell, shell.submissionFailureRevision]))
     try {
-      for (const shell of this.shells.values()) releases.push(shell.lockDraft())
+      await this.ready
+      if (this.releases !== releases) throw new Error('Draft save preparation was cancelled')
+      if (this.ownerRevision !== ownerRevision) throw new Error('Draft save preparation was cancelled')
+      await this.lockSettledDrafts(releases, failures)
       await this.save()
       if (this.releases !== releases) throw new Error('Draft save preparation was cancelled')
       if (this.error !== undefined) throw this.error instanceof Error ? this.error : new Error('Draft checkpoint failed')
@@ -222,9 +269,11 @@ export class DraftPersistence {
 
   /** Release a cancelled or failed restart's input locks. */
   release(): void {
+    this.cancelRestartWait?.()
     const releases = this.releases
     this.releases = undefined
     for (const release of releases ?? []) release()
+    this.schedule()
   }
 
   /** Remove native listeners and input locks when the UI plugin unloads. */

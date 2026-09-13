@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { expect, it } from 'vitest'
-import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-client-ui-mantur-editing'
 import type {} from '@deepseek-ai/dsh-agent-presets'
@@ -61,7 +61,13 @@ export async function createServer() {
     // Keep this Session registered through scaffold.close(), which compares its entire recorded log.
     const before = await scaffold.ctx.systemPrompt.assemble({ scope: handle.agent })
     expect(before.sections.some(section => section.name === 'mantur:editing-workflow')).toBe(false)
-    await scaffold.ctx.manturEditing.open(handle.agent, scaffold.baseUrl)
+    expect(scaffold.ctx.tools.schemas(handle.agent).some(tool => tool.name === 'open_editing_workbench')).toBe(true)
+    const opened = await scaffold.ctx.tools.execute({
+      name: 'open_editing_workbench', arguments: {}, agent: handle.agent,
+      callId: ToolCallId('open-before-model-request'), signal: new AbortController().signal,
+    })
+    expect(opened.isError).toBe(false)
+    expect(opened.meta).toMatchObject({ kind: 'mantur-editing-workspace', sessionId: handle.agent.id })
     const [task] = fixtureUserPrompts(await readFile(fixture, 'utf8'))
     if (task === undefined) throw new Error('Editing snapshot has no user task')
     handle.agent.followup(createUserMessage({ content: [{ type: 'text', text: task }], source: { kind: 'user' } }))

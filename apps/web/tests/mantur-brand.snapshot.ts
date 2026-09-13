@@ -27,7 +27,7 @@ const FIXTURE = fileURLToPath(new URL('../../../snapshots/web/fresh-round-trip/s
 const RECIPE_REPLAY_FIXTURE = fileURLToPath(new URL('../../../snapshots/web/lifecycle-chrome/session.jsonl', import.meta.url))
 const SYSTEM_PROMPT_EXPECTED = join(SNAPSHOT_DIR, 'system-prompt.expected.md')
 const TOOL_SCHEMAS_EXPECTED = fileURLToPath(
-  new URL('../../../snapshots/web/fresh-round-trip/tool-schemas.expected.json', import.meta.url),
+  new URL('../../../snapshots/web/mantur-brand/tool-schemas.expected.json', import.meta.url),
 )
 const MARKETPLACE_EXPECTED = join(SNAPSHOT_DIR, 'marketplace.expected.md')
 const ACCOUNT_SETTINGS_EXPECTED = join(SNAPSHOT_DIR, 'account-settings.expected.md')
@@ -204,8 +204,7 @@ describe.skipIf(MODE === 'record')('web snapshot: Mantur product identity', () =
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 }).catch(async () => {
       throw new Error(`Mantur Web frame did not mount. Body: ${await page.locator('body').innerText()}. Page errors: ${tripwire.pageErrors.map(String).join('; ')}`)
     })
-    await page.getByRole('heading', { name: '登录漫途账号' }).waitFor({ timeout: 10_000 })
-    await page.getByRole('button', { name: '暂时跳过' }).click()
+    expect(await page.getByRole('heading', { name: '登录漫途账号' }).count()).toBe(0)
   }, 120_000)
 
   afterAll(async () => {
@@ -222,7 +221,7 @@ describe.skipIf(MODE === 'record')('web snapshot: Mantur product identity', () =
 
   it('shows the Mantur brand without the official mark, preview badge, preset, or plan control', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-mantur-brand'))
-    await expect.poll(() => page.getByText('漫途Agent', { exact: true }).count(), { timeout: 10_000 })
+    await expect.poll(() => page.getByText('ManTur Agent', { exact: true }).count(), { timeout: 10_000 })
       .toBe(1)
     await page.getByText('故事起于一念，余下交给漫途', { exact: true }).waitFor({ timeout: 10_000 })
     expect(await page.getByText('探索未至之境', { exact: true }).count()).toBe(0)
@@ -245,13 +244,14 @@ describe.skipIf(MODE === 'record')('web snapshot: Mantur product identity', () =
     await dialog.getByRole('button', { name: '模型' }).waitFor({ timeout: 10_000 })
     await dialog.getByRole('button', { name: '漫途账号' }).click()
     await dialog.getByText('尚未登录漫途账号', { exact: true }).waitFor({ timeout: 10_000 })
+    await expect.poll(() => dialog.getByRole('button', { name: '登录漫途账号', exact: true }).isEnabled()).toBe(true)
     const accountSettings = await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(ACCOUNT_SETTINGS_EXPECTED, accountSettings, MODE)
     await dialog.getByRole('button', { name: '关闭' }).click()
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
-  it('orders Mantur account choice before DeepSeek credential onboarding', async () => {
+  it('offers model credential setup without requiring a Mantur account choice', async () => {
     const firstRun = await launchWebScaffold({
       extraOverlayPath: OVERLAY,
       extraInstallAnchors: [INSTALL_ANCHOR],
@@ -264,12 +264,9 @@ describe.skipIf(MODE === 'record')('web snapshot: Mantur product identity', () =
     try {
       await firstRunPage.goto(firstRun.authenticatedUrl, { waitUntil: 'load' })
       await firstRunPage.waitForSelector('[class*="frame"]', { timeout: 30_000 })
-      await firstRunPage.getByRole('heading', { name: '登录漫途账号' }).waitFor({ timeout: 10_000 })
-      expect(await firstRunPage.getByText('内测声明', { exact: true }).count()).toBe(0)
-      expect(await firstRunPage.getByText('添加一个 API Key 开始使用', { exact: true }).count()).toBe(0)
-      await firstRunPage.getByRole('button', { name: '暂时跳过' }).click()
       await firstRunPage.getByRole('heading', { name: '添加一个 API Key 开始使用' })
         .waitFor({ timeout: 10_000 })
+      expect(await firstRunPage.getByRole('heading', { name: '登录漫途账号' }).count()).toBe(0)
     } finally {
       await firstRunPage.close()
       await firstRun.close()
@@ -366,8 +363,7 @@ describe.skipIf(MODE === 'record')('web snapshot: Mantur product identity', () =
     try {
       await recipePage.goto(recipeScaffold.authenticatedUrl, { waitUntil: 'load' })
       await recipePage.waitForSelector('[class*="frame"]', { timeout: 30_000 })
-      await recipePage.getByRole('heading', { name: '登录漫途账号' }).waitFor({ timeout: 10_000 })
-      await recipePage.getByRole('button', { name: '暂时跳过' }).click()
+      expect(await recipePage.getByRole('heading', { name: '登录漫途账号' }).count()).toBe(0)
       await connectManturWorkspace(recipePage, recipeScaffold.workspaceCwd, 'zh')
       const createRequestsBeforeRecipe = createRequests.length
       const initialIds = new Set((await recipeScaffold.ctx.sessionPersistence.list()).map(snapshot => snapshot.header.id))
@@ -428,9 +424,8 @@ describe.skipIf(MODE === 'record')('web snapshot: Mantur product identity', () =
     try {
       await englishPage.goto(englishScaffold.authenticatedUrl, { waitUntil: 'load' })
       await englishPage.waitForSelector('[class*="frame"]', { timeout: 30_000 })
-      await englishPage.getByRole('heading', { name: 'Sign in to Mantur' }).waitFor({ timeout: 10_000 })
-      await englishPage.getByRole('button', { name: 'Not now' }).click()
-      await englishPage.getByText('漫途Agent', { exact: true }).waitFor({ timeout: 10_000 })
+      await englishPage.getByText('ManTur Agent', { exact: true }).waitFor({ timeout: 10_000 })
+      expect(await englishPage.getByRole('heading', { name: 'Sign in to Mantur' }).count()).toBe(0)
       await englishPage.getByText('Every story starts with an idea. Mantur handles the rest.', { exact: true })
         .waitFor({ timeout: 10_000 })
       expect(await englishPage.getByText('Preview', { exact: true }).count()).toBe(0)
@@ -459,7 +454,7 @@ describe.skipIf(MODE === 'record')('web snapshot: Mantur product identity', () =
     try {
       const assembly = await scaffold.ctx.systemPrompt.assemble({ scope: handle.agent })
       expect(assembly.sections.find(section => section.name === 'deployment:persona')?.text)
-        .toContain('你是漫途Agent，由漫途（Mantur）打造')
+        .toContain('你是ManTur Agent，由漫途（Mantur）打造')
       expect(assembly.sections.some(section => section.name === 'harness:identity')).toBe(false)
       expect(assembly.sections.some(section => section.name === 'harness:source')).toBe(false)
       expect(assembly.sections.some(section => section.name === 'app:web-surface')).toBe(false)
@@ -482,7 +477,7 @@ describe.skipIf(MODE === 'record')('web snapshot: Mantur product identity', () =
       await compareOrRefreshGolden(
         TOOL_SCHEMAS_EXPECTED,
         formatToolSchemasSnapshot(header.tools ?? []).trimEnd(),
-        'replay',
+        MODE,
       )
     } finally {
       await handle.dispose()

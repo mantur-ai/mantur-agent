@@ -1,4 +1,4 @@
-# Agent Note: Mantur first-send projects and durable unassigned drafts
+# Agent Note: Mantur first-send projects and unassigned drafts
 
 Status: implemented
 
@@ -10,11 +10,11 @@ Creators need to write before choosing a folder. Creating a project merely on pa
 
 ## Decision
 
-Mantur uses an explicit Workspace-selection policy and a resident unassigned editor. Typing, switching creation modes, choosing recommendations, and reading the location create no Host entity. First send durably reserves a UUID through [native draft checkpoints](../architecture/2026-09-06-desktop-draft-checkpoints.md), prepares its directory through [mantur-projects](../../../../packages/workspace/mantur-projects/README.md), and creates the deterministic Session through the ordinary controller. The [shared Workspace picker](../simplification/2026-07-31-one-route-to-add-a-workspace.md) remains the explicit path-adoption route; the standard Web composition retains current-or-recent selection.
+Mantur uses an explicit Workspace-selection policy and a resident unassigned editor. Typing, switching creation modes, choosing recommendations, and reading the location create no Host entity. First send obtains a stable UUID from the conversation draft owner, prepares its directory through [mantur-projects](../../../../packages/workspace/mantur-projects/README.md), and creates the deterministic Session through the ordinary controller. The [shared Workspace picker](../simplification/2026-07-31-one-route-to-add-a-workspace.md) remains the explicit path-adoption route; the standard Web composition retains current-or-recent selection.
 
 The desktop supplies the OS-resolved Documents directory with a `漫途项目` child. Settings → General owns the default-location row through `settings.general.item`, using the same project store and native directory picker as first-send preparation. The durable root applies only to unreserved creations; changing it never moves existing projects. Cancelling the picker preserves the root. Read and save failures remain visible with Retry. The home footer contains only the existing project picker and preparation progress or errors; a missing root points to Settings → General. Exclusive directory creation never adopts existing content. An ambiguous ownership receipt or an externally removed directory causes a visible error; choosing an existing directory is a separate user action.
 
-The conversation owner waits for native restoration of both editors, validates the originating preparation and selection immediately before publishing the transfer, and commits one checkpoint containing the populated target and cleared source. Full Lexical documents retain Chinese labels, reference identity, occurrence order, and selected image bytes. Selecting another conversation cancels the preparation; returning to the home page cannot revive it. A cancellation before publication retains the source. A cancellation or navigation during the write can leave a durably transferred target; it suppresses automatic opening and sending and reports where the unsent draft remains. Source clearing is not a prompt-delivery receipt.
+When [native draft checkpoints](../architecture/2026-09-06-desktop-draft-checkpoints.md) are explicitly composed, the conversation owner waits for native restoration of both editors, validates the originating preparation and selection immediately before publishing the transfer, and commits one checkpoint containing the populated target and cleared source. Full Lexical documents retain Chinese labels, reference identity, occurrence order, and selected image bytes. Selecting another conversation cancels the preparation; returning to the home page cannot revive it. A cancellation before publication retains the source. A cancellation or navigation during the write can leave a durably transferred target; it suppresses automatic opening and sending and reports where the unsent draft remains. Source clearing is not a prompt-delivery receipt.
 
 After a confirmed transfer, the existing Session input submits normally. Preparation and storage locks are independently owned, so releasing one cannot reopen an editor still owned by the other. The [creation guide](2026-09-06-mantur-creation-guide.md) inserts into this resident editor without manufacturing a temporary Session; mode changes still change no Agent identity or permissions. Project directories and [transcript storage directories](../architecture/2026-07-24-project-session-directories.md) remain distinct concerns.
 
@@ -22,7 +22,7 @@ After a confirmed transfer, the existing Session input submits normally. Prepara
 
 **Create a project on entry.** Visiting or dismissing the home page would write directories without a submitted task.
 
-**Keep a separate browser creation identity.** It can diverge from the native draft and disappear with the loopback origin. The durable draft owns its retry identity.
+**Store a creation identity separately from its draft.** It can diverge from the native draft and disappear with the loopback origin. The retry identity shares the lifetime and storage mode of its draft.
 
 **Copy slash text or save the two owners separately.** Text loses titled references, and separate writes can lose or duplicate the draft. One checkpoint records both owners before in-memory movement.
 
@@ -30,7 +30,7 @@ After a confirmed transfer, the existing Session input submits normally. Prepara
 
 ## Consequences
 
-First send requires working native draft persistence. Storage errors, unsupported Windows publication, and missing desktop transport remain explicit failures, not browser-storage substitutions. A partially created directory may require manual selection. Ordinary Session admission and failure restoration remain the send owner; this feature does not promise exactly-once delivery across a crash after prompt admission.
+The desktop keeps draft text, references, images and the creation identity in memory. Failed creation reuses that identity; successful complete transfer retires it. Session changes and updates do not save native checkpoints or install a save guard. Restarting discards an unsent browser draft; partially created projects remain available through explicit project selection. Explicit checkpoint compositions retain identity and draft together and report storage failures without switching to browser storage. Ordinary Session admission and failed-send recovery continue to own delivery.
 
 ## Verification
 

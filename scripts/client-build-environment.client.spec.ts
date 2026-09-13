@@ -149,7 +149,7 @@ describe('client build environment', () => {
     })).toEqual({
       DSH_CLIENT_BUILD_PROFILE: 'mantur',
       DSH_CLIENT_COMMIT_HASH: COMMIT_HASH.slice(0, 7),
-      DSH_CLIENT_TITLE: '漫途Agent',
+      DSH_CLIENT_TITLE: 'ManTur Agent',
       DSH_CLIENT_VERSION: '1.2.3',
     })
   })

@@ -29,7 +29,7 @@ export function parseMacArchitecture(arguments_: string[]): MacArchitecture {
  * @returns Absolute application path.
  */
 export function macApplicationPath(root: string, architecture: MacArchitecture): string {
-  return posix.join(root, 'dist', architecture === 'arm64' ? 'mac-arm64' : 'mac', '漫途Agent.app')
+  return posix.join(root, 'dist', architecture === 'arm64' ? 'mac-arm64' : 'mac', 'ManTur Agent.app')
 }
 
 /**
@@ -81,7 +81,7 @@ async function main(): Promise<void> {
     run('hdiutil', ['attach', '-nobrowse', '-noverify', '-noautoopen', '-mountpoint', mountPoint, writableImage])
     mounted = true
     await symlink('/Applications', join(mountPoint, 'Applications'))
-    run('diskutil', ['rename', mountPoint, '漫途Agent'])
+    run('diskutil', ['rename', mountPoint, 'ManTur Agent'])
     run('hdiutil', ['detach', mountPoint])
     mounted = false
     run('hdiutil', ['convert', writableImage, '-format', 'UDZO', '-o', compressedImage])

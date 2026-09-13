@@ -20,7 +20,7 @@ export function AccountView({ state, controller, t, showSkip, onSkip }: AccountV
     return (
       <div className={css.stack}>
         <strong>{t('signedIn')}</strong>
-        <span>{state.account?.email}</span>
+        <span>{state.account === undefined ? '' : 'displayName' in state.account ? state.account.displayName : state.account.email}</span>
         <button type="button" onClick={() => { void controller.signOut() }}>{t('signOut')}</button>
       </div>
     )

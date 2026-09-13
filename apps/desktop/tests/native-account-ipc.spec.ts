@@ -47,7 +47,7 @@ describe('native account Main IPC', () => {
   it('does not echo rejected passwords, URLs or arbitrary action input', async () => {
     const b = await nativeBrokerBench((_request, response) => { response.end() })
     const subject = bridgeFixture(b.controller)
-    const password = vi.spyOn(b.controller, 'password')
+    const browser = vi.spyOn(b.controller, 'startBrowser')
     for (const input of [
       { kind: 'password', email: 'broker@example.com', password: b.password, consent: false },
       { kind: 'password', email: 'broker@example.com', password: b.password, consent: true, origin: 'https://other.invalid' },
@@ -57,7 +57,7 @@ describe('native account Main IPC', () => {
       expect(result).toMatchObject({ ok: false, failure: { kind: 'invalid-request' } })
       expect(JSON.stringify(result)).not.toContain(b.password)
     }
-    expect(password).not.toHaveBeenCalled()
+    expect(browser).not.toHaveBeenCalled()
   })
 
   it('reads and publishes only public account fields with monotonically increasing revisions', async () => {
@@ -97,23 +97,21 @@ describe('native account Main IPC', () => {
   it('redacts unexpected operation errors and refuses a reply after frame navigation', async () => {
     const b = await nativeBrokerBench((_request, response) => { response.end() })
     const subject = bridgeFixture(b.controller)
-    vi.spyOn(b.controller, 'sendCode').mockRejectedValueOnce(new Error(`${b.password} ${String(b.bearer())}`))
-    const failed = await subject.invoke({ kind: 'send-code', email: 'broker@example.com' })
+    vi.spyOn(b.controller, 'refresh').mockRejectedValueOnce(new Error(`${b.password} ${String(b.bearer())}`))
+    const failed = await subject.invoke({ kind: 'refresh' })
     expect(failed).toMatchObject({ ok: false, failure: { kind: 'local' } })
     expect(JSON.stringify(failed)).not.toContain(b.password)
-    const release = Promise.withResolvers<{ ok: true; expiresInSec: number }>()
-    vi.spyOn(b.controller, 'sendCode').mockImplementationOnce(() => release.promise)
-    const running = subject.invoke({ kind: 'send-code', email: 'broker@example.com' })
+    const release = Promise.withResolvers<undefined>()
+    vi.spyOn(b.controller, 'refresh').mockImplementationOnce(() => release.promise)
+    const running = subject.invoke({ kind: 'refresh' })
     subject.frame.url = 'https://external.example/'
-    release.resolve({ ok: true, expiresInSec: 600 })
+    release.resolve(undefined)
     await expect(running).rejects.toThrow('main frame')
   })
 
-  it('exposes server code expiry and removes handlers without touching the controller', async () => {
+  it('removes handlers without closing the controller', async () => {
     const b = await nativeBrokerBench((_request, response) => { response.end() })
     const subject = bridgeFixture(b.controller)
-    vi.spyOn(b.controller, 'sendCode').mockResolvedValueOnce({ ok: true, expiresInSec: 600 })
-    expect(await subject.invoke({ kind: 'send-code', email: 'broker@example.com' })).toMatchObject({ ok: true, codeExpirySeconds: 600 })
     subject.disable()
     expect(await subject.invoke({ kind: 'snapshot' })).toMatchObject({ ok: false, failure: { kind: 'unavailable' } })
     subject.bridge.dispose()

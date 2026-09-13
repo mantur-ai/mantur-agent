@@ -1,7 +1,11 @@
 /** Optional Session preparation for a browser-owned, unassigned conversation draft. */
+import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { SessionInput } from './input.ts'
+
+/** Stable retry identity of one unassigned draft until transfer completes. */
+export type ConversationDraftId = Branded<'ConversationDraftId'>
 
 /** Feature-owned creation policy, invoked only after a non-empty Send gesture. */
 export interface ConversationDraftPreparation {
@@ -19,6 +23,11 @@ export interface ConversationDrafts {
   readonly enabled: ObservableSnapshot<boolean>
   /** Browser-owned editor and attachments; not a fabricated Session. */
   readonly input: SessionInput
+  /**
+   * Retain a retry identity until the complete unassigned draft transfers.
+   * @returns a stable identity, persisted only when the native checkpoint capability is composed.
+   */
+  prepareIdentity(): Promise<ConversationDraftId>
   /**
    * Install the sole Session creation policy.
    * @param preparation - feature-owned Session creation policy.

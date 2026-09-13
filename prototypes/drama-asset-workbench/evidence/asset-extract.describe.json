@@ -1,0 +1,223 @@
+{
+  "id": "op.drama.asset-extract",
+  "name": "剧本资产提取",
+  "layer": "understand",
+  "tags": [
+    "drama",
+    "script",
+    "asset",
+    "excel",
+    "image-gen"
+  ],
+  "io": "异步算子。输入：UTF-8完整剧本、target_region、可选项目美术规范和最多10张视觉参考图。输出：包含地区预设、基础资产ID、变体规则JSON、生成/音色策略、提示词与参考绑定建议的四Sheet Excel与JSON；不生成图片或音色。",
+  "priority": "P1",
+  "description": "Worker 验证完整剧本后以 Markdown input_file 交给 Responses API，按中国或欧美地区预设完整提取角色/群众、实际可见场景和制作所需道具及其变体，以严格 JSON Schema 输出旧模板 Excel、结构化 JSON 与可机器判断的变体规则。",
+  "deps": [],
+  "status": "online",
+  "cat": "data",
+  "createdAt": "2026-08-08T08:39:05.696Z",
+  "updatedAt": "2026-09-04T08:14:13.637Z",
+  "publishedAt": "2026-08-17T12:40:52.748Z",
+  "versions": [
+    {
+      "id": "29d7aa14-b61d-460a-94cd-062a21599915",
+      "operatorId": "op.drama.asset-extract",
+      "tag": "v1.4.1",
+      "weight": 0,
+      "createdAt": "2026-08-08T08:39:05.696Z"
+    },
+    {
+      "id": "48571a0c-4123-4d57-9540-0ae33b689136",
+      "operatorId": "op.drama.asset-extract",
+      "tag": "v1.4.3",
+      "weight": 0,
+      "createdAt": "2026-08-08T14:28:05.544Z"
+    },
+    {
+      "id": "9f81e82c-0c90-47b4-a745-e28c822269f7",
+      "operatorId": "op.drama.asset-extract",
+      "tag": "v2.3.2",
+      "weight": 0,
+      "createdAt": "2026-08-17T05:41:41.751Z"
+    },
+    {
+      "id": "5a4c889d-e704-4c51-9a46-1614ad993bc7",
+      "operatorId": "op.drama.asset-extract",
+      "tag": "v2.3.6",
+      "weight": 0,
+      "createdAt": "2026-08-17T12:40:52.709Z"
+    },
+    {
+      "id": "526a8f48-daeb-40cd-a11a-b114eef763f8",
+      "operatorId": "op.drama.asset-extract",
+      "tag": "v1.5.1",
+      "weight": 0,
+      "createdAt": "2026-08-09T12:32:17.015Z"
+    },
+    {
+      "id": "f2efd732-2159-4bcc-bb4a-b7aa590a441e",
+      "operatorId": "op.drama.asset-extract",
+      "tag": "v2.4.3",
+      "weight": 0,
+      "createdAt": "2026-09-04T03:44:20.458Z"
+    },
+    {
+      "id": "4b11a911-dad1-4689-9c9b-47f6f48991bb",
+      "operatorId": "op.drama.asset-extract",
+      "tag": "v2.3.1",
+      "weight": 0,
+      "createdAt": "2026-08-14T08:44:22.473Z"
+    },
+    {
+      "id": "0707117b-fee1-42a8-a7f0-3c69a57b8f85",
+      "operatorId": "op.drama.asset-extract",
+      "tag": "v2.3.0",
+      "weight": 0,
+      "createdAt": "2026-08-13T11:35:19.861Z"
+    },
+    {
+      "id": "a2108d09-9c9a-4972-bda6-77c4575f22db",
+      "operatorId": "op.drama.asset-extract",
+      "tag": "v2.4.4",
+      "weight": 100,
+      "createdAt": "2026-09-04T08:11:02.058Z"
+    },
+    {
+      "id": "cf7bd13f-2f7e-4f4f-a936-68bd967edaae",
+      "operatorId": "op.drama.asset-extract",
+      "tag": "v2.3.5",
+      "weight": 0,
+      "createdAt": "2026-08-17T10:40:56.797Z"
+    }
+  ],
+  "upstream": [],
+  "downstream": [],
+  "params_schema": {
+    "async": true,
+    "oneOf": [
+      {
+        "not": {
+          "required": [
+            "script_text"
+          ]
+        },
+        "required": [
+          "script_url"
+        ]
+      },
+      {
+        "not": {
+          "required": [
+            "script_url"
+          ]
+        },
+        "required": [
+          "script_text"
+        ]
+      }
+    ],
+    "fields": [
+      {
+        "desc": "执行动作，当前只支持整剧资产提取",
+        "enum": [
+          "extract"
+        ],
+        "name": "action",
+        "type": "string",
+        "default": "extract",
+        "required": false
+      },
+      {
+        "desc": "地区预设；china=中国版（中文/普通话/中文可见文字），western=欧美版（英文/英文音色/英文可见文字）",
+        "enum": [
+          "china",
+          "western"
+        ],
+        "name": "target_region",
+        "type": "string",
+        "default": "western",
+        "required": false
+      },
+      {
+        "desc": "ManturHub文件或Worker可访问的 UTF-8 .md/.txt 完整剧本 URL；与 script_text 二选一。Worker下载验证后以 Markdown input_file.file_data 交给 Responses",
+        "name": "script_url",
+        "type": "string",
+        "required": false
+      },
+      {
+        "desc": "UTF-8 完整剧本文本；与 script_url 二选一，Worker验证后以 Markdown input_file.file_data 交给 Responses",
+        "name": "script_text",
+        "type": "string",
+        "required": false,
+        "maxLength": 10000000,
+        "minLength": 1
+      },
+      {
+        "desc": "输出文件使用的剧本名称",
+        "name": "script_name",
+        "type": "string",
+        "required": false,
+        "maxLength": 200
+      },
+      {
+        "desc": "项目级美术世界观和角色风格；不传时从剧本提炼",
+        "name": "project_style",
+        "type": "string",
+        "required": false,
+        "maxLength": 12000
+      },
+      {
+        "desc": "项目级负面约束，会合并到资产负面提示词",
+        "name": "visual_negative",
+        "type": "string",
+        "required": false,
+        "maxLength": 12000
+      },
+      {
+        "desc": "视觉参考图列表，最多10张，推荐约8张：主要角色3-4张、场景/世界观2张、画风/材质1-2张、关键道具1张。每张包含可公开读取的url、用途标签label和可选说明note。模型只分析并输出参考绑定建议，实际生图仍需将选中的原图直接传给生图模型。",
+        "name": "reference_images",
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": [
+            "url",
+            "label"
+          ],
+          "properties": {
+            "url": {
+              "desc": "可由GPT访问的HTTP/HTTPS图片URL",
+              "type": "string"
+            },
+            "note": {
+              "desc": "可选补充说明，不替代图片内容",
+              "type": "string",
+              "maxLength": 1000
+            },
+            "label": {
+              "desc": "用户定义用途，如角色A、学院场景、暖色材质或设定板版式",
+              "type": "string",
+              "maxLength": 200,
+              "minLength": 1
+            }
+          }
+        },
+        "maxItems": 10,
+        "required": false
+      },
+      {
+        "desc": "稳定幂等键；相同键和相同请求返回原 task_id",
+        "name": "idempotency_key",
+        "type": "string",
+        "required": false,
+        "maxLength": 200,
+        "minLength": 8
+      }
+    ]
+  },
+  "assets": {
+    "logo_asset_id": "7d5966cb-76d1-4c6f-b6cf-292b42b10ba3",
+    "cover_url": "https://manturhub.tos-s3-cn-hongkong.volces.com/catalog/static/16/16e5a05165a68b36262c652be1337298580a657c6c90ed03eb7e7747c08abbcb.jpg",
+    "logo_url": "https://manturhub.tos-s3-cn-hongkong.volces.com/catalog/static/e4/e4bf87a4b8062e76e10659faaa7e808b45d05c77f8f1a436a4c5e9f08cb1c2a1.svg",
+    "cover_asset_id": "73c80d46-1ebe-419f-8a14-7c5fb1ad9f58"
+  }
+}

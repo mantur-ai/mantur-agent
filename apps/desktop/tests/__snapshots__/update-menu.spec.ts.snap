@@ -37,12 +37,12 @@ exports[`desktop update menu > places update controls in the macOS app menu and 
     ],
     "platform": "darwin",
     "topLevel": [
-      "漫途Agent",
+      "ManTur Agent",
       "编辑",
       "显示",
       "窗口",
     ],
-    "updateParent": "漫途Agent",
+    "updateParent": "ManTur Agent",
   },
   {
     "items": [
@@ -121,12 +121,12 @@ exports[`desktop update menu > places update controls in the macOS app menu and 
     ],
     "platform": "darwin",
     "topLevel": [
-      "漫途Agent",
+      "ManTur Agent",
       "编辑",
       "显示",
       "窗口",
     ],
-    "updateParent": "漫途Agent",
+    "updateParent": "ManTur Agent",
   },
   {
     "items": [
@@ -163,12 +163,12 @@ exports[`desktop update menu > places update controls in the macOS app menu and 
     ],
     "platform": "darwin",
     "topLevel": [
-      "漫途Agent",
+      "ManTur Agent",
       "编辑",
       "显示",
       "窗口",
     ],
-    "updateParent": "漫途Agent",
+    "updateParent": "ManTur Agent",
   },
   {
     "items": [
@@ -205,12 +205,12 @@ exports[`desktop update menu > places update controls in the macOS app menu and 
     ],
     "platform": "darwin",
     "topLevel": [
-      "漫途Agent",
+      "ManTur Agent",
       "编辑",
       "显示",
       "窗口",
     ],
-    "updateParent": "漫途Agent",
+    "updateParent": "ManTur Agent",
   },
   {
     "items": [
@@ -247,12 +247,12 @@ exports[`desktop update menu > places update controls in the macOS app menu and 
     ],
     "platform": "darwin",
     "topLevel": [
-      "漫途Agent",
+      "ManTur Agent",
       "编辑",
       "显示",
       "窗口",
     ],
-    "updateParent": "漫途Agent",
+    "updateParent": "ManTur Agent",
   },
   {
     "items": [
@@ -289,12 +289,12 @@ exports[`desktop update menu > places update controls in the macOS app menu and 
     ],
     "platform": "darwin",
     "topLevel": [
-      "漫途Agent",
+      "ManTur Agent",
       "编辑",
       "显示",
       "窗口",
     ],
-    "updateParent": "漫途Agent",
+    "updateParent": "ManTur Agent",
   },
   {
     "items": [
@@ -331,12 +331,12 @@ exports[`desktop update menu > places update controls in the macOS app menu and 
     ],
     "platform": "darwin",
     "topLevel": [
-      "漫途Agent",
+      "ManTur Agent",
       "编辑",
       "显示",
       "窗口",
     ],
-    "updateParent": "漫途Agent",
+    "updateParent": "ManTur Agent",
   },
   {
     "items": [
@@ -349,7 +349,7 @@ exports[`desktop update menu > places update controls in the macOS app menu and 
       {
         "enabled": false,
         "id": "desktop-update-status",
-        "label": "已是最新版本",
+        "label": "暂无可用更新",
         "visible": true,
       },
       {
@@ -373,12 +373,12 @@ exports[`desktop update menu > places update controls in the macOS app menu and 
     ],
     "platform": "darwin",
     "topLevel": [
-      "漫途Agent",
+      "ManTur Agent",
       "编辑",
       "显示",
       "窗口",
     ],
-    "updateParent": "漫途Agent",
+    "updateParent": "ManTur Agent",
   },
   {
     "items": [
@@ -415,12 +415,12 @@ exports[`desktop update menu > places update controls in the macOS app menu and 
     ],
     "platform": "darwin",
     "topLevel": [
-      "漫途Agent",
+      "ManTur Agent",
       "编辑",
       "显示",
       "窗口",
     ],
-    "updateParent": "漫途Agent",
+    "updateParent": "ManTur Agent",
   },
 ]
 `;

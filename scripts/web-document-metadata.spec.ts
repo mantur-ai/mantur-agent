@@ -16,7 +16,7 @@ afterEach(() => {
 
 it.each(['official', 'mantur'])('keeps the optional mascot while applying %s document metadata', async (profile) => {
   vi.stubEnv('DSH_CLIENT_BUILD_PROFILE', profile)
-  vi.stubEnv('DSH_CLIENT_TITLE', profile === 'mantur' ? '漫途Agent' : 'DeepSeek Harness')
+  vi.stubEnv('DSH_CLIENT_TITLE', profile === 'mantur' ? 'ManTur Agent' : 'DeepSeek Harness')
   const configPath = '../apps/web/vite.config.ts'
   const module = await import(configPath) as { default: { plugins: unknown[] } }
   const metadata = module.default.plugins.flat().find(plugin => typeof plugin === 'object'
@@ -30,7 +30,7 @@ it.each(['official', 'mantur'])('keeps the optional mascot while applying %s doc
   expect(vi.mocked(rm).mock.calls.map(([path]) => basename(String(path)))).toEqual([
     profile === 'mantur' ? 'favicon.svg' : 'mantur-logo.png',
   ])
-  expect(html).toContain(profile === 'mantur' ? '<title>漫途Agent</title>' : '<title>DeepSeek Harness</title>')
+  expect(html).toContain(profile === 'mantur' ? '<title>ManTur Agent</title>' : '<title>DeepSeek Harness</title>')
   expect(html).toContain(profile === 'mantur' ? './mantur-logo.png' : './favicon.svg')
   if (profile === 'official') {
     expect(writeFile).not.toHaveBeenCalled()

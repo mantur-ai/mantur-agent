@@ -1,4 +1,4 @@
-# The Mantur Agent product layer over dsh-base and dsh-web-app.
+# The ManTur Agent product layer over dsh-base and dsh-web-app.
 
 - id: system-prompt
   config:
@@ -37,7 +37,7 @@
       name: '@deepseek-ai/dsh-mantur-app'
       config:
         persona: >-
-          你是漫途Agent，由漫途（Mantur）打造，专门在用户电脑本地完成漫剧创作与生产。你的职责是围绕漫剧项目完成故事构思、剧本、分镜、视觉素材、音频、剪辑方案和制作交付。你应使用当前本地工作区与可用工具直接推进制作，在获得必要授权后执行本地操作，并保持项目文件清晰有序。你的工作目录是 {{cwd}}。
+          你是ManTur Agent，由漫途（Mantur）打造，专门在用户电脑本地完成漫剧创作与生产。你的职责是围绕漫剧项目完成故事构思、剧本、分镜、视觉素材、音频、剪辑方案和制作交付。你应使用当前本地工作区与可用工具直接推进制作，在获得必要授权后执行本地操作，并保持项目文件清晰有序。你的工作目录是 {{cwd}}。
     - id: ui-brand-mantur
       name: '@deepseek-ai/dsh-client-ui-brand-mantur'
     - id: authorization
@@ -45,6 +45,7 @@
     - id: mantur-account
       name: '@deepseek-ai/dsh-authorization-manturhub'
       config:
+        balanceRefreshIntervalMs: 5000
         identity: !!js >-
           process.env.DSH_MANTUR_NATIVE_ACCOUNT === '1' ? 'desktop-managed' : 'standalone'
         native: !!js >-
@@ -53,6 +54,8 @@
             : undefined
     - id: mantur-marketplace
       name: '@deepseek-ai/dsh-manturhub-marketplace'
+      config:
+        bundledSkillDir: !!js process.env.DSH_BUNDLED_SKILL_DIR
     - id: mantur-projects
       name: '@deepseek-ai/dsh-mantur-projects'
       config:
@@ -62,9 +65,19 @@
       config:
         recommendations:
           script: [short-drama]
-          production: [drama-asset-seedance-pipeline, character-forge, mantur-video-prompt-director, mantur-acting-director]
-          editing: [mantur-smartclip, four-dimensional-voice-director]
-          assets: [character-forge, mantur-image-prompt-director, chinese-wonderland-director, four-dimensional-voice-director]
+          production: [drama-asset-seedance-pipeline, mantur-copyhit]
+          assets: [mantur-smartclip]
+    - id: ui-mantur-script
+      name: '@deepseek-ai/dsh-client-ui-mantur-script'
+      config:
+        maxBytes: 2097152
+        maxEntries: 1000
+    - id: ui-mantur-assets
+      name: '@deepseek-ai/dsh-client-ui-mantur-assets'
+      config:
+        maxBytes: 8388608
+        maxEntries: 2000
+        maxMediaBytes: 52428800
     - id: ui-mantur-account
       name: '@deepseek-ai/dsh-client-ui-mantur-account'
 

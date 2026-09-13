@@ -1,0 +1,3 @@
+- insert:
+    - id: bundled-skill-fixture
+      name: './bundled-skill-fixture.mjs'

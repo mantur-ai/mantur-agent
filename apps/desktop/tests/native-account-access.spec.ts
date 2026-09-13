@@ -28,10 +28,10 @@ async function bench() {
   const access = new NativeAccountAccess(store, http, () => Date.now())
   cleanup.push(() => access.close())
   const secrets = createNativeSecrets({ origin: http.origin, environment: 'test', deviceInstanceId: store.deviceInstanceId,
-    deviceName: 'Isolated test device', platform: 'macos' })
+    deviceName: 'Isolated test device', platform: 'macos', state: 's'.repeat(43), redirectUri: 'http://127.0.0.1:49152/oauth/mantur/callback' })
   const metadata: NativeActiveMetadata = {
-    attempt: { id: randomUUID(), userCode: 'ABCD-EFGH', verificationUrl: `${http.origin}/auth/agent?user_code=ABCD-EFGH`, expiresAt: Date.now() + 600_000 },
-    credential: { id: randomUUID(), email: 'isolated@example.com', expiresAt: Date.now() + 90 * 86_400_000 },
+    attempt: { id: randomUUID(), expiresAt: Date.now() + 600_000 },
+    credential: { id: randomUUID(), displayName: 'Isolated account', accountId: randomUUID(), policyKeyId: randomUUID(), generation: 1, expiresAt: Date.now() + 90 * 86_400_000 },
   }
   await store.savePending(secrets, () => {})
   return { root, cipher, store, transport, http, access, secrets, metadata }
@@ -122,22 +122,22 @@ describe('native account request and revocation lifetimes', () => {
     b.transport.mockRejectedValueOnce(new Error('offline'))
     expect(await later.retryRevocations()).toMatchObject({ revoked: 0, expired: 0, failures: [{ kind: 'network' }] })
     expect(b.store.records(b.http.origin)[0]?.metadata.credential?.expiresAt).toBe(b.metadata.credential.expiresAt)
-    expect(b.transport.mock.calls[0]?.[0]).toBe(`${b.http.origin}/api/v1/native/auth/attempts/${b.metadata.attempt.id}/cancel`)
+    expect(b.transport.mock.calls[0]?.[0]).toBe(`${b.http.origin}/api/v1/client-auth/attempts/${b.metadata.attempt.id}/cancel`)
   })
 
   it('recovers an unknown create response with the original persisted verifier request before cancelling that exact attempt', async () => {
     const b = await bench()
     await b.access.disable(b.secrets.requestId)
-    b.transport.mockResolvedValueOnce(Response.json({ status: 'pending', attempt_id: b.metadata.attempt.id, user_code: 'ABCD-EFGH',
-      verification_uri: `${b.http.origin}/auth/agent`, verification_uri_complete: b.metadata.attempt.verificationUrl,
-      attempt_expires_at: new Date(b.metadata.attempt.expiresAt).toISOString(), expires_in: 600, poll_interval: 2 }, { status: 200 }))
+    b.transport.mockResolvedValueOnce(Response.json({ status: 'pending', attempt_id: b.metadata.attempt.id, issuer: b.http.origin, environment: 'test',
+      authorization_uri: b.http.origin + '/auth/client?' + new URLSearchParams({ attempt_id: b.metadata.attempt.id, state: b.secrets.state, iss: b.http.origin }).toString(),
+      attempt_expires_at: new Date(b.metadata.attempt.expiresAt).toISOString(), expires_in: 600 }, { status: 200 }))
       .mockResolvedValueOnce(new Response(null, { status: 204 }))
     expect(await b.access.retryRevocations()).toEqual({ revoked: 1, expired: 0, failures: [] })
     const body = b.transport.mock.calls[0]?.[1]?.body
     if (typeof body !== 'string') throw new Error('Expected persisted create request')
     expect(JSON.parse(body)).toMatchObject({ request_id: b.secrets.requestId, device_instance_id: b.store.deviceInstanceId })
     expect(body).not.toContain(b.secrets.credential)
-    expect(b.transport.mock.calls[1]?.[1]?.headers).toMatchObject({ 'X-Mantur-Attempt': b.secrets.attemptToken })
+    expect(b.transport.mock.calls[1]?.[1]?.headers).toMatchObject({ Authorization: `Bearer ${b.secrets.credential}` })
   })
 
   it('never revokes a newer login while cleaning up an old record, and does not sweep another environment', async () => {

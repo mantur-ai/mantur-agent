@@ -51,9 +51,9 @@ describe('Mantur browser-brand plugin', () => {
   })
 
   it('renders the approved logo with the localized product copy', () => {
-    const t = (() => '漫途Agent') as never
+    const t = (() => 'ManTur Agent') as never
     const sidebarName = render(<ManturSidebarName t={t} />)
-    expect(sidebarName.getByText('漫途Agent')).toBeTruthy()
+    expect(sidebarName.getByText('ManTur Agent')).toBeTruthy()
     sidebarName.unmount()
 
     const hero = render(<ManturHeroBrand size={34} className="hero-mark" />)
@@ -65,7 +65,7 @@ describe('Mantur browser-brand plugin', () => {
 
     const headline = render(<ManturHeroHeadline t={key => key === 'headline'
       ? '故事起于一念，余下交给漫途'
-      : '漫途Agent'} />)
+      : 'ManTur Agent'} />)
     expect(headline.getByText('故事起于一念，余下交给漫途')).toBeTruthy()
     headline.unmount()
 

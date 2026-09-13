@@ -318,7 +318,7 @@ describe('ManturHub device authorization', () => {
     })).resolves.toEqual({ status: 'authorized' })
 
     expect(notices).toEqual([{
-      message: 'Continue in your browser to authorize Mantur Agent.',
+      message: 'Continue in your browser to authorize ManTur Agent.',
       url: `${hub.origin}/device`,
       code: 'MANT-1234',
     }])
@@ -479,4 +479,40 @@ describe('ManturHub device authorization', () => {
     await expect(settled(subject.service, start.attemptId, completion)).resolves.toEqual({ status: 'failed' })
     expect(hub.requests.filter(request => request.startsWith('GET /api/v1/cli/poll'))).toHaveLength(1)
   })
+})
+
+
+describe('fresh Mantou balance', () => {
+  it('returns signed-out without calling the account endpoint', async () => {
+    const hub = await fakeHub()
+    const subject = await boot(hub.origin)
+    expect(await subject.service.balance()).toEqual({ status: 'signed-out' })
+    expect(hub.requests).toEqual([])
+  })
+
+  it.each([0, 1234.5, -0.33])('returns the exact server balance %s and excludes other account fields', async (balance) => {
+    const hub = await fakeHub({ account: { body: { email: 'artist@example.com', balance, privateField: 'not-for-client' } } })
+    const subject = await boot(hub.origin)
+    await subject.ctx.credentials.modifyRecord(manturAccountCredential('production', new URL(hub.origin)),
+      () => Promise.resolve({ kind: 'grant', payload: { version: 1, apiKey: 'mantur-secret-key', account: { email: 'artist@example.com' } } }))
+    expect(await subject.service.balance()).toEqual({ status: 'available', balance })
+    expect(hub.requests).toEqual(['GET /api/v1/me mantur-secret-key'])
+  })
+
+  it.each([{ body: {} }, { body: { balance: '88' } }, { status: 403, body: { balance: 88 } }])('rejects failed or invalid balance responses: %j', async (account) => {
+    const hub = await fakeHub({ account })
+    const subject = await boot(hub.origin)
+    await subject.ctx.credentials.modifyRecord(manturAccountCredential('production', new URL(hub.origin)),
+      () => Promise.resolve({ kind: 'grant', payload: { version: 1, apiKey: 'mantur-secret-key', account: { email: 'artist@example.com' } } }))
+    await expect(subject.service.balance()).rejects.toThrow('balance could not be read')
+  })
+})
+
+it('exposes the configured balance refresh cadence', async () => {
+  const subject = await boot({ balanceRefreshIntervalMs: 12000 })
+  expect(subject.service.balanceRefreshIntervalMs()).toBe(12000)
+})
+
+it.each([0, -1, 1.5, 999, 2_147_483_648])('rejects an invalid balance refresh cadence: %s', (balanceRefreshIntervalMs) => {
+  expect(() => new ManturHubAuthorization(new Context(), { balanceRefreshIntervalMs })).toThrow(/number/)
 })

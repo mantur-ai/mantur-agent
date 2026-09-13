@@ -1,19 +1,22 @@
 {
   "name": "@deepseek-ai/dsh-desktop",
-  "description": "Thin Electron carrier for the Mantur Agent desktop installers",
-  "version": "0.1.2-rc.1",
+  "description": "Thin Electron carrier for the ManTur Agent desktop installers",
+  "version": "0.1.11",
   "private": true,
   "type": "module",
   "main": "lib/main.js",
   "scripts": {
     "bundle": "tsdown",
-    "dev": "tsx watch --clear-screen=false --include \"src/**/*\" --include \"resources/**/*\" --include package.json --include tsconfig.json --include tsdown.config.ts scripts/dev.ts",
-    "pack": "pnpm run prepare:mantur-cut && electron-builder --dir --publish never",
+    "dev": "pnpm run prepare:skills && tsx watch --clear-screen=false --include \"src/**/*\" --include \"resources/**/*\" --include package.json --include tsconfig.json --include tsdown.config.ts scripts/dev.ts",
+    "pack": "pnpm run prepare:skills && pnpm run prepare:cli && pnpm run prepare:mantur-cut && electron-builder --dir --publish never",
     "prepare:mantur-cut": "tsx ../../scripts/mantur-cut-distribution.ts",
-    "dist:mac:arm64": "pnpm run prepare:mantur-cut -- --target darwin-arm64 && electron-builder --mac zip --arm64 --publish never && tsx ../../scripts/create-macos-dmg.ts --arch arm64",
-    "dist:mac:x64": "pnpm run prepare:mantur-cut -- --target darwin-x64 && electron-builder --mac zip --x64 --publish never && tsx ../../scripts/create-macos-dmg.ts --arch x64",
-    "dist:win:x64": "pnpm run prepare:mantur-cut -- --target win32-x64 && electron-builder --win nsis --x64 --publish never",
-    "smoke:packaged": "tsx scripts/smoke-packaged.ts"
+    "dist:mac:arm64": "pnpm run prepare:skills && pnpm run prepare:cli && pnpm run prepare:mantur-cut -- --target darwin-arm64 && electron-builder --mac zip --arm64 --publish never && tsx ../../scripts/create-macos-dmg.ts --arch arm64",
+    "dist:mac:arm64:local": "pnpm run prepare:skills && pnpm run prepare:cli && pnpm run prepare:mantur-cut -- --target darwin-arm64 && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac zip --arm64 --publish never --config.mac.identity=- --config.mac.notarize=false --config.mac.strictVerify=true && codesign --verify --deep --strict \"dist/mac-arm64/ManTur Agent.app\" && tsx ../../scripts/create-macos-dmg.ts --arch arm64",
+    "dist:mac:x64": "pnpm run prepare:skills && pnpm run prepare:cli && pnpm run prepare:mantur-cut -- --target darwin-x64 && electron-builder --mac zip --x64 --publish never && tsx ../../scripts/create-macos-dmg.ts --arch x64",
+    "dist:win:x64": "pnpm run prepare:skills && pnpm run prepare:cli && pnpm run prepare:mantur-cut -- --target win32-x64 && electron-builder --win nsis --x64 --publish never",
+    "smoke:packaged": "tsx scripts/smoke-packaged.ts",
+    "prepare:cli": "tsx scripts/prepare-cli.ts",
+    "prepare:skills": "tsx scripts/prepare-skills.ts"
   },
   "license": "MIT",
   "dependencies": {
@@ -52,7 +55,7 @@
   },
   "build": {
     "appId": "ai.mantur.agent",
-    "productName": "漫途Agent",
+    "productName": "ManTur Agent",
     "asar": false,
     "files": [
       "lib/**/*",
@@ -64,15 +67,27 @@
     },
     "extraResources": [
       {
+        "from": ".generated/mantur-skills",
+        "to": "mantur-skills"
+      },
+      {
         "from": ".generated/mantur-cut",
         "to": "mantur-cut"
+      },
+      {
+        "from": ".generated/mantur-cli/source.json",
+        "to": "mantur-cli/source.json"
+      },
+      {
+        "from": ".generated/mantur-cli/node_modules",
+        "to": "mantur-cli/node_modules"
       }
     ],
     "publish": [
       {
         "provider": "github",
         "owner": "mantur-ai",
-        "repo": "mantur-harness",
+        "repo": "mantur-agent",
         "releaseType": "release"
       }
     ],
@@ -94,7 +109,8 @@
       ]
     },
     "nsis": {
-      "oneClick": true,
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "runAfterFinish": true

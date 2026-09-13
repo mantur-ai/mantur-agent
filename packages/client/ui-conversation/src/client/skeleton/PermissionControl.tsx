@@ -1,4 +1,4 @@
-/** Layout-slot adapter for the resident composer's permission control. */
+/** Accessory-slot adapter for the resident composer's permission control. */
 
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ComposerControlInjected } from '../contract/slots.ts'
@@ -6,13 +6,13 @@ import { composerAvailability } from './composer-availability.ts'
 import { PermissionSelect } from './PermissionSelect.tsx'
 
 /**
- * Render the existing permission projection and command face outside the input card.
- * @param props - Framework-bound Session/input sources and the layout's display lock.
+ * Render the existing permission projection and command face above the editor.
+ * @param props - Framework-bound Session/input sources and the composer's display lock.
  * @returns The permission selector when the Session exposes its command face.
  */
 export function PermissionControl({ sessionId, useSession, useProjection, useComposerInput,
   inputActions, unassignedActions, keyboard, command, disabled, t,
-}: PropsRuntime<'conversation.composer.layout.permissions'> & InjectFace<ComposerControlInjected> & PropsLocale<'conversation'>) {
+}: PropsRuntime<'conversation.composer.bar.accessory.permissions'> & InjectFace<ComposerControlInjected> & PropsLocale<'conversation'>) {
   const input = useComposerInput(state => state)
   const removed = useSession(state => state.removed) ?? false
   const subagent = useSession(state => state.subagent) ?? null

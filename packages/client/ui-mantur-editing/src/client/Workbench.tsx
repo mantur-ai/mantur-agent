@@ -2,22 +2,29 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { InjectFace } from '@deepseek-ai/dsh-client-ui-slots'
-import type { WorkbenchInjection } from './index.ts'
+import type { WorkbenchInjection, WorkbenchToggleInjection } from './index.ts'
 import { localEditorUrl } from '../settings.ts'
 import type { EditingWorkspace } from '../types.ts'
 import css from './Workbench.module.css'
-import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 
 /**
- * Reopen editing for the selected conversation after a reload or explicit close.
- * @param props - Localized label and layout action.
- * @returns Session header action.
+ * Observe live editing opens and retain explicit same-Session dismissal.
+ * @param props - Localized labels and the layout's current visibility controls.
+ * @returns No visible content; the shared shell owns the boundary button.
  */
-export function EditingAction({ openWorkbench, t }: PropsLocale<'editing.mantur'> & { openWorkbench: () => void }) {
-  return <button type="button" className={css.openAction} onClick={openWorkbench}>{t('open')}</button>
+export function WorkbenchToggle({ expanded, openWorkbench, observeAutomaticOpening, suppressAutomaticOpening, useSessions }:
+PropsRuntime<'main.workbench.toggle.editing'> & PropsLocale<'editing.mantur'> & InjectFace<WorkbenchToggleInjection>) {
+  const session = useSessions(s => s.current)
+  const previous = useRef({ session, expanded })
+  useEffect(() => observeAutomaticOpening(openWorkbench), [observeAutomaticOpening, openWorkbench])
+  useEffect(() => {
+    if (previous.current.session === session && previous.current.expanded && !expanded) suppressAutomaticOpening()
+    previous.current = { session, expanded }
+  }, [session, expanded, suppressAutomaticOpening])
+  return null
 }
 
-type Props = PropsRuntime<'main.workbench'> & PropsLocale<'editing.mantur'> & InjectFace<WorkbenchInjection>
+type Props = PropsRuntime<'main.workbench.editing.content'> & PropsLocale<'editing.mantur'> & InjectFace<WorkbenchInjection>
 
 /**
  * Render the full editor beside Mantur without starting another model turn.
@@ -25,7 +32,7 @@ type Props = PropsRuntime<'main.workbench'> & PropsLocale<'editing.mantur'> & In
  * @returns embedded editor or a configuration diagnostic.
  */
 export function Workbench({
-  useSessions, openWorkspace, closeWorkbench, getColorScheme, subscribeTheme, getLocale, subscribeLocale, t,
+  useSessions, openWorkspace, getColorScheme, subscribeTheme, getLocale, subscribeLocale, t,
 }: Props) {
   const sessionId = useSessions(s => s.current)
   const [revision, setRevision] = useState(0)
@@ -44,8 +51,7 @@ export function Workbench({
   return <section className={css.workbench} aria-label={t('title')}>
     <header className={css.header}>
       <strong title={workspace?.directory ?? t('help')}>{t('title')}</strong>
-      <button type="button" onClick={() => { setRevision(value => value + 1) }}>{t('reload')}</button>
-      <button type="button" onClick={closeWorkbench}>{t('close')}</button>
+      <button type="button" title={t('reload')} onClick={() => { setRevision(value => value + 1) }}>{t('reload')}</button>
     </header>
     {error !== undefined ? <p role="alert">{t('failed')}: {error}</p> : workspace !== undefined
       ? <ThemedEditor key={`${sessionId}:${revision}`} url={workspace.editorUrl} title={t('title')} getColorScheme={getColorScheme} subscribeTheme={subscribeTheme} getLocale={getLocale} subscribeLocale={subscribeLocale} />
@@ -80,4 +86,9 @@ function ThemedEditor({ url, title, getColorScheme, subscribeTheme, getLocale, s
     return () => { window.removeEventListener('message', ready) }
   }, [sendTheme, url])
   return <iframe ref={frame} className={css.editor} src={src} title={title} onLoad={sendTheme} allow="autoplay; fullscreen; cross-origin-isolated" />
+}
+
+/** @param props - Shared shell selection and locale-owned editing label. @returns Editing availability control. */
+export function EditingTab({ selected, selectEditing, t }: PropsRuntime<'main.workbench.editing.tab'> & PropsLocale<'editing.mantur'>) {
+  return <button type="button" aria-pressed={selected} onClick={selectEditing}>{t('tab')}</button>
 }

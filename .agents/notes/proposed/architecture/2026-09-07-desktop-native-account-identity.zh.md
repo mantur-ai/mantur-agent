@@ -8,6 +8,8 @@ Status: proposed
 
 桌面账号登录与随附 ManturHub CLI 需要共用一个设备身份，但不能把可复用的账号秘密复制到 renderer 状态、进程参数或 shell 环境。授权响应丢失与离线退出登录不能遗留无人持有的凭据，也不能在重启后悄悄恢复本地授权。
 
+browser-account-v2 [决策](../../implemented/architecture/2026-09-08-browser-account-authorization.zh.md)取代本提案中的 v1 密码、注册和激活流程。broker 所有权、进程清理及原生平台验收要求仍有效。
+
 ## 提案
 
 Electron Main 将拥有 profile 内的安装身份，以及相互独立、由操作系统加密保存的 attempt 和设备秘密。native-account-v1 协议在联网前提交完整的 verifier-first 请求，结果未知时保留原请求。确认 ready 的元数据包含凭据原始到期时间，必须先保存再激活。设备凭据按绝对九十天到期，不刷新。

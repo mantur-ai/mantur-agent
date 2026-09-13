@@ -1,3 +1,65 @@
+diff --git a/.gitignore b/.gitignore
+index e42eb07..2962ba0 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -87,6 +87,7 @@ MODEL-OPT-PLAN.md
+ # `git add -A`, and CI died with MODULE_NOT_FOUND on a file that exists locally.
+ /scripts/*
+ !/scripts/sync-mediapipe.mjs
++!/scripts/patch-remotion-shutdown.mjs
+ # Stable regressions are *.verify.* by convention (see the *.check.* rule
+ # above), so they are never local-only.
+ !/scripts/*.verify.mjs
+diff --git a/MANTUR-RENDER-SHUTDOWN.md b/MANTUR-RENDER-SHUTDOWN.md
+new file mode 100644
+index 0000000..670a7f4
+--- /dev/null
++++ b/MANTUR-RENDER-SHUTDOWN.md
+@@ -0,0 +1,9 @@
++# Render browser shutdown
++
++Mantur's install preparation requires the rendering browser's close operation and the exact spawned child's `close` event. Node emits that event after the process ends and its stdio streams close; a process `exit` event alone is insufficient. Pending or failed cleanup continues to block installation.
++
++`scripts/patch-remotion-shutdown.mjs` is an install-time source patch for both the CommonJS BrowserRunner and ESM bundle in pinned `@remotion/renderer` 4.0.509. It registers the `close` listener immediately after spawn, before the first asynchronous browser setup operation, and exposes its promise on the runner. Existing license notices are retained. Both original and patched bytes are SHA-256 checked before either file is modified. Unknown source bytes reject installation rather than silently disabling evidence collection. No global spawn interception, PID polling, timeout-as-success, or relaxation of process signing is used.
++
++The patch is applied by `npm ci`/`npm install` through the root `postinstall`. If dependency install scripts are intentionally disabled, run `node scripts/patch-remotion-shutdown.mjs` explicitly before building or running the editor. `remotion/render-shutdown.mjs` rejects missing evidence even if the browser's public `close()` resolves.
++
++`node remotion/render-shutdown.verify.mjs` covers the close barrier, repeated close calls, missing evidence, failed cleanup, and preservation of simultaneous rendering and cleanup failures. The isolated native export regression additionally requires successful MP4 generation and `stopForShutdown`; an MP4 alone is not sufficient evidence of safe update preparation.
+diff --git a/README.md b/README.md
+index c28bd44..8df9208 100644
+--- a/README.md
++++ b/README.md
+@@ -349,6 +349,8 @@ If an `auto` session becomes stale, it returns an error instead of falling back
+
+ In the Mantur integration, `import_asset` and `import_folder` read media from the current Agent project. Manual sessions require confirmation before reading local files. Imported assets enter the editing draft, so successive imports and edits retain the same session revision; review applies the assets with the other draft operations. Compatible originals are referenced in place and remain unchanged. Concurrent live edits still make the session stale.
+
++After rendering, Mantur confirms the browser process and its output pipes have closed before preparing installation. The pinned dependency patch and failure behavior are documented in [render browser shutdown](MANTUR-RENDER-SHUTDOWN.md).
++
+ Only draft-safe project read/edit tools are exposed in these sessions. Generation, export, project deletion, and other immediate side-effect tools stay unavailable because a rejected proposal could not roll them back.
+
+ ### Codex
+@@ -376,6 +378,8 @@ the adjacent video clips. Submit the draft for review and wait for the user to
+ approve it in OpenChatCut before reporting that the edit was applied.
+ ```
+
++An editor result reaches the external Agent only after the broker synchronizes the registered project revision. The next edit session can start immediately from the committed revision; synchronization failure returns an error, and cancelled or expired calls cannot later report success.
++
+ External agents invoke the same internal editing tools and `EditorCore` commands as the editor itself. There are no separate project formats that can drift apart, and the live timeline is not changed while an external draft is being prepared.
+
+ Mantur Cut retains an edit session's last saved draft, operations and original project revision when the session becomes stale, cancelled or failed. These records remain evidence after reload; they cannot resume, rebase or apply a terminal session. New checkpoints also include the original project document. Missing content in older records is not reconstructed. See [terminal draft persistence](MANTUR-TERMINAL-DRAFT.md) for failure ordering and verification.
+diff --git a/README_ZH.md b/README_ZH.md
+index 9679ae8..059cb75 100644
+--- a/README_ZH.md
++++ b/README_ZH.md
+@@ -370,6 +370,8 @@ claude mcp add --transport http openchatcut \
+ 再报告修改已经生效。
+ ```
+
++编辑器结果在 broker 同步项目注册版本后才返回外部 Agent，下一轮编辑会话可立即使用已提交的版本。同步失败会返回错误，已取消或超时的调用不会再返回成功。
++
+ 外部 Agent 调用的仍是编辑器内部同一套工具和 `EditorCore` 命令，不存在两套互相漂移的工程格式；外部草稿准备期间不会修改正式时间线。
+
+ ### MCP 访问保护
 diff --git a/desktop/embedded-server.ts b/desktop/embedded-server.ts
 index 7f373b1..3813420 100644
 --- a/desktop/embedded-server.ts
@@ -22,48 +84,721 @@ index 7f373b1..3813420 100644
    // Static cover at the end: uploading assets at runtime takes precedence over dist's build-stage copy
    app.use('/media/uploads', uploadsMiddleware());
    if (mantur) {
+diff --git a/package-lock.json b/package-lock.json
+index 0e72452..75e2253 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -7,6 +7,7 @@
+     "": {
+       "name": "openchatcut",
+       "version": "0.2.14",
++      "hasInstallScript": true,
+       "license": "AGPL-3.0-or-later",
+       "dependencies": {
+         "@ai-sdk/alibaba": "^2.0.16",
+@@ -2093,9 +2094,9 @@
+       }
+     },
+     "node_modules/@img/sharp-darwin-arm64": {
+-      "version": "0.34.5",
+-      "resolved": "https://registry.npmjs.org/@img/sharp-darwin-arm64/-/sharp-darwin-arm64-0.34.5.tgz",
+-      "integrity": "sha512-imtQ3WMJXbMY4fxb/Ndp6HBTNVtWCUI0WdobyheGf5+ad6xX8VIDO8u2xE4qc/fr08CKG/7dDseFtn6M6g/r3w==",
++      "version": "0.35.4",
++      "resolved": "https://registry.npmjs.org/@img/sharp-darwin-arm64/-/sharp-darwin-arm64-0.35.4.tgz",
++      "integrity": "sha512-Uhfl4V4lhP2nbUVF9+hyH1+luj86f1gUFeo8ALYxFoULoU+G87D43BfeMP8XHsk9boxAnCY/bf2EHwhA7MuGsA==",
+       "cpu": [
+         "arm64"
+       ],
+@@ -2105,19 +2106,19 @@
+         "darwin"
+       ],
+       "engines": {
+-        "node": "^18.17.0 || ^20.3.0 || >=21.0.0"
++        "node": ">=20.9.0"
+       },
+       "funding": {
+         "url": "https://opencollective.com/libvips"
+       },
+       "optionalDependencies": {
+-        "@img/sharp-libvips-darwin-arm64": "1.2.4"
++        "@img/sharp-libvips-darwin-arm64": "1.3.3"
+       }
+     },
+     "node_modules/@img/sharp-darwin-x64": {
+-      "version": "0.34.5",
+-      "resolved": "https://registry.npmjs.org/@img/sharp-darwin-x64/-/sharp-darwin-x64-0.34.5.tgz",
+-      "integrity": "sha512-YNEFAF/4KQ/PeW0N+r+aVVsoIY0/qxxikF2SWdp+NRkmMB7y9LBZAVqQ4yhGCm/H3H270OSykqmQMKLBhBJDEw==",
++      "version": "0.35.4",
++      "resolved": "https://registry.npmjs.org/@img/sharp-darwin-x64/-/sharp-darwin-x64-0.35.4.tgz",
++      "integrity": "sha512-hWniXY3bG5qKpkKrAwPe4y+VTPmf086YQAnkxWh7uA1YrlRouWGa0M0Mxj3ZjnXFkv7/TD1bTy9lGUK26vRvWw==",
+       "cpu": [
+         "x64"
+       ],
+@@ -2127,19 +2128,38 @@
+         "darwin"
+       ],
+       "engines": {
+-        "node": "^18.17.0 || ^20.3.0 || >=21.0.0"
++        "node": ">=20.9.0"
+       },
+       "funding": {
+         "url": "https://opencollective.com/libvips"
+       },
+       "optionalDependencies": {
+-        "@img/sharp-libvips-darwin-x64": "1.2.4"
++        "@img/sharp-libvips-darwin-x64": "1.3.3"
++      }
++    },
++    "node_modules/@img/sharp-freebsd-wasm32": {
++      "version": "0.35.4",
++      "resolved": "https://registry.npmjs.org/@img/sharp-freebsd-wasm32/-/sharp-freebsd-wasm32-0.35.4.tgz",
++      "integrity": "sha512-lIsKw/BU+kjB4eZjxrYrZmwOJYi3Ajrv66iAlBmUPyKc3HpnloevB1g3wxGD9P/5BbQ1brBGl65VRRrCvQDEqA==",
++      "license": "Apache-2.0",
++      "optional": true,
++      "os": [
++        "freebsd"
++      ],
++      "dependencies": {
++        "@img/sharp-wasm32": "0.35.4"
++      },
++      "engines": {
++        "node": ">=20.9.0"
++      },
++      "funding": {
++        "url": "https://opencollective.com/libvips"
+       }
+     },
+     "node_modules/@img/sharp-libvips-darwin-arm64": {
+-      "version": "1.2.4",
+-      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-darwin-arm64/-/sharp-libvips-darwin-arm64-1.2.4.tgz",
+-      "integrity": "sha512-zqjjo7RatFfFoP0MkQ51jfuFZBnVE2pRiaydKJ1G/rHZvnsrHAOcQALIi9sA5co5xenQdTugCvtb1cuf78Vf4g==",
++      "version": "1.3.3",
++      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-darwin-arm64/-/sharp-libvips-darwin-arm64-1.3.3.tgz",
++      "integrity": "sha512-suTBPTDGrI9WodccaDdwZItTSaBYASlBk1NSfElSHrUfzu3szG6lvIF58+WiFvnfzuK8ZBFS5zE00PxqxnRiPg==",
+       "cpu": [
+         "arm64"
+       ],
+@@ -2153,9 +2173,9 @@
+       }
+     },
+     "node_modules/@img/sharp-libvips-darwin-x64": {
+-      "version": "1.2.4",
+-      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-darwin-x64/-/sharp-libvips-darwin-x64-1.2.4.tgz",
+-      "integrity": "sha512-1IOd5xfVhlGwX+zXv2N93k0yMONvUlANylbJw1eTah8K/Jtpi15KC+WSiaX/nBmbm2HxRM1gZ0nSdjSsrZbGKg==",
++      "version": "1.3.3",
++      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-darwin-x64/-/sharp-libvips-darwin-x64-1.3.3.tgz",
++      "integrity": "sha512-FVJZ5mITMobmXIz/hPDTw0EintTW5H3WfrxwLqEqjiIihlu+hVRyGrFQ60xl0Lxn7Bt3zdpevPaQi0HEzqz9fw==",
+       "cpu": [
+         "x64"
+       ],
+@@ -2169,9 +2189,9 @@
+       }
+     },
+     "node_modules/@img/sharp-libvips-linux-arm": {
+-      "version": "1.2.4",
+-      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linux-arm/-/sharp-libvips-linux-arm-1.2.4.tgz",
+-      "integrity": "sha512-bFI7xcKFELdiNCVov8e44Ia4u2byA+l3XtsAj+Q8tfCwO6BQ8iDojYdvoPMqsKDkuoOo+X6HZA0s0q11ANMQ8A==",
++      "version": "1.3.3",
++      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linux-arm/-/sharp-libvips-linux-arm-1.3.3.tgz",
++      "integrity": "sha512-3rbU4vqXXc3hY/OiXdl52xZvT0F1yEngWfvqudtPJg/KkyiaQw2DRsFrNzpmLvfavbwOq3qXn36GP8obHRULQA==",
+       "cpu": [
+         "arm"
+       ],
+@@ -2188,9 +2208,9 @@
+       }
+     },
+     "node_modules/@img/sharp-libvips-linux-arm64": {
+-      "version": "1.2.4",
+-      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linux-arm64/-/sharp-libvips-linux-arm64-1.2.4.tgz",
+-      "integrity": "sha512-excjX8DfsIcJ10x1Kzr4RcWe1edC9PquDRRPx3YVCvQv+U5p7Yin2s32ftzikXojb1PIFc/9Mt28/y+iRklkrw==",
++      "version": "1.3.3",
++      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linux-arm64/-/sharp-libvips-linux-arm64-1.3.3.tgz",
++      "integrity": "sha512-0DaL0A6Xu6sQSQFwe4iVCrKWU2cCTItnRsYsCdxAMm9NF6twAA9BKnoqy4hqz4+azQ0JHuA26qiUKsf1XJ/v5A==",
+       "cpu": [
+         "arm64"
+       ],
+@@ -2207,9 +2227,9 @@
+       }
+     },
+     "node_modules/@img/sharp-libvips-linux-ppc64": {
+-      "version": "1.2.4",
+-      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linux-ppc64/-/sharp-libvips-linux-ppc64-1.2.4.tgz",
+-      "integrity": "sha512-FMuvGijLDYG6lW+b/UvyilUWu5Ayu+3r2d1S8notiGCIyYU/76eig1UfMmkZ7vwgOrzKzlQbFSuQfgm7GYUPpA==",
++      "version": "1.3.3",
++      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linux-ppc64/-/sharp-libvips-linux-ppc64-1.3.3.tgz",
++      "integrity": "sha512-cdn1OvUBwsXhbC0zSzJnNzf5MZ/mTrobawDvNXBTxe8VtqKAm0sRuEY2Evzovb/w9JMk4TvRxqt1mekSuJz64w==",
+       "cpu": [
+         "ppc64"
+       ],
+@@ -2226,9 +2246,9 @@
+       }
+     },
+     "node_modules/@img/sharp-libvips-linux-riscv64": {
+-      "version": "1.2.4",
+-      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linux-riscv64/-/sharp-libvips-linux-riscv64-1.2.4.tgz",
+-      "integrity": "sha512-oVDbcR4zUC0ce82teubSm+x6ETixtKZBh/qbREIOcI3cULzDyb18Sr/Wcyx7NRQeQzOiHTNbZFF1UwPS2scyGA==",
++      "version": "1.3.3",
++      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linux-riscv64/-/sharp-libvips-linux-riscv64-1.3.3.tgz",
++      "integrity": "sha512-HjPVx7yKz+0lqdhDlTw1tt90wamBoxhiXpvl1XZpJLiHH4RCJ5yDTqH+VlYPv2fwFs89JFw4c1IexYOcQUi4IQ==",
+       "cpu": [
+         "riscv64"
+       ],
+@@ -2245,9 +2265,9 @@
+       }
+     },
+     "node_modules/@img/sharp-libvips-linux-s390x": {
+-      "version": "1.2.4",
+-      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linux-s390x/-/sharp-libvips-linux-s390x-1.2.4.tgz",
+-      "integrity": "sha512-qmp9VrzgPgMoGZyPvrQHqk02uyjA0/QrTO26Tqk6l4ZV0MPWIW6LTkqOIov+J1yEu7MbFQaDpwdwJKhbJvuRxQ==",
++      "version": "1.3.3",
++      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linux-s390x/-/sharp-libvips-linux-s390x-1.3.3.tgz",
++      "integrity": "sha512-neWLh+3yCNThxnfy3c4BbVBeGgt9aftno+XbT56iK28RgeDs3UOFWviLWlUu0bArYVYJaFDK+RRohbicUNCm8Q==",
+       "cpu": [
+         "s390x"
+       ],
+@@ -2264,9 +2284,9 @@
+       }
+     },
+     "node_modules/@img/sharp-libvips-linux-x64": {
+-      "version": "1.2.4",
+-      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linux-x64/-/sharp-libvips-linux-x64-1.2.4.tgz",
+-      "integrity": "sha512-tJxiiLsmHc9Ax1bz3oaOYBURTXGIRDODBqhveVHonrHJ9/+k89qbLl0bcJns+e4t4rvaNBxaEZsFtSfAdquPrw==",
++      "version": "1.3.3",
++      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linux-x64/-/sharp-libvips-linux-x64-1.3.3.tgz",
++      "integrity": "sha512-4vKmvAst9nrowcqquKFAyZJUDolUaIp8uRiN0mWFguJ1IplC9/pitXtlnnlU4aa/eJw3J7i67V+pwUL+wZGdsA==",
+       "cpu": [
+         "x64"
+       ],
+@@ -2283,9 +2303,9 @@
+       }
+     },
+     "node_modules/@img/sharp-libvips-linuxmusl-arm64": {
+-      "version": "1.2.4",
+-      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linuxmusl-arm64/-/sharp-libvips-linuxmusl-arm64-1.2.4.tgz",
+-      "integrity": "sha512-FVQHuwx1IIuNow9QAbYUzJ+En8KcVm9Lk5+uGUQJHaZmMECZmOlix9HnH7n1TRkXMS0pGxIJokIVB9SuqZGGXw==",
++      "version": "1.3.3",
++      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linuxmusl-arm64/-/sharp-libvips-linuxmusl-arm64-1.3.3.tgz",
++      "integrity": "sha512-Y9kQaLMuNoB0bPYOOdcZMaseNrFpPodIWWMrx+CZyydf2xn68j9WYc6sWWRrDwNkzCQjKYfc68L7jKjGlHMibw==",
+       "cpu": [
+         "arm64"
+       ],
+@@ -2302,9 +2322,9 @@
+       }
+     },
+     "node_modules/@img/sharp-libvips-linuxmusl-x64": {
+-      "version": "1.2.4",
+-      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linuxmusl-x64/-/sharp-libvips-linuxmusl-x64-1.2.4.tgz",
+-      "integrity": "sha512-+LpyBk7L44ZIXwz/VYfglaX/okxezESc6UxDSoyo2Ks6Jxc4Y7sGjpgU9s4PMgqgjj1gZCylTieNamqA1MF7Dg==",
++      "version": "1.3.3",
++      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linuxmusl-x64/-/sharp-libvips-linuxmusl-x64-1.3.3.tgz",
++      "integrity": "sha512-fj8Mv0HHfD1Rr+4I68+3agJynxDWtBFgicTbSOb9Bke6pIwzGcJ+RX/yHjmiEGFMCavY/dxvem7MyNaJF+wDiw==",
+       "cpu": [
+         "x64"
+       ],
+@@ -2321,9 +2341,9 @@
+       }
+     },
+     "node_modules/@img/sharp-linux-arm": {
+-      "version": "0.34.5",
+-      "resolved": "https://registry.npmjs.org/@img/sharp-linux-arm/-/sharp-linux-arm-0.34.5.tgz",
+-      "integrity": "sha512-9dLqsvwtg1uuXBGZKsxem9595+ujv0sJ6Vi8wcTANSFpwV/GONat5eCkzQo/1O6zRIkh0m/8+5BjrRr7jDUSZw==",
++      "version": "0.35.4",
++      "resolved": "https://registry.npmjs.org/@img/sharp-linux-arm/-/sharp-linux-arm-0.35.4.tgz",
++      "integrity": "sha512-7OAS8gI0EReKGVN2HssHlM6umJgxF5VI3xN0p9FA91p/YO+ou5hiNghLdZ5BEHztwaaK5+bLKRf8x/o2L2nk9A==",
+       "cpu": [
+         "arm"
+       ],
+@@ -2336,19 +2356,19 @@
+         "linux"
+       ],
+       "engines": {
+-        "node": "^18.17.0 || ^20.3.0 || >=21.0.0"
++        "node": ">=20.9.0"
+       },
+       "funding": {
+         "url": "https://opencollective.com/libvips"
+       },
+       "optionalDependencies": {
+-        "@img/sharp-libvips-linux-arm": "1.2.4"
++        "@img/sharp-libvips-linux-arm": "1.3.3"
+       }
+     },
+     "node_modules/@img/sharp-linux-arm64": {
+-      "version": "0.34.5",
+-      "resolved": "https://registry.npmjs.org/@img/sharp-linux-arm64/-/sharp-linux-arm64-0.34.5.tgz",
+-      "integrity": "sha512-bKQzaJRY/bkPOXyKx5EVup7qkaojECG6NLYswgktOZjaXecSAeCWiZwwiFf3/Y+O1HrauiE3FVsGxFg8c24rZg==",
++      "version": "0.35.4",
++      "resolved": "https://registry.npmjs.org/@img/sharp-linux-arm64/-/sharp-linux-arm64-0.35.4.tgz",
++      "integrity": "sha512-De4jpEnAU8Hd5oT0j1G3uL4ZvTuipVMn7YC6vPaJhy6/7EwEae0SVAoBrUMYQbkLGDm85taVWwuPc1a44LTzCQ==",
+       "cpu": [
+         "arm64"
+       ],
+@@ -2361,19 +2381,19 @@
+         "linux"
+       ],
+       "engines": {
+-        "node": "^18.17.0 || ^20.3.0 || >=21.0.0"
++        "node": ">=20.9.0"
+       },
+       "funding": {
+         "url": "https://opencollective.com/libvips"
+       },
+       "optionalDependencies": {
+-        "@img/sharp-libvips-linux-arm64": "1.2.4"
++        "@img/sharp-libvips-linux-arm64": "1.3.3"
+       }
+     },
+     "node_modules/@img/sharp-linux-ppc64": {
+-      "version": "0.34.5",
+-      "resolved": "https://registry.npmjs.org/@img/sharp-linux-ppc64/-/sharp-linux-ppc64-0.34.5.tgz",
+-      "integrity": "sha512-7zznwNaqW6YtsfrGGDA6BRkISKAAE1Jo0QdpNYXNMHu2+0dTrPflTLNkpc8l7MUP5M16ZJcUvysVWWrMefZquA==",
++      "version": "0.35.4",
++      "resolved": "https://registry.npmjs.org/@img/sharp-linux-ppc64/-/sharp-linux-ppc64-0.35.4.tgz",
++      "integrity": "sha512-2oYZJeIl4kCcMGk4ouZVjnkCtFrpQFlNEtJ6GbxzhHQchwH0NH/qEb9ykmOl29dqwMq+JhFdZn+1ak2FKhI9fQ==",
+       "cpu": [
+         "ppc64"
+       ],
+@@ -2386,19 +2406,19 @@
+         "linux"
+       ],
+       "engines": {
+-        "node": "^18.17.0 || ^20.3.0 || >=21.0.0"
++        "node": ">=20.9.0"
+       },
+       "funding": {
+         "url": "https://opencollective.com/libvips"
+       },
+       "optionalDependencies": {
+-        "@img/sharp-libvips-linux-ppc64": "1.2.4"
++        "@img/sharp-libvips-linux-ppc64": "1.3.3"
+       }
+     },
+     "node_modules/@img/sharp-linux-riscv64": {
+-      "version": "0.34.5",
+-      "resolved": "https://registry.npmjs.org/@img/sharp-linux-riscv64/-/sharp-linux-riscv64-0.34.5.tgz",
+-      "integrity": "sha512-51gJuLPTKa7piYPaVs8GmByo7/U7/7TZOq+cnXJIHZKavIRHAP77e3N2HEl3dgiqdD/w0yUfiJnII77PuDDFdw==",
++      "version": "0.35.4",
++      "resolved": "https://registry.npmjs.org/@img/sharp-linux-riscv64/-/sharp-linux-riscv64-0.35.4.tgz",
++      "integrity": "sha512-cPbNChoRURAWdebDIHSenxRpgEdy7JkPydSnUxRm9VvKD7m0/xVaR/8Fzlu81pk5nHEvHH87UZUA7cTtwnbJSA==",
+       "cpu": [
+         "riscv64"
+       ],
+@@ -2411,19 +2431,19 @@
+         "linux"
+       ],
+       "engines": {
+-        "node": "^18.17.0 || ^20.3.0 || >=21.0.0"
++        "node": ">=20.9.0"
+       },
+       "funding": {
+         "url": "https://opencollective.com/libvips"
+       },
+       "optionalDependencies": {
+-        "@img/sharp-libvips-linux-riscv64": "1.2.4"
++        "@img/sharp-libvips-linux-riscv64": "1.3.3"
+       }
+     },
+     "node_modules/@img/sharp-linux-s390x": {
+-      "version": "0.34.5",
+-      "resolved": "https://registry.npmjs.org/@img/sharp-linux-s390x/-/sharp-linux-s390x-0.34.5.tgz",
+-      "integrity": "sha512-nQtCk0PdKfho3eC5MrbQoigJ2gd1CgddUMkabUj+rBevs8tZ2cULOx46E7oyX+04WGfABgIwmMC0VqieTiR4jg==",
++      "version": "0.35.4",
++      "resolved": "https://registry.npmjs.org/@img/sharp-linux-s390x/-/sharp-linux-s390x-0.35.4.tgz",
++      "integrity": "sha512-RY0JFY8Fd6RonCBtHz+DvadaPkXDSI1AUn6yWL9TipqkZ1vY8w8evqdgyDFnkm4/K1ve1TvZiaePP5oSd4+WVQ==",
+       "cpu": [
+         "s390x"
+       ],
+@@ -2436,19 +2456,19 @@
+         "linux"
+       ],
+       "engines": {
+-        "node": "^18.17.0 || ^20.3.0 || >=21.0.0"
++        "node": ">=20.9.0"
+       },
+       "funding": {
+         "url": "https://opencollective.com/libvips"
+       },
+       "optionalDependencies": {
+-        "@img/sharp-libvips-linux-s390x": "1.2.4"
++        "@img/sharp-libvips-linux-s390x": "1.3.3"
+       }
+     },
+     "node_modules/@img/sharp-linux-x64": {
+-      "version": "0.34.5",
+-      "resolved": "https://registry.npmjs.org/@img/sharp-linux-x64/-/sharp-linux-x64-0.34.5.tgz",
+-      "integrity": "sha512-MEzd8HPKxVxVenwAa+JRPwEC7QFjoPWuS5NZnBt6B3pu7EG2Ge0id1oLHZpPJdn3OQK+BQDiw9zStiHBTJQQQQ==",
++      "version": "0.35.4",
++      "resolved": "https://registry.npmjs.org/@img/sharp-linux-x64/-/sharp-linux-x64-0.35.4.tgz",
++      "integrity": "sha512-9qvvEAuk8k89TfWUoX2htWjbAMX8p+NxCppjpcg5k6xMsjhBQPTsoIh36h9Qde4WRuGpJeYnOjdosDn/cnv+OA==",
+       "cpu": [
+         "x64"
+       ],
+@@ -2461,19 +2481,19 @@
+         "linux"
+       ],
+       "engines": {
+-        "node": "^18.17.0 || ^20.3.0 || >=21.0.0"
++        "node": ">=20.9.0"
+       },
+       "funding": {
+         "url": "https://opencollective.com/libvips"
+       },
+       "optionalDependencies": {
+-        "@img/sharp-libvips-linux-x64": "1.2.4"
++        "@img/sharp-libvips-linux-x64": "1.3.3"
+       }
+     },
+     "node_modules/@img/sharp-linuxmusl-arm64": {
+-      "version": "0.34.5",
+-      "resolved": "https://registry.npmjs.org/@img/sharp-linuxmusl-arm64/-/sharp-linuxmusl-arm64-0.34.5.tgz",
+-      "integrity": "sha512-fprJR6GtRsMt6Kyfq44IsChVZeGN97gTD331weR1ex1c1rypDEABN6Tm2xa1wE6lYb5DdEnk03NZPqA7Id21yg==",
++      "version": "0.35.4",
++      "resolved": "https://registry.npmjs.org/@img/sharp-linuxmusl-arm64/-/sharp-linuxmusl-arm64-0.35.4.tgz",
++      "integrity": "sha512-KB5jxpfWQTr0nc3xdHtWChdbifHrBGsd2SM62Eyxrl8afikm+f5qGBU75SJIZBT/S1MC8XyacdlXBMSWq6OURA==",
+       "cpu": [
+         "arm64"
+       ],
+@@ -2486,19 +2506,19 @@
+         "linux"
+       ],
+       "engines": {
+-        "node": "^18.17.0 || ^20.3.0 || >=21.0.0"
++        "node": ">=20.9.0"
+       },
+       "funding": {
+         "url": "https://opencollective.com/libvips"
+       },
+       "optionalDependencies": {
+-        "@img/sharp-libvips-linuxmusl-arm64": "1.2.4"
++        "@img/sharp-libvips-linuxmusl-arm64": "1.3.3"
+       }
+     },
+     "node_modules/@img/sharp-linuxmusl-x64": {
+-      "version": "0.34.5",
+-      "resolved": "https://registry.npmjs.org/@img/sharp-linuxmusl-x64/-/sharp-linuxmusl-x64-0.34.5.tgz",
+-      "integrity": "sha512-Jg8wNT1MUzIvhBFxViqrEhWDGzqymo3sV7z7ZsaWbZNDLXRJZoRGrjulp60YYtV4wfY8VIKcWidjojlLcWrd8Q==",
++      "version": "0.35.4",
++      "resolved": "https://registry.npmjs.org/@img/sharp-linuxmusl-x64/-/sharp-linuxmusl-x64-0.35.4.tgz",
++      "integrity": "sha512-f+eZJZIQNEEd26RPSW+76chwOf1XtA2Y/O+5ocVyLliHkeih3e+jhLVBdNTd2rS3IbNXK8+ug93Vf5ZXtF5Lxg==",
+       "cpu": [
+         "x64"
+       ],
+@@ -2511,38 +2531,64 @@
+         "linux"
+       ],
+       "engines": {
+-        "node": "^18.17.0 || ^20.3.0 || >=21.0.0"
++        "node": ">=20.9.0"
+       },
+       "funding": {
+         "url": "https://opencollective.com/libvips"
+       },
+       "optionalDependencies": {
+-        "@img/sharp-libvips-linuxmusl-x64": "1.2.4"
++        "@img/sharp-libvips-linuxmusl-x64": "1.3.3"
+       }
+     },
+     "node_modules/@img/sharp-wasm32": {
+-      "version": "0.34.5",
+-      "resolved": "https://registry.npmjs.org/@img/sharp-wasm32/-/sharp-wasm32-0.34.5.tgz",
+-      "integrity": "sha512-OdWTEiVkY2PHwqkbBI8frFxQQFekHaSSkUIJkwzclWZe64O1X4UlUjqqqLaPbUpMOQk6FBu/HtlGXNblIs0huw==",
++      "version": "0.35.4",
++      "resolved": "https://registry.npmjs.org/@img/sharp-wasm32/-/sharp-wasm32-0.35.4.tgz",
++      "integrity": "sha512-zQnl4Kwp7Q6NHsENtU2T/00Zi+w3AQNwz3+UaTyVBy2FpXrzXzGjndpK61onhZjRtRpQXxCTeqw19bVyXOh7jA==",
++      "license": "Apache-2.0 AND LGPL-3.0-or-later AND MIT",
++      "optional": true,
++      "dependencies": {
++        "@emnapi/runtime": "^1.11.3"
++      },
++      "engines": {
++        "node": ">=20.9.0"
++      },
++      "funding": {
++        "url": "https://opencollective.com/libvips"
++      }
++    },
++    "node_modules/@img/sharp-wasm32/node_modules/@emnapi/runtime": {
++      "version": "1.11.3",
++      "resolved": "https://registry.npmjs.org/@emnapi/runtime/-/runtime-1.11.3.tgz",
++      "integrity": "sha512-Xz4Tpyki7XyrpbUK1jR1AhdAdaXyhhY4lZ3neLodmhpuWfy2PAQN5B46sAiU4liOXGLkHypn/qU+jvfWSCYYLA==",
++      "license": "MIT",
++      "optional": true,
++      "dependencies": {
++        "tslib": "^2.4.0"
++      }
++    },
++    "node_modules/@img/sharp-webcontainers-wasm32": {
++      "version": "0.35.4",
++      "resolved": "https://registry.npmjs.org/@img/sharp-webcontainers-wasm32/-/sharp-webcontainers-wasm32-0.35.4.tgz",
++      "integrity": "sha512-ESfNkywmCfPNyaZjxooddJQiQ+l/nTpGEOGthxiLnIHXC/CmcBixnfwUleX9mCz9ovrUUvKMap/pm8RYbzfwaA==",
+       "cpu": [
+         "wasm32"
+       ],
+-      "license": "Apache-2.0 AND LGPL-3.0-or-later AND MIT",
++      "license": "Apache-2.0",
+       "optional": true,
+       "dependencies": {
+-        "@emnapi/runtime": "^1.7.0"
++        "@img/sharp-wasm32": "0.35.4"
+       },
+       "engines": {
+-        "node": "^18.17.0 || ^20.3.0 || >=21.0.0"
++        "node": ">=20.9.0"
+       },
+       "funding": {
+         "url": "https://opencollective.com/libvips"
+       }
+     },
+     "node_modules/@img/sharp-win32-arm64": {
+-      "version": "0.34.5",
+-      "resolved": "https://registry.npmjs.org/@img/sharp-win32-arm64/-/sharp-win32-arm64-0.34.5.tgz",
+-      "integrity": "sha512-WQ3AgWCWYSb2yt+IG8mnC6Jdk9Whs7O0gxphblsLvdhSpSTtmu69ZG1Gkb6NuvxsNACwiPV6cNSZNzt0KPsw7g==",
++      "version": "0.35.4",
++      "resolved": "https://registry.npmjs.org/@img/sharp-win32-arm64/-/sharp-win32-arm64-0.35.4.tgz",
++      "integrity": "sha512-iNdlBX9gLVvqe2I3uIJSIKTq6wckP/DYxZtcqxm09x5Gi24DnFBmPAWZmr60ZyYMG0xlzo6goG3670ar+RXvRw==",
+       "cpu": [
+         "arm64"
+       ],
+@@ -2552,16 +2598,16 @@
+         "win32"
+       ],
+       "engines": {
+-        "node": "^18.17.0 || ^20.3.0 || >=21.0.0"
++        "node": ">=20.9.0"
+       },
+       "funding": {
+         "url": "https://opencollective.com/libvips"
+       }
+     },
+     "node_modules/@img/sharp-win32-ia32": {
+-      "version": "0.34.5",
+-      "resolved": "https://registry.npmjs.org/@img/sharp-win32-ia32/-/sharp-win32-ia32-0.34.5.tgz",
+-      "integrity": "sha512-FV9m/7NmeCmSHDD5j4+4pNI8Cp3aW+JvLoXcTUo0IqyjSfAZJ8dIUmijx1qaJsIiU+Hosw6xM5KijAWRJCSgNg==",
++      "version": "0.35.4",
++      "resolved": "https://registry.npmjs.org/@img/sharp-win32-ia32/-/sharp-win32-ia32-0.35.4.tgz",
++      "integrity": "sha512-kqRsbaa5CS6KHlpxnN7WhE6vAAugXyZButpRdvDWetlv6Qv4N9WTcrWzF7tXfB9T7MsoadqdI8hmwLq6UlLvtw==",
+       "cpu": [
+         "ia32"
+       ],
+@@ -2571,16 +2617,16 @@
+         "win32"
+       ],
+       "engines": {
+-        "node": "^18.17.0 || ^20.3.0 || >=21.0.0"
++        "node": "^20.9.0"
+       },
+       "funding": {
+         "url": "https://opencollective.com/libvips"
+       }
+     },
+     "node_modules/@img/sharp-win32-x64": {
+-      "version": "0.34.5",
+-      "resolved": "https://registry.npmjs.org/@img/sharp-win32-x64/-/sharp-win32-x64-0.34.5.tgz",
+-      "integrity": "sha512-+29YMsqY2/9eFEiW93eqWnuLcWcufowXewwSNIT6UwZdUUCrM3oFjMWH/Z6/TMmb4hlFenmfAVbpWeup2jryCw==",
++      "version": "0.35.4",
++      "resolved": "https://registry.npmjs.org/@img/sharp-win32-x64/-/sharp-win32-x64-0.35.4.tgz",
++      "integrity": "sha512-XtmnYhBcrORsJ4XJngyzr/EWP0hRZLAZRFaApdKuviyqF78+ylxh2y06ZmtULAMOnObJ3ucpN0AcwSWnMowTRg==",
+       "cpu": [
+         "x64"
+       ],
+@@ -2590,7 +2636,7 @@
+         "win32"
+       ],
+       "engines": {
+-        "node": "^18.17.0 || ^20.3.0 || >=21.0.0"
++        "node": ">=20.9.0"
+       },
+       "funding": {
+         "url": "https://opencollective.com/libvips"
+@@ -5076,12 +5122,12 @@
+       }
+     },
+     "node_modules/adm-zip": {
+-      "version": "0.5.18",
+-      "resolved": "https://registry.npmjs.org/adm-zip/-/adm-zip-0.5.18.tgz",
+-      "integrity": "sha512-ufJnssQGbxzLNS1Ho9bCtX4rQKCCvoVuDLHoJyc3F9dOGDB4BkWs2Ci0kv53lqocAEQ/Cbi+I2XCsNYGqVYqng==",
++      "version": "0.6.0",
++      "resolved": "https://registry.npmjs.org/adm-zip/-/adm-zip-0.6.0.tgz",
++      "integrity": "sha512-XleryMhbuksdKtofnWZ9Sk+4CUTbms4Mb/EU32SZwToAyZ5RgVos/ki8n+yr0LWHOGKuakbXTuuYNHLQjhddgg==",
+       "license": "MIT",
+       "engines": {
+-        "node": ">=12.0"
++        "node": ">=14.0"
+       }
+     },
+     "node_modules/agent-base": {
+@@ -11507,47 +11553,52 @@
+       "license": "ISC"
+     },
+     "node_modules/sharp": {
+-      "version": "0.34.5",
+-      "resolved": "https://registry.npmjs.org/sharp/-/sharp-0.34.5.tgz",
+-      "integrity": "sha512-Ou9I5Ft9WNcCbXrU9cMgPBcCK8LiwLqcbywW3t4oDV37n1pzpuNLsYiAV8eODnjbtQlSDwZ2cUEeQz4E54Hltg==",
+-      "hasInstallScript": true,
++      "version": "0.35.4",
++      "resolved": "https://registry.npmjs.org/sharp/-/sharp-0.35.4.tgz",
++      "integrity": "sha512-n++8XWcj+jCOr2IOl7h8LbKnGBDY4aPbmprMONBNFdn0ImXqpGVv5zliDs0V9HbmbCQLpbuo2ej9rAoOQTvMDA==",
+       "license": "Apache-2.0",
+       "dependencies": {
+-        "@img/colour": "^1.0.0",
++        "@img/colour": "^1.1.0",
+         "detect-libc": "^2.1.2",
+-        "semver": "^7.7.3"
++        "semver": "^7.8.5"
+       },
+       "engines": {
+-        "node": "^18.17.0 || ^20.3.0 || >=21.0.0"
++        "node": ">=20.9.0"
+       },
+       "funding": {
+         "url": "https://opencollective.com/libvips"
+       },
+       "optionalDependencies": {
+-        "@img/sharp-darwin-arm64": "0.34.5",
+-        "@img/sharp-darwin-x64": "0.34.5",
+-        "@img/sharp-libvips-darwin-arm64": "1.2.4",
+-        "@img/sharp-libvips-darwin-x64": "1.2.4",
+-        "@img/sharp-libvips-linux-arm": "1.2.4",
+-        "@img/sharp-libvips-linux-arm64": "1.2.4",
+-        "@img/sharp-libvips-linux-ppc64": "1.2.4",
+-        "@img/sharp-libvips-linux-riscv64": "1.2.4",
+-        "@img/sharp-libvips-linux-s390x": "1.2.4",
+-        "@img/sharp-libvips-linux-x64": "1.2.4",
+-        "@img/sharp-libvips-linuxmusl-arm64": "1.2.4",
+-        "@img/sharp-libvips-linuxmusl-x64": "1.2.4",
+-        "@img/sharp-linux-arm": "0.34.5",
+-        "@img/sharp-linux-arm64": "0.34.5",
+-        "@img/sharp-linux-ppc64": "0.34.5",
+-        "@img/sharp-linux-riscv64": "0.34.5",
+-        "@img/sharp-linux-s390x": "0.34.5",
+-        "@img/sharp-linux-x64": "0.34.5",
+-        "@img/sharp-linuxmusl-arm64": "0.34.5",
+-        "@img/sharp-linuxmusl-x64": "0.34.5",
+-        "@img/sharp-wasm32": "0.34.5",
+-        "@img/sharp-win32-arm64": "0.34.5",
+-        "@img/sharp-win32-ia32": "0.34.5",
+-        "@img/sharp-win32-x64": "0.34.5"
++        "@img/sharp-darwin-arm64": "0.35.4",
++        "@img/sharp-darwin-x64": "0.35.4",
++        "@img/sharp-freebsd-wasm32": "0.35.4",
++        "@img/sharp-libvips-darwin-arm64": "1.3.3",
++        "@img/sharp-libvips-darwin-x64": "1.3.3",
++        "@img/sharp-libvips-linux-arm": "1.3.3",
++        "@img/sharp-libvips-linux-arm64": "1.3.3",
++        "@img/sharp-libvips-linux-ppc64": "1.3.3",
++        "@img/sharp-libvips-linux-riscv64": "1.3.3",
++        "@img/sharp-libvips-linux-s390x": "1.3.3",
++        "@img/sharp-libvips-linux-x64": "1.3.3",
++        "@img/sharp-libvips-linuxmusl-arm64": "1.3.3",
++        "@img/sharp-libvips-linuxmusl-x64": "1.3.3",
++        "@img/sharp-linux-arm": "0.35.4",
++        "@img/sharp-linux-arm64": "0.35.4",
++        "@img/sharp-linux-ppc64": "0.35.4",
++        "@img/sharp-linux-riscv64": "0.35.4",
++        "@img/sharp-linux-s390x": "0.35.4",
++        "@img/sharp-linux-x64": "0.35.4",
++        "@img/sharp-linuxmusl-arm64": "0.35.4",
++        "@img/sharp-linuxmusl-x64": "0.35.4",
++        "@img/sharp-webcontainers-wasm32": "0.35.4",
++        "@img/sharp-win32-arm64": "0.35.4",
++        "@img/sharp-win32-ia32": "0.35.4",
++        "@img/sharp-win32-x64": "0.35.4"
++      },
++      "peerDependenciesMeta": {
++        "@types/node": {
++          "optional": true
++        }
+       }
+     },
+     "node_modules/sharp/node_modules/semver": {
 diff --git a/package.json b/package.json
-index 69a1f6b..cc56b05 100644
+index 69a1f6b..c7744e8 100644
 --- a/package.json
 +++ b/package.json
-@@ -33,7 +33,7 @@
+@@ -12,6 +12,7 @@
+     "node": ">=24 <25"
+   },
+   "scripts": {
++    "postinstall": "node scripts/patch-remotion-shutdown.mjs",
+     "sync:mediapipe": "node scripts/sync-mediapipe.mjs",
+     "sync:whisper-cli": "node scripts/sync-whisper-cli.mjs",
+     "generate:server-tool-catalog": "tsx server/agent-runs/generate-tool-catalog.mts",
+@@ -32,8 +33,8 @@
+     "verify:directory-watch": "tsx shared/directory-import.verify.ts && tsx desktop/directory-watch-errors.verify.ts && tsx desktop/directory-watch-controller.verify.ts && tsx desktop/directory-watch-import.verify.ts && tsx desktop/directory-watch.verify.ts && tsx src/media/directoryDrop.verify.ts && tsx src/media/directoryImportAsset.verify.ts && tsx src/media/useDirectoryImport.verify.ts && tsx src/media/directoryImportIntegration.verify.ts && tsx src/media/media-folder-menu.verify.ts && tsx src/media/media-pool-batch-timeline.verify.ts",
      "verify:clip-fx-export": "node src/gl/clipFxExport.verify.mjs",
      "verify:approval-policy": "tsx src/agent/approval-policy.verify.ts",
-     "verify:mcp": "tsx server/external-agent/mcp-tool-exposure.verify.ts && tsx server/external-agent/mcp.verify.ts && tsx server/external-agent/mcp-check.verify.ts",
+-    "verify:mcp": "tsx server/external-agent/mcp-tool-exposure.verify.ts && tsx server/external-agent/mcp.verify.ts && tsx server/external-agent/mcp-check.verify.ts",
 -    "pretest": "npm run verify:approval-policy && npm run verify:semantic-sampling && npm run verify:runtime-profile && npm run verify:directory-watch && npm run verify:salvage && npm run verify:harness && npm run verify:mcp && npm run verify:caption-motion && npm run verify:export-adaptive && npm run verify:editor && npm run verify:captions && npm run verify:agent-tools && npm run verify:components && npm run verify:media-persist && npm run verify:export-gl && npm run verify:server-extra && npm run verify:sqlite-migration && npm run verify:production-contracts && npm run verify:desktop-window && npm run verify:desktop-update && npm run verify:toolbar-tooltips && npm run verify:project-store-transport && tsx src/agent/tools/upload-tools.verify.ts && tsx server/plugins/upload-routes.verify.ts && tsx src/agent/local-models.verify.ts && tsx server/codex/codex-agent.verify.ts && tsx src/agent/codex/runtime.verify.ts && tsx src/agent/codex/followup-activation.verify.ts && tsx src/components/settings/codexReasoning.verify.ts && tsx src/library/sound-localization.verify.ts && tsx src/media/qualityPolicy.verify.ts && tsx src/components/chat/chatAttachmentLifecycle.verify.ts && npm run verify:music-intelligence && npm run verify:skills && npm run verify:shortcuts && npm run verify:i18n",
++    "verify:mcp": "tsx server/external-agent/broker-settlement.verify.ts && tsx server/external-agent/mcp-tool-exposure.verify.ts && tsx server/external-agent/mcp.verify.ts && tsx server/external-agent/mcp-check.verify.ts",
 +    "pretest": "npm run verify:approval-policy && npm run verify:semantic-sampling && npm run verify:runtime-profile && npm run verify:directory-watch && npm run verify:salvage && npm run verify:harness && npm run verify:mcp && npm run verify:caption-motion && npm run verify:export-adaptive && npm run verify:editor && npm run verify:captions && npm run verify:agent-tools && npm run verify:components && npm run verify:media-persist && npm run verify:export-gl && npm run verify:server-extra && npm run verify:sqlite-migration && npm run verify:production-contracts && npm run verify:desktop-window && npm run verify:desktop-update && npm run verify:toolbar-tooltips && npm run verify:project-store-transport && tsx src/agent/tools/upload-tools.verify.ts && tsx server/plugins/upload-routes.verify.ts && tsx src/agent/local-models.verify.ts && tsx server/codex/codex-agent.verify.ts && tsx src/agent/codex/runtime.verify.ts && tsx src/agent/codex/followup-activation.verify.ts && tsx src/components/settings/codexReasoning.verify.ts && tsx src/library/sound-localization.verify.ts && tsx src/media/qualityPolicy.verify.ts && tsx src/components/chat/chatAttachmentLifecycle.verify.ts && npm run verify:music-intelligence && npm run verify:skills && npm run verify:shortcuts && npm run verify:i18n && npm run verify:mantur-shutdown",
      "verify:salvage": "tsx src/agent/model-selection.verify.ts && tsx src/agent/context-compaction.verify.ts && tsx src/agent/context-overflow-guidance.verify.ts && tsx src/agent/tool-activation.verify.ts && tsx src/agent/tool-result-compaction.verify.ts && tsx src/agent/tool-result-output.verify.ts && tsx src/agent/token-efficiency.verify.ts && tsx src/captions/srt.verify.ts && tsx server/plugins/assemblyai-upload.verify.ts && tsx src/agent/capabilities.verify.ts && tsx src/agent/vision.verify.ts",
      "verify:harness": "tsx src/agent/harness-context.verify.ts && tsx src/agent/harness-runtime.verify.ts && tsx src/agent/agent-hydration-recovery.verify.ts && tsx src/agent/retry-message.verify.ts && tsx src/agent/useAgentHistoryActions.verify.ts && tsx src/agent/external-draft-persistence.verify.ts && tsx server/external-agent/agent-runtime-persistence.verify.ts && tsx server/plugins/project-store-project-document.verify.ts",
      "verify:skills": "tsx src/agent/skills/skill-loading.verify.ts && tsx src/agent/skills/skill-deps.verify.ts && tsx server/skills-files.verify.ts",
-@@ -80,7 +80,8 @@
+@@ -80,7 +81,8 @@
      "verify:export-gl": "tsx src/export/export-reliability.verify.ts && tsx src/export/exportMediaPlan.verify.ts && tsx src/export/range.verify.ts && tsx src/gl/customTransitions.verify.ts && tsx src/gl/fx/chroma-key.verify.ts && tsx src/gl/fx/cube.verify.ts && tsx src/gl/fx/fx.verify.ts && tsx src/gl/shader-contract.verify.ts && tsx src/generate/media-export.geometry.verify.ts && tsx src/generate/video.verify.ts && tsx src/plugins/export.verify.ts && tsx src/plugins/resourcePreview.verify.ts && tsx src/plugins/validate.verify.ts && tsx src/multicam/align.verify.ts && tsx src/multicam/sync.verify.ts && tsx src/reframe/detect.verify.ts && tsx src/script/script.verify.ts && tsx --tsconfig tsconfig.app.json src/fonts/notoSansOffline.verify.ts",
      "verify:server-extra": "tsx server/media-process.verify.ts && tsx server/media-references.verify.ts && tsx server/media-normalization-reason.verify.ts && tsx server/media-normalization-reference.verify.ts && tsx server/media-normalization-admission.verify.ts && tsx server/plugins/upload-multipart-meta.verify.ts && tsx server/plugins/firecrawl.verify.ts && tsx server/plugins/request-shape-gate.verify.ts && tsx server/plugins/isolate-voice.verify.ts && tsx server/plugins/project-store-merge.verify.ts && tsx server/plugins/render-clip-cancellation.verify.ts && tsx server/plugins/storage-lifecycle.verify.ts && tsx server/plugins/video-reference.verify.ts && tsx server/safe-public-fetch.verify.ts && tsx shared/timeline-geometry.verify.ts && tsx remotion/render-timeout.verify.mjs && tsx server/plugins/stock-check.verify.ts",
      "verify:sqlite-migration": "tsx server/storage/sqlite-store.verify.ts && tsx server/storage/sqlite-migration-http.verify.ts && tsx server/plugins/project-store-export-recovery-sqlite.verify.ts && tsx src/export/serverExportRecovery.verify.ts",
 -    "verify:extract-audio": "tsx server/plugins/extract-audio.verify.ts"
 +    "verify:extract-audio": "tsx server/plugins/extract-audio.verify.ts",
-+    "verify:mantur-shutdown": "node --import tsx server/plugins/generation-shutdown.verify.ts && node --import tsx server/plugins/project-shutdown.verify.ts && node --import tsx server/external-agent/broker-shutdown.verify.ts && node --import tsx server/plugins/mantur-shutdown.verify.ts && node --import tsx src/agent/external-shutdown.verify.ts && node remotion/render-shutdown.verify.mjs && node --import tsx src/media/semantic-search/vectorCapability.verify.ts && node --import tsx server/plugins/mcp-transport-shutdown.verify.ts"
++    "verify:mantur-shutdown": "node scripts/patch-remotion-shutdown.verify.mjs && node --import tsx server/media-process-shutdown.verify.ts && node --import tsx server/plugins/generation-shutdown.verify.ts && node --import tsx server/plugins/project-shutdown.verify.ts && node --import tsx server/external-agent/broker-shutdown.verify.ts && node --import tsx server/plugins/mantur-shutdown.verify.ts && node --import tsx src/agent/external-shutdown.verify.ts && node remotion/render-shutdown.verify.mjs && node --import tsx src/media/semantic-search/vectorCapability.verify.ts && node --import tsx server/plugins/mcp-transport-shutdown.verify.ts && node --import tsx server/plugins/extract-frames-shutdown.verify.ts && node --import tsx server/plugins/local-upload-shutdown.verify.ts"
    },
    "dependencies": {
      "@ai-sdk/alibaba": "^2.0.16",
+@@ -149,6 +151,12 @@
+     "vite": "^8.1.1"
+   },
+   "overrides": {
+-    "onnxruntime-web": "1.29.0"
++    "onnxruntime-web": "1.29.0",
++    "onnxruntime-node": {
++      "adm-zip": "0.6.0"
++    },
++    "@huggingface/transformers": {
++      "sharp": "0.35.4"
++    }
+   }
+ }
+diff --git a/remotion/render-shutdown-browser.verify.mjs b/remotion/render-shutdown-browser.verify.mjs
+new file mode 100644
+index 0000000..1a007a3
+--- /dev/null
++++ b/remotion/render-shutdown-browser.verify.mjs
+@@ -0,0 +1,16 @@
++import assert from 'node:assert/strict';
++import { openBrowser } from '@remotion/renderer';
++import { ownRenderBrowser, assertRenderShutdownConfirmed } from './render-shutdown.mjs';
++
++const browserExecutable = process.env.MANTUR_TEST_BROWSER_EXECUTABLE;
++if (!browserExecutable) throw new Error('MANTUR_TEST_BROWSER_EXECUTABLE must identify the isolated test browser');
++const browser = await openBrowser('chrome', { browserExecutable });
++const close = ownRenderBrowser(browser);
++try {
++  assert(browser.runner.manturProcessAndPipesClosed instanceof Promise);
++  assert.throws(assertRenderShutdownConfirmed, /unconfirmed/);
++} finally {
++  await close();
++}
++assert.doesNotThrow(assertRenderShutdownConfirmed);
++console.log('Real browser close operation and spawned process-and-pipe close event confirmed');
 diff --git a/remotion/render-shutdown.d.mts b/remotion/render-shutdown.d.mts
 new file mode 100644
-index 0000000..eeea792
+index 0000000..f6cd6a6
 --- /dev/null
 +++ b/remotion/render-shutdown.d.mts
 @@ -0,0 +1,6 @@
 +/** Retain the first close operation for an acquired render browser. */
-+export function ownRenderBrowser(browser: { close(options: { silent: boolean }): Promise<void> }): () => Promise<void>;
++export function ownRenderBrowser(browser: { close(options: { silent: boolean }): Promise<void>; runner?: unknown }): () => Promise<void>;
 +/** Preserve both render and close errors. */
 +export function closeRenderBrowser(close: () => Promise<void>, renderingFailure?: { error: unknown }): Promise<void>;
 +/** Reject when this process lacks exact render process-and-pipe close evidence. */
 +export function assertRenderShutdownConfirmed(): void;
 diff --git a/remotion/render-shutdown.mjs b/remotion/render-shutdown.mjs
 new file mode 100644
-index 0000000..312c14c
+index 0000000..f6552a6
 --- /dev/null
 +++ b/remotion/render-shutdown.mjs
-@@ -0,0 +1,31 @@
-+/** Render browser ownership recorded only when this instance acquires a browser handle. */
+@@ -0,0 +1,37 @@
++/** Pending browser ownership ends only after its close operation and child-process close event. */
 +let acquiredBrowsers = 0;
 +const closeFailures = [];
 +
@@ -71,7 +806,13 @@ index 0000000..312c14c
 +export function ownRenderBrowser(browser) {
 +  acquiredBrowsers += 1;
 +  let closing;
-+  return () => closing ??= Promise.resolve().then(() => browser.close({ silent: true })).catch((error) => {
++  const processClosed = browser.runner?.manturProcessAndPipesClosed;
++  return () => closing ??= Promise.resolve().then(async () => {
++    await browser.close({ silent: true });
++    if (!(processClosed instanceof Promise)) throw new Error('Rendering browser lacks pinned process-and-pipe close evidence');
++    await processClosed;
++    acquiredBrowsers -= 1;
++  }).catch((error) => {
 +    closeFailures.push(error);
 +    throw error;
 +  });
@@ -86,27 +827,45 @@ index 0000000..312c14c
 +  }
 +}
 +
-+/** The pinned public Browser.close waits for exit, not the spawned process's close event and pipes. */
++/** Reject while any browser is pending or any browser cleanup failed. */
 +export function assertRenderShutdownConfirmed() {
 +  const failures = [...closeFailures];
 +  if (acquiredBrowsers) failures.push(new Error(
-+    `This editor acquired ${acquiredBrowsers} rendering browser(s); Remotion does not expose their process-and-pipe close completion`,
++    `This editor has ${acquiredBrowsers} rendering browser(s) without confirmed process-and-pipe closure`,
 +  ));
 +  if (failures.length) throw new AggregateError(failures, 'Rendering subprocess shutdown is unconfirmed; installation is blocked');
 +}
 diff --git a/remotion/render-shutdown.verify.mjs b/remotion/render-shutdown.verify.mjs
 new file mode 100644
-index 0000000..9d4c87e
+index 0000000..d191c34
 --- /dev/null
 +++ b/remotion/render-shutdown.verify.mjs
-@@ -0,0 +1,37 @@
+@@ -0,0 +1,57 @@
 +import assert from 'node:assert/strict';
 +import { setImmediate as tick } from 'node:timers/promises';
 +import { withAbortableCompositionSelection } from './render.mjs';
 +import { assertRenderShutdownConfirmed } from './render-shutdown.mjs';
++import { ownRenderBrowser } from './render-shutdown.mjs';
 +
 +// Merely importing the installed renderer has not acquired a rendering subprocess.
 +assert.doesNotThrow(assertRenderShutdownConfirmed);
++const processClosed = Promise.withResolvers();
++let normalCloses = 0;
++const close = ownRenderBrowser({
++  runner: { manturProcessAndPipesClosed: processClosed.promise },
++  close: async () => { normalCloses += 1; },
++});
++let confirmed = false;
++const pending = close().then(() => { confirmed = true; });
++await tick();
++assert.equal(confirmed, false, 'Browser.close alone does not prove output pipes closed');
++assert.throws(assertRenderShutdownConfirmed, /unconfirmed/);
++processClosed.resolve();
++await pending;
++await close();
++assert.equal(normalCloses, 1, 'cleanup is owned once');
++assert.doesNotThrow(assertRenderShutdownConfirmed);
++
 +const released = Promise.withResolvers();
 +const closing = Promise.withResolvers();
 +let closes = 0;
@@ -136,7 +895,9 @@ index 0000000..9d4c87e
 +  run: async () => assert.fail('failed selection must not render'),
 +}), (error) => error instanceof AggregateError && error.errors[0] === original && error.errors[1] === earlierClose);
 +assert.equal(abortCloses, 1, 'finally retains the original abort-triggered close promise');
-+console.log('render shutdown: unused instance, pending close, failed close and original failure retention passed');
++await assert.rejects(ownRenderBrowser({ close: async () => {} })(), /lacks pinned process-and-pipe close evidence/);
++assert.throws(assertRenderShutdownConfirmed, /unconfirmed/);
++console.log('render shutdown: process-and-pipe barrier, idempotence, missing evidence and failure retention passed');
 diff --git a/remotion/render.mjs b/remotion/render.mjs
 index 0357324..62bdff6 100644
 --- a/remotion/render.mjs
@@ -203,6 +964,426 @@ index 0357324..62bdff6 100644
 +    if (closeBrowser) await closeRenderBrowser(closeBrowser, renderingFailure);
    }
  }
+diff --git a/scripts/patch-remotion-shutdown.mjs b/scripts/patch-remotion-shutdown.mjs
+new file mode 100644
+index 0000000..8da7a9d
+--- /dev/null
++++ b/scripts/patch-remotion-shutdown.mjs
+@@ -0,0 +1,43 @@
++/** Expose the exact child-process close event in pinned Remotion 4.0.509. */
++import { createHash } from 'node:crypto';
++import { readFile, writeFile } from 'node:fs/promises';
++import { createRequire } from 'node:module';
++import { dirname, join, resolve } from 'node:path';
++import { fileURLToPath } from 'node:url';
++
++const patches = [
++  { file: 'browser/BrowserRunner.js', indent: '    ', comma: ',',
++    original: 'e5401a2f9ddacefd34814025ce2a26c378584cab31237b1655d74c880e07adfe',
++    patched: '3f32af1d0140b3f3316e50330e7bd900ab4ef16f2738b5634455f484d16c26ae' },
++  { file: 'esm/index.mjs', indent: '  ', comma: '',
++    original: 'f9604c14bb917e263c9e79c85044b681d1da41df5b5b8ae586a6f2e4b7050413',
++    patched: '465ca13edf1f61d2a3524741523a47733bcbe2a6c65a5a29cf81a0119eb4c866' },
++];
++const digest = source => createHash('sha256').update(source).digest('hex');
++
++/** Apply only to the reviewed source bytes; an unknown dependency version fails closed. */
++export function patchRemotionShutdown(source) {
++  const hash = digest(source);
++  const patch = patches.find(entry => entry.original === hash || entry.patched === hash);
++  if (!patch) throw new Error('Unrecognized Remotion BrowserRunner; review the shutdown patch before building');
++  if (hash === patch.patched) return source;
++  const { indent, comma } = patch;
++  const patched = source.replace(
++    `${indent}const browserWSEndpoint = await waitForWSEndpoint({`,
++    `${indent}const manturProcessAndPipesClosed = new Promise((resolve) => {\n${indent}${indent}proc.once("close", () => resolve());\n${indent}});\n${indent}const browserWSEndpoint = await waitForWSEndpoint({`,
++  ).replace(`${indent}${indent}closeProcess${comma}\n${indent}};\n};`, `${indent}${indent}closeProcess,\n${indent}${indent}manturProcessAndPipesClosed${comma}\n${indent}};\n};`);
++  if (digest(patched) !== patch.patched) throw new Error('Remotion shutdown patch did not produce the reviewed source');
++  return patched;
++}
++
++if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
++  const require = createRequire(import.meta.url);
++  const root = dirname(require.resolve('@remotion/renderer'));
++  const plans = await Promise.all(patches.map(async ({ file }) => {
++    const path = join(root, file);
++    const source = await readFile(path, 'utf8');
++    return { path, source, patched: patchRemotionShutdown(source) };
++  }));
++  for (const { path, source, patched } of plans) if (patched !== source) await writeFile(path, patched);
++  console.log('Remotion 4.0.509 process-and-pipe close evidence patch verified');
++}
+diff --git a/scripts/patch-remotion-shutdown.verify.mjs b/scripts/patch-remotion-shutdown.verify.mjs
+new file mode 100644
+index 0000000..9789183
+--- /dev/null
++++ b/scripts/patch-remotion-shutdown.verify.mjs
+@@ -0,0 +1,19 @@
++import assert from 'node:assert/strict';
++import { readFile } from 'node:fs/promises';
++import { createRequire } from 'node:module';
++import { dirname, join } from 'node:path';
++import { patchRemotionShutdown } from './patch-remotion-shutdown.mjs';
++
++const require = createRequire(import.meta.url);
++for (const file of ['browser/BrowserRunner.js', 'esm/index.mjs']) {
++  const installed = await readFile(join(dirname(require.resolve('@remotion/renderer')), file), 'utf8');
++  const patched = patchRemotionShutdown(installed);
++  assert.equal(patchRemotionShutdown(patched), patched);
++  const original = patched.replace(
++    /^ +const manturProcessAndPipesClosed = new Promise\(\(resolve\) => \{\n +proc.once\("close", \(\) => resolve\(\)\);\n +\}\);\n/m, '',
++  ).replace(/(\n +closeProcess),\n +manturProcessAndPipesClosed(,?)/, '$1$2');
++  assert.equal(patchRemotionShutdown(original), patched);
++  assert.throws(() => patchRemotionShutdown(`${original}\n`), /Unrecognized Remotion/);
++  assert(patched.indexOf('proc.once("close"') < patched.indexOf('await waitForWSEndpoint('));
++}
++console.log('Remotion patch: original and patched hashes, idempotence and unknown-source rejection passed');
+diff --git a/server/external-agent/broker-registry.ts b/server/external-agent/broker-registry.ts
+index 68079ae..b33e42d 100644
+--- a/server/external-agent/broker-registry.ts
++++ b/server/external-agent/broker-registry.ts
+@@ -26,12 +26,17 @@ interface EditorRegistration extends EditorBinding {
+
+ export interface EditorConnectionRegistryHooks {
+   bindingReplaced: (binding: EditorBinding, sameEditor: boolean) => void;
+-  revisionChanged: (binding: EditorBinding) => void;
++  revisionChanged: (binding: EditorBinding, completingCallId?: string) => void;
+   editorRemoved: (binding: EditorBinding) => void;
+   wakeProject: (projectId: string) => void;
+   hasInFlightCall: (projectId: string) => boolean;
+ }
+
++export interface EditorCallRevisionSync {
++  callId: string;
++  isCurrent: () => boolean;
++}
++
+ export function sameEditorBinding(left: EditorBinding, right: EditorBinding): boolean {
+   return left.projectId === right.projectId
+     && left.editorInstanceId === right.editorInstanceId
+@@ -160,13 +165,17 @@ export class EditorConnectionRegistry {
+     editorInstanceId: string,
+     baseRevision?: string,
+     registrationCapability?: string | null,
++    completion?: EditorCallRevisionSync,
+   ): Promise<boolean> {
++    if (completion && !completion.isCurrent()) return false;
+     const editor = this.editors.get(projectId);
+     if (!editor || editor.editorInstanceId !== editorInstanceId) return false;
+     if (registrationCapability !== undefined
+       && !capabilityMatches(editor.capability, registrationCapability)) return false;
+     if (editor.ownership) {
+       const renewed = await renewProjectEditOwnership(editor.ownership, baseRevision ?? editor.baseRevision);
++      // A renewal must not update or unregister a replacement connection.
++      if (this.editors.get(projectId) !== editor || completion && !completion.isCurrent()) return false;
+       if (renewed.status !== 'renewed') {
+         await this.unregister(projectId, editorInstanceId);
+         throw new ExternalEditorCallError('stale', `Project ${projectId} browser ownership is stale.`);
+@@ -181,7 +190,7 @@ export class EditorConnectionRegistry {
+     } else if (baseRevision && editor.baseRevision !== baseRevision) {
+       const previous = bindingOf(editor);
+       editor.baseRevision = baseRevision;
+-      this.hooks.revisionChanged(previous);
++      this.hooks.revisionChanged(previous, completion?.callId);
+     }
+     // A successful touch IS the keep-alive: refresh lastSeen so the online
+     // lease (isConnected) reflects this poll even when no call arrives.
+diff --git a/server/external-agent/broker-settlement.verify.ts b/server/external-agent/broker-settlement.verify.ts
+new file mode 100644
+index 0000000..774bce6
+--- /dev/null
++++ b/server/external-agent/broker-settlement.verify.ts
+@@ -0,0 +1,290 @@
++// Runnable check: node --import tsx server/external-agent/broker-settlement.verify.ts
++import assert from 'node:assert/strict';
++import { mkdtemp, rename, rm, writeFile } from 'node:fs/promises';
++import type { IncomingMessage, ServerResponse } from 'node:http';
++import { tmpdir } from 'node:os';
++import { join } from 'node:path';
++import { Readable } from 'node:stream';
++import { mock } from 'node:test';
++
++const root = await mkdtemp(join(tmpdir(), 'mantur-broker-settlement-'));
++process.env.OPENCHATCUT_DATA_DIR = root;
++process.env.OPENCHATCUT_SQLITE_STORE = '0';
++process.env.OPENCHATCUT_EDITOR_URL = 'http://127.0.0.1:5199';
++process.env.OPENCHATCUT_MCP_TOKEN = 'isolated-settlement-fixture';
++const broker = await import('./broker.ts');
++const store = await import('../plugins/project-store.ts');
++const ownership = await import('./project-edit-ownership.ts');
++const { EditorConnectionRegistry } = await import('./broker-registry.ts');
++const { handleExternalAgentBridge } = await import('../plugins/external-agent.ts');
++const { INITIAL } = await import('../../src/editor/initial.ts');
++const { docFromTimeline } = await import('../../src/persist/projectStore.ts');
++const { revisionOf } = await import('../../src/agent/external-edit-session.ts');
++const originalTouch = EditorConnectionRegistry.prototype.touch;
++let touchEntered: PromiseWithResolvers<void> | undefined;
++let touchCount = 0;
++const heldStores = new Set<() => Promise<void>>();
++const resultRequests = new Set<Promise<void>>();
++mock.method(EditorConnectionRegistry.prototype, 'touch', function (
++  this: InstanceType<typeof EditorConnectionRegistry>,
++  ...args: Parameters<typeof originalTouch>
++) {
++  touchCount += 1;
++  touchEntered?.resolve();
++  return originalTouch.apply(this, args);
++});
++
++function observe<T>(promise: Promise<T>) {
++  let state = 'pending';
++  const result = promise.then(
++    value => { state = 'applied'; return { ok: true as const, value }; },
++    (error: unknown) => { state = 'failed'; return { ok: false as const, error }; },
++  );
++  return { result, state: () => state };
++}
++
++function postResult(id: string, capability: string, baseRevision: string) {
++  const request = Object.assign(Readable.from([JSON.stringify({
++    id, outcome: 'applied', value: { status: 'applied' }, baseRevision,
++  })]), {
++    method: 'POST', url: '/result',
++    headers: {
++      host: '127.0.0.1:5199', origin: 'http://127.0.0.1:5199',
++      'content-type': 'application/json',
++      'x-openchatcut-editor-registration': capability,
++    },
++    socket: { remoteAddress: '127.0.0.1' },
++  }) as IncomingMessage;
++  let body: string | undefined;
++  const response = {
++    statusCode: 0,
++    setHeader: () => undefined,
++    end: (value: string) => { body = value; },
++  } as unknown as ServerResponse;
++  const done = handleExternalAgentBridge(request, response).catch((error: unknown) => {
++    response.statusCode = 500;
++    response.end(error instanceof Error ? error.message : String(error));
++  }).finally(() => { resultRequests.delete(done); });
++  resultRequests.add(done);
++  return { done, response, body: () => body };
++}
++
++let serial = 0;
++async function fixture(owned = true, timeoutMs = 30_000) {
++  broker.resetExternalAgentBrokerForTest();
++  const projectId = `settlement-project-${++serial}`;
++  const editorId = 'settlement-editor';
++  const before = docFromTimeline(INITIAL);
++  const after = docFromTimeline({ ...INITIAL, width: 1080, height: 1920 });
++  const oldRevision = revisionOf(before);
++  const newRevision = revisionOf(after);
++  assert.notEqual(oldRevision, newRevision);
++  let claim: import('./project-edit-ownership.ts').ProjectEditOwnershipClaim | undefined;
++  if (owned) {
++    await store.setStoredEntry(`project:${projectId}`, before);
++    const claimed = await ownership.claimBrowserProjectOwnership(projectId, editorId, oldRevision);
++    assert.equal(claimed.status, 'claimed');
++    if (claimed.status !== 'claimed') throw new Error('Fixture ownership was not acquired');
++    claim = claimed.claim;
++  }
++  const capability = broker.registerEditor(projectId, editorId, oldRevision, [], claim);
++  const binding = broker.editorBinding(projectId)!;
++  const result = observe(broker.invokeEditorTool('owner', binding, 'review_edit_session', {}, timeoutMs));
++  const call = await broker.nextEditorCall(projectId, editorId, oldRevision, new AbortController().signal, capability);
++  assert(call);
++  if (claim) {
++    await store.withSerializedProjectStore(async locked => {
++      await locked.writeEntryExact(`project:${projectId}`, after);
++      await locked.writeEntryExact(
++        ownership.projectEditOwnershipKey(projectId),
++        ownership.renewedProjectEditOwnership(claim!, newRevision),
++      );
++    });
++  }
++  return { projectId, editorId, oldRevision, newRevision, capability, binding, claim, result, call };
++}
++
++async function holdStore() {
++  let beforeRelease: ((locked: import('../plugins/project-store.ts').LockedProjectStore) => Promise<void>) | undefined;
++  const entered = Promise.withResolvers<void>();
++  const release = Promise.withResolvers<void>();
++  const held = store.withSerializedProjectStore(async locked => {
++    entered.resolve();
++    await release.promise;
++    if (beforeRelease) await beforeRelease(locked);
++  });
++  await entered.promise;
++  const releaseStore = async (write?: typeof beforeRelease) => {
++    beforeRelease = write;
++    release.resolve();
++    try { await held; } finally { heldStores.delete(releaseStore); }
++  };
++  heldStores.add(releaseStore);
++  return { release: releaseStore };
++}
++
++async function pendingSync(f: Awaited<ReturnType<typeof fixture>>, reportedRevision = f.newRevision) {
++  const barrier = await holdStore();
++  touchEntered = Promise.withResolvers<void>();
++  const request = postResult(f.call.id, f.capability, reportedRevision);
++  await touchEntered.promise;
++  touchEntered = undefined;
++  await Promise.resolve();
++  assert.equal(f.result.state(), 'pending', 'MCP must remain pending while revision synchronization is blocked');
++  assert.equal(request.body(), undefined, 'HTTP success must wait for revision synchronization');
++  return { request, barrier };
++}
++
++function assertFailure(result: { ok: true; value: unknown } | { ok: false; error: unknown }, outcome: string) {
++  assert.equal(result.ok, false);
++  if (!result.ok) {
++    assert(result.error instanceof broker.ExternalEditorCallError);
++    assert.equal(result.error.outcome, outcome);
++  }
++}
++
++let testFailed = false;
++try {
++  // The continuation starts from MCP success, before the result HTTP handler returns.
++  {
++    const f = await fixture();
++    const { request, barrier } = await pendingSync(f, 'browser-revision-is-not-authoritative');
++    const duplicate = postResult(f.call.id, f.capability, f.newRevision);
++    const touches = touchCount;
++    await duplicate.done;
++    assert.equal(duplicate.response.statusCode, 404);
++    assert.equal(touchCount, touches, 'duplicate completion cannot start another renewal');
++    const next = f.result.result.then(result => {
++      assert.equal(result.ok, true);
++      assert.equal(broker.editorBinding(f.projectId)?.baseRevision, f.newRevision);
++      return observe(broker.invokeEditorTool('owner', broker.editorBinding(f.projectId)!, 'begin_edit_session', {}));
++    });
++    await barrier.release();
++    const nextResult = await next;
++    const nextCall = await broker.nextEditorCall(
++      f.projectId, f.editorId, f.newRevision, new AbortController().signal, f.capability,
++    );
++    assert.equal(nextCall?.binding.baseRevision, f.newRevision);
++    broker.settleEditorCall(nextCall!.id, 'applied', { editSessionId: 'second-round' }, f.capability);
++    assert.equal((await nextResult.result).ok, true);
++    await request.done;
++    assert.equal(request.response.statusCode, 200);
++  }
++
++  // No-ownership revision changes exempt only the call whose result advances it.
++  {
++    const f = await fixture(false);
++    const sibling = observe(broker.invokeEditorTool('other-owner', f.binding, 'read_timeline', {}));
++    const request = postResult(f.call.id, f.capability, f.newRevision);
++    await request.done;
++    assert.equal(request.response.statusCode, 200);
++    assert.equal((await f.result.result).ok, true);
++    assertFailure(await sibling.result, 'stale');
++    assert.equal(broker.editorBinding(f.projectId)?.baseRevision, f.newRevision);
++  }
++
++  // A capability is checked before touching the registry or accepting any result.
++  {
++    const f = await fixture(false);
++    const touches = touchCount;
++    const expiredTime = Date.now() + 60_000;
++    const clock = mock.method(Date, 'now', () => expiredTime);
++    const invalid = postResult(f.call.id, 'x'.repeat(43), f.newRevision);
++    try { await invalid.done; } finally { clock.mock.restore(); }
++    assert.equal(invalid.response.statusCode, 404);
++    assert.equal(touchCount, touches);
++    assert.equal(f.result.state(), 'pending');
++    assert.equal(broker.editorBinding(f.projectId)?.baseRevision, f.oldRevision);
++    const queued = observe(broker.invokeEditorTool('queued-owner', f.binding, 'read_timeline', {}));
++    const queuedId = broker.pendingEditorCallsForTest('queued-owner')[0]!.id;
++    const undelivered = postResult(queuedId, f.capability, f.newRevision);
++    await undelivered.done;
++    assert.equal(undelivered.response.statusCode, 404);
++    assert.equal(touchCount, touches);
++    broker.cancelEditorCallsForOwner('queued-owner');
++    await queued.result;
++    await postResult(f.call.id, f.capability, f.newRevision).done;
++    assert.equal((await f.result.result).ok, true);
++  }
++
++  for (const stop of ['cancel', 'timeout'] as const) {
++    const f = await fixture();
++    const { request, barrier } = await pendingSync(f);
++    const expiredTime = Date.now() + 60_000;
++    const clock = stop === 'timeout' ? mock.method(Date, 'now', () => expiredTime) : undefined;
++    if (stop === 'cancel') broker.cancelEditorCallsForOwner('owner');
++    try {
++      await barrier.release();
++      await request.done;
++    } finally { clock?.mock.restore(); }
++    assertFailure(await f.result.result, 'cancelled');
++    assert.equal(request.response.statusCode, 404);
++    assert.equal(broker.editorBinding(f.projectId)?.baseRevision, f.oldRevision);
++    assert.equal(broker.pendingEditorCallsForTest().length, 0);
++    const late = postResult(f.call.id, f.capability, f.newRevision);
++    await late.done;
++    assert.equal(late.response.statusCode, 404);
++  }
++
++
++  for (const replacement of ['same-binding', 'new-capability', 'new-epoch'] as const) {
++    const f = await fixture();
++    const { request, barrier } = await pendingSync(f);
++    const claim = replacement === 'new-epoch' ? { ...f.claim!, epoch: f.claim!.epoch + 1 } : f.claim!;
++    const capability = broker.registerEditor(
++      f.projectId, f.editorId, f.oldRevision, [], claim,
++      replacement === 'new-capability' ? null : f.capability,
++    );
++    await barrier.release(replacement === 'new-epoch' ? async locked => {
++      await locked.writeEntryExact(
++        ownership.projectEditOwnershipKey(f.projectId),
++        ownership.renewedProjectEditOwnership(claim, f.newRevision),
++      );
++    } : undefined);
++    await request.done;
++    assertFailure(await f.result.result, 'stale');
++    assert.equal(request.response.statusCode, 404);
++    assert.deepEqual(broker.editorBinding(f.projectId), { ...f.binding, ownershipEpoch: claim.epoch });
++    assert.equal(broker.editorRegistrationMatches(f.projectId, f.editorId, capability), true);
++    assert.equal(broker.pendingEditorCallsForTest().length, 0);
++  }
++
++  // A real project-store I/O failure cannot be hidden behind an applied result.
++  {
++    const f = await fixture();
++    const { request, barrier } = await pendingSync(f);
++    await rename(join(root, 'project-store-v1'), join(root, 'before-io-failure'));
++    await writeFile(join(root, 'project-store-v1'), 'not a directory');
++    await barrier.release();
++    await request.done;
++    assertFailure(await f.result.result, 'failed');
++    assert.equal(request.response.statusCode, 500);
++    assert.match(request.body()!, /ENOTDIR/);
++    assert.equal(broker.pendingEditorCallsForTest().length, 0);
++    assert.equal(broker.editorBinding(f.projectId)?.baseRevision, f.oldRevision);
++    await assert.rejects(broker.stopEditorCallsForShutdown(), /failed; shutdown is unconfirmed/);
++    await assert.rejects(broker.stopEditorRegistrationsForShutdown(), /failed; shutdown is unconfirmed/);
++  }
++
++  console.log('broker settlement: 9 deterministic route/broker scenarios passed, including real ownership renewal and I/O failure');
++} catch (error) {
++  testFailed = true;
++  throw error;
++} finally {
++  touchEntered = undefined;
++  broker.resetExternalAgentBrokerForTest();
++  const released = await Promise.allSettled([...heldStores].map(release => release()));
++  const requests = await Promise.allSettled([...resultRequests]);
++  mock.restoreAll();
++  const removed = await Promise.allSettled([rm(root, { recursive: true, force: true })]);
++  const errors = [...released, ...requests, ...removed]
++    .filter(result => result.status === 'rejected')
++    .map(result => result.reason);
++  if (errors.length) {
++    const error = new AggregateError(errors, 'Settlement fixture cleanup failed');
++    if (testFailed) console.error(error);
++    else throw error;
++  } else {
++    console.log('broker settlement cleanup: store barriers and result requests drained before removing fixtures');
++  }
++}
 diff --git a/server/external-agent/broker-shutdown.verify.ts b/server/external-agent/broker-shutdown.verify.ts
 new file mode 100644
 index 0000000..71bcf61
@@ -314,7 +1495,7 @@ index 0000000..71bcf61
 +  } finally { await rm(root, { recursive: true, force: true }); }
 +}
 diff --git a/server/external-agent/broker.ts b/server/external-agent/broker.ts
-index 55fcac7..f7de823 100644
+index 55fcac7..8cb5fdc 100644
 --- a/server/external-agent/broker.ts
 +++ b/server/external-agent/broker.ts
 @@ -1,4 +1,6 @@
@@ -324,7 +1505,15 @@ index 55fcac7..f7de823 100644
  import type { ProjectEditOwnershipClaim } from './project-edit-ownership.ts';
  import {
    EditorConnectionRegistry,
-@@ -62,6 +64,11 @@ const waiters = new Map<string, Set<() => void>>();
+@@ -29,6 +31,7 @@ interface QueuedCall {
+   arguments: Record<string, unknown>;
+   state: 'queued' | 'in_flight';
+   allowRevisionDrift: boolean;
++  settling?: boolean;
+   deadline: number;
+   resolve: (value: unknown) => void;
+   reject: (error: ExternalEditorCallError) => void;
+@@ -62,6 +65,11 @@ const waiters = new Map<string, Set<() => void>>();
  const sessionOwnership = new EditSessionOwnershipRegistry();
  const cancellationQueues = new Map<string, ExternalEditorCancellation[]>();
  const cancellationWaiters = new Map<string, Set<() => void>>();
@@ -336,7 +1525,19 @@ index 55fcac7..f7de823 100644
 
  const editorKey = (projectId: string, editorInstanceId: string) => `${projectId}\u0000${editorInstanceId}`;
 
-@@ -173,6 +180,7 @@ export function registerEditor(
+@@ -143,9 +151,9 @@ const registry = new EditorConnectionRegistry({
+         : `Editor ${binding.editorInstanceId} closed or switched projects.`,
+     );
+   },
+-  revisionChanged(binding) {
++  revisionChanged(binding, completingCallId) {
+     cancelCalls(
+-      (call) => sameBinding(call.binding, binding) && !call.allowRevisionDrift,
++      (call) => call.id !== completingCallId && sameBinding(call.binding, binding) && !call.allowRevisionDrift,
+       'stale',
+       `Project ${binding.projectId} changed while the editor call was pending.`,
+     );
+@@ -173,6 +181,7 @@ export function registerEditor(
    ownership?: ProjectEditOwnershipClaim,
    registrationCapability?: string | null,
  ): string {
@@ -344,7 +1545,7 @@ index 55fcac7..f7de823 100644
    return registry.register(
      projectId,
      editorInstanceId,
-@@ -194,7 +202,13 @@ export function unregisterEditor(
+@@ -194,7 +203,13 @@ export function unregisterEditor(
    projectId: string, editorInstanceId: string,
    registrationCapability?: string | null,
  ): Promise<boolean> {
@@ -359,7 +1560,7 @@ index 55fcac7..f7de823 100644
  }
 
  export function onRegisteredToolsChanged(listener: () => void): () => void {
-@@ -205,7 +219,8 @@ export function touchEditor(
+@@ -205,7 +220,8 @@ export function touchEditor(
    projectId: string, editorInstanceId: string,
    baseRevision?: string, registrationCapability?: string | null,
  ): Promise<boolean> {
@@ -369,7 +1570,7 @@ index 55fcac7..f7de823 100644
  }
 
  export function editorBinding(projectId: string): EditorBinding | null {
-@@ -294,7 +309,14 @@ export function invokeEditorTool(
+@@ -294,7 +310,14 @@ export function invokeEditorTool(
    args: Record<string, unknown>,
    timeoutMs = DEFAULT_TIMEOUT_MS,
  ): Promise<unknown> {
@@ -385,7 +1586,7 @@ index 55fcac7..f7de823 100644
    const recoveryTool = name === 'list_edit_sessions' || name === 'recover_edit_session';
    const ownsSession = name !== 'begin_edit_session' && !recoveryTool && 'editSessionId' in args;
    if (ownsSession) requireOwnedEditSession(ownerId, binding, args);
-@@ -337,6 +359,36 @@ export function invokeEditorTool(
+@@ -337,6 +360,36 @@ export function invokeEditorTool(
    });
  }
 
@@ -422,6 +1623,130 @@ index 55fcac7..f7de823 100644
  function takeNextCall(projectId: string, binding: EditorBinding): QueuedCall | undefined {
    const queue = queues.get(projectId);
    while (queue?.length) {
+@@ -438,12 +491,6 @@ export async function nextEditorCancellation(
+   return cancellation ?? null;
+ }
+
+-/** Binding of a pending editor call, read before settle for revision sync. */
+-export function editorCallBinding(id: string): EditorBinding | null {
+-  const call = pending.get(id);
+-  return call ? { ...call.binding } : null;
+-}
+-
+ export function settleEditorCall(
+   id: string,
+   outcome: ExternalCallTerminalOutcome,
+@@ -451,7 +498,7 @@ export function settleEditorCall(
+   registrationCapability?: string | null,
+ ): boolean {
+   const call = pending.get(id);
+-  if (!call) return false;
++  if (!call || call.settling) return false;
+   if (registrationCapability !== undefined
+     && !editorRegistrationMatches(
+       call.binding.projectId,
+@@ -461,6 +508,58 @@ export function settleEditorCall(
+   return finishCall(call, outcome, value, false);
+ }
+
++/**
++ * Synchronize the registered revision before releasing a browser result to MCP.
++ * A cancelled, expired, replaced, or duplicate completion cannot publish success.
++ */
++export async function settleEditorCallWithRevision(
++  id: string,
++  outcome: ExternalCallTerminalOutcome,
++  value: unknown,
++  registrationCapability: string | null,
++  baseRevision?: string,
++): Promise<boolean> {
++  const call = pending.get(id);
++  if (!call || call.state !== 'in_flight' || call.settling) return false;
++  const isCurrent = (): boolean => {
++    if (pending.get(id) !== call || !editorRegistrationMatches(
++      call.binding.projectId,
++      call.binding.editorInstanceId,
++      registrationCapability,
++    )) return false;
++    if (Date.now() >= call.deadline) {
++      finishCall(call, 'cancelled', 'Editor call timed out before revision synchronization completed.', true);
++      return false;
++    }
++    return true;
++  };
++  if (!isCurrent()) return false;
++  call.settling = true;
++  try {
++    const synced = !registrationsClosed && await registrationWork.admit(() => registry.touch(
++      call.binding.projectId,
++      call.binding.editorInstanceId,
++      baseRevision,
++      registrationCapability,
++      { callId: id, isCurrent },
++    ));
++    if (!isCurrent() || !synced) {
++      finishCall(call, 'stale', 'Editor registration changed before result revision synchronization completed.', false);
++      return false;
++    }
++    return finishCall(call, outcome, value, false);
++  } catch (error) {
++    if (pending.get(id) !== call) return false;
++    finishCall(
++      call,
++      error instanceof ExternalEditorCallError ? error.outcome : 'failed',
++      error instanceof Error ? error.message : 'Editor result revision synchronization failed.',
++      false,
++    );
++    throw error;
++  }
++}
++
+ export function cancelEditorCallsForOwner(
+   ownerId: string,
+   outcome: Extract<ExternalCallTerminalOutcome, 'cancelled' | 'stale' | 'failed'> = 'cancelled',
+diff --git a/server/external-agent/mcp-check.verify.ts b/server/external-agent/mcp-check.verify.ts
+index a39acc1..089ee40 100644
+--- a/server/external-agent/mcp-check.verify.ts
++++ b/server/external-agent/mcp-check.verify.ts
+@@ -74,8 +74,7 @@ const resultResponse = {
+ } as unknown as ServerResponse;
+ let settledImages = 0;
+ const resultOperations = {
+-  editorCallBinding: () => null,
+-  settleEditorCall: (_id, _outcome, value) => {
++  settleEditorCall: async (_id, _outcome, value) => {
+     settledImages = (value as { __images?: unknown[] }).__images?.length ?? 0;
+     return true;
+   },
+diff --git a/server/external-agent/mcp-session-verifier.ts b/server/external-agent/mcp-session-verifier.ts
+index 225fb56..f5096b7 100644
+--- a/server/external-agent/mcp-session-verifier.ts
++++ b/server/external-agent/mcp-session-verifier.ts
+@@ -41,8 +41,22 @@ export async function connectClient(
+ ): Promise<ConnectedClient> {
+   const before = new Set(mcpSessionsForTest().map((session) => session.id));
+   const client = new Client({ name, version: '1.0.0' });
+-  const transport = new StreamableHTTPClientTransport(url, { requestInit: { headers } });
+-  await client.connect(transport);
++  const notificationsReady = Promise.withResolvers<void>();
++  const transport = new StreamableHTTPClientTransport(url, {
++    requestInit: { headers },
++    fetch: (input, init) => {
++      const response = fetch(input, init);
++      if (init?.method === 'GET') {
++        void response.then((result) => {
++          assert.equal(result.status, 200, 'the notification stream must be established');
++          notificationsReady.resolve();
++        }).catch(notificationsReady.reject);
++      }
++      return response;
++    },
++  });
++  // The SDK starts its GET notification stream without awaiting it in connect().
++  await Promise.all([client.connect(transport), notificationsReady.promise]);
+   const session = mcpSessionsForTest().find((candidate) => !before.has(candidate.id));
+   assert(session, 'initialization registers exactly one new MCP session');
+   return { client, sessionId: session.id };
 diff --git a/server/external-agent/mcp.ts b/server/external-agent/mcp.ts
 index d5b4530..fd2b6b8 100644
 --- a/server/external-agent/mcp.ts
@@ -518,8 +1843,101 @@ index d5b4530..fd2b6b8 100644
 
  onRegisteredToolsChanged(() => {
    for (const session of sessions.values()) {
+diff --git a/server/frame-grid.ts b/server/frame-grid.ts
+index 64509b0..5bc5027 100644
+--- a/server/frame-grid.ts
++++ b/server/frame-grid.ts
+@@ -4,7 +4,8 @@
+ //   2. Python PIL       — stamps text when drawtext is missing (common on macOS bottles)
+ //   3. no pixel labels  — still tiles; labels remain in the tool note
+ // Used by extract-frames + render-still grid mode.
+-import { spawn, spawnSync } from 'node:child_process';
++import { spawnSync } from 'node:child_process';
++import { editorRequests } from './shutdown-runtime.ts';
+ import { existsSync } from 'node:fs';
+ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+ import { tmpdir } from 'node:os';
+@@ -34,9 +35,10 @@ function run(cmd: string, args: string[], timeoutMs = 120_000): Promise<void> {
+   return new Promise((resolve, reject) => {
+     const child = spawnMediaProcess(cmd, [...ffmpegThreadArgs(), ...args], { stdio: ['ignore', 'ignore', 'pipe'] });
+     let stderr = '';
++    let failure: Error | undefined;
+     const timer = setTimeout(() => {
++      failure = new Error(`${cmd} timed out`);
+       child.kill('SIGKILL');
+-      reject(new Error(`${cmd} timed out`));
+     }, timeoutMs);
+     child.stderr?.on('data', (c: Buffer) => {
+       stderr += String(c);
+@@ -44,11 +46,12 @@ function run(cmd: string, args: string[], timeoutMs = 120_000): Promise<void> {
+     });
+     child.on('error', (err) => {
+       clearTimeout(timer);
+-      reject(err);
++      failure = err;
+     });
+     child.on('close', (code) => {
+       clearTimeout(timer);
+-      if (code === 0) resolve();
++      if (failure) reject(failure);
++      else if (code === 0) resolve();
+       else reject(new Error(`${cmd} exit ${code}: ${stderr.slice(-500)}`));
+     });
+   });
+@@ -196,14 +199,16 @@ draw.text((4 + pad, 4 + pad), label, fill=(255, 255, 255), font=font)
+ im.save(path_out, "JPEG", quality=88)
+ `;
+   await new Promise<void>((resolve, reject) => {
+-    const child = spawn('python3', ['-c', script, scaled, output, label || ''], {
++    const child = spawnMediaProcess('python3', ['-c', script, scaled, output, label || ''], {
+       stdio: ['ignore', 'ignore', 'pipe'],
+     });
+     let err = '';
++    let failure: Error | undefined;
+     child.stderr?.on('data', (c: Buffer) => { err += String(c); });
+-    child.on('error', reject);
++    child.on('error', error => { failure = error; });
+     child.on('close', (code) => {
+-      if (code === 0) resolve();
++      if (failure) reject(failure);
++      else if (code === 0) resolve();
+       else reject(new Error(`PIL stamp failed: ${err.slice(-300)}`));
+     });
+   });
+@@ -232,16 +237,18 @@ async function prepareCell(
+       ]);
+       await run(ffmpegBin(), ['-nostdin', '-hide_banner', '-loglevel', 'error', '-y', '-i', tmp, '-q:v', String(quality), outPath]);
+       return;
+-    } catch {
+-      // fall through to pil/none
++    } catch (error) {
++      editorRequests.recordFailure(error);
++      // Preserve the existing preview behavior; shutdown still reports the failed stamp.
+     }
+   }
+   if (backend === 'pil' && label) {
+     try {
+       await stampWithPil(rawPath, outPath, label, cellWidth, cellH, quality);
+       return;
+-    } catch {
+-      // fall through
++    } catch (error) {
++      editorRequests.recordFailure(error);
++      // Preserve the existing preview behavior; shutdown still reports the failed stamp.
+     }
+   }
+   // no labels — just scale+pad
+@@ -333,7 +340,7 @@ export async function tileContactSheet(cells: GridCell[], opts: TileOptions = {}
+     }
+     return await readFile(sheet);
+   } finally {
+-    await rm(dir, { recursive: true, force: true }).catch(() => {});
++    await rm(dir, { recursive: true, force: true });
+   }
+ }
+
 diff --git a/server/media-acceleration.ts b/server/media-acceleration.ts
-index 2b6e85e..98fbce1 100644
+index 2b6e85e..e89f04e 100644
 --- a/server/media-acceleration.ts
 +++ b/server/media-acceleration.ts
 @@ -1,4 +1,5 @@
@@ -532,7 +1950,7 @@ index 2b6e85e..98fbce1 100644
      cwd: dirname(ffmpeg),
      stdio: ['ignore', 'pipe', 'ignore'],
    });
-+  trackEditorMediaProcess(child);
++  trackEditorMediaProcess(child, 'hardware acceleration list probe');
    let output = '';
    child.stdout.on('data', (chunk: Buffer) => { output = `${output}${chunk}`.slice(0, 8192); });
    const timer = setTimeout(() => child.kill('SIGKILL'), 5_000);
@@ -540,7 +1958,7 @@ index 2b6e85e..98fbce1 100644
      cwd: dirname(ffmpeg),
      stdio: ['ignore', 'pipe', 'pipe'],
    });
-+  trackEditorMediaProcess(child);
++  trackEditorMediaProcess(child, 'encoder quality probe');
    let output = '';
    const collect = (chunk: Buffer) => { output = `${output}${chunk}`.slice(0, 16_384); };
    child.stdout.on('data', collect);
@@ -548,7 +1966,7 @@ index 2b6e85e..98fbce1 100644
      cwd: dirname(ffmpeg),
      stdio: ['pipe', 'ignore', 'ignore'],
    });
-+  trackEditorMediaProcess(child);
++  trackEditorMediaProcess(child, 'encoder execution probe');
    const timer = setTimeout(() => child.kill('SIGKILL'), 12_000);
    child.once('error', () => {
      clearTimeout(timer);
@@ -556,12 +1974,49 @@ index 2b6e85e..98fbce1 100644
      cwd: dirname(ffmpeg),
      stdio: ['ignore', 'pipe', 'pipe'],
    });
-+  trackEditorMediaProcess(child);
++  trackEditorMediaProcess(child, 'compiled encoder list probe');
    let output = '';
    const collect = (chunk: Buffer) => { output = `${output}${chunk}`.slice(0, 16_384); };
    child.stdout.on('data', collect);
+diff --git a/server/media-process-shutdown.verify.ts b/server/media-process-shutdown.verify.ts
+new file mode 100644
+index 0000000..e3d6e48
+--- /dev/null
++++ b/server/media-process-shutdown.verify.ts
+@@ -0,0 +1,31 @@
++import assert from 'node:assert/strict';
++import { spawn } from 'node:child_process';
++import { once } from 'node:events';
++import { basename } from 'node:path';
++import { trackEditorMediaProcess, stopEditorMediaProcessesForShutdown } from './shutdown-runtime.ts';
++
++const child = trackEditorMediaProcess(spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
++  stdio: 'ignore', env: {},
++}), 'synthetic signal probe');
++const closed = once(child, 'close');
++try {
++  await once(child, 'spawn');
++  assert.equal(child.kill('SIGKILL'), true);
++  await closed;
++  await assert.rejects(stopEditorMediaProcessesForShutdown(), error => {
++    assert(error instanceof AggregateError);
++    assert.equal(error.errors.length, 1);
++    const failure: unknown = error.errors[0];
++    assert(failure instanceof Error);
++    assert(failure.message.includes('synthetic signal probe'));
++    assert(failure.message.includes(basename(process.execPath)));
++    assert(failure.message.includes(`pid ${child.pid}`));
++    assert(failure.message.includes('SIGKILL'));
++    assert(!failure.message.includes('setInterval'));
++    return true;
++  });
++} finally {
++  if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
++  await closed;
++}
++console.log('Media shutdown retains a signaled child failure with operation, basename and PID only');
 diff --git a/server/media-process.ts b/server/media-process.ts
-index 868587f..45b872d 100644
+index 868587f..accad56 100644
 --- a/server/media-process.ts
 +++ b/server/media-process.ts
 @@ -9,6 +9,7 @@ import {
@@ -577,7 +2032,7 @@ index 868587f..45b872d 100644
    options: SpawnOptions = {},
  ): ChildProcess {
 -  const child = spawn(command, args, options);
-+  const child = trackEditorMediaProcess(spawn(command, args, options));
++  const child = trackEditorMediaProcess(spawn(command, args, options), 'media operation');
 +  if (options.detached || options.shell) recordUnconfirmedEditorProducer('media subprocess with detached or shell descendants');
    if (child.pid !== undefined) {
      try {
@@ -602,6 +2057,18 @@ index 36411d0..6dbcead 100644
            },
          },
        );
+diff --git a/server/plugins/export-media-plan.verify.ts b/server/plugins/export-media-plan.verify.ts
+index 4f2825e..79cc9b4 100644
+--- a/server/plugins/export-media-plan.verify.ts
++++ b/server/plugins/export-media-plan.verify.ts
+@@ -667,6 +667,7 @@ try {
+   let browserCloseCalls = 0;
+   let renderMediaCalls = 0;
+   const fakeBrowser = {
++    runner: { manturProcessAndPipesClosed: Promise.resolve() },
+     async close() {
+       browserCloseCalls += 1;
+     },
 diff --git a/server/plugins/export-stage.ts b/server/plugins/export-stage.ts
 index e26b987..a36f18b 100644
 --- a/server/plugins/export-stage.ts
@@ -671,11 +2138,92 @@ index db26432..04b98db 100644
 
        registerRenderStillRoute(server);
        registerRenderClipRoute(server);
+diff --git a/server/plugins/external-agent-bridge-routes.ts b/server/plugins/external-agent-bridge-routes.ts
+index 77291be..273f2d3 100644
+--- a/server/plugins/external-agent-bridge-routes.ts
++++ b/server/plugins/external-agent-bridge-routes.ts
+@@ -6,11 +6,9 @@ import {
+ import type {
+   nextEditorCall,
+   nextEditorCancellation,
+-  editorCallBinding,
+   editorRegistrationMatches,
+   registerEditor,
+-  settleEditorCall,
+-  touchEditor,
++  settleEditorCallWithRevision,
+   unregisterEditor,
+   ExternalCallTerminalOutcome,
+   ExternalToolSchema,
+@@ -46,9 +44,7 @@ export interface BridgeOperations {
+   unregisterEditor: typeof unregisterEditor;
+   nextEditorCall: typeof nextEditorCall;
+   nextEditorCancellation: typeof nextEditorCancellation;
+-  settleEditorCall: typeof settleEditorCall;
+-  editorCallBinding: typeof editorCallBinding;
+-  touchEditor: typeof touchEditor;
++  settleEditorCall: typeof settleEditorCallWithRevision;
+   mcpTools: typeof mcpTools;
+ }
+
+@@ -268,24 +264,13 @@ async function settleBridgeCall(
+         : null;
+   if (!outcome) throw new Error('invalid tool result outcome');
+   const capability = registrationCapability(req, true);
+-  const binding = operations.editorCallBinding(body.id);
+-  const settled = operations.settleEditorCall(
++  const settled = await operations.settleEditorCall(
+     body.id,
+     outcome,
+     body.value,
+     capability,
++    typeof body.baseRevision === 'string' && body.baseRevision ? body.baseRevision : undefined,
+   );
+-  if (settled && binding && typeof body.baseRevision === 'string' && body.baseRevision) {
+-    // The editor just committed the tool's mutation; sync the registry to the
+-    // post-tool revision so a follow-up MCP session binds to the current
+-    // snapshot instead of being rejected as stale by the previous one.
+-    await operations.touchEditor(
+-      binding.projectId,
+-      binding.editorInstanceId,
+-      body.baseRevision,
+-      capability,
+-    ).catch(() => undefined);
+-  }
+   sendBridgeJson(res, settled ? 200 : 404, settled
+     ? { ok: true }
+     : { error: 'editor call is unavailable' });
 diff --git a/server/plugins/external-agent.ts b/server/plugins/external-agent.ts
-index 289e318..919c93c 100644
+index 289e318..e30a32b 100644
 --- a/server/plugins/external-agent.ts
 +++ b/server/plugins/external-agent.ts
-@@ -132,7 +132,7 @@ export function externalAgentPlugin(): Plugin {
+@@ -2,13 +2,11 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
+ import { TLSSocket } from 'node:tls';
+ import type { Plugin } from 'vite';
+ import {
+-  editorCallBinding,
+-  touchEditor,
+   editorRegistrationMatches,
+   nextEditorCall,
+   nextEditorCancellation,
+   registerEditor,
+-  settleEditorCall,
++  settleEditorCallWithRevision,
+   unregisterEditor,
+ } from '../external-agent/broker.ts';
+ import { handleMcpRequest, mcpTools } from '../external-agent/mcp.ts';
+@@ -42,9 +40,7 @@ const bridgeOperations: BridgeOperations = {
+   unregisterEditor,
+   nextEditorCall,
+   nextEditorCancellation,
+-  settleEditorCall,
+-  editorCallBinding,
+-  touchEditor,
++  settleEditorCall: settleEditorCallWithRevision,
+   mcpTools,
+ };
+
+@@ -132,7 +128,7 @@ export function externalAgentPlugin(): Plugin {
      name: 'openchatcut-external-agent',
      configureServer(server) {
        server.middlewares.use('/api/external-agent', (req, res) => {
@@ -684,7 +2232,7 @@ index 289e318..919c93c 100644
            if (!res.headersSent) sendBridgeJson(res, 400, { error: error instanceof Error ? error.message : String(error) });
          });
        });
-@@ -141,7 +141,7 @@ export function externalAgentPlugin(): Plugin {
+@@ -141,7 +137,7 @@ export function externalAgentPlugin(): Plugin {
            sendBridgeJson(res, 401, { error: 'invalid OpenChatCut MCP token' });
            return;
          }
@@ -693,6 +2241,332 @@ index 289e318..919c93c 100644
            server.config.logger.error(`[external-mcp] ${error instanceof Error ? error.message : String(error)}`);
            if (!res.headersSent) sendBridgeJson(res, 500, { error: 'MCP request failed' });
          });
+diff --git a/server/plugins/external-agent.verify.ts b/server/plugins/external-agent.verify.ts
+index 1c929cc..1cf7b91 100644
+--- a/server/plugins/external-agent.verify.ts
++++ b/server/plugins/external-agent.verify.ts
+@@ -17,8 +17,6 @@ const calls: Record<keyof BridgeOperations, number> = {
+   nextEditorCall: 0,
+   nextEditorCancellation: 0,
+   settleEditorCall: 0,
+-  editorCallBinding: 0,
+-  touchEditor: 0,
+   mcpTools: 0,
+ };
+
+@@ -61,19 +59,11 @@ const operations = {
+     assert.equal(capability, registrationCapability);
+     return null;
+   },
+-  settleEditorCall: (_id, _outcome, _value, capability) => {
++  settleEditorCall: async (_id, _outcome, _value, capability) => {
+     calls.settleEditorCall += 1;
+     assert.equal(capability, registrationCapability);
+     return true;
+   },
+-  editorCallBinding: (_id) => {
+-    calls.editorCallBinding += 1;
+-    return { projectId: 'project-a', editorInstanceId: 'editor-a', baseRevision: 'rev-a', ownershipEpoch: 1 };
+-  },
+-  touchEditor: async () => {
+-    calls.touchEditor += 1;
+-    return true;
+-  },
+   mcpTools: () => {
+     calls.mcpTools += 1;
+     return [];
+diff --git a/server/plugins/extract-frames-shutdown.verify.ts b/server/plugins/extract-frames-shutdown.verify.ts
+new file mode 100644
+index 0000000..1ef5b14
+--- /dev/null
++++ b/server/plugins/extract-frames-shutdown.verify.ts
+@@ -0,0 +1,176 @@
++import assert from 'node:assert/strict';
++import { randomUUID } from 'node:crypto';
++import childProcess, { execFileSync, spawn } from 'node:child_process';
++import fsPromises, { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
++import { createServer, request } from 'node:http';
++import { syncBuiltinESMExports } from 'node:module';
++import { tmpdir } from 'node:os';
++import { basename, join } from 'node:path';
++import { fileURLToPath } from 'node:url';
++import { setImmediate as tick } from 'node:timers/promises';
++import type { Plugin, ViteDevServer } from 'vite';
++
++const scenario = process.argv[2];
++if (!scenario) {
++  for (const name of ['accepted', 'automatic', 'pipe', 'cleanup-failure', 'partial-failure', 'scene-failure', 'grid-cleanup-failure']) {
++    await new Promise<void>((resolve, reject) => {
++      const child = spawn(process.execPath, ['--import', 'tsx', fileURLToPath(import.meta.url), name], { stdio: 'inherit' });
++      child.once('error', reject);
++      child.once('close', (code, signal) => code === 0 && signal === null ? resolve() : reject(new Error(`${name}: ${code}/${signal}`)));
++    });
++  }
++  console.log('extract frames: real JPEG, accepted work, source integrity, pipe close and retained failures passed');
++} else {
++  const expectedFailure = ['cleanup-failure', 'partial-failure', 'scene-failure', 'grid-cleanup-failure'].includes(scenario);
++  const root = await mkdtemp(join(tmpdir(), 'mantur-extract-shutdown-'));
++  const removeRoot = fsPromises.rm;
++  try {
++  const scratch = join(root, 'tmp'); await mkdir(scratch);
++  process.env.OPENCHATCUT_DATA_DIR = root;
++  process.env.OPENCHATCUT_DEV_PROFILE_ID = randomUUID();
++  process.env.TMPDIR = scratch;
++  process.env.MANTUR_CUT_DRAIN_TIMEOUT_MS = '10000';
++  const { ffmpegBin } = await import('../media-binaries.ts');
++  const ffmpeg = ffmpegBin();
++  const { uploadDir } = await import('../media-dir.ts');
++  const media = uploadDir(); await mkdir(media, { recursive: true });
++  const video = join(media, 'fresh-test.mp4');
++  execFileSync(ffmpeg, ['-nostdin', '-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=160x90:rate=10', '-t', '0.5', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', video], { timeout: 15000 });
++  const originalVideo = await readFile(video);
++  const releaseFile = join(root, 'release');
++  const wrapper = join(root, 'ffmpeg.cjs');
++  const pipeEntered = Promise.withResolvers<ReturnType<typeof spawn>>();
++  const nativeSpawn = childProcess.spawn;
++  const nativeSpawnSync = childProcess.spawnSync;
++  if (scenario === 'pipe' || scenario === 'partial-failure' || scenario === 'scene-failure') {
++    await writeFile(wrapper, `#!${process.execPath}\nconst {spawn}=require('node:child_process'); const fs=require('node:fs');
++const args=process.argv.slice(2);
++if (${JSON.stringify(scenario)}==='scene-failure' && args.some(x=>x.includes('showinfo'))) process.exit(7);
++if (${JSON.stringify(scenario)}==='partial-failure' && /f-1\\.jpg$/.test(args.at(-1))) process.exit(7);
++const work=spawn(${JSON.stringify(ffmpeg)},args,{stdio:['ignore',1,2]});
++work.on('error',e=>{console.error(e);process.exit(1)});
++work.on('close',code=>{
++ if(code===0 && ${JSON.stringify(scenario)}==='pipe' && /f-0\\.jpg$/.test(args.at(-1))) {
++  const holder=spawn(process.execPath,['-e',${JSON.stringify(`const fs=require('node:fs');const timer=setInterval(()=>{if(fs.existsSync(${JSON.stringify(releaseFile)})){clearInterval(timer);process.stderr.write('pipe released');}},10);`)}],{stdio:['ignore','ignore',2]});
++  holder.once('spawn',()=>process.exit(0));
++ } else process.exit(code??1);
++});\n`);
++    process.env.OPENCHATCUT_FFMPEG = wrapper;
++    childProcess.spawn = ((...args: Parameters<typeof nativeSpawn>) => {
++      const child = args[0] === wrapper && Array.isArray(args[1])
++        ? nativeSpawn(process.execPath, [wrapper, ...args[1]], args[2]) : nativeSpawn(...args);
++      if (args[0] === wrapper && Array.isArray(args[1]) && /f-0\.jpg$/.test(String(args[1].at(-1)))) pipeEntered.resolve(child);
++      return child;
++    }) as typeof nativeSpawn;
++    childProcess.spawnSync = ((...args: Parameters<typeof nativeSpawnSync>) => args[0] === wrapper && Array.isArray(args[1])
++      ? nativeSpawnSync(process.execPath, [wrapper, ...args[1]], args[2]) : nativeSpawnSync(...args)) as typeof nativeSpawnSync;
++    syncBuiltinESMExports();
++  }
++  const nativeRm = fsPromises.rm;
++  const cleanupEntered = Promise.withResolvers<void>();
++  const cleanupRelease = Promise.withResolvers<void>();
++  fsPromises.rm = async (path, options) => {
++    if (scenario === 'grid-cleanup-failure' && String(path).startsWith(scratch) && basename(String(path)).startsWith('cc-grid-')) throw new Error('grid cleanup refused');
++    if (String(path).startsWith(scratch) && basename(String(path)).startsWith('cc-frames-')) {
++      cleanupEntered.resolve(); await cleanupRelease.promise;
++      if (scenario === 'cleanup-failure') throw new Error('extraction cleanup refused');
++    }
++    return nativeRm(path, options);
++  };
++  syncBuiltinESMExports();
++  const { createMiniConnect } = await import('../../desktop/mini-connect.ts');
++  const { ManturEditorShutdown } = await import('./mantur-shutdown.ts');
++  const { extractFramesPlugin } = await import('./extract-frames.ts');
++  const broker = await import('../external-agent/broker.ts');
++  const errors: unknown[] = [];
++  const app = createMiniConnect(error => { errors.push(error); });
++  const server = createServer((req, res) => app.handle(req, res));
++  const owner = new ManturEditorShutdown();
++  try {
++    const mount = async (plugin: Plugin) => {
++      const hook = plugin.configureServer!; const configure = typeof hook === 'function' ? hook : hook.handler;
++      await configure.call({} as never, { middlewares: app, httpServer: server, config: { logger: { error() {}, info() {} } } } as unknown as ViteDevServer);
++    };
++    await mount(owner.plugin());
++    const admitted = Promise.withResolvers<void>();
++    // The actual route returns its original promise; this observation adds no work to it.
++    const observedApp = new Proxy(app, { get(target, key, receiver) {
++      if (key !== 'use') return Reflect.get(target, key, receiver);
++      return (path: string, handler: Parameters<typeof app.use>[1]) => target.use(path, (req, res, next) => {
++        const result = handler!(req, res, next); admitted.resolve(); return result;
++      });
++    } });
++    const plugin = owner.ownPlugin(extractFramesPlugin());
++    const hook = plugin.configureServer!; const configure = typeof hook === 'function' ? hook : hook.handler;
++    await configure.call({} as never, { middlewares: observedApp, httpServer: server, config: { logger: { error() {}, info() {} } } } as unknown as ViteDevServer);
++    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
++    const address = server.address(); assert(address && typeof address !== 'string');
++    const url = `http://127.0.0.1:${address.port}/api/extract-frames`;
++    let post!: ReturnType<typeof request>;
++    const response = new Promise<{ status: number; body: Record<string, unknown> }>((resolve, reject) => {
++      post = request(url, { method: 'POST', headers: { 'Content-Type': 'application/json' } }, res => {
++        const chunks: Buffer[] = []; res.on('data', chunk => chunks.push(chunk));
++        res.on('end', () => { resolve({ status: res.statusCode!, body: JSON.parse(Buffer.concat(chunks).toString()) }); });
++        res.on('error', reject);
++      });
++      post.on('error', reject); post.write('{"src":');
++    });
++    let responded = false; void response.then(() => { responded = true; });
++    await admitted.promise;
++    const capability = broker.registerEditor('project', 'editor', 'revision', []);
++    const stopping = owner.stopForShutdown();
++    const observed = stopping.then(() => ({ ok: true as const }), error => ({ ok: false as const, error }));
++    const poll = () => broker.nextEditorCall('project', 'editor', 'revision', AbortSignal.timeout(10000), capability);
++    const freeze = await poll(); assert.equal(freeze?.arguments.phase, 'freeze');
++    broker.settleEditorCall(freeze!.id, 'applied', { phase: 'freeze' }, capability);
++    await tick();
++    assert.equal((await fetch(url, { method: 'POST', body: '{}' })).status, 503, 'new extraction is refused after cutoff');
++    const body = scenario === 'automatic' || scenario === 'scene-failure' ? { src: '/media/uploads/fresh-test.mp4', count: 2 } : { src: '/media/uploads/fresh-test.mp4', sourceTimesMs: [0, 200] };
++    post.end(JSON.stringify(body).slice('{"src":'.length));
++    let finished = false; void observed.then(() => { finished = true; });
++    if (scenario === 'pipe') {
++      const child = await pipeEntered.promise;
++      await new Promise<void>(resolve => child.once('exit', () => resolve()));
++      await tick(); assert.equal(finished, false, 'process exit is insufficient while its stderr is inherited');
++      assert.equal(responded, false, 'frame extraction still awaits its actual child close before replying');
++      await writeFile(releaseFile, 'release');
++    }
++    const result = await response;
++    if (scenario === 'grid-cleanup-failure') {
++      assert.equal(result.status, 500); assert.match(String(result.body.error), /grid cleanup refused/);
++    } else {
++      assert.equal(result.status, 200, JSON.stringify(result.body));
++      assert.equal(result.body.renderedBy, 'ffmpeg');
++      const jpeg = Buffer.from(String(result.body.base64), 'base64');
++      assert.equal(jpeg.subarray(0, 2).toString('hex'), 'ffd8');
++      assert.equal(jpeg.subarray(-2).toString('hex'), 'ffd9');
++      await writeFile(join(root, 'contact-sheet.jpg'), jpeg);
++      execFileSync(ffmpeg, ['-nostdin', '-v', 'error', '-i', join(root, 'contact-sheet.jpg'), '-f', 'null', '-'], { timeout: 15000 });
++      assert.deepEqual(await readFile(join(root, 'contact-sheet.jpg')), jpeg);
++    }
++    assert.deepEqual(await readFile(video), originalVideo, 'source video is never modified');
++    await cleanupEntered.promise; await tick(); assert.equal(finished, false, 'HTTP response does not finish temporary-file cleanup');
++    cleanupRelease.resolve();
++    let flushed = false;
++    const flush = expectedFailure ? Promise.resolve() : poll().then(async call => {
++      assert.equal(call?.arguments.phase, 'flush'); flushed = true;
++      broker.settleEditorCall(call!.id, 'applied', { phase: 'flush' }, capability);
++      await broker.unregisterEditor('project', 'editor', capability);
++    });
++    const stopped = await observed;
++    assert.equal(stopped.ok, !expectedFailure, String(stopped.ok ? '' : stopped.error));
++    if (stopped.ok) { await flush; assert.equal(flushed, true); await owner.finishTransportShutdown(); }
++    else {
++      assert.match(String(stopped.error), /failed; shutdown is unconfirmed/);
++      assert(stopped.error instanceof AggregateError);
++      const expected = scenario === 'grid-cleanup-failure' ? /HTTP 500/ : /cleanup refused|exit 7|Scene analysis exited 7/;
++      assert(stopped.error.errors.some(error => expected.test(String(error))));
++      assert.strictEqual(stopping, owner.stopForShutdown());
++    }
++  } finally {
++    cleanupRelease.resolve(); await writeFile(releaseFile, 'release');
++    fsPromises.rm = nativeRm; childProcess.spawn = nativeSpawn; childProcess.spawnSync = nativeSpawnSync; syncBuiltinESMExports();
++    await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
++  }
++  } finally { await removeRoot(root, { recursive: true, force: true }); }
++}
+diff --git a/server/plugins/extract-frames.ts b/server/plugins/extract-frames.ts
+index 41ee060..c33d9e2 100644
+--- a/server/plugins/extract-frames.ts
++++ b/server/plugins/extract-frames.ts
+@@ -12,6 +12,7 @@ import { formatTimeLabel, tileContactSheet } from '../frame-grid.ts';
+ import { ffmpegBin, ffprobeBin } from '../media-binaries.ts';
+ import { resolveHwDecodeArgs } from '../media-acceleration.ts';
+ import { ffmpegThreadArgs, spawnMediaProcess } from '../media-process.ts';
++import { editorRequests } from '../shutdown-runtime.ts';
+
+ const MAX_JSON = 32 * 1024;
+ const MAX_SAMPLES = 20;
+@@ -59,9 +60,10 @@ function run(cmd: string, args: string[], timeoutMs: number): Promise<void> {
+   return new Promise((resolve, reject) => {
+     const child = spawnMediaProcess(cmd, [...ffmpegThreadArgs(), ...args], { stdio: ['ignore', 'ignore', 'pipe'] });
+     let stderr = '';
++    let failure: Error | undefined;
+     const timer = setTimeout(() => {
++      failure = new Error(`${cmd} timed out`);
+       child.kill('SIGKILL');
+-      reject(new Error(`${cmd} timed out`));
+     }, timeoutMs);
+     child.stderr?.on('data', (c: Buffer) => {
+       stderr += String(c);
+@@ -69,11 +71,12 @@ function run(cmd: string, args: string[], timeoutMs: number): Promise<void> {
+     });
+     child.on('error', (err) => {
+       clearTimeout(timer);
+-      reject(err);
++      failure = err;
+     });
+     child.on('close', (code) => {
+       clearTimeout(timer);
+-      if (code === 0) resolve();
++      if (failure) reject(failure);
++      else if (code === 0) resolve();
+       else reject(new Error(`${cmd} exit ${code}: ${stderr.slice(-400)}`));
+     });
+   });
+@@ -88,9 +91,11 @@ async function probeDurationMs(path: string): Promise<number> {
+       path,
+     ], { stdio: ['ignore', 'pipe', 'pipe'] });
+     let out = '';
++    let failure: Error | undefined;
+     child.stdout?.on('data', (c: Buffer) => { out += String(c); });
+-    child.on('error', reject);
++    child.on('error', error => { failure = error; });
+     child.on('close', (code) => {
++      if (failure) { reject(failure); return; }
+       const sec = Number(out.trim());
+       if (code === 0 && Number.isFinite(sec) && sec > 0) resolve(Math.round(sec * 1000));
+       else reject(new Error('ffprobe duration failed'));
+@@ -110,13 +115,13 @@ export function sampleTimesMs(fromMs: number, toMs: number, count: number): numb
+ // ── Remove nearly duplicates ───────────────────────────────────────────────────────
+ // Uniform sampling will result in N almost identical pictures on fixed-camera asset, and burning visual tokens in vain will not help.
+ // position. First use ffmpeg scene detection to pick out the moments when "the picture really changes", and then use uniform sampling to fill in the gaps.
+-// Analysis is done at scaled down to 160 width, 2fps, at a bounded cost; any failure silently falls back to uniform sampling.
++// Analysis uses 160-pixel frames at 2fps. Collected times remain usable, but failed analysis prevents shutdown confirmation.
+
+ /** Scene difference threshold (0..1): low enough to capture the action changes in the camera, not just hard cuts.*/
+ const SCENE_THRESHOLD = 0.08;
+ const SCENE_ANALYSIS_TIMEOUT_MS = 20_000;
+
+-/** The moment when the picture changes significantly (milliseconds, ascending order). Returns empty array on failure = caller falls back to uniform sampling.*/
++/** Collected scene-change times in milliseconds; retained failures are checked by editor shutdown. */
+ function sceneChangeTimesMs(input: string, fromMs: number, toMs: number): Promise<number[]> {
+   return (async () => {
+     const hwDecode = await resolveHwDecodeArgs(ffmpegBin(), undefined);
+@@ -133,7 +138,8 @@ function sceneChangeTimesMs(input: string, fromMs: number, toMs: number): Promis
+       '-f', 'null', '-',
+     ], { stdio: ['ignore', 'ignore', 'pipe'] });
+     let tail = '';
+-    const done = (): void => { child.kill('SIGKILL'); resolve(times); };
++    let failure: Error | undefined;
++    const done = (): void => { failure = new Error('Scene analysis timed out'); child.kill('SIGKILL'); };
+     const timer = setTimeout(done, SCENE_ANALYSIS_TIMEOUT_MS);
+     child.stderr?.on('data', (chunk: Buffer) => {
+       // Streaming analysis of pts_time avoids storing the entire showinfo in memory
+@@ -145,8 +151,12 @@ function sceneChangeTimesMs(input: string, fromMs: number, toMs: number): Promis
+         if (m) times.push(Math.round(fromMs + Number(m[1]) * 1000));
+       }
+     });
+-    child.on('error', () => { clearTimeout(timer); resolve([]); });
+-    child.on('close', () => { clearTimeout(timer); resolve(times); });
++    child.on('error', error => { clearTimeout(timer); failure = error; });
++    child.on('close', code => {
++      clearTimeout(timer);
++      if (failure || code !== 0) editorRequests.recordFailure(failure ?? new Error(`Scene analysis exited ${code}`));
++      resolve(times);
++    });
+     });
+   })();
+ }
+@@ -266,6 +276,7 @@ export function extractFramesPlugin(): Plugin {
+                 label: formatTimeLabel(t),
+               });
+             } catch (err) {
++              editorRequests.recordFailure(err);
+               server.config.logger.info(
+                 `[extract-frames] skip t=${t}ms: ${err instanceof Error ? err.message : String(err)}`,
+               );
+@@ -300,7 +311,7 @@ export function extractFramesPlugin(): Plugin {
+           const status = /ENOENT|spawn ffmpeg|spawn ffprobe/i.test(message) ? 503 : 500;
+           sendJson(res, status, { error: message });
+         } finally {
+-          await rm(work, { recursive: true, force: true }).catch(() => {});
++          await rm(work, { recursive: true, force: true });
+         }
+       });
+     },
 diff --git a/server/plugins/generation-job-lifecycle.ts b/server/plugins/generation-job-lifecycle.ts
 index 4ffdcc2..01c23c6 100644
 --- a/server/plugins/generation-job-lifecycle.ts
@@ -1098,14 +2972,190 @@ index a4ab905..24a6670 100644
 -  ];
 +  ].map((plugin) => plugin.name === 'mantur-editor-shutdown' ? plugin : shutdown.ownPlugin(plugin));
  }
+diff --git a/server/plugins/local-upload-shutdown.verify.ts b/server/plugins/local-upload-shutdown.verify.ts
+new file mode 100644
+index 0000000..26a3b27
+--- /dev/null
++++ b/server/plugins/local-upload-shutdown.verify.ts
+@@ -0,0 +1,169 @@
++import assert from 'node:assert/strict';
++import { createHash, randomUUID } from 'node:crypto';
++import { spawn, execFileSync } from 'node:child_process';
++import fsPromises, { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
++import { createServer, request } from 'node:http';
++import { syncBuiltinESMExports } from 'node:module';
++import { tmpdir } from 'node:os';
++import { join } from 'node:path';
++import { setImmediate as tick } from 'node:timers/promises';
++import { fileURLToPath } from 'node:url';
++import type { Plugin, ViteDevServer } from 'vite';
++
++const scenario = process.argv[2];
++if (!scenario) {
++  for (const name of ['post', 'put', 'cutoff', 'copy-close', 'close-failure', 'dedupe', 'unsupported-delete']) {
++    await new Promise<void>((resolve, reject) => {
++      const child = spawn(process.execPath, ['--import', 'tsx', fileURLToPath(import.meta.url), name], { stdio: 'inherit' });
++      child.once('error', reject);
++      child.once('close', (code, signal) => code === 0 && signal === null ? resolve() : reject(new Error(`${name}: ${code}/${signal}`)));
++    });
++  }
++  console.log('local upload: real media, streaming cutoff, file close, deduplication and unsupported method passed');
++} else {
++  const root = await mkdtemp(join(tmpdir(), 'mantur-upload-shutdown-'));
++  const nativeLink = fsPromises.link;
++  const nativeOpen = fsPromises.open;
++  const handles: Array<() => Promise<void>> = [];
++  const closeEntered = Promise.withResolvers<void>();
++  const closeRelease = Promise.withResolvers<void>();
++  let post: ReturnType<typeof request> | undefined;
++  let server: ReturnType<typeof createServer> | undefined;
++  const pollAbort = new AbortController();
++  try {
++    process.env.OPENCHATCUT_DATA_DIR = root;
++    process.env.OPENCHATCUT_DEV_PROFILE_ID = randomUUID();
++    process.env.MANTUR_CUT_DRAIN_TIMEOUT_MS = '10000';
++    const { ffmpegBin } = await import('../media-binaries.ts');
++    const source = join(root, 'source.mp4');
++    execFileSync(ffmpegBin(), ['-nostdin', '-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=160x90:rate=10', '-t', '0.2', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', source], { timeout: 15000 });
++    const bytes = await readFile(source);
++    const hash = createHash('sha256').update(bytes).digest('hex');
++    const { uploadDir } = await import('../media-dir.ts');
++    const finalPath = join(uploadDir(), 'local-test.mp4');
++    if (scenario === 'copy-close' || scenario === 'close-failure') {
++      fsPromises.link = async (from, to) => {
++        if (String(to) === finalPath) throw Object.assign(new Error('fixture filesystem has no hard links'), { code: 'ENOTSUP' });
++        return nativeLink(from, to);
++      };
++      fsPromises.open = async (...args: Parameters<typeof nativeOpen>) => {
++        const handle = await nativeOpen(...args);
++        if (String(args[0]) === finalPath && args[1] === 'wx') {
++          const close = handle.close.bind(handle); handles.push(close);
++          handle.close = async () => {
++            closeEntered.resolve(); await closeRelease.promise;
++            if (scenario === 'close-failure') throw new Error('upload file close refused');
++            await close();
++          };
++        }
++        return handle;
++      };
++      syncBuiltinESMExports();
++    }
++    const { createMiniConnect } = await import('../../desktop/mini-connect.ts');
++    const { ManturEditorShutdown } = await import('./mantur-shutdown.ts');
++    const { uploadPlugin } = await import('./upload.ts');
++    const { extractFramesPlugin } = await import('./extract-frames.ts');
++    const broker = await import('../external-agent/broker.ts');
++    const app = createMiniConnect(() => {});
++    server = createServer((req, res) => app.handle(req, res));
++    const owner = new ManturEditorShutdown();
++    const admitted = Promise.withResolvers<void>();
++    const observedApp = new Proxy(app, { get(target, key, receiver) {
++      if (key !== 'use') return Reflect.get(target, key, receiver);
++      return (path: string, handler: Parameters<typeof app.use>[1]) => target.use(path, (req, res, next) => {
++        const result = handler!(req, res, next);
++        if (path === '/upload') admitted.resolve();
++        return result;
++      });
++    } });
++    const mount = async (plugin: Plugin) => {
++      const hook = plugin.configureServer!; const configure = typeof hook === 'function' ? hook : hook.handler;
++      await configure.call({} as never, { middlewares: observedApp, httpServer: server, config: { logger: { error() {}, info() {} } } } as unknown as ViteDevServer);
++    };
++    await mount(owner.plugin()); await mount(owner.ownPlugin(uploadPlugin())); await mount(owner.ownPlugin(extractFramesPlugin()));
++    await new Promise<void>(resolve => server!.listen(0, '127.0.0.1', resolve));
++    const address = server.address(); assert(address && typeof address !== 'string');
++    const origin = `http://127.0.0.1:${address.port}`;
++    const url = `${origin}/upload?name=source.mp4&assetId=local-test${scenario === 'put' ? '' : '&ifAbsent=1'}`;
++    const response = new Promise<{ status: number; body: Record<string, unknown> }>((resolve, reject) => {
++      post = request(url, { method: scenario === 'put' ? 'PUT' : 'POST', headers: { Origin: origin, 'Content-Type': 'video/mp4' } }, res => {
++        const chunks: Buffer[] = []; res.on('data', chunk => chunks.push(chunk));
++        res.on('end', () => resolve({ status: res.statusCode!, body: JSON.parse(Buffer.concat(chunks).toString()) }));
++        res.on('error', reject);
++      });
++      post.on('error', reject); post.write(bytes.subarray(0, 32));
++      if (scenario !== 'cutoff') post.end(bytes.subarray(32));
++    });
++    // Only cleanup can abort this test-owned request after an earlier assertion failed.
++    void response.catch(() => {});
++    await admitted.promise;
++    if (scenario === 'post' || scenario === 'dedupe' || scenario === 'unsupported-delete') {
++      const uploaded = await response; assert.equal(uploaded.status, 200, JSON.stringify(uploaded.body));
++      if (scenario === 'post') {
++        const frames = await fetch(`${origin}/api/extract-frames`, { method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' }, body: JSON.stringify({ src: uploaded.body.path, sourceTimesMs: [0] }) });
++        assert.equal(frames.status, 200); const grid = await frames.json() as { base64: string; sampleCount: number };
++        assert.equal(grid.sampleCount, 1); assert.equal(Buffer.from(grid.base64, 'base64').subarray(0, 2).toString('hex'), 'ffd8');
++      }
++      if (scenario === 'dedupe') {
++        const again = await fetch(url, { method: 'POST', headers: { Origin: origin, 'Content-Type': 'video/mp4' }, body: bytes });
++        assert.equal(again.status, 200); const duplicate = await again.json() as { created: boolean; contentHash: string };
++        assert.equal(duplicate.created, false); assert.equal(duplicate.contentHash, hash);
++      }
++      if (scenario === 'unsupported-delete') {
++        const deleted = await fetch(`${origin}/upload?name=local-test.mp4`, { method: 'DELETE', headers: { Origin: origin } });
++        assert.equal(deleted.status, 200);
++      }
++    }
++    if (scenario === 'copy-close' || scenario === 'close-failure') await closeEntered.promise;
++    const capability = broker.registerEditor('project', 'editor', 'revision', []);
++    const freezeAck = Promise.withResolvers<void>();
++    const stopping = owner.stopForShutdown();
++    const observed = stopping.then(() => ({ ok: true as const }), error => ({ ok: false as const, error }));
++    const pump = (async () => {
++      try {
++        for (const phase of ['freeze', 'flush']) {
++          const call = await broker.nextEditorCall('project', 'editor', 'revision', pollAbort.signal, capability);
++          if (pollAbort.signal.aborted) return;
++          assert.equal(call?.arguments.phase, phase);
++          broker.settleEditorCall(call!.id, 'applied', { phase }, capability);
++          if (phase === 'freeze') freezeAck.resolve();
++          else await broker.unregisterEditor('project', 'editor', capability);
++        }
++      } catch (error) { if (!pollAbort.signal.aborted) throw error; }
++    })();
++    void pump.catch(() => {});
++    await freezeAck.promise; await tick();
++    let finished = false; void observed.then(() => { finished = true; }); await tick();
++    if (scenario === 'cutoff' || scenario === 'copy-close' || scenario === 'close-failure') {
++      assert.equal(finished, false, 'accepted upload must retain its body and file-handle completion');
++      assert.equal((await fetch(url, { method: 'POST', headers: { Origin: origin }, body: bytes })).status, 503);
++    }
++    if (scenario === 'cutoff') post!.end(bytes.subarray(32));
++    closeRelease.resolve();
++    const result = await response;
++    if (scenario === 'close-failure') {
++      assert.equal(result.status, 500); assert.match(String(result.body.error), /upload file close refused/);
++    } else {
++      assert.equal(result.status, 200, JSON.stringify(result.body)); assert.equal(result.body.contentHash, hash);
++      if (scenario !== 'unsupported-delete') {
++        assert.deepEqual(await readFile(finalPath), bytes);
++        assert((await readdir(uploadDir())).every(name => !name.endsWith('.part')));
++      }
++    }
++    assert.deepEqual(await readFile(source), bytes);
++    const stopped = await observed; pollAbort.abort(); await pump;
++    assert.equal(stopped.ok, scenario !== 'close-failure' && scenario !== 'unsupported-delete', String(stopped.ok ? '' : stopped.error));
++    if (stopped.ok) await owner.finishTransportShutdown();
++    else {
++      assert.match(String(stopped.error), scenario === 'unsupported-delete' ? /unconfirmed producers: openchatcut-upload/ : /failed; shutdown is unconfirmed/);
++      assert.strictEqual(stopping, owner.stopForShutdown());
++    }
++  } finally {
++    pollAbort.abort(); closeRelease.resolve(); post?.destroy();
++    fsPromises.link = nativeLink; fsPromises.open = nativeOpen; syncBuiltinESMExports();
++    await Promise.all(handles.map(close => close()));
++    if (server) await new Promise<void>((resolve, reject) => server!.close(error => error ? reject(error) : resolve()));
++    await rm(root, { recursive: true, force: true });
++  }
++}
 diff --git a/server/plugins/mantur-shutdown.ts b/server/plugins/mantur-shutdown.ts
 new file mode 100644
-index 0000000..b3555d8
+index 0000000..6b0cf21
 --- /dev/null
 +++ b/server/plugins/mantur-shutdown.ts
-@@ -0,0 +1,165 @@
+@@ -0,0 +1,172 @@
 +import type { IncomingMessage, ServerResponse } from 'node:http';
 +import { ShutdownWork } from '../../shared/shutdown-work.ts';
++import { isIsolatedDevProfile } from '../runtime-profile.ts';
 +import { Server } from 'node:http';
 +import type { Connect, Plugin, ViteDevServer } from 'vite';
 +import {
@@ -1133,6 +3183,7 @@ index 0000000..b3555d8
 +  'mantur-project-media', 'openchatcut-project-store', 'openchatcut-external-agent',
 +  'openchatcut-export', 'openchatcut-export-stage', 'openchatcut-export-destination',
 +  'openchatcut-generation-progress', 'openchatcut-media-preview', 'openchatcut-settings',
++  'openchatcut-extract-frames',
 +]);
 +
 +function requestPath(mount: string, req: IncomingMessage): string {
@@ -1151,6 +3202,11 @@ index 0000000..b3555d8
 +    name === 'openchatcut-extension-store' && (pathname === '/api/plugins' || pathname === '/api/plugins/')
 +    || name === 'openchatcut-model-packs' && pathname === '/api/model-packs'
 +  );
++}
++
++function ownedLocalUploadRequest(name: string, pathname: string, req: IncomingMessage): boolean {
++  return name === 'openchatcut-upload' && pathname === '/upload'
++    && (req.method === 'POST' || req.method === 'PUT') && isIsolatedDevProfile();
 +}
 +
 +function refuse(res: ServerResponse): void {
@@ -1258,7 +3314,7 @@ index 0000000..b3555d8
 +        // Connect types handlers as returning void; feature routes may return their actual async work.
 +        const completion: unknown = handler(req, res, (error) => { delegated = true; next(error); });
 +        if (!delegated) {
-+          if (!OWNED_PLUGINS.has(name) && !ownedCatalogRequest(name, pathname, req)) recordUnconfirmedEditorProducer(`${name} ${mount || '/'}`);
++          if (!OWNED_PLUGINS.has(name) && !ownedCatalogRequest(name, pathname, req) && !ownedLocalUploadRequest(name, pathname, req)) recordUnconfirmedEditorProducer(`${name} ${mount || '/'}`);
 +          if (completion === undefined && !res.writableEnded) recordUnconfirmedEditorProducer(`${name}: asynchronous handler without completion`);
 +        }
 +        await completion;
@@ -1777,6 +3833,57 @@ index 818e5fe..4071baa 100644
    await ensureStoreReady();
    if (!sqliteStoreEnabled()) return updateLegacyExportRecovery(input);
    return sqliteImmediateTransaction((store) => (
+diff --git a/server/plugins/upload-route-storage.ts b/server/plugins/upload-route-storage.ts
+index 9508860..eb580f3 100644
+--- a/server/plugins/upload-route-storage.ts
++++ b/server/plugins/upload-route-storage.ts
+@@ -6,6 +6,7 @@ import {
+ } from 'node:fs/promises';
+ import { join } from 'node:path';
+ import { randomUUID } from 'node:crypto';
++import { once } from 'node:events';
+ import { pipeline } from 'node:stream/promises';
+ import {
+   deleteUploadObject, putUploadFile, r2Config, UploadTooLargeError,
+@@ -296,10 +297,11 @@ async function publishPartIfAbsent(
+     throw error;
+   }
+   const initialIdentity = uploadFileIdentity(await target.stat());
++  const writer = target.createWriteStream({ autoClose: false });
+   try {
+     await pipeline(
+       createReadStream(partPath),
+-      target.createWriteStream({ autoClose: false }),
++      writer,
+     );
+     return uploadFileIdentity(await target.stat());
+   } catch (error) {
+@@ -317,7 +319,11 @@ async function publishPartIfAbsent(
+     }
+     throw error;
+   } finally {
+-    await target.close().catch(() => {});
++    if (!writer.closed) {
++      const closed = once(writer, 'close');
++      writer.destroy();
++      await closed;
++    }
+   }
+ }
+
+diff --git a/server/plugins/upload-routes.ts b/server/plugins/upload-routes.ts
+index 90cde3d..afc9c47 100644
+--- a/server/plugins/upload-routes.ts
++++ b/server/plugins/upload-routes.ts
+@@ -258,7 +258,7 @@ export function registerUploadRoutes(
+       : requireEditorRead(req, res);
+     if (authorized) void handlePresign(req, res);
+   });
+-  server.middlewares.use('/upload', (req, res) => { void handleUpload(req, res, logger); });
++  server.middlewares.use('/upload', (req, res) => handleUpload(req, res, logger));
+   server.middlewares.use('/api/import-url', (req, res) => {
+     if (requireEditorMutation(req, res)) void handleImportUrl(req, res, logger);
+   });
 diff --git a/server/project-store-http-routes.ts b/server/project-store-http-routes.ts
 index e618bfe..b3b9f44 100644
 --- a/server/project-store-http-routes.ts
@@ -1823,11 +3930,12 @@ index cd50ad1..c8b7fb2 100644
      case 'semantic-vectors-search':
 diff --git a/server/shutdown-runtime.ts b/server/shutdown-runtime.ts
 new file mode 100644
-index 0000000..dd19356
+index 0000000..ea9a2f0
 --- /dev/null
 +++ b/server/shutdown-runtime.ts
-@@ -0,0 +1,45 @@
+@@ -0,0 +1,46 @@
 +import type { ChildProcess } from 'node:child_process';
++import { basename } from 'node:path';
 +import { ShutdownWork } from '../shared/shutdown-work.ts';
 +
 +export const editorRequests = new ShutdownWork('Editor requests');
@@ -1848,13 +3956,13 @@ index 0000000..dd19356
 +export function recordUnconfirmedEditorProducer(name: string): void { unconfirmed.add(name); }
 +
 +/** Retain the exact child handle's close event, including inherited output pipes. */
-+export function trackEditorMediaProcess<T extends ChildProcess>(child: T): T {
++export function trackEditorMediaProcess<T extends ChildProcess>(child: T, operation: string): T {
 +  let failure: Error | undefined;
 +  const closed = new Promise<void>((resolve, reject) => {
 +    child.once('error', (error) => { failure = error; });
 +    child.once('close', (_code, signal) => {
 +      if (failure && child.pid !== undefined) reject(failure);
-+      else if (signal) reject(new Error(`Editor media subprocess ended with ${signal}`));
++      else if (signal) reject(new Error(`Editor media subprocess ${operation} (${basename(child.spawnfile)}, pid ${child.pid}) ended with ${signal}`));
 +      else resolve();
 +    });
 +  });

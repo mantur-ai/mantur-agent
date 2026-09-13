@@ -97,6 +97,14 @@
   background: var(--dsw-alias-state-business-primary);
 }
 
+.productAccessory {
+  display: flex;
+  padding: 0 12px;
+  min-width: 0;
+}
+
+.productAccessory:empty { display: none; }
+
 .accessory {
   display: flex;
   align-items: center;

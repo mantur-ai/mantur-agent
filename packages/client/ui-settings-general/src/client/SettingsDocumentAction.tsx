@@ -39,6 +39,7 @@ export function SettingsDocumentAction({ controller, useSnapshot, t }: SettingsD
     <div className={css.action}>
       {state.error === null ? null : <span className={css.error} role="alert">{t('openDocument.error')}</span>}
       <Button
+        title={t('openDocument.hint')}
         variant="outline"
         size="sm"
         disabled={state.opening}

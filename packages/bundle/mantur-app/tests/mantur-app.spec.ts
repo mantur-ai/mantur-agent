@@ -33,8 +33,8 @@ describe('dsh-mantur-app bundle', () => {
     if (!row) throw new Error('Mantur composition is missing its editing entry')
     expect(interpolate({ process: { env: {} } }, row.disabled)).toBe(true)
     const context = { process: { env: {
-      DSH_MANTUR_EDITOR_ROOT: '/Applications/漫途 Agent.app/Contents/Resources/mantur-cut',
-      DSH_MANTUR_EDITOR_NODE: '/Applications/漫途 Agent.app/Contents/MacOS/漫途Agent',
+      DSH_MANTUR_EDITOR_ROOT: '/Applications/ManTur Agent.app/Contents/Resources/mantur-cut',
+      DSH_MANTUR_EDITOR_NODE: '/Applications/ManTur Agent.app/Contents/MacOS/ManTur Agent',
     } } }
     expect(interpolate(context, row.disabled)).toBe(false)
     expect(interpolate(context, row.config)).toEqual({
@@ -100,7 +100,7 @@ describe('dsh-mantur-app bundle', () => {
     const assembly = await ctx.systemPrompt.assemble()
     expect(assembly.sections.map(section => section.name)).toEqual(['deployment:persona', 'product:guidance'])
     expect(renderPrompt(assembly)).toMatchInlineSnapshot(`
-      "你是漫途Agent，由漫途（Mantur）打造，专门在用户电脑本地完成漫剧创作与生产。你的职责是围绕漫剧项目完成故事构思、剧本、分镜、视觉素材、音频、剪辑方案和制作交付。你应使用当前本地工作区与可用工具直接推进制作，在获得必要授权后执行本地操作，并保持项目文件清晰有序。你的工作目录是 /work。\n\nKeep the project organized."
+      "你是ManTur Agent，由漫途（Mantur）打造，专门在用户电脑本地完成漫剧创作与生产。你的职责是围绕漫剧项目完成故事构思、剧本、分镜、视觉素材、音频、剪辑方案和制作交付。你应使用当前本地工作区与可用工具直接推进制作，在获得必要授权后执行本地操作，并保持项目文件清晰有序。你的工作目录是 /work。\n\nKeep the project organized."
     `)
     await ctx.fiber.dispose()
   })

@@ -6,7 +6,7 @@ import { clientBundle } from '../tsdown.client.ts'
 const stylesheetSource = new URL('./src/client/Workbench.module.css', import.meta.url)
 const stylesheetOutput = new URL('./lib/types/client/Workbench.module.css', import.meta.url)
 
-export default clientBundle('@deepseek-ai/dsh-client-ui-mantur-editing', ['lib/types/index.js'], {
+export default clientBundle('@deepseek-ai/dsh-client-ui-mantur-editing', ['lib/types/index.js', 'lib/types/types.js'], {
   hostPhase: true,
   lib: {
     plugins: [{

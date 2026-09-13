@@ -12,13 +12,19 @@ import type {
   ManturMarketplaceCatalog, ManturMarketplaceInstallResult, ManturMarketplaceSkill,
   ManturMarketplaceRecipe, ManturMarketplaceRecipeCatalog, ManturMarketplaceRecipeDetail,
   ManturMarketplaceRecipeQuery, ManturMarketplaceSkillDetail,
+  ManturBundledSkill,
 } from './types.ts'
 import { installSkill, type InstallerConfig } from './installer.ts'
+import { loadBundledSkill, readBundledCatalog } from './bundled-catalog.ts'
+import { bundledSkillReference, parseBundledSkillReference } from './bundled-manifest.ts'
+import { registerBundledInvocations } from './bundled-invocation.ts'
 
 export type * from './types.ts'
 
 /** Marketplace Host configuration. */
 export interface Config {
+  /** Read-only App resource directory containing the pinned Skill manifest. */
+  readonly bundledSkillDir?: string
   /** Harness home containing the live user Skill directory. */
   readonly dshHome?: string
   /** Maximum JSON bytes accepted from one ManturHub metadata response. */
@@ -36,6 +42,7 @@ export interface Config {
 }
 
 interface ResolvedConfig extends InstallerConfig {
+  readonly bundledSkillDir?: string
   readonly maxMetadataBytes: number
 }
 
@@ -177,6 +184,7 @@ export class ManturHubMarketplace extends TypertRemoteService {
   static inject = ['manturAccount']
 
   static Config: s<Config> = s.object({
+    bundledSkillDir: s.string(),
     dshHome: s.string(),
     maxMetadataBytes: s.number().step(1).min(1024).default(defaultMaxMetadataBytes),
     maxBundleBytes: s.number().step(1).min(1024).default(defaultMaxBundleBytes),
@@ -197,6 +205,7 @@ export class ManturHubMarketplace extends TypertRemoteService {
     super(ctx, 'manturMarketplace', { namespace: 'manturMarketplace' })
     const dshHome = resolveDshHome(config.dshHome)
     this.config = {
+      ...(config.bundledSkillDir === undefined ? {} : { bundledSkillDir: config.bundledSkillDir }),
       dshHome,
       skillsRoot: join(dshHome, 'skills'),
       maxMetadataBytes: config.maxMetadataBytes ?? defaultMaxMetadataBytes,
@@ -206,6 +215,32 @@ export class ManturHubMarketplace extends TypertRemoteService {
       metadataTimeoutMs: config.metadataTimeoutMs ?? defaultMetadataTimeoutMs,
       downloadTimeoutMs: config.downloadTimeoutMs ?? defaultDownloadTimeoutMs,
     }
+    registerBundledInvocations(ctx, this.config.bundledSkillDir, this.config)
+  }
+
+  /**
+   * Read the App's offline Skill entries without requesting account or marketplace data.
+   * @param signal - cancellation supplied by the requesting client.
+   * @returns pinned identities and display titles; missing resources reject the request.
+   */
+  @Remote
+  async bundled(signal: AbortSignal): Promise<ManturBundledSkill[]> {
+    const skills = await readBundledCatalog(this.config.bundledSkillDir, this.config, signal)
+    return skills.map(({ name, title, version, digest }) => ({ name, title, version, digest,
+      reference: bundledSkillReference({ name, version, digest }), source: 'app-bundled' }))
+  }
+
+  /**
+   * Verify that a draft still refers to the exact App resource the user selected.
+   * @param reference - captured name, version and digest, never a user-directory locator.
+   * @param signal - cancellation supplied by the sending draft.
+   * @returns the verified App identity; no installed or online substitute is selected.
+   */
+  @Remote
+  async resolveBundled(reference: string, signal: AbortSignal): Promise<ManturBundledSkill> {
+    const loaded = await loadBundledSkill(this.config.bundledSkillDir, parseBundledSkillReference(reference), this.config, signal)
+    const { name, title, version, digest } = loaded.identity
+    return { name, title, version, digest, reference: bundledSkillReference(loaded.identity), source: 'app-bundled' }
   }
 
   /**

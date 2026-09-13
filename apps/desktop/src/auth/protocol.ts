@@ -17,22 +17,31 @@ export interface NativeSecrets {
   readonly deviceName: string
   readonly platform: 'macos' | 'windows'
   readonly credential: string
-  readonly attemptToken: string
+  readonly state: string
+  readonly codeVerifier: string
+  readonly exchangeRequestId: NativeRequestId
+  readonly redirectUri: string
+  readonly code?: string | undefined
 }
 
 const secretsSchema = z.strictObject({
   requestId: z.uuid(), deviceInstanceId: z.uuid(), origin: z.url(),
   environment: z.enum(['production', 'test']), deviceName: z.string().min(1), platform: z.enum(['macos', 'windows']),
-  credential: z.string().regex(/^mtd_v1_[A-Za-z0-9_-]{43}$/u),
-  attemptToken: z.string().regex(/^mat_v1_[A-Za-z0-9_-]{43}$/u),
+  credential: z.string().regex(/^mtd_v2_[A-Za-z0-9_-]{43}$/u),
+  state: z.string().regex(/^[A-Za-z0-9_-]{43}$/u),
+  codeVerifier: z.string().regex(/^[A-Za-z0-9_-]{43}$/u),
+  exchangeRequestId: z.uuid(), redirectUri: z.url(),
+  code: z.string().regex(/^[A-Za-z0-9_-]{43}$/u).optional(),
 })
 
 /** Public, server-confirmed metadata; none of these fields authenticates a caller. */
 export const nativeMetadataSchema = z.strictObject({
   attempt: z.strictObject({
-    id: z.uuid(), userCode: z.string().min(1), verificationUrl: z.url(), expiresAt: z.number().int().positive(),
+    id: z.uuid(), expiresAt: z.number().int().positive(),
   }).optional(),
-  credential: z.strictObject({ id: z.uuid(), email: z.email(), expiresAt: z.number().int().positive() }).optional(),
+  exchangeStarted: z.literal(true).optional(),
+  credential: z.strictObject({ id: z.uuid(), generation: z.number().int().positive(),
+    accountId: z.uuid(), displayName: z.string(), policyKeyId: z.uuid(), expiresAt: z.number().int().positive() }).optional(),
 })
 
 /** Metadata retained with the original sealed authorization material. */
@@ -49,15 +58,15 @@ export interface NativeActiveMetadata {
  * @param device - installation and configured deployment selected by the Host.
  * @returns unsaved material; no network request is authorized until its store commit succeeds.
  */
-export function createNativeSecrets(device: Omit<NativeSecrets, 'requestId' | 'credential' | 'attemptToken'>): NativeSecrets {
+export function createNativeSecrets(device: Omit<NativeSecrets, 'requestId' | 'credential' | 'codeVerifier' | 'exchangeRequestId' | 'code'>): NativeSecrets {
   return { ...device, requestId: randomUUID() as NativeRequestId,
-    credential: `mtd_v1_${randomBytes(32).toString('base64url')}`,
-    attemptToken: `mat_v1_${randomBytes(32).toString('base64url')}` }
+    credential: `mtd_v2_${randomBytes(32).toString('base64url')}`,
+    codeVerifier: randomBytes(32).toString('base64url'), exchangeRequestId: randomUUID() as NativeRequestId }
 }
 
 /**
- * Hash the complete prefixed UTF-8 secret according to native-account-v1.
- * @param secret - Host-generated credential or attempt token, including its prefix.
+ * Hash a browser-account-v2 device secret, state or PKCE verifier.
+ * @param secret - complete Host-generated UTF-8 value, including any prefix.
  * @returns SHA-256 as unpadded base64url, not the raw secret.
  */
 export function nativeVerifier(secret: string): string {
@@ -72,7 +81,8 @@ export function nativeVerifier(secret: string): string {
 export function parseNativeSecrets(text: string): NativeSecrets {
   try {
     const value = secretsSchema.parse(JSON.parse(text) as unknown)
-    return { ...value, requestId: value.requestId as NativeRequestId, deviceInstanceId: value.deviceInstanceId as NativeDeviceId }
+    return { ...value, requestId: value.requestId as NativeRequestId, deviceInstanceId: value.deviceInstanceId as NativeDeviceId,
+      exchangeRequestId: value.exchangeRequestId as NativeRequestId }
   } catch {
     // JSON and schema errors can quote secret input; only the fixed diagnostic may escape.
     throw new Error('Native account secret record is invalid')

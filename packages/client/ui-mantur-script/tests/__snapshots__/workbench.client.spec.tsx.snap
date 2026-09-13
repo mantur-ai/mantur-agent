@@ -1,0 +1,15 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`defaults to rendered Markdown without modifying disk and snapshots the reading layout 1`] = `
+"<section class="_shell_d5a9c0" aria-label="Script workbench"><header class="_tabs_d5a9c0"><button type="button" aria-pressed="true">Script</button><button type="button" aria-pressed="false">剪辑</button></header><div class="_panel_d5a9c0"><div class="_script_d5a9c0"><nav class="_files_d5a9c0" aria-label="Episodes and files"><strong>Episodes and files</strong><form><input aria-label="Project folder" value=""><button type="submit">Open folder</button></form><button type="button">Project root</button><button type="button" title="/project/01.md" aria-current="page">01.md</button></nav><main class="_document_d5a9c0"><header class="_toolbar_d5a9c0"><strong title="/project/01.md">01.md</strong><span>Saved</span><button type="button" aria-pressed="true">Read</button><button type="button" aria-pressed="false">Edit source</button><button type="button" disabled="">Save</button><button type="button">Check file</button></header><article class="_reading_d5a9c0"><div class="_markdown_404681"><h1>第一集</h1>
+<p><strong>加粗</strong></p>
+<p>重复台词</p>
+<p>重复台词</p></div><p class="_hint_d5a9c0">Switch to Edit source to select the exact passage to rewrite.</p></article></main></div></div></section>"
+`;
+
+exports[`defaults to rendered Markdown without modifying disk and snapshots the reading layout 2`] = `
+"<section class="_shell_d5a9c0" aria-label="剧本工作台"><header class="_tabs_d5a9c0"><button type="button" aria-pressed="true">剧本</button><button type="button" aria-pressed="false">剪辑</button></header><div class="_panel_d5a9c0"><div class="_script_d5a9c0"><nav class="_files_d5a9c0" aria-label="分集与文件"><strong>分集与文件</strong><form><input aria-label="项目内文件夹" value=""><button type="submit">打开文件夹</button></form><button type="button">项目根目录</button><button type="button" title="/project/01.md" aria-current="page">01.md</button></nav><main class="_document_d5a9c0"><header class="_toolbar_d5a9c0"><strong title="/project/01.md">01.md</strong><span>已保存</span><button type="button" aria-pressed="true">阅读</button><button type="button" aria-pressed="false">编辑源码</button><button type="button" disabled="">保存</button><button type="button">检查文件更新</button></header><article class="_reading_d5a9c0"><div class="_markdown_404681"><h1>第一集</h1>
+<p><strong>加粗</strong></p>
+<p>重复台词</p>
+<p>重复台词</p></div><p class="_hint_d5a9c0">切到“编辑源码”后选中文字，即可要求改写准确选段。</p></article></main></div></div></section>"
+`;

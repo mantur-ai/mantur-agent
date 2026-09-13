@@ -8,6 +8,8 @@ English | [中文](2026-09-07-desktop-native-account-identity.zh.md)
 
 Desktop account login and the bundled ManturHub CLI need one device identity without copying a reusable account secret into renderer state, process arguments or shell environments. A lost provisioning response and an offline logout must not create an orphan credential or silently restore local authorization after restart.
 
+The browser-account-v2 [decision](../../implemented/architecture/2026-09-08-browser-account-authorization.md) supersedes this proposal’s v1 password, registration and activation flow. The broker ownership, process cleanup and native-platform acceptance requirements remain relevant.
+
 ## Proposal
 
 Electron Main will own one profile-local installation identity and independent OS-sealed attempt and device secrets. The native-account-v1 protocol commits the full verifier-first request before network transmission and preserves the same request after an unknown result. Confirmed ready metadata, including the original credential expiry, precedes activation. The device grant expires after an absolute ninety days without refresh.

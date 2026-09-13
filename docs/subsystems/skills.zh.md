@@ -238,6 +238,8 @@ interface Config {
 
 ## 浏览器 Session 目录
 
+`SkillInvocationSource` 使用 `name` 与 `form: 'instructions'` 标识用户所选的指令消息。可选的 `bundled` 来源包含精确 App 引用的 `version` 与 `digest`；普通注册表调用不包含它。[漫途广场](../../packages/skill/manturhub-marketplace/README.zh.md)负责这些 App 引用的校验与加载。
+
 `SkillListRequest` 通过 `sessionId` 指定一个 Session；`SkillListValue` 返回允许用户调用的条目，其中包含名称、描述、可选使用提示与模型调用可用性。`SessionSkillCatalog` 在不激活 Agent 的前提下读取 Session cwd 与记录的 preset。live Agent 可以提供其作用域 registry，冷 Session 则使用 preset 的 standing scope。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
@@ -255,6 +257,21 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 Host service for catalog reads and local Skill installation.
 
 ```ts cordis-catalog
+/**
+ * Read the App's offline Skill entries without requesting account or marketplace data.
+ * @param signal - cancellation supplied by the requesting client.
+ * @returns pinned identities and display titles; missing resources reject the request.
+ */
+@Remote async bundled(signal: AbortSignal): Promise<ManturBundledSkill[]>
+
+/**
+ * Verify that a draft still refers to the exact App resource the user selected.
+ * @param reference - captured name, version and digest, never a user-directory locator.
+ * @param signal - cancellation supplied by the sending draft.
+ * @returns the verified App identity; no installed or online substitute is selected.
+ */
+@Remote async resolveBundled(reference: string, signal: AbortSignal): Promise<ManturBundledSkill>
+
 /**
  * Load the complete public Skill catalog and current local install flags.
  * @returns browser-safe catalog metadata.

@@ -3,13 +3,14 @@ import { Context, type Fiber } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { isAbsolute } from 'node:path'
 import type { Agent } from '@deepseek-ai/dsh-agent'
+import { defineTool } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { connectMcpServer, type ConnectionHandle } from '@deepseek-ai/dsh-mcp-client'
 import { startEditor, type EditorProcess, type EditorRuntime, type RuntimeConfig } from './runtime.ts'
 import { resolvePackagedResources } from '@deepseek-ai/dsh-client-ui-mantur-editing/packaged-resources'
-import type { EditingWorkspace } from './types.ts'
+import { EDITING_WORKSPACE_META_KIND, type EditingWorkspace } from './types.ts'
 
 const EDITING_WORKFLOW = `Mantur Cut editing workflow
 
@@ -65,6 +66,36 @@ export class ManturEditing extends TypertRemoteService {
     if (!isAbsolute(config.editorRoot) || !isAbsolute(config.nodeExecutable)) throw new Error('Editing runtime paths must be absolute')
     if (config.runtimeMode === 'packaged') resolvePackagedResources(config.editorRoot)
     ctx.effect(() => () => this.stopForShutdown(), 'editing: drain session runtimes')
+    ctx.tools.register(defineTool({
+      name: 'open_editing_workbench',
+      description: 'Open or reuse this conversation’s 漫途Cut workbench when the user requests video editing. '
+        + 'Call this before editing if the mcp__mantur_cut__ tools are not available. '
+        + 'After success use those native tools to target the project shown in the workbench, inspect it and edit its draft. '
+        + 'Opening does not import media, apply edits or authorize overwrite, deletion, paid generation, export or publishing. '
+        + 'Preserve each native tool’s confirmation requirements. A hidden workbench can remain active; do not reopen it merely to show progress.',
+      parameters: {},
+      output: {
+        schema: {
+          type: 'object', additionalProperties: false,
+          properties: {
+            sessionId: { type: 'string', required: true },
+            editorUrl: { type: 'string', required: true },
+            directory: { type: 'string', required: true },
+          },
+        },
+        render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
+        presentationMeta: (_args, value) => ({ kind: EDITING_WORKSPACE_META_KIND, ...value }),
+      },
+      execute: async (_args, exec) => {
+        if (!exec.agent) throw new Error('Opening editing requires an owning Agent Session')
+        exec.signal.throwIfAborted()
+        const workspace = await this.open(exec.agent, `http://127.0.0.1:${ctx.webServer.port}`)
+        // Cancellation hides no failure and does not dispose the Session-owned editor.
+        exec.signal.throwIfAborted()
+        return { sessionId: exec.agent.id, ...workspace }
+      },
+      presentCall: () => ({ card: 'generic', title: 'Open 漫途Cut', kind: 'other' }),
+    }))
   }
 
   /**

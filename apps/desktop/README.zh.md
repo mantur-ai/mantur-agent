@@ -1,8 +1,16 @@
-# 漫途Agent 桌面端
+# ManTur Agent 桌面端
 
 [English](README.md) | 中文
 
-桌面应用是由漫途（Mantur）打造、专门在本地完成漫剧创作与生产的漫途Agent。Electron 只负责原生窗口和一个子进程；子进程在随机 loopback 端口启动随附的 `dsh --profile mantur` 应用。开发应用与打包应用都把已确认的蓝色无限环 Logo 用于原生窗口、macOS Dock、关于面板和安装包资源。桌面包不会实现另一套 agent 运行时。
+桌面应用是由漫途（Mantur）打造、专门在本地完成漫剧创作与生产的ManTur Agent。Electron 只负责原生窗口和一个子进程；子进程在随机 loopback 端口启动随附的 `dsh --profile mantur` 应用。开发应用与打包应用都把奶白色吉祥物图标（黄色螺旋、水平居中的蓝色无限环徽记，1024 像素透明画布和平滑圆角）用于原生窗口、macOS Dock、打包版关于面板和安装包资源。桌面包不会实现另一套 agent 运行时。
+
+Windows 使用 NSIS 安装向导，允许选择应用安装目录。EXE 随附应用资源，解压进度不表示再次下载应用。浏览器登录创建接口不存在时，客户端会单独提示服务器路由不可用，与网络错误和响应不兼容区分。打包成功不代表正式站登录可用，也不代表具备 Windows 签名身份。
+
+重复发起同一登录请求时，客户端接受服务器返回的 0 至 600 秒剩余有效期，并保留原始绝对过期时间。
+
+在交换新 Host 的启动 token 前，Main 仅从桌面窗口的 Cookie 存储移除 `127.0.0.1` 根路径下的 `dsh-auth-` 连接凭据。Cookie 跨端口共享，随机端口重启遗留的凭据可能使 HTTP 请求头超限，导致插件加载返回 431。清理保留漫途账号凭据、会话、浏览器偏好和无关 Cookie；完成移除后才导航，移除失败则停止启动。
+
+macOS 原生关于面板从应用包读取图标，因此未打包的开发程序在该面板保留 Electron 图标，Dock 图标使用产品 PNG。
 
 ## 不打包开发
 
@@ -41,9 +49,15 @@ pnpm run desktop:smoke
 
 Chrome for Testing 下载 URL 将版本号放在目录中，并使用 `chrome-headless-shell-<platform>.zip` 作为归档文件名。本地缓存文件名还会包含固定版本号。
 
-macOS 命令先由 electron-builder 完成签名并生成更新 ZIP，再用 Apple 的 `hdiutil` 创建 DMG。构建阶段使用临时唯一卷名，避免与已安装或已挂载的同名应用冲突；最终镜像会恢复 `漫途Agent` 卷名、加入 Applications 快捷方式，并生成独立的更新 blockmap。挂载点使用 macOS `getconf DARWIN_USER_TEMP_DIR` 下的独立临时目录，镜像文件仍位于构建输出目录；解析或创建挂载点失败会停止打包。
+编辑器打包暂存仅排除 webpack 构建缓存、重复的 `.remotion/chrome-headless-shell` 缓存和非目标平台的 ONNX 原生目录。清单指定的浏览器、目标绑定、其他缓存内容和许可证均保留。macOS 暂存阶段在签名前将 compositor 可执行文件及相邻 dylib 的引用改为 `@loader_path`；无法解析的非系统库会阻止打包。签名选项和权限配置保持不变。见[资源暂存决策](../../.agents/notes/implemented/bug-fix/2026-09-09-mantur-native-resource-staging.zh.md)。
 
-macOS x64 命令必须在 Intel Mac 上运行，Windows 命令必须在 x64 Windows 上运行。手动触发的 `Desktop package` GitHub Actions 工作流会在三个原生 runner 上检出同一个 commit、运行打包 smoke，并将以下文件保留七天：
+编辑器的固定版本渲染器补丁公开每个浏览器子进程及管道关闭的完成证据。安装准备同时等待该证据和公开浏览器关闭操作；缺失证据或清理失败仍会阻止安装。见[渲染浏览器关闭](../../.agents/notes/implemented/bug-fix/2026-09-09-mantur-render-browser-close.zh.md)。
+
+macOS 命令先由 electron-builder 完成签名并生成更新 ZIP，再用 Apple 的 `hdiutil` 创建 DMG。构建阶段使用临时唯一卷名，避免与已安装或已挂载的同名应用冲突；最终镜像会恢复 `ManTur Agent` 卷名、加入 Applications 快捷方式，并生成独立的更新 blockmap。挂载点使用 macOS `getconf DARWIN_USER_TEMP_DIR` 下的独立临时目录，镜像文件仍位于构建输出目录；解析或创建挂载点失败会停止打包。
+
+在没有 Developer ID 凭据的情况下进行本地 Apple Silicon 验收时，请在独立、干净的构建副本中运行 `pnpm run desktop:dist:mac:arm64:local`。该命令明确选择 electron-builder 的 ad-hoc 身份，关闭证书自动发现及公证，并要求严格签名校验。标准签名器在生成 ZIP 前封装已装配的应用；创建 DMG 前还必须通过 `codesign --verify --deep --strict`。签名后不得修改应用内容。这种本地身份只证明应用包完整性，不表示 Apple 认可、已公证、通过 Gatekeeper 或适用于公开更新。正式发行工作流及证书要求保持不变；见[本地签名决策](../../.agents/notes/implemented/bug-fix/2026-09-09-local-macos-bundle-signing.zh.md)。
+
+macOS x64 命令必须在 Intel Mac 上运行，Windows 命令必须在 x64 Windows 上运行。手动触发的 `Desktop package` GitHub Actions 工作流会在三个原生 runner 上检出同一个 commit、运行打包 smoke，并将以下文件、生成的 blockmap 和各平台的更新清单（`latest-mac.yml` 或 `latest.yml`）保留七天。这些 CI 附件不会发布正式更新源：
 
 | Runner | 命令 | 产物 |
 |---|---|---|
@@ -53,9 +67,13 @@ macOS x64 命令必须在 Intel Mac 上运行，Windows 命令必须在 x64 Wind
 
 smoke 会从解包应用自己的依赖目录启动 `dsh`，把打印出的进程 token 换成会话 cookie，并要求带品牌标题的 Web 页面返回 HTTP 200。它还会校验 Mantur Cut manifest 中的每条路径，以 `--help` 启动包内 Whisper CLI 与 server，要求源码、许可证、构建及安全记录齐全，并检查 updater 依赖与 GitHub release 配置。它使用空的临时 Harness home，避免开发者数据影响包检查结果。
 
+smoke 还会检查内置 CLI 的固定来源记录、包版本、许可证和依赖入口，创建真实的配置目录内启动脚本，并要求 `manturhub --version` 使用包内 Electron 可执行文件返回 `0.11.0`。启动脚本关闭 CLI 和技能更新检查。缺少资源直接失败，不搜索全局 CLI。该检查不会创建账号授权尝试，也不验证浏览器授权、Main 的操作系统存储，或以 macOS 结果证明 Windows 行为。
+
+打包时将 CLI 来源记录和 `node_modules` 目录分别作为资源输入。Electron Builder 在复制目录时排除其顶层 `node_modules` 子目录；直接选择模块目录本身，才能保留内置 CLI 及其依赖。
+
 ## 发布已签名的 macOS release
 
-手动触发的 `Desktop release` GitHub Actions 工作流会在原生 macOS runner 上分别构建 arm64 与 x64。两个任务都会使用 Developer ID Application 身份签名应用、提交 Apple notarization，并验证签名、Gatekeeper 评估与 stapled ticket；它们还会在产物进入组装步骤前运行 packaged smoke。
+手动触发的 `Desktop release` 工作流默认选择 `architectures=both`，也可明确选择 `arm64`，在对应原生 macOS runner 上构建。每个选中任务都会先在进程文件描述符上限为 64 时验证有界签名扫描，再使用 Developer ID Application 身份签名应用、提交 Apple notarization，并验证签名、Gatekeeper 评估与 stapled ticket；它们还会在产物进入组装步骤前运行 packaged smoke。
 
 对外发布前，先在仓库设置中启用 Release Immutability。然后在 GitHub 的 `macos-release` 环境中配置两个变量和四个加密 secret：
 
@@ -68,9 +86,13 @@ smoke 会从解包应用自己的依赖目录启动 `dsh`，把打印出的进�
 | Secret | `APPLE_ID` | 用于 notarization 的 Apple ID |
 | Secret | `APPLE_APP_SPECIFIC_PASSWORD` | 该 Apple ID 的 App 专用密码 |
 
-工作流会把两份原生 `latest-mac.yml` 合并为一份可区分架构的更新通道，并把完整候选产物与 `SHA256SUMS` 保留七天。必须从精确匹配 `v<apps/desktop 版本>` 的 tag 运行；electron-updater 可以从 GitHub feed 中选择这种兼容 semver 的预发布 tag。`publish=false` 会在组装候选产物后停止。`publish=true` 还要求审批变量指向完整固定源码配置的 SHA-256 摘要，之后才会创建 GitHub release，并同时上传 DMG、更新 ZIP、blockmap、更新元数据与哈希。工作流会拒绝使用已有 release 的 tag，不会替换已发布文件；仓库级 Release Immutability 则会继续阻止之后修改 tag 或产物。
+工作流会把选中的原生 `latest-mac.yml` 合并为一份可区分架构的更新通道，并把完整候选产物与 `SHA256SUMS` 保留七天。必须从精确匹配 `v<apps/desktop 版本>` 的 tag 运行；electron-updater 可以从 GitHub feed 中选择这种兼容 semver 的预发布 tag。`publish=false` 会在组装候选产物后停止。`publish=true` 还要求审批变量指向完整固定源码配置的 SHA-256 摘要，之后才会创建 GitHub release，并同时上传 DMG、更新 ZIP、blockmap、更新元数据与哈希。工作流会拒绝使用已有 release 的 tag，不会替换已发布文件；仓库级 Release Immutability 则会继续阻止之后修改 tag 或产物。
+
+每次交付安装包或更新发布状态，都必须在[飞书产品与安装使用指南](https://guiyi2023.feishu.cn/docx/Iq3id4fr8o2uo9xKfpEcIck9nRf)中追加带日期和版本号的用户更新日志，并保留历史记录与附件。日志说明用户可见的改进、问题修复、更新步骤、支持平台、已知限制，以及经过验证的安装包下载和自动更新状态；仅上传安装包不代表自动更新通道已经可用。最新记录排在最前，同时更新受影响的安装与使用说明。
 
 ## 运行时设计
+
+目录选择使用无参数的 `manturDirectoryPicker.pick()` preload 能力。Main 只接受当前本地主 frame，并将 Electron 单目录对话框的父窗口设为当前应用窗口。取消返回 `null`；失败直接报错，不调用 Host 选择器。对话框尚未结束时，重复请求会被拒绝，更新准备也会被阻止，直到原生调用结束。更新准备或退出期间，Main 拒绝新请求；主 frame 导航、窗口关闭或退出后，迟到的结果会失效。
 
 主进程通过 `ELECTRON_RUN_AS_NODE=1` 复用 Electron 作为 Node 可执行文件，并以 `--profile mantur --host 127.0.0.1 --port 0 --no-open` 启动已构建的 `@deepseek-ai/dsh` 入口。就绪解析器只接受带 token 的 `127.0.0.1` URL。renderer 禁用 Node integration、启用 context isolation 与 sandbox，并把离开本地 origin 的导航交给操作系统浏览器。
 
@@ -78,13 +100,19 @@ smoke 会从解包应用自己的依赖目录启动 `dsh`，把打印出的进�
 
 打包后的 Main 将 `resources/mantur-cut` 和自身可执行文件提供给漫途剪辑 profile。首次打开工作台才以 Electron 的 Node 模式启动编辑器，不创建第二个 Electron 窗口。安装包必须包含清单声明的生产服务、静态前端与目标平台渲染二进制；不完整的编辑器包会明确报错。开发模式不继承这一打包选择。会话可写目录和待完成的分发检查见[剪辑运行服务](../../packages/client/ui-mantur-editing/README.zh.md)。
 
-Main 持有操作系统加密的原生账号存储，并校验来自当前本地主 frame 的账号操作。桌面启动显式选择漫途 provider 的 `desktop-managed` 身份。Host API 响应通过逐请求 loopback broker 流式传输，仅 Main 向上游发送设备 bearer。命令描述文件保持私有，直至 consumer 确认整棵进程树清理完成。退出登录会取消已接受的流与命令，但保留加密的远端清理记录，直到 HTTP 204 或原始到期时间。
+Main 持有 browser-account-v2 授权及操作系统加密的 profile 存储。登录按钮打开所配置 issuer 的普通网站登录与同意页。Main 注册精确的 `127.0.0.1` 回调，校验 state 与 issuer，加密保存一次性 code，再使用 PKCE 和设备证明交换授权。只有确认的 grant 元数据才能启用登录及唤回窗口。renderer 不接收包含 state 的 URL 或凭据。
+
+交换恢复在 attempt 到期前复用原始加密请求。进程重启后尚未收到 code 的 attempt 会取消，不注册新端口。退出登录立即阻止本地调用，并保留加密的取消或撤销资料，直到服务端 HTTP 204 或 grant 绝对期限结束；结果未知的交换保留九十天上界。浏览器账号存储使用版本 2。在 macOS 上启动 Host 前，Main 会为版本 1 数据库提供明确的重新授权选项。确认后，在账号目录旁保留仅当前用户可访问的备份，并仅将账号数据库原子替换为空的版本 2 存储；取消不修改数据库。替换失败会保留原数据库或其私有备份，以固定错误提示停止启动。此操作不会解密、复用或远端撤销旧凭据；项目、草稿和模型凭据不变。其他非空格式仍被拒绝。Windows 版本 1 恢复尚未实现原生持久化发布，会明确失败且不替换数据。参见[账号升级决策](../../.agents/notes/implemented/architecture/2026-09-09-native-account-reauthorization.zh.md)。
+
+[内置 CLI 输入](cli-runtime/README.zh.md)由审核过的归档和独立 npm 锁文件组成。开发与打包都会准备 `mantur-cli` 资源。Main 创建 profile 本地启动器，将它置于受监督 Host 的 PATH 首位，并使用自身 Electron 可执行文件的 Node 模式。缺少资源时启动失败。命令使用 broker-v2 描述文件；只有 Main 向上游附加设备 bearer。运行时不会安装或寻找全局 CLI。
 
 永久应用标识为 `ai.mantur.agent`。Electron 就绪前，载体会在操作系统的应用数据根目录下设置稳定的 `mantur-agent` 用户数据目录。其 `harness` 子目录是已安装应用使用的唯一 `DSH_HOME`，因此 `~/.dsh` 中的 CLI 或开发数据不会影响桌面启动。子进程从应用自有的中性目录启动，并把 stdout、stderr、恢复与 updater 诊断追加到同一用户数据根下的 `logs/harness.log`。
 
 如果启动错误只识别到过期的 `session_projcache` schema，载体会先关闭失败的子进程并完成日志写入，再由本地化原生对话框在用户明确同意后删除这份可丢弃的投影缓存并重试。它不会删除会话日志、设置、凭据、profile 或 workspace。其他启动错误只提供查看日志与退出，不猜测修复方式。
 
-已打包应用会在 macOS 的原生应用菜单和 Windows 的帮助菜单中显示当前版本与**检查更新…**。菜单会显示检查中、下载进度、可安装、已是最新版与失败状态；手动检查还会打开本地化的结果或错误对话框。应用启动后会开始检查，并每六小时重复。stable 构建只接收 stable release，版本号含 `alpha`、`beta` 或 `rc` 的构建可以接收预发布版本。后台发现新版本时保持安静。漫途侧栏在展开与收起状态下都在设置上方显示更新入口；空闲或已是最新版时不保留卡片。只有用户点击下载才开始传输，显示实际字节数，仅在已知时显示百分比。下载并校验完成后，准备重启前会请求确认。确认安装后，Main 保存原生草稿，通过所属 IPC 通道请求 Host 停机回执，再关闭账号通道并请求 Host 正常退出。Main 等待进程真正退出和诊断日志关闭后才调用安装器。不支持的 Host 组合、保存失败、取消、异常退出和超时都会阻止安装；检查和下载不会冻结工作。等待失败后 Host 清理可能继续，工作不会自动恢复。参见 [Host 更新策略](../../packages/bundle/mantur-app/README.zh.md#use-this-package)。选择稍后会保留重启安装入口，不重复弹窗。侧栏和原生菜单共用主进程确认；保存失败会保留已校验的下载并报告错误。关闭 updater 会抑制后续安装。
+GitHub 检查先比较已选发行标签，再请求更新文件。相同或更旧的发行显示暂无可用更新。不完整的更高发行和网络故障显示简短本地化反馈；原始诊断保留在日志中。参见[版本检查决策](../../.agents/notes/implemented/bug-fix/2026-09-12-github-update-version-check.zh.md)。
+
+已打包应用会在 macOS 的原生应用菜单和 Windows 的帮助菜单中显示当前版本与**检查更新…**。菜单会显示检查中、下载进度、可安装、已是最新版与失败状态；手动检查还会打开本地化的结果或错误对话框。应用启动后会开始检查，并每六小时重复。stable 构建只接收 stable release，版本号含 `alpha`、`beta` 或 `rc` 的构建可以接收预发布版本。后台发现新版本时保持安静。通用设置提供已安装版本、手动检查与重试操作。漫途侧栏仅在发现新版、下载中或已有待安装版本时显示入口，展开与收起状态均支持。只有用户点击下载才开始传输，显示实际字节数，仅在已知时显示百分比。下载并校验完成后，准备重启前会请求确认。确认安装后，Main 保存原生草稿，通过所属 IPC 通道请求 Host 停机回执，再关闭账号通道并请求 Host 正常退出。Main 等待进程真正退出和诊断日志关闭后才调用安装器。不支持的 Host 组合、保存失败、取消、异常退出和超时都会阻止安装；检查和下载不会冻结工作。等待失败后 Host 清理可能继续，工作不会自动恢复。参见 [Host 更新策略](../../packages/bundle/mantur-app/README.zh.md#use-this-package)。选择稍后会保留重启安装入口，不重复弹窗。侧栏和原生菜单共用主进程确认；保存失败会保留已校验的下载并报告错误。关闭 updater 会抑制后续安装。
 
 macOS Intel、macOS Apple Silicon 与 Windows 使用同一个更新控制器。macOS release 更新需要已签名并 notarize 的应用，以及生成的 ZIP 与更新元数据；DMG 仍是人工安装产物。Windows 对外更新需要代码签名身份、受保护的发布凭据与生成的 NSIS 更新产物；本仓库不提供或绕过这些前置条件。
 
@@ -92,18 +120,19 @@ macOS Intel、macOS Apple Silicon 与 Windows 使用同一个更新控制器。m
 
 <a id="draft-checkpoints"></a>
 
-沙箱化 preload 仅暴露具名的草稿读取、保存、重启准备及更新状态与操作消息。主进程只接受当前本地主 frame 的调用，并在 `userData/drafts` 下写入完整检查点，不依赖随机 loopback origin。检查点保留完整编辑器文档、Skill 引用标识，以及用户已经选择的图片原始字节和 SHA-256 摘要。一个 revision 覆盖所有草稿归属以及未关联草稿转入 Session 的两端。过期 revision、附件不完整、存储错误或 renderer 无响应都会阻止重启准备；取消会释放输入锁。
+桌面端使用原版逐 Session 浏览器草稿存储，不再暴露原生草稿检查点桥，也不在切换 Session 时锁定草稿。未发送草稿不保证在 loopback origin 改变后保留；已发送消息仍存于 Session 日志。旧原生检查点文件保留在磁盘上，但不自动恢复。
 
-在 macOS 上，保存回执仅在检查点文件与父目录同步后返回。Windows 尚未实现原生持久发布路径，保存会明确失败；Node 未提供所需的目录 fsync 操作。恢复只读取应用检查点和当前 origin 中存在的旧文本草稿。发生冲突会明确报告，不扫描其他浏览器 origin，也不替换其数据。漫途 profile 在启用首次发送准备前将未关联输入框接入此检查点。
+桌面对话框接受本机文件与文件夹拖拽，并提供添加文件和添加文件夹按钮。文档逐字节复制到 `userData/attachments` 下的独立目录，保留嵌套路径和空目录。文件名不限定接受类型：Markdown、Word、音频等资料均保留原始字节。失败批次被清理并显示错误，不修改原文件。符号链接及包含附件存储目录的导入会被拒绝。
 
-载体将 `app.getPath('documents')` 下的 `漫途项目` 子目录作为 `DSH_MANTUR_PROJECTS_ROOT` 传给 Host。该值只指定默认根目录，不提前创建目录。[项目所有者](../../packages/workspace/mantur-projects/README.zh.md)持久保存用户明确更改的位置，仅在首次发送时创建子目录。
+导入项以文件或文件夹引用标签显示原始名称，按 Backspace/Delete 可移除标签而不删除已复制文件。添加文件与添加文件夹沿用输入框现有图标按钮样式。提交时，标签转为包含保存路径的文件引用（必要时加引号），经普通用户消息记录入日志。路径含双引号或控制字符时会明确提示重命名。切换 Session 后，导入结果不会加入其他 Session。文档解读使用 Agent 文件工具，导入本身不承诺提取 Word 正文。图片保留预览和图片提交路径。纯浏览器部署保留图片接收能力。[原生导入决策](../../.agents/notes/implemented/feature/2026-09-11-desktop-file-import.zh.md)记录存储与测试范围。
 
 ## 已知限制
 
+- 主应用依赖固定版本及其验证范围见[桌面依赖安全决策](../../.agents/notes/implemented/bug-fix/2026-09-08-mantur-main-app-security.zh.md)。
 - 将 Whisper 可执行文件打入安装包并启动，只能证明其原生文件及相邻动态库能在目标平台加载，不能让内嵌工作台直接具备本地转写能力。Mantur iframe 尚未安装 OpenChatCut 的桌面推理 preload，因此编辑器的原生 ASR adapter 当前会返回不可用。
 - 构建出内部安装包不等于获得分发批准。OpenChatCut 的 AGPL 源码交付义务、Remotion 的实体与用途条款、FFmpeg 与 ffprobe 的 GPL/LGPL 义务、需保留的 notice、二进制再分发条款及全部生产依赖审计发现，都必须针对精确补丁 tree 完成审核后才能公开发布。
-- 原生账号 Main、preload、provider、表单与 Bash、PowerShell、PTY 消费方已在源码中连接。表单提供注册、浏览器授权、持久跳过和精确到期状态，不发布设备 bearer。广场登录路由、打包 CLI 调用和原生操作系统验收仍未完成。Loopback IPC、模拟 preload 浏览器测试和固定 CLI 测试不能证明完整原生登录已可用；[接入提案](../../.agents/notes/proposed/architecture/2026-09-07-desktop-native-account-identity.zh.md)记录剩余验收条件。
+- 本地回调、加密存储、模拟 preload 和内置 CLI 测试不能证明真实网站授权。CLI 余额夹具使用受控本地响应。macOS 和 Windows 原生账号存储、浏览器返回、安装包资源、PostgreSQL 16 与经授权的测试站检查仍需分别验收；参见[浏览器授权决策](../../.agents/notes/implemented/architecture/2026-09-08-browser-account-authorization.zh.md)。
 - `Desktop package` 产物仍是未签名的内部安装包。macOS Gatekeeper 与 Windows SmartScreen 可能对这些文件显示警告；对外分发 macOS 客户端时只能使用 `Desktop release` 产物。
-- 原生图标源文件是带白色圆角底和透明外角的 1024 px PNG，Web 客户端单独使用透明 Logo。macOS 和 Windows 包会在原生构建时生成各自的平台图标格式；当前没有矢量源文件。
+- 原生图标源是 1024 像素 RGBA PNG，带透明圆角和居中的蓝色无限环徽记。Web 客户端单独使用透明徽标。macOS 和 Windows 安装包在原生构建时生成各自平台的图标格式；尚无矢量源文件。
 - 已签名的 release 工作流只发布 macOS。Windows 在具备代码签名身份与受保护的发布路径之前不支持外部更新。
 - 每个目标只在其原生 runner 同时完成打包和 smoke 后有效。一个架构上的构建不能作为另一目标的证据。

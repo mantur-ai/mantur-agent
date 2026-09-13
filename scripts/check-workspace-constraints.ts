@@ -216,6 +216,8 @@ export function expectedDshPackageFiles(manifest: PackageManifest): readonly str
     // as a row module, so it cannot ride inside the package entry.
     ...exportDefault(manifest, './startup') === './lib/startup.js' ? ['lib/startup.js'] : [],
     ...extras,
+    // A bundled shared-types entry does not publish private browser compiler output.
+    ...exportDefault(manifest, './types') === './lib/types.js' ? ['lib/types.js'] : [],
     // Subpaths whose runtime default is the tsc-emitted tree (lib/types/*.js —
     // browser-safe source channels rehomed off src so plain Node can import
     // them without type stripping) publish the emitted JS alongside the

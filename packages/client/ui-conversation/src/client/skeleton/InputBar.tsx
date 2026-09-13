@@ -17,7 +17,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, KeyboardEvent, MouseEvent, ReactNode } from 'react'
 import clsx from 'clsx'
 import {
-  IconPlusOutline16, IconWarningOutline16, Toast, Tooltip,
+  IconPlusOutline16, IconWarningOutline16, IconPaperclipOutline16, IconFolderOpenOutline16, Toast, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 // Type-only: the `plan` projection key merge (the TodoDock posture — the
 // composer reads a host-computed value; the domain owns the key).
@@ -41,7 +41,7 @@ import css from './InputBar.module.css'
 export type InputBarProps = ComposerBarProps
 
 export const InputBar = memo(function InputBar({
-  useSession, inputActions: sessionInputActions, keyboard, addImages, removeImage, draftImages,
+  useSession, inputActions: sessionInputActions, keyboard, addImages, importFiles, removeImage, draftImages,
   resolveSubmitMode, toggleCommandMenu, stop, command, t,
   renderSlot, useNotices, useLexicon, useMenuLauncher, useComposerInput, useExternalPermissions, unassignedActions,
   useProjection, sessionId, variant, disabled: inert = false, blocked,
@@ -246,14 +246,26 @@ export const InputBar = memo(function InputBar({
     if (rejected !== null) showToast(rejected)
   }, [addImages, attachments, imageLimits, showToast, t])
 
+  const importNativeFiles = useCallback((selection: readonly File[] | 'file' | 'directory'): void => {
+    if (importFiles === undefined) return
+    void importFiles(selection).catch((error: unknown) => { showToast(String(error)) })
+  }, [importFiles, showToast])
+  const intakeFiles = useCallback((files: readonly File[]): void => {
+    if (importFiles === undefined) { intakeImages(files); return }
+    const images = files.filter(file => ['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(file.type))
+    const documents = files.filter(file => !images.includes(file))
+    if (images.length > 0) intakeImages(images)
+    if (documents.length > 0) importNativeFiles(documents)
+  }, [intakeImages, importNativeFiles, importFiles, showToast, t])
+
   const canAcceptDrop = !locked && !machineBusy && addImages !== undefined
 
   // The keymap handlers read live bar state through this ref so the editor
   // registration survives re-renders without re-arming per keystroke.
   const gate = useRef({
-    locked, machineBusy, canSteerQueue, running, subagent, resolveSubmitMode, intakeImages,
+    locked, machineBusy, canSteerQueue, running, subagent, resolveSubmitMode, intakeFiles,
   })
-  gate.current = { locked, machineBusy, canSteerQueue, running, subagent, resolveSubmitMode, intakeImages }
+  gate.current = { locked, machineBusy, canSteerQueue, running, subagent, resolveSubmitMode, intakeFiles }
 
   useEffect(() => {
     if (editor === null || keyboard === undefined) return
@@ -280,7 +292,7 @@ export const InputBar = memo(function InputBar({
           g.subagent === null,
         ))
       },
-      intakeFiles: (files) => { gate.current.intakeImages(files) },
+      intakeFiles: (files) => { gate.current.intakeFiles(files) },
       pasteText: (text) => {
         if (gate.current.machineBusy || gate.current.locked) return
         keyboard.paste(text)
@@ -397,10 +409,14 @@ export const InputBar = memo(function InputBar({
           <div className={css.overlayAnchor}>{renderSlot('conversation.input.overlay', {})}</div>
         )}
         {accessory !== undefined && <div className={css.accessory}>{accessory}</div>}
+        <div className={css.productAccessory}>
+          {renderSlot('conversation.composer.bar.accessory', { disabled: locked })}
+        </div>
         {renderSlot('conversation.input.attachments', {
           attachments,
           canAcceptDrop,
-          onAddImages: intakeImages,
+          onAddImages: intakeFiles,
+          filesSupported: importFiles !== undefined,
           onRemoveImage: (id) => { removeImage?.(id) },
           dropLimits: imageLimits === undefined ? undefined : {
             count: imageLimits.maxImagesPerMessage,
@@ -454,6 +470,20 @@ export const InputBar = memo(function InputBar({
                 <IconPlusOutline16 size={14} />
               </button>
             </Tooltip>
+            {importFiles !== undefined && <>
+              <Tooltip label={t('file.choose')} side="top" delayMs={500}>
+                <button type="button" className={css.add} aria-label={t('file.choose')}
+                  disabled={!canAcceptDrop} onMouseDown={keepFocus} onClick={() => { importNativeFiles('file') }}>
+                  <IconPaperclipOutline16 size={14} />
+                </button>
+              </Tooltip>
+              <Tooltip label={t('file.chooseFolder')} side="top" delayMs={500}>
+                <button type="button" className={css.add} aria-label={t('file.chooseFolder')}
+                  disabled={!canAcceptDrop} onMouseDown={keepFocus} onClick={() => { importNativeFiles('directory') }}>
+                  <IconFolderOpenOutline16 size={14} />
+                </button>
+              </Tooltip>
+            </>}
             <div className={css.modes}>
               {accessSelect}
               {sessionId === undefined ? null : renderSlot('conversation.input.plan', { locked })}

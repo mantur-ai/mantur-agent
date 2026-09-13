@@ -16,7 +16,7 @@ Status: implemented
 
 ## Alternatives considered
 
-单独的 renderer updater 会重复下载和确认职责。自动下载会移除明确同意。永久空闲卡片会在没有可用操作时占据空间。按时间猜测百分比会误报进度。
+单独的 renderer updater 会重复下载和确认职责。自动下载会移除明确同意。隐藏空闲卡片的决定由[常驻更新检查决定](2026-09-11-desktop-update-check.zh.md)部分取代，以便在发现新版前也能手动检查。按时间猜测百分比会误报进度。
 
 ## Consequences
 

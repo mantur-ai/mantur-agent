@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-mantur-app",
-  "description": "The Mantur Agent desktop profile layer over dsh-base and dsh-web-app",
-  "version": "0.1.2-rc.1",
+  "description": "The ManTur Agent desktop profile layer over dsh-base and dsh-web-app",
+  "version": "0.1.3",
   "publishConfig": {
     "access": "public"
   },
@@ -48,6 +48,7 @@
     "@deepseek-ai/dsh-authorization-manturhub": "workspace:^",
     "@deepseek-ai/dsh-client-ui-brand-mantur": "workspace:^",
     "@deepseek-ai/dsh-client-ui-mantur-account": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-mantur-assets": "workspace:^",
     "@deepseek-ai/dsh-client-ui-mantur-navigation": "workspace:^",
     "@deepseek-ai/dsh-manturhub-marketplace": "workspace:^",
     "@deepseek-ai/dsh-mantur-projects": "workspace:^",
@@ -64,7 +65,8 @@
     "@deepseek-ai/cordis-plugin-loader": "workspace:^",
     "@deepseek-ai/dsh-llm": "workspace:^",
     "@deepseek-ai/dsh-code-runtime-worker-thread": "workspace:^",
-    "@deepseek-ai/dsh-cordis-host-runner": "workspace:^"
+    "@deepseek-ai/dsh-cordis-host-runner": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-mantur-script": "workspace:^"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:^"

@@ -6,11 +6,15 @@
   },
   "include": ["src"],
   "references": [
+    { "path": "../../core/agent" },
+    { "path": "../../llm/llm" },
+    { "path": "../skill" },
     { "path": "../../../vendor/cosmokit" },
     { "path": "../../../vendor/cordis" },
     { "path": "../../../vendor/schemastery" },
     { "path": "../../credentials/authorization-manturhub" },
     { "path": "../../util/home-paths" },
+    { "path": "../skill-filesystem" },
     { "path": "../../typert/protocol" }
   ]
 }

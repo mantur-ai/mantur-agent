@@ -279,6 +279,8 @@ export interface Config {
 ```ts config-catalog
 /** ManturHub deployment endpoint. */
 export interface Config {
+  /** Visible-client balance polling cadence in milliseconds. */
+  readonly balanceRefreshIntervalMs?: number
   /** Standalone credential storage or Electron Main ownership; no cross-mode credential lookup. */
   readonly identity?: ManturIdentityMode
   /** Explicit Main transport and command budgets, required for desktop-managed identity. */
@@ -316,7 +318,7 @@ export interface NativeAccountConfiguration {
 export type ManturEnvironment = 'production' | 'test'
 ```
 
-来源：[`packages/credentials/authorization-manturhub/src/index.ts:32`](../packages/credentials/authorization-manturhub/src/index.ts)
+来源：[`packages/credentials/authorization-manturhub/src/index.ts:33`](../packages/credentials/authorization-manturhub/src/index.ts)
 
 <a id="deepseek-aidsh-bash-local"></a>
 
@@ -408,6 +410,26 @@ export interface Config {
 
 来源：[`packages/client/hmr/src/index.ts:31`](../packages/client/hmr/src/index.ts)
 
+<a id="deepseek-aidsh-client-ui-mantur-assets"></a>
+
+## `@deepseek-ai/dsh-client-ui-mantur-assets`
+
+需要： `typert` · `fs` · `tools` · `connection`
+
+```ts config-catalog
+/** Size and listing limits for report, journal, and media reads. */
+export interface Config {
+  /** Maximum bytes per report or journal read. */
+  readonly maxBytes: number
+  /** Maximum direct child entries per selected directory. */
+  readonly maxEntries: number
+  /** Maximum bytes per media validation or preview read. */
+  readonly maxMediaBytes: number
+}
+```
+
+来源： [`packages/client/ui-mantur-assets/src/index.ts:15`](../packages/client/ui-mantur-assets/src/index.ts)
+
 <a id="deepseek-aidsh-client-ui-mantur-editing"></a>
 
 ## `@deepseek-ai/dsh-client-ui-mantur-editing`
@@ -435,7 +457,7 @@ export interface RuntimeConfig {
 }
 ```
 
-来源： [`packages/client/ui-mantur-editing/src/index.ts:34`](../packages/client/ui-mantur-editing/src/index.ts)
+来源： [`packages/client/ui-mantur-editing/src/index.ts:35`](../packages/client/ui-mantur-editing/src/index.ts)
 
 <a id="deepseek-aidsh-client-ui-mantur-navigation"></a>
 
@@ -456,6 +478,24 @@ export type CreationMode = typeof CREATION_MODES[number]
 ```
 
 来源：[`packages/client/ui-mantur-navigation/src/index.ts:9`](../packages/client/ui-mantur-navigation/src/index.ts)
+
+<a id="deepseek-aidsh-client-ui-mantur-script"></a>
+
+## `@deepseek-ai/dsh-client-ui-mantur-script`
+
+依赖： `typert` · `fs` · `tools`
+
+```ts config-catalog
+/** Deployment limits for whole-document editing and directory discovery. */
+export interface Config {
+  /** Maximum UTF-8 bytes read or written for one script. */
+  readonly maxBytes: number
+  /** Maximum direct entries examined in one project folder. */
+  readonly maxEntries: number
+}
+```
+
+来源： [`packages/client/ui-mantur-script/src/index.ts:13`](../packages/client/ui-mantur-script/src/index.ts)
 
 <a id="deepseek-aidsh-client-ui-workspace"></a>
 
@@ -1586,6 +1626,8 @@ export interface Config {
 ```ts config-catalog
 /** Marketplace Host configuration. */
 export interface Config {
+  /** Read-only App resource directory containing the pinned Skill manifest. */
+  readonly bundledSkillDir?: string
   /** Harness home containing the live user Skill directory. */
   readonly dshHome?: string
   /** Maximum JSON bytes accepted from one ManturHub metadata response. */
@@ -1603,7 +1645,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/skill/manturhub-marketplace/src/index.ts:21`](../packages/skill/manturhub-marketplace/src/index.ts)
+来源：[`packages/skill/manturhub-marketplace/src/index.ts:25`](../packages/skill/manturhub-marketplace/src/index.ts)
 
 <a id="deepseek-aidsh-mcp-client"></a>
 
@@ -2281,7 +2323,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/skill/skill/src/index.ts:283`](../packages/skill/skill/src/index.ts)
+来源：[`packages/skill/skill/src/index.ts:285`](../packages/skill/skill/src/index.ts)
 
 <a id="deepseek-aidsh-skill-filesystem"></a>
 

@@ -3,13 +3,15 @@ import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
+import { UiConversation } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import * as client from '../src/client/index.ts'
 import { Workbench } from '../src/client/Workbench.tsx'
+import type {} from '@deepseek-ai/dsh-client-ui-mantur-navigation/client'
 
 vi.mock('@deepseek-ai/dsh-client-ui-mantur-editing/remote', () => ({ default: {} }))
 
 describe('editing workbench composition', () => {
-  it('opens only for explicit editing selections and releases its occupant and listener', async () => {
+  it('keeps mode selections independent of workbench visibility and releases its controls', async () => {
     const ctx = new Context()
     onTestFinished(() => ctx.fiber.dispose())
     await ctx.plugin(SlotRegistry).await()
@@ -20,6 +22,9 @@ describe('editing workbench composition', () => {
     ctx.provide('theme', { getTheme: () => ({ active: { colorScheme } }) } as never)
     const layout = { openWorkbench: vi.fn(), closeWorkbench: vi.fn() }
     ctx.provide('layout', layout as never)
+    const sessions = { list: { getSnapshot: () => ({ current: undefined }), subscribe: () => () => {} } }
+    ctx.provide('sessions', sessions as never)
+    new UiConversation(ctx, sessions as never)
     const disposeRemote = vi.fn(async () => {})
     const open = vi.fn()
       .mockResolvedValueOnce({ ok: true, value: { editorUrl: 'http://127.0.0.1:5300/', directory: '/project/editing' } })
@@ -27,15 +32,17 @@ describe('editing workbench composition', () => {
     ctx.provide('remote', { $mount: vi.fn(async () => disposeRemote), manturEditing: { open } } as never)
     ctx.provide('remote.manturEditing', { open } as never)
     const slots = ctx.get('slots') as SlotRegistry
-    slots.register({ name: 'root', children: { 'main.workbench': { kind: 'single', scope: 'root' }, 'conversation.session.header.actions': { kind: 'list', scope: 'session' } } } as never, () => null)
+    slots.register({ name: 'root', children: { 'main.workbench.editing.content': { kind: 'single', scope: 'root' }, 'main.workbench.toggle.editing': { kind: 'single', scope: 'root' }, 'main.workbench.editing.tab': { kind: 'single', scope: 'root' } } } as never, () => null)
     const fiber = ctx.plugin(client)
     await fiber.await()
-    expect(slots.entries('main.workbench')[0]?.component).toBe(Workbench)
-    expect(slots.entries('conversation.session.header.actions')).toHaveLength(1)
-    const action = slots.entries('conversation.session.header.actions')[0]!
-    ;(action.inject as unknown as () => { openWorkbench: () => void })().openWorkbench()
-    expect(layout.openWorkbench).toHaveBeenCalledOnce()
-    const entry = slots.entries('main.workbench')[0]!
+    expect(slots.entries('main.workbench.editing.content')[0]?.component).toBe(Workbench)
+    expect(slots.entries('main.workbench.toggle.editing')).toHaveLength(1)
+    const toggle = slots.entries('main.workbench.toggle.editing')[0]!
+    const control = (toggle.inject as unknown as () => client.WorkbenchToggleInjection)()
+    const stopObserving = control.observeAutomaticOpening(layout.openWorkbench)
+    control.suppressAutomaticOpening()
+    stopObserving()
+    const entry = slots.entries('main.workbench.editing.content')[0]!
     const face = (entry.inject as unknown as () => client.WorkbenchInjection)()
     await expect(face.openWorkspace('session-a' as never)).resolves.toEqual({ editorUrl: 'http://127.0.0.1:5300/', directory: '/project/editing' })
     await expect(face.openWorkspace('session-a' as never)).rejects.toThrow('editor refused')
@@ -58,20 +65,20 @@ describe('editing workbench composition', () => {
     expect(notify).toHaveBeenCalledOnce()
     const disposedNotify = vi.fn()
     face.subscribeTheme(disposedNotify)
-    layout.openWorkbench.mockClear()
-    ctx.emit('mantur/creation-mode-selected', 'editing')
-    ctx.emit('mantur/creation-mode-selected', 'editing')
-    expect(layout.openWorkbench).toHaveBeenCalledTimes(2)
+    expect(layout.openWorkbench).not.toHaveBeenCalled()
+    ctx.emit('mantur/creation-mode-selected', 'production')
+    ctx.emit('mantur/creation-mode-selected', 'production')
+    expect(layout.openWorkbench).not.toHaveBeenCalled()
     for (const mode of ['script', 'production', 'assets'] as const) ctx.emit('mantur/creation-mode-selected', mode)
-    expect(layout.closeWorkbench).toHaveBeenCalledTimes(3)
+    expect(layout.closeWorkbench).not.toHaveBeenCalled()
     await fiber.dispose()
     expect(disposeRemote).toHaveBeenCalledOnce()
-    expect(layout.closeWorkbench).toHaveBeenCalledTimes(4)
-    expect(slots.entries('main.workbench')).toEqual([])
-    expect(slots.entries('conversation.session.header.actions')).toEqual([])
+    expect(layout.closeWorkbench).not.toHaveBeenCalled()
+    expect(slots.entries('main.workbench.editing.content')).toEqual([])
+    expect(slots.entries('main.workbench.toggle.editing')).toEqual([])
     ctx.emit('theme/change', ctx.theme.getTheme())
     expect(disposedNotify).not.toHaveBeenCalled()
-    ctx.emit('mantur/creation-mode-selected', 'editing')
-    expect(layout.openWorkbench).toHaveBeenCalledTimes(2)
+    ctx.emit('mantur/creation-mode-selected', 'production')
+    expect(layout.openWorkbench).not.toHaveBeenCalled()
   })
 })

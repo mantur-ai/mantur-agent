@@ -6,13 +6,9 @@ import type { NativeAccountAction, NativeAccountReply } from '@deepseek-ai/dsh-a
 import { NativeAccountController, NativeAccountFailure } from './controller.ts'
 import { NativeHttpFailure } from './http.ts'
 
-const action = z.discriminatedUnion('kind', [
-  z.strictObject({ kind: z.enum(['snapshot', 'refresh', 'browser', 'reopen-browser', 'poll', 'skip', 'sign-out', 'retry-revocations']) }),
-  z.strictObject({ kind: z.literal('password'), email: z.email().max(320), password: z.string().min(1).max(1_024), consent: z.literal(true) }),
-  z.strictObject({ kind: z.literal('send-code'), email: z.email().max(320) }),
-  z.strictObject({ kind: z.literal('register'), email: z.email().max(320), password: z.string().min(1).max(1_024),
-    code: z.string().min(1).max(100), invite_code: z.string().min(1).max(128).optional() }),
-]) satisfies z.ZodType<NativeAccountAction>
+const action = z.strictObject({
+  kind: z.enum(['snapshot', 'refresh', 'browser', 'reopen-browser', 'skip', 'sign-out', 'switch-account', 'retry-revocations']),
+}) satisfies z.ZodType<NativeAccountAction>
 
 /** Electron Main owns both the active controller and the currently trusted local frame. */
 export interface NativeAccountBridgeOptions {
@@ -51,7 +47,6 @@ export function installNativeAccountBridge(options: NativeAccountBridgeOptions):
     if (!parsed.success) return { ok: false, revision, failure: { kind: 'invalid-request' } }
     const controller = options.controller()
     if (controller === undefined) return { ok: false, revision, failure: { kind: 'unavailable' } }
-    let codeExpirySeconds: number | undefined
     let failure: NativeAccountReply['failure']
     const request = parsed.data
     try {
@@ -60,18 +55,11 @@ export function installNativeAccountBridge(options: NativeAccountBridgeOptions):
         case 'refresh': await controller.refresh(); break
         case 'browser': await controller.startBrowser(); break
         case 'reopen-browser': await controller.reopenBrowser(); break
-        case 'poll': await controller.poll(); break
         case 'skip': await controller.skip(); break
         case 'sign-out': await controller.signOut(); break
+        case 'switch-account': await controller.switchAccount(); break
         case 'retry-revocations': await controller.retryRevocations(); break
-        case 'password': await controller.password({ email: request.email, password: request.password, consent: request.consent }); break
-        case 'send-code': codeExpirySeconds = (await controller.sendCode(request.email)).expiresInSec; break
-        case 'register': {
-          await controller.register({ email: request.email, password: request.password, code: request.code,
-            ...(request.invite_code === undefined ? {} : { invite_code: request.invite_code }) })
-          break
-        }
-        default: assertNever(request)
+        default: assertNever(request.kind)
       }
     } catch (error) {
       failure = error instanceof NativeHttpFailure
@@ -82,7 +70,7 @@ export function installNativeAccountBridge(options: NativeAccountBridgeOptions):
     authorize(event)
     if (controller !== options.controller()) return { ok: false, revision, failure: { kind: 'unavailable' } }
     return { ok: failure === undefined, revision, snapshot: controller.getSnapshot(),
-      ...(codeExpirySeconds === undefined ? {} : { codeExpirySeconds }), ...(failure === undefined ? {} : { failure }) }
+      ...(failure === undefined ? {} : { failure }) }
   }
   options.ipc.handle('mantur:account:invoke', invoke)
   return {

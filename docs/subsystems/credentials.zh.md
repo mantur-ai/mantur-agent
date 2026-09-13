@@ -267,6 +267,12 @@ Host service registering the ManturHub authorization flow and account Remote.
 @Remote identityMode(): ManturIdentityMode
 
 /**
+ * Expose the configured cadence for visible-client balance reads.
+ * @returns polling interval in milliseconds.
+ */
+@Remote balanceRefreshIntervalMs(): number
+
+/**
  * Freeze native command identity and brokered API admission, then join trees, leases and IPC cleanup.
  * The parent must keep IPC connected until this operation completes.
  * @returns the same completion on every call; retained cleanup failures reject.
@@ -285,6 +291,13 @@ stopNativeForShutdown(): Promise<void>
  * @returns the response, or `undefined` when authentication was requested while signed out.
  */
 async request(pathname: string, options: ManturHubRequestOptions): Promise<Response | undefined>
+
+/**
+ * Fetch the current account's Mantou balance from the configured deployment.
+ * @returns the server balance, or signed-out when no local grant is active.
+ * @throws when the upstream request fails or its balance is invalid; no cached balance is returned.
+ */
+@Remote async balance(): Promise<ManturBalanceStatus>
 
 /**
  * Read local sign-in state without exposing the stored API key.

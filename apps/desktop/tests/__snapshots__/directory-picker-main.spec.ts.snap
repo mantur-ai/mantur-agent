@@ -1,0 +1,25 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`records account recovery dialog copy for en 1`] = `
+{
+  "cancel": "Quit",
+  "confirm": "Back up and sign in again",
+  "detail": "Continuing keeps a private backup beside the local account directory and clears local sign-in. Projects, drafts and model keys are unchanged. Old credentials are not reused, and existing website device grants are not revoked. You can then sign in through your browser or skip sign-in.",
+  "failure": "Account storage could not be updated. Sign-in has not started.",
+  "failureDetail": "Original account data remains in its original location or a private local backup. Projects, drafts and model keys were not changed. Quit and contact support; do not delete the account directory.",
+  "message": "This version uses browser sign-in and needs new authorization.",
+  "title": "Sign in to Mantur again",
+}
+`;
+
+exports[`records account recovery dialog copy for zh-CN 1`] = `
+{
+  "cancel": "退出",
+  "confirm": "备份并重新登录",
+  "detail": "继续会在本机私有账号目录旁保留旧账号数据备份，并清空本机登录状态。项目、草稿和模型 Key 不受影响。旧凭据不会被复用，此操作不会撤销网站上的旧设备授权。随后可在浏览器重新登录，或暂时跳过。",
+  "failure": "无法完成账号存储更新，尚未启动登录。",
+  "failureDetail": "原始账号数据仍保留在原位置或本机私有备份中；项目、草稿和模型 Key 未修改。请退出并联系支持，不要删除账号目录。",
+  "message": "此版本使用浏览器登录，需要重新授权。",
+  "title": "重新登录漫途账号",
+}
+`;

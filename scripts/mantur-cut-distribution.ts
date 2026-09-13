@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { delimiter, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import { copyRuntimeDependencies, relocateMacCompositor } from './mantur-cut-resources.ts'
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const sourceConfigPath = resolve(root, 'apps/desktop/mantur-cut/source.json')
@@ -258,12 +259,15 @@ export function sourceBuildEnvironment(
       || name === 'APPLE_ID'
       || name === 'APPLE_TEAM_ID'
       || name === 'CSC_LINK'
-      || name.startsWith('OPENCHATCUT_'))
+      || name.startsWith('OPENCHATCUT_')
+      || name.toUpperCase() === 'PATH')
   )))
   environment.ELECTRON_SKIP_BINARY_DOWNLOAD = '1'
   environment.npm_config_cache = join(cacheDir, 'npm')
   environment.npm_config_registry = 'https://registry.npmjs.org/'
-  environment.PATH = [...toolDirectories, environment.PATH].filter((value): value is string => value !== undefined).join(delimiter)
+  const pathKey = Object.keys(ambient).find(name => name.toUpperCase() === 'PATH')
+  const inheritedPath = pathKey === undefined ? undefined : ambient[pathKey]
+  environment.PATH = [...toolDirectories, inheritedPath].filter((value): value is string => value !== undefined).join(delimiter)
   return environment
 }
 
@@ -370,20 +374,27 @@ function verifyWhisperExecutables(source: string, targetKey: ManturCutTarget, ta
 }
 
 function run(command: string, args: readonly string[], cwd: string, environment: NodeJS.ProcessEnv = process.env): void {
-  const result = spawnSync(command, args, { cwd, env: environment, stdio: 'inherit' })
+  // npm.cmd needs the Windows command processor; npm arguments here are literals or validated target enums.
+  const result = spawnSync(command, args, {
+    cwd, env: environment, stdio: 'inherit', shell: process.platform === 'win32' && command === 'npm',
+  })
   if (result.error !== undefined) throw result.error
   if (result.status !== 0) throw new Error(`${command} ${args.join(' ')} exited with ${String(result.status ?? result.signal)}`)
 }
 
 function capture(command: string, args: readonly string[], cwd: string, environment: NodeJS.ProcessEnv = process.env): string {
-  const result = spawnSync(command, args, { cwd, env: environment, encoding: 'utf8' })
+  const result = spawnSync(command, args, {
+    cwd, env: environment, encoding: 'utf8', shell: process.platform === 'win32' && command === 'npm',
+  })
   if (result.error !== undefined) throw result.error
   if (result.status !== 0) throw new Error(`${command} ${args.join(' ')} exited with ${String(result.status ?? result.signal)}: ${result.stderr.trim()}`)
   return result.stdout.trim()
 }
 
 async function auditProductionDependencies(source: string, targetKey: ManturCutTarget, environment: NodeJS.ProcessEnv): Promise<string> {
-  const result = spawnSync('npm', ['audit', '--json', '--omit=dev'], { cwd: source, env: environment, encoding: 'utf8' })
+  const result = spawnSync('npm', ['audit', '--json', '--omit=dev'], {
+    shell: process.platform === 'win32', cwd: source, env: environment, encoding: 'utf8',
+  })
   if (result.error !== undefined) throw result.error
   if (result.status !== 0 && result.status !== 1) throw new Error(`npm audit exited with ${String(result.status ?? result.signal)}: ${result.stderr.trim()}`)
   let report: unknown
@@ -413,7 +424,7 @@ async function replaceDirectory(staging: string, outputDir: string): Promise<voi
     if (hadOutput) await rename(backup, outputDir)
     throw error
   }
-  if (hadOutput) await rm(backup, { recursive: true, force: true })
+  if (hadOutput) await rm(backup, { recursive: true, force: true, maxRetries: 3 })
 }
 
 function inside(rootDir: string, candidate: string): boolean {
@@ -464,8 +475,9 @@ async function copyProductionProgram(source: string, staging: string, auditRepor
   await cp(join(source, 'desktop-dist/chrome-headless-shell'), join(staging, 'chrome-headless-shell'), { recursive: true })
   await cp(join(source, 'public/whisper-cli', targetKey), join(staging, 'whisper-cli', targetKey), { recursive: true })
   await cp(join(source, '.cache/whisper-cli/whisper.cpp/LICENSE'), join(staging, 'whisper-cli/LICENSE.whisper.cpp'))
-  await cp(join(source, 'node_modules'), join(staging, 'runtime/node_modules'), { recursive: true })
+  await copyRuntimeDependencies(join(source, 'node_modules'), join(staging, 'runtime/node_modules'), targetKey)
   await removePackageRuntimeResidue(join(staging, 'runtime/node_modules'))
+  if (target.platform === 'darwin') await relocateMacCompositor(join(staging, paths.compositor))
   await cp(join(source, 'package.json'), join(staging, 'package.json'))
   await cp(join(source, 'package-lock.json'), join(staging, 'package-lock.json'))
   await cp(join(source, 'LICENSE'), join(staging, 'LICENSE'))
@@ -660,7 +672,7 @@ async function prepare(targetKey: ManturCutTarget, cacheDir: string, outputDir: 
     await mkdir(join(source, 'desktop-dist'), { recursive: true })
     await cp(cachedChrome, join(source, 'desktop-dist', `chs-${target.chromePlatform}-${target.chromeVersion}.zip`))
     run('npm', ['run', 'desktop:prepare', '--', targetKey], source, environment)
-    run(join(source, 'node_modules/.bin/esbuild'), ['desktop/embedded-server.ts', '--bundle', '--platform=node', '--format=esm', '--packages=external', '--outfile=desktop-dist/mantur-embedded-server.mjs'], source, environment)
+    run('npm', ['exec', '--offline', '--no', '--', 'esbuild', 'desktop/embedded-server.ts', '--bundle', '--platform=node', '--format=esm', '--packages=external', '--outfile=desktop-dist/mantur-embedded-server.mjs'], source, environment)
     run('npm', ['prune', '--omit=dev'], source, environment)
     await mkdir(staging, { recursive: true })
     const paths = await copyProductionProgram(source, staging, auditReport, targetKey, target)

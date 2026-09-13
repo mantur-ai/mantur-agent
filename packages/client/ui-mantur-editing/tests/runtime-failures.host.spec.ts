@@ -303,3 +303,30 @@ it('keeps the original startup failure when the process already closed cleanly',
   value.emit('close', 0, null)
   await expect(pending).rejects.toThrow('startup rejected')
 })
+
+it('waits for close after a successful stop acknowledgement and exit, including late stderr', async () => {
+  const value = child((message) => {
+    if ((message as { type?: string }).type === 'mantur-cut:drain') finishPhase(value, 'drain')
+    else if ((message as { type?: string }).type === 'mantur-cut:stop') {
+      finishPhase(value, 'stop')
+      value.emit('exit', 0, null)
+    }
+  })
+  harness.spawn.mockReturnValue(value)
+  const pending = startEditor(await config(), await temp(), 'late-stderr' as SessionId, 'http://127.0.0.1:5298')
+  await spawned(pending)
+  const runtime = await ready(value, pending)
+  let finished = false
+  const stopping = runtime.dispose()
+  void stopping.then(() => { finished = true }, () => { finished = true })
+  try {
+    await vi.waitFor(() => { expect(value.send).toHaveBeenCalledWith({ type: 'mantur-cut:stop' }, expect.any(Function)) })
+    expect(() => { runtime.assertRunning() }).toThrow('exited')
+    expect(finished).toBe(false)
+    value.stderr.emit('data', Buffer.from('late pipe write'))
+    await Promise.resolve()
+    expect(finished).toBe(false)
+  } finally { value.emit('close', 0, null) }
+  await stopping
+  expect(finished).toBe(true)
+})

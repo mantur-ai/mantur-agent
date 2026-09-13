@@ -1,4 +1,4 @@
-/** Mantur Agent product identity enforced over the selected agent preset. */
+/** ManTur Agent product identity enforced over the selected agent preset. */
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { PERSONA_SECTION } from '@deepseek-ai/dsh-system-prompt'

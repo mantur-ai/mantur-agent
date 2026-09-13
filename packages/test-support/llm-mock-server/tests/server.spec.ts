@@ -212,6 +212,24 @@ describe('mock LLM server wire behaviors', () => {
     expect((await chat(server)).status).toBe(200)
   })
 
+  it('gives tool calls distinct IDs across requests and server restarts', async () => {
+    const first = await start(['tool_call_success'], { repeatLast: true })
+    const ids: string[] = []
+    for (let index = 0; index < 2; index += 1) {
+      const body = await (await chat(first)).text()
+      const id = /"id":"([^"]+)"/.exec(body)?.[1]
+      expect(id).toBeDefined()
+      ids.push(id as string)
+    }
+    await first.close()
+    const restarted = await start(['tool_call_success'])
+    const body = await (await chat(restarted)).text()
+    const id = /"id":"([^"]+)"/.exec(body)?.[1]
+    expect(id).toBeDefined()
+    ids.push(id as string)
+    expect(new Set(ids).size).toBe(3)
+  })
+
   it('emits reasoning, tool calls, max-token finishes, slow chunks, and a wrong content type', async () => {
     const server = await start([
       'reasoning_success',

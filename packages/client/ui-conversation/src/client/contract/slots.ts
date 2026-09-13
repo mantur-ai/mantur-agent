@@ -40,6 +40,8 @@ export interface ComposerAttachmentsOwnerProps {
   attachments: readonly ComposerAttachment[]
   /** Whether a document-level file drop may add images now. */
   canAcceptDrop: boolean
+  /** Native file and folder import is available in this carrier. */
+  filesSupported?: boolean
   /** Add one dropped batch through the composer's validation path. */
   onAddImages: (files: readonly File[]) => void
   /** Remove one draft image through the Conversation service. */
@@ -135,8 +137,10 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       scope: 'session-maybe'
       owner: { hero: boolean; disabled: boolean; heading: ReactNode; workspace: ReactNode; content: ReactNode }
     }
-    /** Permission control declared by an alternate composer layout; otherwise rendered inline. */
-    'conversation.composer.layout.permissions': { kind: 'single'; scope: 'session-maybe'; owner: { disabled: boolean } }
+    /** Product controls above the editor inside the resident composer card. */
+    'conversation.composer.bar.accessory': { kind: 'single'; scope: 'session-maybe'; owner: { disabled: boolean } }
+    /** Permission control declared by a composer accessory; otherwise rendered in the toolbar. */
+    'conversation.composer.bar.accessory.permissions': { kind: 'single'; scope: 'session-maybe'; owner: { disabled: boolean } }
     /** Agent-preset control staged for a New Session. */
     'conversation.hero.agentPreset': { kind: 'single'; scope: 'root'; owner: HeroAgentPresetOwnerProps }
     /** Full-width entries above the composer card. */
@@ -287,6 +291,8 @@ export interface ComposerControlInjected {
 
 /** Package-private operations injected into the resident composer bar. */
 export interface ComposerBarInjected extends ComposerControlInjected {
+  /** Copy desktop attachments and append their saved paths to the owning draft. */
+  importFiles?: (files: readonly File[] | 'file' | 'directory') => Promise<void>
   addImages: ((files: readonly File[]) => string | null) | undefined
   removeImage: ((id: DraftAttachmentId) => void) | undefined
   draftImages: ((ids: readonly DraftAttachmentId[]) => readonly ComposerAttachment[]) | undefined
@@ -320,6 +326,7 @@ export type ComposerBarProps =
     | 'conversation.input.left' | 'conversation.input.plan'
     | 'conversation.input.right' | 'conversation.input.model'
     | 'conversation.composer.dock'
+    | 'conversation.composer.bar.accessory'
   >
   & InjectFace<ComposerBarInjected>
   & PropsLocale<'conversation'>

@@ -5,13 +5,13 @@ import type { AddressInfo } from 'node:net'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 import { expect, it } from 'vitest'
-import { launchWebScaffold, watchConsole } from './scaffold.ts'
+import { compareOrRefreshGolden, launchWebScaffold, watchConsole, webSnapshotMode } from './scaffold.ts'
 
 const overlay = fileURLToPath(new URL('../../../packages/bundle/mantur-app/cordis.patch.yml', import.meta.url))
 const anchor = fileURLToPath(new URL('../../../packages/bundle/mantur-app/package.json', import.meta.url))
 const artifacts = fileURLToPath(new URL('../../../.artifacts/desktop-update-fixture/', import.meta.url))
 
-it('places native update status above Settings in expanded and collapsed sidebars', async () => {
+it('keeps manual checks in Settings and shows discovered updates in either sidebar width', async () => {
   const server = createServer((_request, response) => { response.writeHead(200, { 'content-type': 'application/json' }); response.end('{"skills":[]}') })
   let scaffold: Awaited<ReturnType<typeof launchWebScaffold>> | undefined
   let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
@@ -38,13 +38,33 @@ it('places native update status above Settings in expanded and collapsed sidebar
       })
     })
     await page.goto(scaffold.authenticatedUrl)
-    await page.getByRole('button', { name: '暂时跳过' }).click()
     const settings = page.getByRole('button', { name: '设置', exact: true })
     await settings.waitFor()
+    const captures: string[] = []
+    const check = page.getByRole('button', { name: '检查更新', exact: true })
+    expect(await check.count()).toBe(0)
+    await settings.click()
+    const panel = page.getByRole('dialog', { name: '设置', exact: true })
+    await panel.waitFor()
+    await check.waitFor()
+    captures.push(`## Idle\n\n${await page.getByRole('region', { name: '当前版本 1.0.0', exact: true }).ariaSnapshot()}`)
+    await check.click()
     expect(await page.getByRole('button', { name: '下载更新', exact: true }).count()).toBe(0)
     const state = async (value: unknown) => page.evaluate((value) => {
       (window as unknown as { testNativeState: (state: unknown) => void }).testNativeState(value)
     }, value)
+    await state({ kind: 'up-to-date', requestedByUser: true })
+    await page.getByText('暂无可用更新', { exact: true }).waitFor()
+    captures.push(`## Current\n\n${await page.getByRole('region', { name: '暂无可用更新', exact: true }).ariaSnapshot()}`)
+    await check.click()
+    await state({ kind: 'error', detail: 'Release feed unavailable', requestedByUser: false })
+    await page.getByRole('button', { name: '重新检查', exact: true }).waitFor()
+    expect(await page.getByText('暂无可用更新', { exact: true }).count()).toBe(0)
+    captures.push(`## Failed\n\n${await page.getByRole('region', { name: '更新未完成', exact: true }).ariaSnapshot()}`)
+    await page.getByRole('button', { name: '重新检查', exact: true }).click()
+    await page.keyboard.press('Escape')
+    await panel.waitFor({ state: 'hidden' })
+    expect(await check.count()).toBe(0)
     await state({ kind: 'available', version: '1.2.0', prompting: false })
     const download = page.getByRole('button', { name: '下载更新', exact: true })
     await download.waitFor()
@@ -53,7 +73,7 @@ it('places native update status above Settings in expanded and collapsed sidebar
     if (downloadBox === null || settingsBox === null) throw new Error('Native update or Settings control is hidden')
     expect(downloadBox.y + downloadBox.height).toBeLessThanOrEqual(settingsBox.y)
     await download.click()
-    expect(await page.evaluate(() => (window as unknown as { testNativeActions: string[] }).testNativeActions)).toEqual(['download'])
+    expect(await page.evaluate(() => (window as unknown as { testNativeActions: string[] }).testNativeActions)).toEqual(['check', 'check', 'check', 'download'])
     await state({ kind: 'downloading', version: '1.2.0', percent: 37, transferred: 38797312, total: 104857600 })
     await page.getByRole('progressbar').waitFor()
     expect(await page.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('37')
@@ -68,7 +88,17 @@ it('places native update status above Settings in expanded and collapsed sidebar
     await install.waitFor()
     await page.screenshot({ path: `${artifacts}/collapsed.png` })
     await install.click()
-    expect(await page.evaluate(() => (window as unknown as { testNativeActions: string[] }).testNativeActions)).toEqual(['download', 'install'])
+    await state({ kind: 'idle' })
+    expect(await page.getByRole('button', { name: /检查更新/u }).count()).toBe(0)
+    await page.locator('button[aria-haspopup="dialog"][aria-expanded="false"]').click()
+    await panel.waitFor()
+    const collapsedCheck = panel.getByRole('button', { name: '检查更新', exact: true })
+    await collapsedCheck.waitFor()
+    captures.push(`## Collapsed settings\n\n${await panel.getByRole('region', { name: '当前版本 1.0.0', exact: true }).ariaSnapshot()}`)
+    await collapsedCheck.click()
+    await page.screenshot({ path: `${artifacts}/check-settings.png` })
+    expect(await page.evaluate(() => (window as unknown as { testNativeActions: string[] }).testNativeActions)).toEqual(['check', 'check', 'check', 'download', 'install', 'check'])
+    await compareOrRefreshGolden(fileURLToPath(new URL('./expected/desktop-updates.md', import.meta.url)), captures.join('\n\n'), webSnapshotMode())
     expect(console.pageErrors).toEqual([])
     expect(console.warnings).toEqual([])
   } finally {

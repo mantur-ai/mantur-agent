@@ -1,0 +1,381 @@
+{
+  "id": "op.drama.clip-seedance-compile",
+  "name": "剧本分镜提示词生成",
+  "layer": "compose",
+  "tags": [
+    "drama",
+    "storyboard",
+    "clip",
+    "assetbind",
+    "seedance"
+  ],
+  "io": "异步算子。输入完整剧本、已补全资产JSON、target_region、制作范围、Clip/时长目标、画幅/模型、缺音色策略和硬限制；中国版默认中文55字/15秒，欧美版默认英文40词/15秒。输出使用固定中文状态枚举的Clip总表、Seedance2.0请求体模板Excel与JSON；metadata.return_last_frame=true。",
+  "priority": "P1",
+  "description": "以完整 Markdown 剧本文件和完整 JSON 资产清单文件调用 Responses API，按中国或欧美地区预设单次规划全剧分镜，并生成资产绑定提示词、连续尾帧依赖及Seedance 2.0请求体模板。",
+  "deps": [],
+  "status": "online",
+  "cat": "video",
+  "createdAt": "2026-08-08T08:39:19.524Z",
+  "updatedAt": "2026-08-28T07:26:21.266Z",
+  "publishedAt": "2026-08-28T07:26:21.272Z",
+  "versions": [
+    {
+      "id": "e65387a5-9482-432b-a681-ceb677544721",
+      "operatorId": "op.drama.clip-seedance-compile",
+      "tag": "v2.3.2",
+      "weight": 0,
+      "createdAt": "2026-08-26T13:15:54.123Z"
+    },
+    {
+      "id": "3ee9cdd9-ad17-4546-8d12-5ae2b3e10c43",
+      "operatorId": "op.drama.clip-seedance-compile",
+      "tag": "v1.8.1",
+      "weight": 0,
+      "createdAt": "2026-08-09T12:32:37.621Z"
+    },
+    {
+      "id": "83e58b50-9d03-4672-8036-559981371b34",
+      "operatorId": "op.drama.clip-seedance-compile",
+      "tag": "v2.2.8",
+      "weight": 0,
+      "createdAt": "2026-08-17T10:40:56.797Z"
+    },
+    {
+      "id": "d9e2c592-5638-45eb-b421-8b078d2e677d",
+      "operatorId": "op.drama.clip-seedance-compile",
+      "tag": "v2.3.3",
+      "weight": 100,
+      "createdAt": "2026-08-28T07:24:48.048Z"
+    },
+    {
+      "id": "e347f222-f0b0-4629-9a58-a1f54e1be00e",
+      "operatorId": "op.drama.clip-seedance-compile",
+      "tag": "v1.7.1",
+      "weight": 0,
+      "createdAt": "2026-08-08T08:39:19.524Z"
+    },
+    {
+      "id": "20b01efe-7876-40b3-b02b-56945d1c1d83",
+      "operatorId": "op.drama.clip-seedance-compile",
+      "tag": "v1.7.3",
+      "weight": 0,
+      "createdAt": "2026-08-08T14:28:07.000Z"
+    },
+    {
+      "id": "f1d0c760-2dad-44a8-ae0c-d55baec4a440",
+      "operatorId": "op.drama.clip-seedance-compile",
+      "tag": "v2.2.4",
+      "weight": 0,
+      "createdAt": "2026-08-15T01:41:39.598Z"
+    },
+    {
+      "id": "7a00db6e-d940-4480-98db-20ba7b8d8458",
+      "operatorId": "op.drama.clip-seedance-compile",
+      "tag": "v2.2.3",
+      "weight": 0,
+      "createdAt": "2026-08-13T11:35:19.861Z"
+    },
+    {
+      "id": "758dc4e9-fd7a-4110-8715-12deef421289",
+      "operatorId": "op.drama.clip-seedance-compile",
+      "tag": "v2.2.11",
+      "weight": 0,
+      "createdAt": "2026-08-25T03:22:13.983Z"
+    }
+  ],
+  "upstream": [],
+  "downstream": [],
+  "params_schema": {
+    "allOf": [
+      {
+        "oneOf": [
+          {
+            "not": {
+              "required": [
+                "script_text"
+              ]
+            },
+            "required": [
+              "script_url"
+            ]
+          },
+          {
+            "not": {
+              "required": [
+                "script_url"
+              ]
+            },
+            "required": [
+              "script_text"
+            ]
+          }
+        ]
+      },
+      {
+        "oneOf": [
+          {
+            "not": {
+              "required": [
+                "asset_manifest"
+              ]
+            },
+            "required": [
+              "asset_manifest_url"
+            ]
+          },
+          {
+            "not": {
+              "required": [
+                "asset_manifest_url"
+              ]
+            },
+            "required": [
+              "asset_manifest"
+            ]
+          }
+        ]
+      }
+    ],
+    "async": true,
+    "fields": [
+      {
+        "desc": "执行动作",
+        "enum": [
+          "compile"
+        ],
+        "name": "action",
+        "type": "string",
+        "default": "compile",
+        "required": false
+      },
+      {
+        "desc": "Worker可访问的UTF-8完整剧本URL；与script_text二选一，下载验证后以Markdown input_file.file_data传给Responses",
+        "name": "script_url",
+        "type": "string",
+        "required": false
+      },
+      {
+        "desc": "UTF-8完整剧本文本；与script_url二选一，验证后以Markdown input_file.file_data传给Responses",
+        "name": "script_text",
+        "type": "string",
+        "required": false,
+        "maxLength": 10000000,
+        "minLength": 1
+      },
+      {
+        "desc": "剧本资产提取算子输出的资产JSON URL；与asset_manifest二选一，下载校验后以JSON input_file.file_data传给Responses",
+        "name": "asset_manifest_url",
+        "type": "string",
+        "required": false
+      },
+      {
+        "desc": "剧本资产提取算子输出的四Sheet同源JSON；与asset_manifest_url二选一，校验后以JSON input_file.file_data传给Responses",
+        "name": "asset_manifest",
+        "type": "object",
+        "required": false
+      },
+      {
+        "desc": "输出文件使用的剧名",
+        "name": "project_name",
+        "type": "string",
+        "required": false,
+        "maxLength": 200
+      },
+      {
+        "desc": "制作起始集；不传时覆盖剧本全部集数",
+        "name": "episode_start",
+        "type": "integer",
+        "required": false
+      },
+      {
+        "desc": "制作结束集；传入时必须同时提供episode_start",
+        "name": "episode_end",
+        "type": "integer",
+        "required": false
+      },
+      {
+        "desc": "Seedance视频画幅",
+        "enum": [
+          "16:9",
+          "9:16",
+          "4:3",
+          "3:4",
+          "1:1",
+          "21:9"
+        ],
+        "name": "ratio",
+        "type": "string",
+        "default": "9:16",
+        "required": false
+      },
+      {
+        "desc": "视频分辨率",
+        "enum": [
+          "480p",
+          "720p",
+          "1080p"
+        ],
+        "name": "resolution",
+        "type": "string",
+        "default": "480p",
+        "required": false
+      },
+      {
+        "desc": "写入Seedance请求体的模型ID",
+        "name": "video_model",
+        "type": "string",
+        "default": "doubao-seedance-2-0-260128",
+        "required": false,
+        "maxLength": 200
+      },
+      {
+        "desc": "每集Clip数量软目标下界；不会作为失败条件",
+        "name": "minimum_clips_per_episode",
+        "type": "integer",
+        "default": 4,
+        "required": false
+      },
+      {
+        "desc": "每集Clip数量软目标",
+        "name": "preferred_clips_per_episode",
+        "type": "integer",
+        "default": 5,
+        "required": false
+      },
+      {
+        "desc": "每集Clip数量软目标上界；内容过长时允许超出",
+        "name": "maximum_clips_per_episode",
+        "type": "integer",
+        "default": 6,
+        "required": false
+      },
+      {
+        "desc": "每集应尽量守住的强下限目标；一次规划优先留出安全余量，不以失败重试实现",
+        "name": "minimum_episode_seconds",
+        "type": "integer",
+        "default": 60,
+        "required": false
+      },
+      {
+        "desc": "每集时长软上界；内容过长时保留完整剧情并允许超出",
+        "name": "maximum_episode_seconds",
+        "type": "integer",
+        "default": 90,
+        "required": false
+      },
+      {
+        "desc": "单Clip时长硬下界，受当前视频模型限制",
+        "name": "minimum_clip_seconds",
+        "type": "integer",
+        "default": 5,
+        "required": false
+      },
+      {
+        "desc": "单Clip时长硬上界，受当前视频模型限制",
+        "name": "maximum_clip_seconds",
+        "type": "integer",
+        "default": 15,
+        "required": false
+      },
+      {
+        "desc": "地区预设；china=中国版，western=欧美版",
+        "enum": [
+          "china",
+          "western"
+        ],
+        "name": "target_region",
+        "type": "string",
+        "default": "western",
+        "required": false
+      },
+      {
+        "desc": "对白输出语言；中国版固定zh，欧美版固定en；不传时由target_region确定",
+        "enum": [
+          "en",
+          "zh"
+        ],
+        "name": "dialogue_language",
+        "type": "string",
+        "required": false
+      },
+      {
+        "desc": "15秒可容纳的英文对白词数估计，用于密度警告",
+        "name": "dialogue_words_per_15_seconds",
+        "type": "integer",
+        "default": 40,
+        "maximum": 80,
+        "minimum": 10,
+        "required": false
+      },
+      {
+        "desc": "15秒可容纳的中文对白汉字数估计，用于中国版密度警告",
+        "name": "dialogue_chinese_characters_per_15_seconds",
+        "type": "integer",
+        "default": 55,
+        "maximum": 100,
+        "minimum": 20,
+        "required": false
+      },
+      {
+        "desc": "缺音色时由视频模型直出或阻断",
+        "enum": [
+          "ai_direct",
+          "error"
+        ],
+        "name": "missing_voice_policy",
+        "type": "string",
+        "default": "ai_direct",
+        "required": false
+      },
+      {
+        "desc": "整剧统一美术风格与世界观硬约束",
+        "name": "visual_style",
+        "type": "string",
+        "required": false,
+        "maxLength": 12000
+      },
+      {
+        "desc": "整剧负面约束；可见文字语言由target_region确定",
+        "name": "visual_negative",
+        "type": "string",
+        "required": false,
+        "maxLength": 12000
+      },
+      {
+        "desc": "逐Clip重复写入的其他硬性限制；无需重复填写固定的不要背景音乐/不要字幕",
+        "name": "hard_constraints",
+        "type": "string",
+        "required": false,
+        "maxLength": 12000
+      },
+      {
+        "desc": "Seedance请求是否生成同步对白与环境音",
+        "name": "generate_audio",
+        "type": "boolean",
+        "default": true,
+        "required": false
+      },
+      {
+        "desc": "Seedance随机种子；-1表示随机",
+        "name": "seed",
+        "type": "integer",
+        "default": -1,
+        "required": false
+      },
+      {
+        "desc": "稳定幂等键；相同键和请求返回原task_id",
+        "name": "idempotency_key",
+        "type": "string",
+        "required": false,
+        "maxLength": 200,
+        "minLength": 8
+      }
+    ]
+  },
+  "assets": {
+    "logo_asset_id": "c7ce4cd6-4be9-4e6f-8515-f046ebda63e6",
+    "cover_url": "https://manturhub.tos-s3-cn-hongkong.volces.com/catalog/static/9c/9c7c6dd720a56266a5e34d2f7374c64f7eb3eda3448ce893fde58853512a3d72.jpg",
+    "logo_url": "https://manturhub.tos-s3-cn-hongkong.volces.com/catalog/static/61/616832c50bdf840b87cfdbece384b7232c739f095a1aef50d74d257ef72d8c98.svg",
+    "cover_asset_id": "4d0677a5-9c76-4112-a799-c73912d9e462"
+  }
+}

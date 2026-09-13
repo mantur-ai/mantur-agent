@@ -9,6 +9,7 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
+import { importedFileReference } from './input/imported-files.ts'
 import { UiConversation } from './conversation/assembly.ts'
 import type { ViewTab } from './contract/views.ts'
 import type {
@@ -21,6 +22,7 @@ import type { IConversation } from './service.ts'
 import { ComposerBlockRegistry } from './input/blocks.ts'
 import type { ComposerBlock } from './contract/composer-blocks.ts'
 import { DraftPersistence } from './input/draft-persistence.ts'
+import type {} from './contract/native-files.ts'
 import { InputHub } from './input/hub.ts'
 import { ConversationDraftController } from './input/draft.ts'
 import { ComposerSubmissionPolicy } from './input/submission-policy.ts'
@@ -171,7 +173,7 @@ export function apply(ctx: Context): void {
     const persistence = new DraftPersistence(window.manturDrafts, {
       capture: ids => concreteConversation(ctx).captureDraftImages(ids),
       restore: images => concreteConversation(ctx).restoreDraftImages(images),
-    }, (error) => {
+    }, () => t('draft.restartSubmissionFailed'), (error) => {
       const message = t('draft.saveFailed', { detail: String(error) })
       inputHub.reportPersistenceError(message)
       drafts.input.notify('error', message)
@@ -283,8 +285,8 @@ export function apply(ctx: Context): void {
   }, ConversationSessionHeader)
 
   const externalPermissions: ObservableSnapshot<boolean> = {
-    getSnapshot: () => slots.entries('conversation.composer.layout.permissions').length > 0,
-    subscribe: listener => slots.subscribe('conversation.composer.layout.permissions', listener),
+    getSnapshot: () => slots.entries('conversation.composer.bar.accessory.permissions').length > 0,
+    subscribe: listener => slots.subscribe('conversation.composer.bar.accessory.permissions', listener),
   }
   const composerControls = (sessionId: SessionId | undefined): ComposerControlInjected => {
     const shell = sessionId === undefined ? drafts.input : inputHub.shell(sessionId)
@@ -300,14 +302,15 @@ export function apply(ctx: Context): void {
       hooks: { composerInput: shell.state },
     }
   }
-  slots.inject('conversation.composer.layout.permissions', () => slots.register({
-    name: 'conversation.composer.layout.permissions', locale: NS, inject: composerControls,
+  slots.inject('conversation.composer.bar.accessory.permissions', () => slots.register({
+    name: 'conversation.composer.bar.accessory.permissions', locale: NS, inject: composerControls,
   }, PermissionControl))
 
   const registerComposerBar = () => slots.register({
     name: 'conversation.composer.bar',
     locale: NS,
     children: {
+      'conversation.composer.bar.accessory': { kind: 'single', scope: 'session-maybe' },
       'conversation.input.attachments': { kind: 'single', scope: 'session-maybe' },
       'conversation.input.overlay': { kind: 'list', scope: 'session' },
       'conversation.input.left': { kind: 'list', scope: 'session' },
@@ -323,6 +326,27 @@ export function apply(ctx: Context): void {
       const controls = composerControls(sessionId)
       return {
         ...controls,
+        ...(typeof window === 'undefined' || window.manturFiles === undefined ? {} : {
+          importFiles: async (selection: readonly File[] | 'file' | 'directory') => {
+            const native = window.manturFiles
+            if (native === undefined) throw new Error(t('file.unavailable'))
+            if (!shell.isRestartSettled() || shell.snapshot.phase === 'adjudicating') throw new Error(t('file.busy'))
+            const unlock = shell.lockDraft()
+            try {
+              const refs = await (typeof selection === 'string' ? native.pick(selection) : native.importFiles(selection))
+              unlock()
+              if (!shell.isDraftSettled()) throw new Error(t('file.ownerClosed'))
+              const references = refs.map((ref) => {
+                const reference = importedFileReference(ref)
+                if (reference === undefined) throw new Error(t('file.invalidName'))
+                return reference
+              })
+              for (const reference of references) {
+                if (!shell.appendReference(reference)) throw new Error(t('file.ownerClosed'))
+              }
+            } finally { unlock() }
+          },
+        }),
         addImages: (files) => {
           try {
             const images = conversation.createDraftImages(files)

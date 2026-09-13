@@ -42,7 +42,7 @@ kind: "package-group"
 | [`ui-layout/`](ui-layout/README.zh.md) | 排列应用的主要区域 | — |
 | [`ui-sidebar/`](ui-sidebar/README.zh.md) | 展示工作区与会话导航 | — |
 | [`ui-brand-official/`](ui-brand-official/README.zh.md) | 用官方名称与标记填充通用浏览器品牌 slot | — |
-| [`ui-brand-mantur/`](ui-brand-mantur/README.zh.md) | 为漫途Agent 填充通用浏览器品牌与首页文案 slot | — |
+| [`ui-brand-mantur/`](ui-brand-mantur/README.zh.md) | 为ManTur Agent 填充通用浏览器品牌与首页文案 slot | — |
 | [`ui-mantur-account/`](ui-mantur-account/README.zh.md) | 添加漫途账号引导、状态与本机退出登录 | — |
 | [`ui-workspace/`](ui-workspace/README.zh.md) | 提供工作区选择与创建界面 | — |
 | [`ui-conversation/`](ui-conversation/README.zh.md) | 展示当前对话及其输入界面 | — |

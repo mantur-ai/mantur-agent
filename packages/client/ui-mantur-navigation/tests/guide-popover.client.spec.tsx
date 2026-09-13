@@ -23,6 +23,7 @@ function elements() {
   seat.append(anchor, panel)
   document.body.append(seat)
   fixtures.push(seat)
+  vi.spyOn(seat, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 1024, 768))
   vi.spyOn(anchor, 'getBoundingClientRect').mockReturnValue(new DOMRect(600, 400, 100, 50))
   Object.defineProperty(panel, 'offsetHeight', { configurable: true, value: 160 })
   Object.defineProperty(content, 'clientHeight', { configurable: true, value: 120 })
@@ -100,6 +101,18 @@ it('uses viewport placement when the anchor has no composer ancestor', () => {
   expect(view.result.current).toEqual({ left: 624, top: 232, width: 240, maxHeight: 240 })
 })
 
+it('keeps guidance inside a narrow conversation column beside a workbench', () => {
+  const fixture = elements()
+  vi.stubGlobal('innerWidth', 1280)
+  const bounds = vi.spyOn(fixture.seat, 'getBoundingClientRect').mockReturnValue(new DOMRect(240, 0, 280, 768))
+  vi.spyOn(fixture.anchor.current, 'getBoundingClientRect').mockReturnValue(new DOMRect(440, 400, 64, 64))
+  const view = renderHook(() => useGuidePopover(true, fixture.anchor, fixture.panel))
+  expect(view.result.current).toMatchObject({ left: 268, width: 240 })
+  bounds.mockReturnValue(new DOMRect(240, 0, 200, 768))
+  act(() => { window.dispatchEvent(new Event('resize')) })
+  expect(view.result.current).toMatchObject({ left: 252, width: 176 })
+})
+
 it('does not subscribe before the anchor and panel content mount', () => {
   const fixture = elements()
   const missing = renderHook(() => useGuidePopover(true, { current: null }, fixture.panel))
@@ -107,4 +120,16 @@ it('does not subscribe before the anchor and panel content mount', () => {
   fixture.panel.current.replaceChildren()
   const empty = renderHook(() => useGuidePopover(true, fixture.anchor, fixture.panel))
   expect(empty.result.current).toBeNull()
+})
+
+it('keeps the stacked workbench skill rail above the guidance panel', () => {
+  const fixture = elements()
+  vi.spyOn(fixture.seat, 'getBoundingClientRect').mockReturnValue(new DOMRect(280, 0, 272, 820))
+  vi.spyOn(fixture.anchor.current, 'getBoundingClientRect').mockReturnValue(new DOMRect(340, 420, 184, 104))
+  const rail = document.createElement('div')
+  rail.setAttribute('data-skill-rail', '')
+  fixture.seat.append(rail)
+  vi.spyOn(rail, 'getBoundingClientRect').mockReturnValue(new DOMRect(284, 260, 264, 40))
+  const view = renderHook(() => useGuidePopover(true, fixture.anchor, fixture.panel))
+  expect(view.result.current).toEqual({ left: 300, top: 308, width: 240, maxHeight: 104 })
 })

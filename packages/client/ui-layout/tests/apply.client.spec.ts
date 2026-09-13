@@ -45,6 +45,7 @@ describe('ui-layout client apply', () => {
     expect(slots.spec('conversation')).toEqual({ kind: 'single', scope: 'session-maybe' })
     expect(slots.spec('details')).toEqual({ kind: 'single', scope: 'session' })
     expect(slots.spec('main.page')).toEqual({ kind: 'single', scope: 'root' })
+    expect(slots.spec('main.workbench.toggle')).toEqual({ kind: 'single', scope: 'root' })
   })
 
   it('injects no business face and attaches the layout actions', async () => {
@@ -96,6 +97,7 @@ describe('ui-layout client apply', () => {
     expect(slots.entries('root')).toHaveLength(0)
     expect(slots.spec('sidebar')).toBeUndefined()
     expect(slots.spec('main.page')).toBeUndefined()
+    expect(slots.spec('main.workbench.toggle')).toBeUndefined()
     // The built-in root declaration survives entry teardown (renderer-owned).
     expect(slots.spec('root')).toEqual({ kind: 'single', scope: 'root' })
   })

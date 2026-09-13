@@ -7,6 +7,10 @@ A service can be a core spine service, a swappable capability seam, or a bundle/
 
 ```mermaid
 flowchart LR
+  pkg_client_ui_mantur_assets["client-ui-mantur-assets"]
+  svc_manturAssets["ctx.manturAssets<br/>Project asset reports"]
+  pkg_client_ui_mantur_script["client-ui-mantur-script"]
+  svc_manturScript["ctx.manturScript<br/>Project script editing"]
   pkg_client_ui_mantur_editing["client-ui-mantur-editing"]
   svc_manturEditing["ctx.manturEditing<br/>Session editing workspace"]
   pkg_attachment["attachment"]
@@ -250,7 +254,9 @@ flowchart LR
   pkg_bash_local --> svc_shell
   pkg_bash_sandbox --> svc_shell
   pkg_client_modules --> svc_clientModules
+  pkg_client_ui_mantur_assets --> svc_manturAssets
   pkg_client_ui_mantur_editing --> svc_manturEditing
+  pkg_client_ui_mantur_script --> svc_manturScript
   pkg_code_runtime --> svc_codeRuntime
   pkg_code_runtime_worker_thread --> svc_codeRuntime
   pkg_command_scopes --> svc_commandScopes
@@ -400,9 +406,11 @@ flowchart LR
   svc_llm --> pkg_agent_loop
   svc_llm --> pkg_compaction_basic
   svc_lsp --> pkg_tool_lsp
+  svc_manturAssets --> pkg_client_ui_mantur_assets
   svc_manturEditing --> pkg_client_ui_mantur_editing
   svc_manturMarketplace --> pkg_ui_mantur_navigation
   svc_manturProjects --> pkg_ui_mantur_navigation
+  svc_manturScript --> pkg_client_ui_mantur_script
   svc_sandbox --> pkg_bash_sandbox
   svc_sandbox --> pkg_terminal_bash
   svc_sandboxPolicy --> pkg_bash_sandbox
@@ -492,6 +500,8 @@ flowchart LR
 
 | ctx key | Role | Owner | Implementations | Direct consumers | Companion plugins | Note |
 | --- | --- | --- | --- | --- | --- | --- |
+| `ctx.manturAssets` | `core` | [`client-ui-mantur-assets`](../packages/client/ui-mantur-assets) | - | [`client-ui-mantur-assets`](../packages/client/ui-mantur-assets) | - | The Mantur asset plugin owns project-local report discovery, guarded prompt proposals, and signature-validated media previews. |
+| `ctx.manturScript` | `core` | [`client-ui-mantur-script`](../packages/client/ui-mantur-script) | - | [`client-ui-mantur-script`](../packages/client/ui-mantur-script) | - | The Mantur script plugin owns versioned script reads, guarded saves, and explicit selection rewrite requests. |
 | `ctx.manturEditing` | `core` | [`client-ui-mantur-editing`](../packages/client/ui-mantur-editing) | - | [`client-ui-mantur-editing`](../packages/client/ui-mantur-editing) | - | The optional Mantur plugin owns per-Agent editor processes and mounts the MCP client in the same Agent scope. |
 | `ctx.attachments` | `seam` | [`attachment`](../packages/attachment/attachment) | [`attachment-local`](../packages/attachment/attachment-local) | [`api-session-controller`](../packages/api/session-controller), [`tool-fs`](../packages/fs/tool-fs), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`llm-deepseek`](../packages/llm/llm-deepseek) | - | The host commits accepted images before session events; provider adapters resolve authorized durable references into provider-native content. |
 | `ctx.llm` | `seam` | [`llm`](../packages/llm/llm) | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`llm-replay`](../packages/test-support/llm-replay) | [`agent-loop`](../packages/core/agent-loop), [`compaction-basic`](../packages/compaction/compaction-basic) | - | Adapters register provider implementations; the loop and compaction call the provider-neutral stream service. |

@@ -81,7 +81,7 @@ async function bench(opts?: { blank?: boolean; command?: ISession['command'] }) 
 }
 
 describe('resident composer', () => {
-  it('keeps one permission control and its Session value across layout declaration removal and recreation', async () => {
+  it('keeps one permission control inside the card and its Session value across accessory removal and recreation', async () => {
     const command = vi.fn<ISession['command']>(async () => ({ ok: true, value: { matched: true } }))
     const runtime = await bench({ command })
     const session = runtime.sessions.binding(SID)!.session as FixtureSession
@@ -95,16 +95,19 @@ describe('resident composer', () => {
       await waitFor(() => {
         expect(access()).toHaveLength(1)
         expect(access()[0]!.textContent).toBe(name)
-        expect(access()[0]!.closest('[data-permission-footer]') !== null).toBe(external)
+        const control = access()[0]!
+        const editor = view.container.querySelector('[data-composer-input]')!
+        expect(control.closest('[data-composer-card]')).toBe(editor.closest('[data-composer-card]'))
+        expect(control.closest('[data-permission-accessory]') !== null).toBe(external)
+        expect(Boolean(control.compareDocumentPosition(editor) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(external)
       })
     }
     const mountLayout = () => runtime.slots.register({
-      name: 'conversation.composer.layout',
-      children: { 'conversation.composer.layout.permissions': { kind: 'single', scope: 'session-maybe' } },
-    }, ({ heading, content, workspace, disabled, renderSlot }: PropsRuntime<'conversation.composer.layout'>
-      & PropsRenderSlots<'conversation.composer.layout.permissions'>) => <>
-      {heading}{content}<div data-permission-footer>{workspace}{renderSlot('conversation.composer.layout.permissions', { disabled })}</div>
-    </>)
+      name: 'conversation.composer.bar.accessory',
+      children: { 'conversation.composer.bar.accessory.permissions': { kind: 'single', scope: 'session-maybe' } },
+    }, ({ disabled, renderSlot }: PropsRuntime<'conversation.composer.bar.accessory'>
+      & PropsRenderSlots<'conversation.composer.bar.accessory.permissions'>) =>
+      <div data-permission-accessory>{renderSlot('conversation.composer.bar.accessory.permissions', { disabled })}</div>)
     try {
       await verify(false, '仅可查看')
       let removeLayout!: () => void
@@ -117,10 +120,10 @@ describe('resident composer', () => {
       await verify(true, '工作区内修改')
       await act(async () => { removeLayout() })
       await verify(false, '工作区内修改')
-      expect(runtime.slots.entries('conversation.composer.layout.permissions')).toHaveLength(0)
+      expect(runtime.slots.entries('conversation.composer.bar.accessory.permissions')).toHaveLength(0)
       await act(async () => { removeLayout = mountLayout() })
       await verify(true, '工作区内修改')
-      expect(runtime.slots.entries('conversation.composer.layout.permissions')).toHaveLength(1)
+      expect(runtime.slots.entries('conversation.composer.bar.accessory.permissions')).toHaveLength(1)
       await act(async () => { session.projections.set('permissions', undefined) })
       expect(view.queryByRole('button', { name: /^访问模式/ })).toBeNull()
       await act(async () => { removeLayout() })

@@ -16,10 +16,9 @@ export interface ManturComposerInjected {
  * @param props - owner-created composer nodes and the current hero state.
  * @returns Mantur's visual and keyboard order without changing the supplied controls.
  */
-export function ManturComposerLayout({ hero, disabled, heading, workspace, content, sessionId,
-  useAutomaticProject, reloadRoot, renderSlot, t,
-}: PropsRuntime<'conversation.composer.layout'> & InjectFace<ManturComposerInjected> & PropsLocale<'projects.mantur'>
-  & PropsRenderSlots<'conversation.composer.layout.permissions'>) {
+export function ManturComposerLayout({ hero, heading, workspace, content, sessionId,
+  useAutomaticProject, reloadRoot, t,
+}: PropsRuntime<'conversation.composer.layout'> & InjectFace<ManturComposerInjected> & PropsLocale<'projects.mantur'>) {
   const project = useAutomaticProject(state => state)
   return <>
     {heading}
@@ -33,7 +32,17 @@ export function ManturComposerLayout({ hero, disabled, heading, workspace, conte
         </p>}
       </div>}
       {workspace}
-      {renderSlot('conversation.composer.layout.permissions', { disabled })}
     </div>
   </>
+}
+
+/**
+ * Place the Session permission control above the editor inside its card.
+ * @param props - Composer lock and the owned permission slot.
+ * @returns The existing permission control without duplicating its state.
+ */
+export function ManturComposerAccessory({ disabled, renderSlot }:
+  PropsRuntime<'conversation.composer.bar.accessory'>
+  & PropsRenderSlots<'conversation.composer.bar.accessory.permissions'>) {
+  return renderSlot('conversation.composer.bar.accessory.permissions', { disabled })
 }

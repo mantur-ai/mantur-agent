@@ -11,6 +11,8 @@ English | [中文](README.zh.md)
 
 This Host package routes ManturHub requests to the selected production or test deployment. `standalone` identity owns per-origin credential records and device-code flows; `desktop-managed` identity delegates to Electron Main and never reads those records. The generated Remote exposes the identity mode and sanitized account status, never an API key or environment configuration.
 
+The secret-free `balance()` Remote reads `/api/v1/me` on the selected deployment and returns only the numeric Mantou balance. Desktop-managed requests use Main’s existing credential-scoped broker. Signed-out identities have no numeric balance; HTTP failures and invalid response fields fail explicitly without cached values or credential details.
+
 ## Table of Contents
 
 - [Configuration](#configuration)
@@ -23,6 +25,8 @@ This Host package routes ManturHub requests to the selected production or test d
 <a id="configuration"></a>
 
 ## Configuration
+
+`balanceRefreshIntervalMs` configures visible-client balance polling, defaults to 5000 milliseconds and accepts integers from 1000 through 2147483647. Its secret-free Remote getter exposes only this cadence.
 
 `environment` defaults to `production`. `baseUrl` defaults to `https://hub.mantur.ai` and names the production origin; `testBaseUrl` names the optional test origin and is required before `test` can be selected. Both values must be HTTP(S) origins without credentials, paths, queries, or fragments, and the test origin must differ from production. Maintainers select the environment through the `mantur-account` row in a machine-local `cordis.patch.yml`; the account browser Remote cannot read or change it. Restarting the desktop application after a change clears its in-memory account and marketplace state.
 
@@ -57,7 +61,7 @@ Authorization does not alter model request prefixes or cache reuse.
 <a id="known-limitations-and-deferred-work"></a>
 
 - Standalone login attempts are process-local; standalone sign-out removes only the local grant.
-- Native forms consume the explicit identity mode and guarded preload. Marketplace login routing, packaged CLI integration and native OS acceptance remain incomplete. Loopback command tests do not establish test-site readiness. See the [native account proposal](../../../.agents/notes/proposed/architecture/2026-09-07-desktop-native-account-identity.md).
+- Desktop browser authorization reports an account display name; standalone account status retains its email field. Native macOS and Windows OS storage, website consent and real-account acceptance remain pending. See the [browser authorization decision](../../../.agents/notes/implemented/architecture/2026-09-08-browser-account-authorization.md).
 
 <a id="dev-note"></a>
 ### Dev Note

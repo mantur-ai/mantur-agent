@@ -30,6 +30,8 @@ An export whose constructor identity or module state must be shared appears in `
 
 Workspace imports used by the Client bundle, type-only imports, module augmentations, `dsh.client.inject`, invariant companions, and existing metadata-only peers belong only in `devDependencies`. Ordinary third-party packages imported by the Host runtime belong in `dependencies`; other third-party relationships keep their declared section. Workspace references use `workspace:^`.
 
+The editing Host imports `connectMcpServer` as peer-required because its module-local server-name reservations must be shared across an Agent's MCP clients. Its public `./types` entry is a separate `lib/types.js` bundle; publishing that entry does not publish the private browser compiler output beneath `lib/types/client/`. The manifest gate requires the bundle, and publint checks its published relative-import closure.
+
 Some development relationships exist only in `dsh.client.inject` or TypeScript project references. The policy's `configurationOnlyDevDependencies` table names only those reviewed edges and keeps them in `devDependencies`.
 
 The verifier reads source manifests and source files, so it runs on a clean tree without built `lib/`. Every selected Host face must have `src/index.ts`. An unclassified Host runtime export is a policy violation that blocks all `--fix` writes; a maintainer must review the export and classify it, change the source relationship, or change the package selection. Once source safety passes, `--fix` performs only the section and range changes implied by the classification and removes stale peer metadata.
@@ -75,6 +77,8 @@ pnpm run benchmark:npm-resolution:next -- --runs=1 --finalist-runs=5 --finalists
 [`verify-npm-install-layout`](../../../../scripts/verify-npm-install-layout.ts) is a deterministic package-path and version check in the `Release (dsh)` workflow on every pull request and master push; it does not enforce resolver duration. [`benchmark-npm-resolution`](../../../../scripts/benchmark-npm-resolution.ts) and [`benchmark-next-package-dependency`](../../../../scripts/benchmark-next-package-dependency.ts) remain manual because resolver time varies with machine load and metadata completion order. Their fresh-consumer, metadata-only runs isolate npm's dependency-tree calculation from registry latency and archive downloads, so relative results identify peer relays without creating a release-time performance promise.
 
 The generated policy currently leaves 27 managed Host runtime edges in `dependencies` across 13 packages. Two edges remain in `peerDependencies`: `dsh-api-remotes → dsh-scope` for `carrierKeyOf`, and `dsh-session → dsh-scope` for `scopeOf` and `scopeTarget`.
+
+The two-release npm layout check follows DSH dependencies from the CLI package. Independently versioned applications outside that closure retain their registry metadata; a reachable package without the core release version remains an error.
 
 ## Alternatives considered
 

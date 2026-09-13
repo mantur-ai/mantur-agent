@@ -10,6 +10,20 @@ async function raster(format: 'png' | 'jpeg' | 'webp' | 'gif'): Promise<Uint8Arr
 }
 
 describe('raster decoding', () => {
+  it('loads the reviewed sharp and libheif builds', () => {
+    expect(sharp.versions.sharp).toBe('0.35.4')
+    expect(sharp.versions.heif).toBe('1.23.2')
+  })
+
+  it('rejects AVIF after reading its metadata without admitting a new attachment format', async () => {
+    const avif = await sharp({
+      create: { width: 3, height: 2, channels: 3, background: { r: 1, g: 2, b: 3 } },
+    }).avif().toBuffer()
+    await expect(sharp(avif).metadata()).resolves.toMatchObject({ format: 'heif', width: 3, height: 2 })
+    await expect(detectImage(avif)).rejects.toMatchObject({ code: 'INVALID_IMAGE' })
+    await expect(probeImage(avif)).rejects.toMatchObject({ code: 'INVALID_IMAGE' })
+  })
+
   it('decodes every supported format and its intrinsic dimensions', async () => {
     for (const [format, mediaType] of [
       ['png', 'image/png'],

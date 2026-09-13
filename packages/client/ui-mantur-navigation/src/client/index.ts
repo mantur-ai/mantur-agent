@@ -1,3 +1,4 @@
+import { bundledSkillClipboard } from './bundled-skills.ts'
 /** Mantur-only sidebar navigation and marketplace page registration. */
 
 import type { Context } from '@deepseek-ai/cordis'
@@ -16,10 +17,11 @@ import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ReferenceInsert } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type {} from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { GUIDE_NAMESPACE, type CreationMode, type GuideSettings } from '../guide-settings.ts'
 import { CreationGuide, CreationModes, type GuidePreferencesInjected } from './CreationGuide.tsx'
-import { ManturComposerLayout } from './ManturComposerLayout.tsx'
+import { ManturComposerAccessory, ManturComposerLayout } from './ManturComposerLayout.tsx'
 import { ProjectPathSettings, type ProjectPathSettingsInjected } from './ProjectPathSettings.tsx'
 import { AutomaticProjectController } from './automatic-project.ts'
 import { en as projectEn, zh as projectZh, type ProjectKey } from './project-locales.ts'
@@ -29,8 +31,9 @@ import {
 } from './MarketplaceNavigation.tsx'
 import { en, zh, type ManturNavigationKey } from './locales.ts'
 import { ManturMarketplaceStore } from './store.ts'
+import { BundledSkills } from './bundled-skills.ts'
 import { NativeUpdates } from './desktop-updates.ts'
-import { DesktopUpdate } from './DesktopUpdate.tsx'
+import { DesktopUpdate, DesktopUpdateSettings } from './DesktopUpdate.tsx'
 import { en as updateEn, zh as updateZh, type UpdateKey } from './update-locales.ts'
 
 declare module '@deepseek-ai/cordis' {
@@ -62,7 +65,7 @@ const NS = 'navigation.mantur'
 const ABSENT_GUIDE_INPUT = { getSnapshot: () => undefined, subscribe: () => () => {} }
 
 /** Required UI services and declarations. */
-export const inject = ['slots', 'locale', 'remote', 'sessions', 'workspaces', 'conversation', 'conversationDrafts', 'uiWorkspace', 'settingsScope']
+export const inject = ['slots', 'locale', 'remote', 'sessions', 'workspaces', 'conversation', 'conversationDrafts', 'uiWorkspace', 'settingsScope', 'inputTriggers']
 
 /** Fill Mantur navigation, workspace terminology, and the root marketplace page. */
 export async function apply(ctx: Context): Promise<void> {
@@ -74,6 +77,10 @@ export async function apply(ctx: Context): Promise<void> {
       name: 'sidebar.footer.action', id: 'mantur.desktop-update', locale: 'updates.mantur',
       inject: () => ({ controller: native, hooks: { updates: native.store } }),
     }, DesktopUpdate))
+    ctx.slots.inject('settings.general.item', () => ctx.slots.register({
+      name: 'settings.general.item', id: 'mantur.desktop-update', order: 90, locale: 'updates.mantur',
+      inject: () => ({ controller: native, hooks: { updates: native.store } }),
+    }, DesktopUpdateSettings))
   }
   const disposeMarketplace = await ctx.remote.$mount(manturMarketplaceRemote)
   ctx.effect(() => disposeMarketplace, 'ui-mantur-navigation: marketplace Remote')
@@ -85,7 +92,7 @@ export async function apply(ctx: Context): Promise<void> {
     scope.effect(() => scope.locale.register('projects.mantur', { zh: projectZh, en: projectEn }), 'ui-mantur-navigation: project dictionaries')
     const projects = new AutomaticProjectController({
       remote: scope.remote.manturProjects, sessions: scope.sessions, workspace: scope.uiWorkspace,
-      persistence: scope.conversation.draftPersistence, text: scope.locale.bind('projects.mantur'),
+      drafts: scope.conversationDrafts, text: scope.locale.bind('projects.mantur'),
     })
     scope.effect(() => () => { projects.dispose() }, 'ui-mantur-navigation: project controller')
     scope.effect(() => scope.conversationDrafts.register(projects), 'ui-mantur-navigation: first-send project policy')
@@ -98,6 +105,26 @@ export async function apply(ctx: Context): Promise<void> {
       inject: () => projectSettings,
     }, ProjectPathSettings))
     const controller = new ManturMarketplaceStore(scope)
+    const bundled = new BundledSkills(async (signal) => {
+      const result = await scope.remote.manturMarketplace.bundled(signal)
+      if (!result.ok) throw new Error(result.error.message)
+      return result.value
+    })
+    scope.effect(() => () => { bundled.dispose() }, 'ui-mantur-navigation: bundled catalog')
+    scope.effect(() => scope.inputTriggers.registerSource({
+      trigger: '/', name: 'mantur-bundled-skill',
+      candidates: () => Promise.resolve([]),
+      onPick: () => { throw new Error('App-bundled Skills are selected through homepage shortcuts') },
+      codec: {
+        clipboardText: bundledSkillClipboard,
+        serialize: async (reference, signal) => {
+          const result = await scope.remote.manturMarketplace.resolveBundled(reference, signal)
+          if (!result.ok) throw new Error(result.error.message)
+          return bundledSkillClipboard(result.value.reference)
+        },
+      },
+    }), 'ui-mantur-navigation: bundled references')
+    void bundled.load()
     const guideNavigation = createSnapshotStore(0)
     scope.effect(() => () => { controller.dispose() }, 'ui-mantur-navigation: marketplace controller')
     const preferences = scope.settingsScope.bind<GuideSettings>({ namespace: GUIDE_NAMESPACE })
@@ -119,16 +146,18 @@ export async function apply(ctx: Context): Promise<void> {
     }, CreationModes))
     scope.slots.inject('conversation.composer.layout', () => scope.slots.register({
       name: 'conversation.composer.layout', locale: 'projects.mantur',
-      children: { 'conversation.composer.layout.permissions': { kind: 'single', scope: 'session-maybe' } },
       inject: () => ({
         hooks: projectSettings.hooks, reloadRoot: projectSettings.reloadRoot,
       }),
     }, ManturComposerLayout))
+    scope.slots.inject('conversation.composer.bar.accessory', () => scope.slots.register({
+      name: 'conversation.composer.bar.accessory',
+      children: { 'conversation.composer.bar.accessory.permissions': { kind: 'single', scope: 'session-maybe' } },
+    }, ManturComposerAccessory))
     scope.slots.inject('conversation.composer.guide', () => scope.slots.register({
       name: 'conversation.composer.guide', locale: 'guide.mantur',
       inject: (sessionId: SessionId | undefined) => ({
         ...guidePreferences,
-        navigationVersion: () => guideNavigation.getSnapshot(),
         appendReference: (reference: ReferenceInsert) => {
           if (sessionId === undefined) return scope.conversationDrafts.input.appendReference(reference)
           const binding = scope.sessions.binding(sessionId)
@@ -136,24 +165,14 @@ export async function apply(ctx: Context): Promise<void> {
           return scope.conversation.input.for(binding.ctx).appendReference(reference)
         },
         hooks: {
-          preferences, marketplace: controller.store, guideNavigation,
+          preferences, guideNavigation, bundledSkills: bundled.store,
           guideInput: sessionId === undefined ? scope.conversationDrafts.input.state : (() => {
             const binding = scope.sessions.binding(sessionId)
             return binding === undefined ? ABSENT_GUIDE_INPUT : scope.conversation.input.for(binding.ctx).state
           })(),
         },
         marketplaceText: scope.locale.bind(NS),
-        load: () => controller.load(),
-        ensureCatalog: () => controller.ensureSkillCatalog(),
-        openDetail: (slug: string) => controller.openDetail(slug),
-        closeDetail: () => { controller.closeDetail() },
-        install: async (slug: string) => {
-          await controller.install(slug)
-          const state = controller.store.getSnapshot()
-          return state.phase === 'ready' && state.catalog.skills.some(skill => skill.slug === slug && skill.installed)
-        },
-        startLogin: () => controller.startLogin(),
-        cancelLogin: () => controller.cancelLogin(),
+        loadBundled: () => bundled.load(),
       }),
     }, CreationGuide))
     scope.slots.inject('sidebar.navigation', () =>

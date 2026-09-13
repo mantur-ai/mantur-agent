@@ -53,21 +53,23 @@ function cloneForVersion(manifest: object, version: string): MutableRegistryMani
 }
 
 /**
- * Replace the working release with two incompatible, internally consistent DSH releases.
+ * Replace the CLI dependency closure with two incompatible, internally consistent DSH releases.
  * @param index - Registry metadata containing the working release.
  * @param sourceVersion - Workspace version copied into each synthetic release.
  * @returns Registry metadata containing both synthetic DSH releases and unchanged external packages.
  */
 export function buildDualDshRegistry(index: RegistryIndex, sourceVersion: string): RegistryIndex {
   const output = new Map(index)
+  const pending = new Set([DSH_PACKAGE])
   let dshPackages = 0
-  for (const [name, versions] of index) {
-    if (!isDshPackage(name)) {
-      output.set(name, versions)
-      continue
-    }
-    const source = versions.get(sourceVersion)
+  for (const name of pending) {
+    const source = index.get(name)?.get(sourceVersion)
     if (source === undefined) throw new Error(`${name} has no workspace version ${sourceVersion}`)
+    for (const field of DEPENDENCY_FIELDS) {
+      for (const dependency of Object.keys(source[field] ?? {})) {
+        if (isDshPackage(dependency)) pending.add(dependency)
+      }
+    }
     dshPackages++
     output.set(name, new Map(SYNTHETIC_DSH_VERSIONS.map(version => [
       version,

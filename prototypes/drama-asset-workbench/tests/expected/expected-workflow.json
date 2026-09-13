@@ -1,0 +1,13 @@
+{
+  "mode": "fixture-controlled-agent",
+  "stages": [
+    { "name": "accepted", "statuses": ["accepted", "accepted"], "versions": [1, 1] },
+    { "name": "executed", "statuses": ["proposed", "failed"], "versions": [1, 1] },
+    { "name": "confirmed", "statuses": ["applied", "failed"], "versions": [2, 1] },
+    { "name": "retry-confirmed", "statuses": ["applied", "applied"], "versions": [2, 2] }
+  ],
+  "submittedTask": "fixture-image-CHAR-001-V01",
+  "submittedVersion": 1,
+  "historyCount": 2,
+  "userClosedAfterRestore": true
+}

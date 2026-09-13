@@ -292,6 +292,8 @@ class SingleExeBuild {
       'deploy',
       '--legacy',
       '--prod',
+      // Desktop-only patches are outside the Python closure; applied patches still fail on errors.
+      '--config.allow-unused-patches=true',
       '--config.node-linker=hoisted',
       '--config.auto-install-peers=false',
       '--config.link-workspace-packages=true',

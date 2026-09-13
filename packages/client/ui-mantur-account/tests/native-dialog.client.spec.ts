@@ -8,7 +8,7 @@ const cleanups: Array<() => void> = []
 afterEach(() => { for (const close of cleanups.splice(0).reverse()) close() })
 const signedOut = { phase: 'signed-out' as const, busy: false, authenticated: false, skipped: true, pendingRevocations: 0 }
 const signedIn = { ...signedOut, phase: 'signed-in' as const, authenticated: true,
-  account: { email: 'creator@example.com', expiresAt: 1_999_999_999_999 } }
+  account: { displayName: 'Test creator', expiresAt: 1_999_999_999_999 } }
 
 function bench() {
   const invoke = vi.fn<NativeAccountBridge['invoke']>(async () => ({ ok: true, revision: 1, snapshot: signedOut }))
@@ -30,7 +30,7 @@ describe('requested native account dialog', () => {
     expect(b.dialog.open()).toBe(request)
     expect(b.view.store.getSnapshot().open).toBe(true)
     b.client.store.set({ online: true, snapshot: { ...signedIn, busy: true } })
-    b.client.store.set({ online: true, snapshot: signedIn, operation: 'password' })
+    b.client.store.set({ online: true, snapshot: signedIn, operation: 'browser' })
     expect(b.view.store.getSnapshot().open).toBe(true)
     b.client.store.set({ online: true, snapshot: signedIn })
     expect(await request).toBe('authenticated')
@@ -39,12 +39,12 @@ describe('requested native account dialog', () => {
     b.dialog.close()
   })
 
-  it.each([false, true])('does not reopen or change the returned outcome after a late password result ok=%s', async (ok) => {
+  it.each([false, true])('does not reopen or change the returned outcome after a late browser result ok=%s', async (ok) => {
     const b = bench()
     const pending = Promise.withResolvers<NativeAccountReply>()
     b.invoke.mockReturnValueOnce(pending.promise)
     const request = b.dialog.open()
-    const login = b.dialog.run({ kind: 'password', email: 'creator@example.com', password: 'transient', consent: true })
+    const login = b.dialog.run({ kind: 'browser' })
     b.dialog.close()
     expect(await request).toBe('closed')
     expect(b.view.store.getSnapshot().open).toBe(false)

@@ -6,14 +6,15 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { startDesktopService } from '../src/runtime.ts'
 import { parseProgramManifest, verifyProgramManifest } from '../../../scripts/mantur-cut-distribution.ts'
+import { smokeEmbeddedCli } from '../../../scripts/desktop-embedded-cli-smoke.ts'
 
 const desktopRoot = resolve(import.meta.dirname, '..')
 
 function packagedPaths(): { electronExecutable: string; resourcesRoot: string; nativeResourcesRoot: string; updateConfig: string } {
   if (process.platform === 'darwin') {
-    const app = join(desktopRoot, 'dist', process.arch === 'arm64' ? 'mac-arm64' : 'mac', '漫途Agent.app')
+    const app = join(desktopRoot, 'dist', process.arch === 'arm64' ? 'mac-arm64' : 'mac', 'ManTur Agent.app')
     return {
-      electronExecutable: join(app, 'Contents', 'MacOS', '漫途Agent'),
+      electronExecutable: join(app, 'Contents', 'MacOS', 'ManTur Agent'),
       resourcesRoot: join(app, 'Contents', 'Resources', 'app'),
       nativeResourcesRoot: join(app, 'Contents', 'Resources'),
       updateConfig: join(app, 'Contents', 'Resources', 'app-update.yml'),
@@ -22,7 +23,7 @@ function packagedPaths(): { electronExecutable: string; resourcesRoot: string; n
   if (process.platform === 'win32') {
     const directory = join(desktopRoot, 'dist', 'win-unpacked')
     return {
-      electronExecutable: join(directory, '漫途Agent.exe'),
+      electronExecutable: join(directory, 'ManTur Agent.exe'),
       resourcesRoot: join(directory, 'resources', 'app'),
       nativeResourcesRoot: join(directory, 'resources'),
       updateConfig: join(directory, 'resources', 'app-update.yml'),
@@ -58,12 +59,24 @@ if (!existsSync(packaged.updateConfig)) {
   throw new Error(`packaged updater configuration is missing: ${packaged.updateConfig}`)
 }
 const updateConfig = readFileSync(packaged.updateConfig, 'utf8')
-for (const expected of ['provider: github', 'owner: mantur-ai', 'repo: mantur-harness']) {
+for (const expected of ['provider: github', 'owner: mantur-ai', 'repo: mantur-agent']) {
   if (!updateConfig.includes(expected)) {
     throw new Error(`packaged updater configuration is missing ${expected}`)
   }
 }
 const dshHome = mkdtempSync(join(tmpdir(), 'mantur-agent-desktop-smoke-'))
+try {
+  await smokeEmbeddedCli({
+    resourceRoot: join(packaged.nativeResourcesRoot, 'mantur-cli'),
+    userData: dshHome,
+    executable: packaged.electronExecutable,
+    platform: process.platform === 'darwin' ? 'darwin' : 'win32',
+  })
+  console.log('desktop packaged CLI smoke: 0.11.0 through the profile-local launcher')
+} catch (error) {
+  rmSync(dshHome, { recursive: true, force: true })
+  throw error
+}
 const launchRoot = join(dshHome, 'launch-root')
 const logPath = join(dshHome, 'harness.log')
 mkdirSync(launchRoot)
@@ -77,6 +90,8 @@ const service = startDesktopService({
     ...process.env,
     DSH_HOME: dshHome,
     DSH_TELEMETRY_DISABLED: '1',
+    DSH_MANTUR_NATIVE_ACCOUNT: '0',
+    DSH_MANTUR_UPDATE_IPC: '0',
     NODE_PATH: '',
   },
 })
@@ -93,7 +108,7 @@ try {
   const html = await response.text()
   if (!response.ok) throw new Error(`packaged dsh Web returned HTTP ${String(response.status)}`)
   if (!html.includes('__DSH_BOOT__')) throw new Error('packaged dsh Web did not return its boot payload')
-  if (!html.includes('<title>漫途Agent</title>')) throw new Error('packaged Web title is not 漫途Agent')
+  if (!html.includes('<title>ManTur Agent</title>')) throw new Error('packaged Web title is not ManTur Agent')
   console.log(`desktop packaged smoke: ${String(response.status)} ${new URL(url).origin}`)
 } finally {
   service.stop()

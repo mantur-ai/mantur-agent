@@ -51,7 +51,7 @@ pnpm dsh --profile headless "test provider recovery"
 
 ### 脚本化行为
 
-`--sequence` 是逗号分隔的 FIFO。耗尽时返回结构化 HTTP 500；`--repeat-last` 显式重用最后一项。
+`--sequence` 是逗号分隔的 FIFO。耗尽时返回结构化 HTTP 500；`--repeat-last` 显式重用最后一项。每个 `tool_call_success` 响应使用新生成的 UUID 工具调用 ID，服务器重启后也不复用；随机行为种子不决定这些 ID。
 
 | 行为 | 协议结果 |
 |---|---|

@@ -332,7 +332,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'pickDirectory(): Promise<string | null>',
-        description: 'Open the Host-native directory picker.',
+        description: 'Open the native directory picker selected by the application composition.',
         parameters: [],
         returns: 'the selected directory, or null when cancelled.',
       },

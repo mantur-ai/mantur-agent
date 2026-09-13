@@ -5,9 +5,8 @@ import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
 import { resolveSlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
-import { AccountOnboarding } from '../src/client/AccountOnboarding.tsx'
 import { AccountSection } from '../src/client/AccountSection.tsx'
-import { NativeAccountOnboarding, NativeAccountSection, type NativeAccountInjected } from '../src/client/NativeAccountSurfaces.tsx'
+import { NativeAccountSection, type NativeAccountInjected } from '../src/client/NativeAccountSurfaces.tsx'
 import { apply, inject } from '../src/client/index.ts'
 import { createNativeAccountDialogStore } from '../src/client/native-dialog.ts'
 import type { NativeAccountDialogInjected } from '../src/client/NativeAccountDialog.tsx'
@@ -19,7 +18,7 @@ vi.mock('@deepseek-ai/dsh-authorization-manturhub/remote', () => ({
 
 afterEach(() => { vi.unstubAllGlobals() })
 
-async function bench(mode: 'standalone' | 'desktop-managed' = 'standalone', available = true) {
+async function bench(mode: 'standalone' | 'desktop-managed' = 'standalone', available = true, cadenceAvailable = true) {
   const ctx = new Context()
   await ctx.plugin(SlotRegistry).await()
   const locale = new LocaleRuntime(ctx)
@@ -27,9 +26,11 @@ async function bench(mode: 'standalone' | 'desktop-managed' = 'standalone', avai
   ctx.provide('locale', locale)
   const remote = new TestRemote(ctx, {
     manturAccount: {
+      balanceRefreshIntervalMs: vi.fn(async () => cadenceAvailable ? { ok: true, value: 5000 } : { ok: false, error: { code: 'gateway/internal', message: 'unavailable' } }),
       identityMode: vi.fn(() => Promise.resolve(available
         ? { ok: true, value: mode }
         : { ok: false, error: { code: 'gateway/internal', message: 'unavailable' } })),
+      balance: vi.fn(async () => ({ ok: true, value: { status: 'available', balance: 1234.5 } })),
       status: vi.fn(() => Promise.resolve({
         ok: true,
         value: { status: 'signed-out' },
@@ -48,9 +49,10 @@ async function bench(mode: 'standalone' | 'desktop-managed' = 'standalone', avai
       'settings.section': { kind: 'list', scope: 'root' },
       'settings.onboarding': { kind: 'list', scope: 'root' },
       'shell.overlay': { kind: 'list', scope: 'root' },
+      'sidebar.footer.action': { kind: 'list', scope: 'root' },
     },
   } as never, () => null)
-  return { ctx, slots, locale }
+  return { ctx, slots, locale, remote }
 }
 
 describe('ui-mantur-account apply', () => {
@@ -73,8 +75,10 @@ describe('ui-mantur-account apply', () => {
       const entry = subject.slots.entries('shell.overlay')[0]!
       const view = createNativeAccountDialogStore().create()
       const props = (entry.inject as unknown as (actions: typeof view.actions) => NativeAccountDialogInjected)(view.actions)
-      const onboarding = (subject.slots.entries('settings.onboarding')[0]!.inject as unknown as () => NativeAccountInjected)()
-      expect(props.hooks.nativeAccount).toBe(onboarding.hooks.nativeAccount)
+      const settings = (subject.slots.entries('settings.section')[0]!.inject as unknown as () => NativeAccountInjected)()
+      expect(props.hooks.nativeAccount).toBe(settings.hooks.nativeAccount)
+      expect(subject.slots.entries('sidebar.footer.action')).toHaveLength(1)
+      expect(subject.slots.entries('settings.onboarding')).toEqual([])
       document.body.append(modal)
       expect(() => subject.ctx.bail('mantur/native-account-open')).toThrow('unavailable')
       modal.remove()
@@ -101,6 +105,32 @@ describe('ui-mantur-account apply', () => {
     expect(unsubscribe).toHaveBeenCalledOnce()
   })
 
+  it('publishes the Host balance with the selected locale and refuses unavailable cadence', async () => {
+    window.manturAccount = { invoke: async () => ({ ok: true, revision: 1, snapshot: {
+      phase: 'signed-in', busy: false, authenticated: true, skipped: false, pendingRevocations: 0,
+      account: { displayName: 'Creator', expiresAt: 1_999_999_999_999 },
+    } }), subscribe: () => () => {} }
+    const subject = await bench('desktop-managed')
+    const fiber = subject.ctx.plugin({ inject: [...inject], apply })
+    try {
+      await fiber.await()
+      const entry = subject.slots.entries('sidebar.footer.action')[0]!
+      const props = (entry.inject as unknown as () => import('../src/client/AccountBalance.tsx').AccountBalanceInjected)()
+      await vi.waitFor(() => { expect(props.hooks.balance.getSnapshot()).toEqual({ phase: 'ready', balance: 1234.5 }) })
+      expect(props.formatBalance(1234.5)).toBe('1,234.5')
+    } finally { await fiber.dispose(); delete window.manturAccount }
+    const unavailable = await bench('desktop-managed', true, false)
+    const rejected = unavailable.ctx.plugin({ inject: [...inject], apply })
+    try {
+      await rejected.await()
+      const errors = await Promise.all([...unavailable.ctx.registry.values()].flatMap(runtime =>
+        [...runtime.fibers].map(fiber => fiber.await().then(() => null, (error: unknown) => String(error)))))
+      expect(errors).toContain('Error: Mantur balance refresh configuration unavailable')
+      expect(unavailable.slots.entries('sidebar.footer.action')).toEqual([])
+    }
+    finally { await rejected.dispose() }
+  })
+
   it('selects Main only from the Host mode and supplies narrow native callbacks', async () => {
     const invoke = vi.fn(async () => ({ ok: true, revision: 1, snapshot: {
       phase: 'signed-out', busy: false, authenticated: false, skipped: false, pendingRevocations: 0,
@@ -111,10 +141,10 @@ describe('ui-mantur-account apply', () => {
     const fiber = subject.ctx.plugin({ inject: [...inject], apply })
     try {
       await fiber.await()
-      const onboarding = subject.slots.entries('settings.onboarding')[0]!
-      expect(onboarding.component).toBe(NativeAccountOnboarding)
+      expect(subject.slots.entries('sidebar.footer.action')).toHaveLength(1)
+      expect(subject.slots.entries('settings.onboarding')).toEqual([])
       expect(subject.slots.entries('settings.section')[0]!.component).toBe(NativeAccountSection)
-      const props = (onboarding.inject as unknown as () => NativeAccountInjected)()
+      const props = (subject.slots.entries('settings.section')[0]!.inject as unknown as () => NativeAccountInjected)()
       expect(resolveSlotLabel(subject.slots.entries('settings.section')[0]!.options.label)).toBe('漫途账号')
       expect(props).not.toHaveProperty('controller')
       expect(props.hooks.nativeAccount.getSnapshot().snapshot?.authenticated).toBe(false)
@@ -130,9 +160,9 @@ describe('ui-mantur-account apply', () => {
     const fiber = subject.ctx.plugin({ inject: [...inject], apply })
     try {
       await fiber.await()
-      const onboarding = subject.slots.entries('settings.onboarding')[0]!
-      expect(onboarding.component).toBe(NativeAccountOnboarding)
-      const props = (onboarding.inject as unknown as () => NativeAccountInjected)()
+      expect(subject.slots.entries('sidebar.footer.action')).toHaveLength(1)
+      expect(subject.slots.entries('settings.onboarding')).toEqual([])
+      const props = (subject.slots.entries('settings.section')[0]!.inject as unknown as () => NativeAccountInjected)()
       expect(props.hooks.nativeAccount.getSnapshot().failure).toEqual({ kind: 'unavailable' })
     } finally { await fiber.dispose() }
   })
@@ -142,25 +172,21 @@ describe('ui-mantur-account apply', () => {
     expect(inject).toEqual(['slots', 'locale', 'remote'])
   })
 
-  it('registers login before DeepSeek setup and exposes the account Settings page', async () => {
+  it('keeps account login optional and exposes the account Settings page', async () => {
     const subject = await bench()
     const fiber = subject.ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
-    expect(subject.slots.entries('settings.onboarding')[0]).toMatchObject({
-      component: AccountOnboarding,
-      options: { id: 'mantur-account', order: -100 },
-    })
-    const onboarding = subject.slots.entries('settings.onboarding')[0]!
-    const injectOnboarding = onboarding.inject as () => {
+    expect(subject.slots.entries('settings.onboarding')).toEqual([])
+    const section = subject.slots.entries('settings.section')[0]!
+    const injectSettings = section.inject as () => {
       controller: unknown
       hooks: { account: unknown }
       t: unknown
     }
-    const injected = injectOnboarding()
+    const injected = injectSettings()
     expect(injected.controller).toBeDefined()
     expect(injected.hooks.account).toBeDefined()
     expect(typeof injected.t).toBe('function')
-    const section = subject.slots.entries('settings.section')[0]!
     expect(section).toMatchObject({
       component: AccountSection,
       options: { id: 'mantur-account', order: 5 },

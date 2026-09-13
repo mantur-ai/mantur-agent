@@ -187,6 +187,105 @@ Host service backing the generated `ctx.remote.directoryPicker` namespace. The s
 
 Source: [`packages/api/workspace-controller/src/directory-picker.ts`](../../packages/api/workspace-controller/src/directory-picker.ts)
 
+<a id="ctxmanturassets--manturassets"></a>
+
+### `ctx.manturAssets` — `ManturAssets`
+
+Host service. Each write is source-CAS guarded and journals recovery before replacement.
+
+```ts cordis-catalog
+/**
+ * List project-local report and media files for manual selection.
+ * @param agent - Owning Session.
+ * @param directory - Project-local folder path.
+ * @returns Direct visible child entries.
+ */
+@Remote('list') async list(agent: Agent, directory: string): Promise<AssetEntry[]>
+
+/**
+ * Discover previewable media candidates in one project-local folder.
+ * @param agent - Owning Session with a loaded report.
+ * @param directory - Project-local candidate folder.
+ * @returns Direct child media files whose bytes match a supported media signature.
+ */
+@Remote('candidates') async candidates(agent: Agent, directory: string): Promise<AssetCandidate[]>
+
+/**
+ * Load one pipeline report and optional explicit media manifest.
+ * @param agent - Owning Session.
+ * @param assetsPath - Project-local report path.
+ * @param _clipsPath - Reserved clip-report path kept for Remote compatibility.
+ * @param mediaManifest - Optional project-local manifest with SHA-256 pinned files.
+ * @returns Current report rows plus journal state.
+ */
+@Remote('load') async load(agent: Agent, assetsPath: string, _clipsPath?: string, mediaManifest?: string): Promise<AssetSnapshot>
+
+/**
+ * Persist selected prompt edits without modifying the source report.
+ * @param agent - Owning Session.
+ * @param command - Source pin, journal version, and selected edits.
+ * @returns Updated report and journal observation.
+ */
+@Remote('saveDraft') async saveDraft(agent: Agent, command: AssetCommand): Promise<AssetSnapshot>
+
+/**
+ * Capture disk prompt fields separately from the user's proposed text.
+ * @param agent - Owning Session.
+ * @param source - Exact report observation.
+ * @param edits - Selected prompt drafts.
+ * @param instruction - User instruction for the original pipeline Skill.
+ * @returns Request identity and selected draft fields for the Session message.
+ */
+@Remote('prepare') async prepare(agent: Agent, source: SourcePin, edits: PromptEdit[], instruction: string): Promise<{ requestId: string source: SourcePin edits: PromptEdit[] }>
+
+/**
+ * Commit an approved proposal with an exclusive journal generation.
+ * @param agent - Owning Session.
+ * @param requestId - Proposal to apply.
+ * @returns Current disk observation after both writes complete.
+ */
+@Remote('apply') async apply(agent: Agent, requestId: string): Promise<AssetSnapshot>
+
+/**
+ * Retry only the exact pending write or finalize its already-written bytes.
+ * Missing or inconsistent proposals reject before either file is written.
+ * @param agent - Session reopening the selected report.
+ * @param expected - Journal generation shown by the recovery UI.
+ * @returns Completed state; conflicting source bytes remain untouched.
+ */
+@Remote('recover') async recover(agent: Agent, expected: AssetVersion): Promise<AssetSnapshot>
+
+/**
+ * Record the Agent's text-only response to a prepared proposal request.
+ * @param agent - Owning Session.
+ * @param requestId - Prepared proposal id.
+ * @param source - Source report path echoed by the request.
+ * @param edits - Prompt edits returned by the Agent.
+ * @returns Proposal after validation.
+ */
+@Remote('propose') async proposeRemote(agent: Agent, requestId: string, source: string, edits: PromptEdit[]): Promise<AssetProposal>
+
+/**
+ * Resolve explicitly manifested media by asset or clip id.
+ * @param agent - Owning Session.
+ * @param id - Manifest id to preview.
+ * @returns Session-scoped media URL.
+ */
+@Remote('media') async media(agent: Agent, id: string): Promise<AssetMedia>
+
+/**
+ * Resolve one discovered candidate path into a validated preview URL.
+ * @param agent - Owning Session.
+ * @param path - Project-local candidate file path.
+ * @returns Session-scoped media URL.
+ */
+@Remote('preview') async preview(agent: Agent, path: string): Promise<AssetMedia>
+```
+
+Types: [Agent](core.md)
+
+Source: [`packages/client/ui-mantur-assets/src/index.ts`](../../packages/client/ui-mantur-assets/src/index.ts)
+
 <a id="ctxmanturediting--manturediting"></a>
 
 ### `ctx.manturEditing` — `ManturEditing`
@@ -244,6 +343,42 @@ Prepare one project per first-send identity, without creating or sending a Sessi
 ```
 
 Source: [`packages/workspace/mantur-projects/src/index.ts`](../../packages/workspace/mantur-projects/src/index.ts)
+
+<a id="ctxmanturscript--manturscript"></a>
+
+### `ctx.manturScript` — `ManturScript`
+
+Remote operations never resolve paths against another Session or process cwd.
+
+```ts cordis-catalog
+/**
+ * List the selected project folder without recursive discovery.
+ * @param agent - Owning Session.
+ * @param directory - Project-relative or absolute folder.
+ * @returns Direct script files and folders.
+ */
+@Remote('list') async list(agent: Agent, directory: string): Promise<ScriptEntry[]>
+
+/**
+ * Read a bounded UTF-8 document from one observed file generation.
+ * @param agent - Owning Session.
+ * @param path - Script file within its project.
+ * @returns Consistently observed text and version.
+ */
+@Remote('read') async read(agent: Agent, path: string): Promise<ScriptDocument>
+
+/**
+ * Save a draft only while its observed generation remains current.
+ * @param agent - Owning Session.
+ * @param request - Versioned full draft.
+ * @returns Written text and new generation.
+ */
+@Remote('save') async save(agent: Agent, request: ScriptWrite): Promise<ScriptDocument>
+```
+
+Types: [Agent](core.md)
+
+Source: [`packages/client/ui-mantur-script/src/index.ts`](../../packages/client/ui-mantur-script/src/index.ts)
 
 <a id="ctxworkspacecontroller--workspacecontroller"></a>
 

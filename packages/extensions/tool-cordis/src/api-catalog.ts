@@ -1298,6 +1298,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the configured identity mode.',
       },
       {
+        signature: '@Remote balanceRefreshIntervalMs(): number',
+        description: 'Expose the configured cadence for visible-client balance reads.',
+        parameters: [],
+        returns: 'polling interval in milliseconds.',
+      },
+      {
         signature: 'stopNativeForShutdown(): Promise<void>',
         description: 'Freeze native command identity and brokered API admission, then join trees, leases and IPC cleanup. The parent must keep IPC connected until this operation completes.',
         parameters: [],
@@ -1309,6 +1315,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Send a Host-only GET to this account provider\'s configured deployment.\n\nThe method accepts only root-relative paths so a stored grant cannot be forwarded to another origin. It is intentionally not a browser Remote.',
         parameters: [{ name: 'pathname', description: 'root-relative ManturHub API path.' }, { name: 'options', description: 'authentication, headers, cancellation, and redirect policy.' }],
         returns: 'the response, or `undefined` when authentication was requested while signed out.',
+      },
+      {
+        signature: '@Remote async balance(): Promise<ManturBalanceStatus>',
+        description: 'Fetch the current account\'s Mantou balance from the configured deployment.',
+        parameters: [],
+        returns: 'the server balance, or signed-out when no local grant is active.',
+        throws: ['when the upstream request fails or its balance is invalid; no cached balance is returned.'],
       },
       {
         signature: '@Remote async status(): Promise<ManturAccountStatus>',
@@ -1341,6 +1354,73 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'manturAssets',
+    summary: 'Host service.',
+    description: 'Host service. Each write is source-CAS guarded and journals recovery before replacement.',
+    methods: [
+      {
+        signature: '@Remote(\'list\') async list(agent: Agent, directory: string): Promise<AssetEntry[]>',
+        description: 'List project-local report and media files for manual selection.',
+        parameters: [{ name: 'agent', description: 'Owning Session.' }, { name: 'directory', description: 'Project-local folder path.' }],
+        returns: 'Direct visible child entries.',
+      },
+      {
+        signature: '@Remote(\'candidates\') async candidates(agent: Agent, directory: string): Promise<AssetCandidate[]>',
+        description: 'Discover previewable media candidates in one project-local folder.',
+        parameters: [{ name: 'agent', description: 'Owning Session with a loaded report.' }, { name: 'directory', description: 'Project-local candidate folder.' }],
+        returns: 'Direct child media files whose bytes match a supported media signature.',
+      },
+      {
+        signature: '@Remote(\'load\') async load(agent: Agent, assetsPath: string, _clipsPath?: string, mediaManifest?: string): Promise<AssetSnapshot>',
+        description: 'Load one pipeline report and optional explicit media manifest.',
+        parameters: [{ name: 'agent', description: 'Owning Session.' }, { name: 'assetsPath', description: 'Project-local report path.' }, { name: '_clipsPath', description: 'Reserved clip-report path kept for Remote compatibility.' }, { name: 'mediaManifest', description: 'Optional project-local manifest with SHA-256 pinned files.' }],
+        returns: 'Current report rows plus journal state.',
+      },
+      {
+        signature: '@Remote(\'saveDraft\') async saveDraft(agent: Agent, command: AssetCommand): Promise<AssetSnapshot>',
+        description: 'Persist selected prompt edits without modifying the source report.',
+        parameters: [{ name: 'agent', description: 'Owning Session.' }, { name: 'command', description: 'Source pin, journal version, and selected edits.' }],
+        returns: 'Updated report and journal observation.',
+      },
+      {
+        signature: '@Remote(\'prepare\') async prepare(agent: Agent, source: SourcePin, edits: PromptEdit[], instruction: string): Promise<{ requestId: string source: SourcePin edits: PromptEdit[] }>',
+        description: 'Capture disk prompt fields separately from the user\'s proposed text.',
+        parameters: [{ name: 'agent', description: 'Owning Session.' }, { name: 'source', description: 'Exact report observation.' }, { name: 'edits', description: 'Selected prompt drafts.' }, { name: 'instruction', description: 'User instruction for the original pipeline Skill.' }],
+        returns: 'Request identity and selected draft fields for the Session message.',
+      },
+      {
+        signature: '@Remote(\'apply\') async apply(agent: Agent, requestId: string): Promise<AssetSnapshot>',
+        description: 'Commit an approved proposal with an exclusive journal generation.',
+        parameters: [{ name: 'agent', description: 'Owning Session.' }, { name: 'requestId', description: 'Proposal to apply.' }],
+        returns: 'Current disk observation after both writes complete.',
+      },
+      {
+        signature: '@Remote(\'recover\') async recover(agent: Agent, expected: AssetVersion): Promise<AssetSnapshot>',
+        description: 'Retry only the exact pending write or finalize its already-written bytes. Missing or inconsistent proposals reject before either file is written.',
+        parameters: [{ name: 'agent', description: 'Session reopening the selected report.' }, { name: 'expected', description: 'Journal generation shown by the recovery UI.' }],
+        returns: 'Completed state; conflicting source bytes remain untouched.',
+      },
+      {
+        signature: '@Remote(\'propose\') async proposeRemote(agent: Agent, requestId: string, source: string, edits: PromptEdit[]): Promise<AssetProposal>',
+        description: 'Record the Agent\'s text-only response to a prepared proposal request.',
+        parameters: [{ name: 'agent', description: 'Owning Session.' }, { name: 'requestId', description: 'Prepared proposal id.' }, { name: 'source', description: 'Source report path echoed by the request.' }, { name: 'edits', description: 'Prompt edits returned by the Agent.' }],
+        returns: 'Proposal after validation.',
+      },
+      {
+        signature: '@Remote(\'media\') async media(agent: Agent, id: string): Promise<AssetMedia>',
+        description: 'Resolve explicitly manifested media by asset or clip id.',
+        parameters: [{ name: 'agent', description: 'Owning Session.' }, { name: 'id', description: 'Manifest id to preview.' }],
+        returns: 'Session-scoped media URL.',
+      },
+      {
+        signature: '@Remote(\'preview\') async preview(agent: Agent, path: string): Promise<AssetMedia>',
+        description: 'Resolve one discovered candidate path into a validated preview URL.',
+        parameters: [{ name: 'agent', description: 'Owning Session.' }, { name: 'path', description: 'Project-local candidate file path.' }],
+        returns: 'Session-scoped media URL.',
+      },
+    ],
+  },
+  {
     key: 'manturEditing',
     summary: 'Runtime and tools share the exact Agent identity resolved by the authenticated Remote gateway.',
     description: 'Runtime and tools share the exact Agent identity resolved by the authenticated Remote gateway.',
@@ -1364,6 +1444,18 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     summary: 'Host service for catalog reads and local Skill installation.',
     description: 'Host service for catalog reads and local Skill installation.',
     methods: [
+      {
+        signature: '@Remote async bundled(signal: AbortSignal): Promise<ManturBundledSkill[]>',
+        description: 'Read the App\'s offline Skill entries without requesting account or marketplace data.',
+        parameters: [{ name: 'signal', description: 'cancellation supplied by the requesting client.' }],
+        returns: 'pinned identities and display titles; missing resources reject the request.',
+      },
+      {
+        signature: '@Remote async resolveBundled(reference: string, signal: AbortSignal): Promise<ManturBundledSkill>',
+        description: 'Verify that a draft still refers to the exact App resource the user selected.',
+        parameters: [{ name: 'reference', description: 'captured name, version and digest, never a user-directory locator.' }, { name: 'signal', description: 'cancellation supplied by the sending draft.' }],
+        returns: 'the verified App identity; no installed or online substitute is selected.',
+      },
       {
         signature: '@Remote async list(): Promise<ManturMarketplaceCatalog>',
         description: 'Load the complete public Skill catalog and current local install flags.',
@@ -1418,6 +1510,31 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Create or resume the same first-send project. No Session or message is created here.',
         parameters: [{ name: 'creationId', description: 'UUID retained by the client until draft transfer succeeds.' }, { name: 'title', description: 'localized initial Workspace title, retained for this creation identity.' }],
         returns: 'its durable Workspace and deterministic Session identity.',
+      },
+    ],
+  },
+  {
+    key: 'manturScript',
+    summary: 'Remote operations never resolve paths against another Session or process cwd.',
+    description: 'Remote operations never resolve paths against another Session or process cwd.',
+    methods: [
+      {
+        signature: '@Remote(\'list\') async list(agent: Agent, directory: string): Promise<ScriptEntry[]>',
+        description: 'List the selected project folder without recursive discovery.',
+        parameters: [{ name: 'agent', description: 'Owning Session.' }, { name: 'directory', description: 'Project-relative or absolute folder.' }],
+        returns: 'Direct script files and folders.',
+      },
+      {
+        signature: '@Remote(\'read\') async read(agent: Agent, path: string): Promise<ScriptDocument>',
+        description: 'Read a bounded UTF-8 document from one observed file generation.',
+        parameters: [{ name: 'agent', description: 'Owning Session.' }, { name: 'path', description: 'Script file within its project.' }],
+        returns: 'Consistently observed text and version.',
+      },
+      {
+        signature: '@Remote(\'save\') async save(agent: Agent, request: ScriptWrite): Promise<ScriptDocument>',
+        description: 'Save a draft only while its observed generation remains current.',
+        parameters: [{ name: 'agent', description: 'Owning Session.' }, { name: 'request', description: 'Versioned full draft.' }],
+        returns: 'Written text and new generation.',
       },
     ],
   },
@@ -3758,6 +3875,54 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface AssembledSection {\n    name: string;\n    text: string;\n}',
   },
   {
+    name: 'AssetCandidate',
+    declaration: 'export interface AssetCandidate {\n    assetId: string | null;\n    path: string;\n    name: string;\n    kind: \'image\' | \'video\';\n    size: number;\n}',
+  },
+  {
+    name: 'AssetCommand',
+    declaration: 'export interface AssetCommand {\n    source: SourcePin;\n    stateVersion: AssetVersion | null;\n    edits: PromptEdit[];\n}',
+  },
+  {
+    name: 'AssetEntry',
+    declaration: 'export interface AssetEntry {\n    path: string;\n    name: string;\n    directory: boolean;\n}',
+  },
+  {
+    name: 'AssetHistory',
+    declaration: 'export interface AssetHistory {\n    id: ProposalId;\n    before: PromptEdit[];\n    after: PromptEdit[];\n    beforeSha: string;\n    afterSha: string;\n}',
+  },
+  {
+    name: 'AssetKey',
+    declaration: 'export type AssetKey = Branded<\'ManturAssetKey\'>;',
+  },
+  {
+    name: 'AssetMedia',
+    declaration: 'export interface AssetMedia {\n    id: string | null;\n    name: string;\n    url: string;\n    kind: \'image\' | \'video\';\n}',
+  },
+  {
+    name: 'AssetPending',
+    declaration: 'export interface AssetPending {\n    proposal: ProposalId;\n    source: SourcePin;\n    afterText: string;\n    afterSha: string;\n}',
+  },
+  {
+    name: 'AssetProposal',
+    declaration: 'export interface AssetProposal {\n    id: ProposalId;\n    session: string;\n    source: SourcePin;\n    draftRevision: number;\n    instruction: string;\n    before: PromptEdit[];\n    edits: PromptEdit[];\n    status: \'requested\' | \'proposed\' | \'applied\';\n}',
+  },
+  {
+    name: 'AssetRow',
+    declaration: 'export interface AssetRow extends PromptText {\n    key: AssetKey;\n    id: string;\n    name: string;\n    table: string;\n    fingerprint: string;\n    kind: \'image\' | \'video\';\n    media: string;\n    template: string;\n    actualRequest: string;\n    actualPrompt: string;\n}',
+  },
+  {
+    name: 'AssetSnapshot',
+    declaration: 'export interface AssetSnapshot {\n    source: SourcePin;\n    stateVersion: AssetVersion | null;\n    state: AssetState;\n    rows: AssetRow[];\n    projectState: string | null;\n}',
+  },
+  {
+    name: 'AssetState',
+    declaration: 'export interface AssetState {\n    format: 1;\n    path: string;\n    drafts: PromptDraft[];\n    proposals: AssetProposal[];\n    history: AssetHistory[];\n    pending: AssetPending | null;\n}',
+  },
+  {
+    name: 'AssetVersion',
+    declaration: 'export type AssetVersion = import(\'@deepseek-ai/dsh-fs\').FsVersion;',
+  },
+  {
     name: 'AssistantMessage',
     declaration: 'export interface AssistantMessage extends Message {\n    readonly role: \'assistant\';\n    readonly source: ModelMessageSource;\n}',
   },
@@ -4615,11 +4780,23 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ManturAccount',
-    declaration: 'export interface ManturAccount {\n    readonly email: string;\n}',
+    declaration: 'export type ManturAccount = {\n    readonly email: string;\n} | {\n    readonly displayName: string;\n};',
   },
   {
     name: 'ManturAccountStatus',
     declaration: 'export type ManturAccountStatus = {\n    readonly status: \'signed-out\';\n} | {\n    readonly status: \'signed-in\';\n    readonly account: ManturAccount;\n};',
+  },
+  {
+    name: 'ManturBalanceStatus',
+    declaration: 'export type ManturBalanceStatus = {\n    readonly status: \'signed-out\';\n} | {\n    readonly status: \'available\';\n    readonly balance: number;\n};',
+  },
+  {
+    name: 'ManturBundledSkill',
+    declaration: 'export interface ManturBundledSkill extends ManturBundledSkillIdentity {\n    readonly reference: string;\n    readonly title: string;\n    readonly source: \'app-bundled\';\n}',
+  },
+  {
+    name: 'ManturBundledSkillIdentity',
+    declaration: 'export interface ManturBundledSkillIdentity {\n    readonly name: string;\n    readonly version: string;\n    readonly digest: string;\n}',
   },
   {
     name: 'ManturHubRequestOptions',
@@ -4926,12 +5103,28 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type PromptContextOrderName = keyof typeof CONTEXT_ORDERS;',
   },
   {
+    name: 'PromptDraft',
+    declaration: 'export interface PromptDraft {\n    revision: number;\n    source: SourcePin;\n    edits: PromptEdit[];\n}',
+  },
+  {
+    name: 'PromptEdit',
+    declaration: 'export interface PromptEdit extends PromptText {\n    key: AssetKey;\n    fingerprint: string;\n}',
+  },
+  {
     name: 'PromptSection',
     declaration: 'export interface PromptSection {\n    readonly name: string;\n    readonly order: number;\n    readonly text: string | ((context: AssembleContext) => string);\n    readonly complete?: boolean;\n}',
   },
   {
     name: 'PromptSectionOrderName',
     declaration: 'export type PromptSectionOrderName = keyof typeof SECTION_ORDERS;',
+  },
+  {
+    name: 'PromptText',
+    declaration: 'export interface PromptText {\n    prompt: string;\n    negative: string;\n}',
+  },
+  {
+    name: 'ProposalId',
+    declaration: 'export type ProposalId = Branded<\'ManturAssetProposalId\'>;',
   },
   {
     name: 'ProviderRequestId',
@@ -5088,6 +5281,22 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ScopeKey',
     declaration: 'export type ScopeKey = object;',
+  },
+  {
+    name: 'ScriptDocument',
+    declaration: 'export interface ScriptDocument {\n    readonly path: string;\n    readonly version: ScriptVersion;\n    readonly content: string;\n}',
+  },
+  {
+    name: 'ScriptEntry',
+    declaration: 'export interface ScriptEntry {\n    readonly path: string;\n    readonly name: string;\n    readonly directory: boolean;\n}',
+  },
+  {
+    name: 'ScriptVersion',
+    declaration: 'export type ScriptVersion = Branded<\'ScriptVersion\'>;',
+  },
+  {
+    name: 'ScriptWrite',
+    declaration: 'export interface ScriptWrite {\n    readonly path: string;\n    readonly version: ScriptVersion;\n    readonly content: string;\n}',
   },
   {
     name: 'SearchFileMatches',
@@ -5720,6 +5929,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SkillViewOptions',
     declaration: 'export interface SkillViewOptions extends SkillLookupOptions {\n    readonly scope?: ScopeKey | undefined;\n}',
+  },
+  {
+    name: 'SourcePin',
+    declaration: 'export interface SourcePin {\n    path: string;\n    version: AssetVersion;\n    sha256: string;\n}',
   },
   {
     name: 'SpawnTeammateRequest',

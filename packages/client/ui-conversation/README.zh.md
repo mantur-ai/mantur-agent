@@ -11,6 +11,8 @@ kind: "package-reference"
 
 `ui-conversation` 拥有与 target 无关的 Conversation 组装和共享浏览器 shell。它消费 Session Controller 的 `SessionEventLikeEntry` feed，通过 `ctx.uiConversation` 暴露不依赖 React 的 registry 与逐 Session binding，并通过 `ctx.uiSession` 提供 `useConversation`、`useInput` 和 `inputActions` 标准 props。它还拥有按会话的持久化图片 URL 缓存：`ctx.uiConversation.imageUrl(sessionId, attachment)` 为每个附件解析一个经会话授权的浏览器 URL，并随 Session binding 释放而撤销，因此所有 Conversation target 共享一次 `session.attachment` 读取。Chat 等具体 target 位于独立 package，由各自 package 注册 Definition、snapshot builder、View 和 renderer。
 
+保存路径加入原始草稿，经普通用户消息记录入日志。切换 Session 后，导入结果不会加入其他 Session。文档解读使用 Agent 文件工具，导入本身不承诺提取 Word 正文。图片保留预览和图片提交路径。纯浏览器部署保留图片接收能力。[原生导入决策](../../../.agents/notes/implemented/feature/2026-09-11-desktop-file-import.zh.md)记录存储与测试范围。
+
 ## 目录
 
 - [Conversation 组装](#conversation-assembly)
@@ -44,13 +46,15 @@ View 选择规则固定：有效且已注册的持久化选择优先，其次是
 
 `conversation.composer.layout` 接收所有者创建的标题、工作区与内容节点。默认顺序把工作区放在编辑器之前；产品 occupant 可以重排这些节点，而不替换控件或状态。内容节点必须在 hero 与 active 阶段保持相同的 React 位置，以保留常驻编辑器。
 
-布局可以声明 `conversation.composer.layout.permissions`，其所有者参数仅为布尔值 `disabled`。Conversation 在该声明的生命周期内贡献内部权限选择器，使用与输入区内控件相同的 input facade、权限投影、命令回调和交互锁。框架绑定的 slot 占用情况仅在替代 slot 存在贡献时隐藏输入区内选择器；移除或重建声明会恢复或移动控件，不改变 Session 权限值。布局的展示锁包含 composer block，模型选择的锁定规则不变。
+产品可以占用输入卡内部、编辑器上方的 `conversation.composer.bar.accessory`，并声明子 slot `conversation.composer.bar.accessory.permissions`，所有者参数为布尔值 `disabled`。Conversation 在该声明的生命周期内提供现有权限选择器，沿用工具栏控件的输入状态、权限投影、命令回调与交互锁。slot 占用情况保证选择器只有一个；移除或重建附加区不改变 Session 权限值。输入框提供包含阻止状态的展示锁，模型选择的锁定规则不变。
 
 Session 首次绑定或缓存的 Session 成为 current 时，shell 会在渲染前读取持久化 View 偏好，激活已注册的偏好 View 或 Chat fallback，并在后续 tab 或 focus 选择写入 store 前先激活对应 target。blank Session 仍不渲染 `conversation.view` slot；未选中的 target 不会激活。
 
 常驻 composer 在无 Session 与有 Session 之间保持挂载。未注册未关联草稿策略时，无 Session 表面保持 inert，Workspace picker 连接 blank Session。该表面是 shell 所有的 Lexical 编辑器：引用 chip 是携带 owner 序列化身份的原子 decorator 节点（提交时经 owner codec 展开），已认领的 slash command 保持为带样式的行首文本，文件夹文本引用以图标前缀携带文件夹图形，草稿的剪贴板投影镜像到逐 Session Conversation store。Queue 操作通过 scoped `ctx.conversation` service 寻址准确的 queue occurrence；queue 预览经 `ui-primitives` 的共享行内引用投影渲染已发送文本（wire 会话形式折叠为其标签），并把本地图片预览或持久化图片部分显示为缩略图，编辑态则展示字面发送文本。持久化缩略图通过会话图片 URL 缓存解析。繁忙时 Enter 行为保存在 Host-backed `ui-conversation` settings namespace。
 
-根作用域准备策略在原生恢复后启用未关联编辑器。首次发送锁定该编辑器、取得真实 Session、等待目标草稿恢复，并在普通提交前转移完整文档与图片。原生转移在单个检查点发布两个归属前立即核验取消状态与当前选择。发布后取消会将目标草稿保留为未发送状态，不改变当前选择。手动选择项目使用同样的完整文档转移，并拒绝非空目标。
+根作用域准备策略在已配置的原生恢复完成后启用未关联编辑器。编辑器在成功转移前拥有稳定的准备标识；纯浏览器组合在内存中保留它，原生检查点组合则将它与草稿一起持久化。首次发送锁定该编辑器、取得真实 Session、等待目标草稿恢复，并在普通提交前转移完整文档与图片。原生转移在单个检查点发布两个归属前立即核验取消状态与当前选择。发布后取消会将目标草稿保留为未发送状态，不改变当前选择。手动选择项目使用同样的完整文档转移，并拒绝非空目标。
+
+原生文件导入把文件或文件夹名称作为标签加入原始编辑器，提交时使用已注册的 `reference` codec。文件引用语法决定可表示的路径；导入不会把 JSON 清单写入草稿。添加文件和添加文件夹使用输入框现有图标按钮样式。
 
 默认发送采用乐观提交：Enter 在同一事务里清空草稿、occurrence 表和撤销历史，composer 保持 `plain`，发送作为 detached attempt 运行，发送期间可以继续输入和提交。`sendSession` 在序列化之前用投递模式注册 Session 提交回显（`session.beginSubmission`）；Session 根据该模式与当前运行状态推导位置，因此空闲发送进入 transcript，繁忙时 Queue 进入 QueueDock，繁忙时 Steer 进入 pending-steering 区域。随后让出一帧，图片经浏览器原生 `FileReader` data-URL 路径编码。多个并发发送失败时，在用户编辑还原内容之前按提交顺序合并还原；命令提交保持冻结的 `submitting` 阶段。Detached attempt 持有图片 id，直到 admission 完成或 Session scope 销毁。回显以 observed 退休时，durable 图片缓存立即公开预览 URL，同时读取 admitted 附件，随后用规范化 URL 替换预览，并在两个 URL 各自停止使用后撤销。直接 subagent continuation 不创建本地回显，因为其 transport 不保留浏览器 request id。
 

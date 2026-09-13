@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-root",
-  "version": "0.1.2-rc.1",
+  "version": "0.1.3",
   "license": "MIT",
   "private": true,
   "type": "module",
@@ -154,6 +154,7 @@
     "release:publish": "tsx scripts/release/publish.ts",
     "dsh": "node --import tsx/esm apps/cli/src/bin.ts",
     "desktop:dist:mac:arm64": "pnpm --filter @deepseek-ai/dsh-desktop run dist:mac:arm64",
+    "desktop:dist:mac:arm64:local": "pnpm --filter @deepseek-ai/dsh-desktop run dist:mac:arm64:local",
     "desktop:dist:mac:x64": "pnpm --filter @deepseek-ai/dsh-desktop run dist:mac:x64",
     "desktop:dist:win:x64": "pnpm --filter @deepseek-ai/dsh-desktop run dist:win:x64",
     "desktop:prepare:mantur-cut": "tsx scripts/mantur-cut-distribution.ts",
