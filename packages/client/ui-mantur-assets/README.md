@@ -26,6 +26,8 @@ The browser panel reads reports, scans an explicitly selected project-local cand
 
 `AssetEntry` and `AssetCandidate` describe project-local discovery results. `SourcePin` retains the path, filesystem `AssetVersion`, and SHA-256 fingerprint; `AssetSnapshot` combines this observation with the journal generation, report rows, and pending state. `PromptEdit` selects a row fingerprint and editable prompt fields. `AssetCommand` pins the source and journal for a batch; `AssetProposal` retains its initiating Session and request status. `AssetMedia` identifies a validated preview URL and media kind. The declarations live in [types.ts](src/types.ts).
 
+No runtime invariant companion is published because report, journal, and media freshness is checked at each filesystem operation; the service owns no independently cached source state to compare.
+
 <a id="model-experience"></a>
 
 ## Model Experience

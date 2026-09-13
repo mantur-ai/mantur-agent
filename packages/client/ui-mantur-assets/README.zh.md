@@ -26,6 +26,8 @@ description: "项目内流水线报告、受版本保护的提示词提案和经
 
 `AssetEntry` 和 `AssetCandidate` 描述项目内发现结果。`SourcePin` 保留路径、文件系统 `AssetVersion` 和 SHA-256 指纹；`AssetSnapshot` 将该观察结果与日志版本、报告行和待处理状态组合。`PromptEdit` 指定行指纹和可编辑的提示词字段。`AssetCommand` 为批量操作固定源和日志；`AssetProposal` 保留发起 Session 和请求状态。`AssetMedia` 标识经过验证的预览地址和媒体类型。声明位于 [types.ts](src/types.ts)。
 
+不发布运行时不变量配套模块，因为每次文件系统操作都会检查报告、日志和媒体的新鲜度；服务没有需要单独比较的源状态缓存。
+
 <a id="model-experience"></a>
 
 ## 模型体验
