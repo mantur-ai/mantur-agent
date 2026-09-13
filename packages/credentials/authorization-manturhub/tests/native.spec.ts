@@ -134,11 +134,18 @@ function transport() {
 
 it('requires a connected Electron parent', () => {
   transport()
-  Object.defineProperty(process, 'connected', { configurable: true, value: false })
-  expect(() => new NativeAccountConnection(config)).toThrow('Electron parent')
-  Object.defineProperty(process, 'connected', { configurable: true, value: true })
-  Object.defineProperty(process, 'send', { configurable: true, value: undefined })
-  expect(() => new NativeAccountConnection(config)).toThrow('Electron parent')
+  const send = Object.getOwnPropertyDescriptor(process, 'send')!
+  try {
+    Object.defineProperty(process, 'connected', { configurable: true, value: false })
+    expect(() => new NativeAccountConnection(config)).toThrow('Electron parent')
+    Object.defineProperty(process, 'connected', { configurable: true, value: true })
+    Object.defineProperty(process, 'send', { configurable: true, value: undefined })
+    expect(() => new NativeAccountConnection(config)).toThrow('Electron parent')
+  } finally {
+    // Vitest reports between the case and async cleanup through this same process channel.
+    Object.defineProperty(process, 'connected', { configurable: true, value: true })
+    Object.defineProperty(process, 'send', send)
+  }
 })
 
 it('validates public snapshots and ignores unrelated or stale IPC replies', async () => {

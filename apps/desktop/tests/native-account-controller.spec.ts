@@ -255,8 +255,13 @@ describe('browser account controller', () => {
 
   it('expires the owned listener without requiring a renderer timer', async () => {
     const b = await bench()
-    b.controls.attemptExpiry = Date.now() + 120
-    await b.controller.startBrowser()
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    try {
+      b.controls.attemptExpiry = Date.now() + 600_000
+      await b.controller.startBrowser()
+      expect(b.controller.getSnapshot().failure).toBeUndefined()
+      await vi.advanceTimersByTimeAsync(600_000)
+    } finally { vi.useRealTimers() }
     await expect.poll(() => b.controller.getSnapshot().failure?.kind).toBe('expired')
     expect(b.controller.getSnapshot().authenticated).toBe(false)
     await expect(fetch(b.callbackUrl())).rejects.toThrow()

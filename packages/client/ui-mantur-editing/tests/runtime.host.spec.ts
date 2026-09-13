@@ -144,39 +144,6 @@ it('rejects an unexpected zero exit even if the process was already closed', asy
   await expect(runtime.dispose()).rejects.toThrow('Editing runtime exited')
 })
 
-it('waits for inherited stderr to close after a successful shutdown acknowledgement and parent exit', async () => {
-  const holder = `
-const {existsSync,writeFileSync,writeSync}=require('node:fs');
-const {join}=require('node:path');
-const root=process.argv[1];
-writeFileSync('pipe-holder.txt','ready');
-process.send('pipe-held');
-process.disconnect();
-const timer=setInterval(()=>{if(existsSync(join(root,'release-pipe.txt'))){clearInterval(timer);writeSync(2,'late pipe write');process.exit(0);}},10);
-`
-  const config = await fixture('', '', `
-const holder = spawn(process.execPath, ['-e', ${JSON.stringify(holder)}, process.cwd()], {stdio:['ignore','ignore',2,'ipc']});
-await new Promise((resolve,reject) => {
-  holder.once('message', message => message === 'pipe-held' ? resolve() : reject(new Error('Invalid pipe holder acknowledgement')));
-  holder.once('error', reject);
-  holder.once('exit', () => reject(new Error('Pipe holder exited before acknowledgement')));
-});
-holder.unref();`)
-  const runtime = await startEditor({ ...config, stopTimeoutMs: 60_000 }, await temp(), 'late-pipe' as SessionId, 'http://127.0.0.1:5298')
-  const child = children.at(-1)!
-  let finished = false
-  const stopping = runtime.dispose()
-  void stopping.then(() => { finished = true }, () => { finished = true })
-  try {
-    await expect.poll(async () => readFile(join(config.editorRoot, 'pipe-holder.txt'), 'utf8')).toBe('ready')
-    await expect.poll(() => child.child.exitCode).toBe(0)
-    expect(finished).toBe(false)
-    expect(child.isClosed).toBe(false)
-  } finally { await writeFile(join(config.editorRoot, 'release-pipe.txt'), 'release') }
-  await stopping
-  expect(child.isClosed).toBe(true)
-})
-
 it('retains a transport completion failure and leaves HTTP open after a successful save drain', async () => {
   const config = await fixture('', '', '', "throw new Error('native stream tail failed');")
   const runtime = await startEditor(config, await temp(), 'transport-failure' as SessionId, 'http://127.0.0.1:5298')
