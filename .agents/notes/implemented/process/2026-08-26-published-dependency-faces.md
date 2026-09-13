@@ -78,6 +78,8 @@ pnpm run benchmark:npm-resolution:next -- --runs=1 --finalist-runs=5 --finalists
 
 The generated policy currently leaves 27 managed Host runtime edges in `dependencies` across 13 packages. Two edges remain in `peerDependencies`: `dsh-api-remotes → dsh-scope` for `carrierKeyOf`, and `dsh-session → dsh-scope` for `scopeOf` and `scopeTarget`.
 
+The two-release npm layout check follows DSH dependencies from the CLI package. Independently versioned applications outside that closure retain their registry metadata; a reachable package without the core release version remains an error.
+
 ## Alternatives considered
 
 **Keep internal relationships as peers.** npm must place and validate each required peer along converging ancestry paths, which recreates the reported install-time failure even when all internal versions are compatible.

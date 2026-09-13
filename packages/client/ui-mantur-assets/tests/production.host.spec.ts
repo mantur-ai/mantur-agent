@@ -1,5 +1,5 @@
 /* oxlint-disable @stylistic/max-len -- acceptance setup keeps source paths explicit. */
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { Context } from '@deepseek-ai/cordis'
@@ -10,23 +10,27 @@ import Assets from '../src/index.ts'
 import { fingerprint } from '../src/report.ts'
 import { expect, it, vi } from 'vitest'
 
-const real = '/Volumes/新磁盘/dsh/青春里的甜蜜风暴2_EP31_验收_2026-09-06'
-const assets = join(real, '资产/资产提取结果/assets-report.json')
+const assets = JSON.stringify({
+  schema_version: '1.0',
+  角色资产: [{ 资产ID: 'CHAR-001-V01', 角色名: '测试角色', 角色提示词: '角色原始提示词', 负面提示词: '角色负面提示词' }],
+  场景资产: [{ 资产ID: 'SCENE-001', 场景名: '测试场景', 场景提示词: '场景原始提示词', 负面提示词: '场景负面提示词' }],
+  道具资产: [{ 资产ID: 'PROP-001', 道具名: '测试道具', 道具提示词: '道具原始提示词', 负面提示词: '道具负面提示词' }],
+})
 function connection() {
   let route: { fetch: (request: Request) => Promise<Response> } | undefined
   return { service: { fetch: { register: (value: { fetch: (request: Request) => Promise<Response> }) => { route = value; return () => { route = undefined } } } }, get: () => route }
 }
 
-it('reads real reports, saves a guarded draft, applies a proposal, and refuses a stale source', async () => {
+it('reads a pipeline report, saves a guarded draft, applies a proposal, and refuses a stale source', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-assets-production-'))
   const ctx = new Context()
   try {
-    await cp(assets, join(root, 'assets-report.json'))
+    await writeFile(join(root, 'assets-report.json'), assets)
     const transport = connection(); ctx.provide('connection', transport.service as never); ctx.provide('typert', {} as never); await ctx.plugin(SystemPrompt, { includeHarnessIdentity: false }); await ctx.plugin(Tools)
     await ctx.plugin(LocalFileSystem, { cwd: root }); await ctx.plugin(Assets, { maxBytes: 9_000_000, maxEntries: 100, maxMediaBytes: 50_000_000 })
     const agent = { ctx, session: { header: { cwd: root } } } as never
     const first = await ctx.manturAssets.load(agent, 'assets-report.json')
-    expect(first.rows).toHaveLength(43); expect(first.rows.every(row => row.media === '')).toBe(true)
+    expect(first.rows).toHaveLength(3); expect(first.rows.every(row => row.media === '')).toBe(true)
     const row = first.rows.find(value => value.table === '角色资产')!
     const draft = await ctx.manturAssets.saveDraft(agent, { source: first.source, stateVersion: first.stateVersion, edits: [{ key: row.key, fingerprint: row.fingerprint, prompt: `${row.prompt}，保持验收构图`, negative: row.negative }] })
     const request = await ctx.manturAssets.prepare(agent, draft.source, draft.state.drafts.at(-1)!.edits, '只提出提示词修改，不生成媒体')
@@ -43,7 +47,7 @@ it('fails loudly on a malformed journal instead of replacing it with an empty st
   const root = await mkdtemp(join(tmpdir(), 'dsh-assets-journal-'))
   const ctx = new Context()
   try {
-    await cp(assets, join(root, 'assets-report.json'))
+    await writeFile(join(root, 'assets-report.json'), assets)
     const transport = connection(); ctx.provide('connection', transport.service as never); ctx.provide('typert', {} as never); await ctx.plugin(SystemPrompt, { includeHarnessIdentity: false }); await ctx.plugin(Tools)
     await ctx.plugin(LocalFileSystem, { cwd: root }); await ctx.plugin(Assets, { maxBytes: 9_000_000, maxEntries: 100, maxMediaBytes: 50_000_000 })
     const absolute = join(root, 'assets-report.json')
@@ -56,8 +60,8 @@ it('fails loudly on a malformed journal instead of replacing it with an empty st
 it('discovers project-local image and video candidates and serves explicit previews', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-assets-candidates-')); const ctx = new Context()
   try {
-    await cp(assets, join(root, 'assets-report.json')); await mkdir(join(root, '候选'), { recursive: true })
-    await cp(join(real, '资产/生成图片/CHAR-001-V01-V01.png'), join(root, '候选/CHAR-001-V01-V01.png'))
+    await writeFile(join(root, 'assets-report.json'), assets); await mkdir(join(root, '候选'), { recursive: true })
+    await writeFile(join(root, '候选/CHAR-001-V01-V01.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
     await writeFile(join(root, '候选/CLIP-EP31-001.mp4'), Buffer.from([0, 0, 0, 0, 0x66, 0x74, 0x79, 0x70, 0, 0, 0, 0]))
     const transport = connection(); ctx.provide('connection', transport.service as never); ctx.provide('typert', {} as never); await ctx.plugin(SystemPrompt, { includeHarnessIdentity: false }); await ctx.plugin(Tools); await ctx.plugin(LocalFileSystem, { cwd: root }); await ctx.plugin(Assets, { maxBytes: 9_000_000, maxEntries: 100, maxMediaBytes: 50_000_000 })
     const agent = { ctx, session: { id: 'candidate-session', header: { cwd: root } } } as never
@@ -103,7 +107,7 @@ it('serves only explicitly manifested media and rejects unknown tokens and chang
 it('applies a controlled Agent batch for two rows or rejects the whole batch on a source conflict', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-assets-batch-')); const ctx = new Context()
   try {
-    await cp(assets, join(root, 'assets-report.json'))
+    await writeFile(join(root, 'assets-report.json'), assets)
     const transport = connection(); ctx.provide('connection', transport.service as never); ctx.provide('typert', {} as never); await ctx.plugin(SystemPrompt, { includeHarnessIdentity: false }); await ctx.plugin(Tools); await ctx.plugin(LocalFileSystem, { cwd: root }); await ctx.plugin(Assets, { maxBytes: 9_000_000, maxEntries: 100, maxMediaBytes: 50_000_000 })
     const agent = { ctx, session: { id: 'batch-session', header: { cwd: root } } } as never
     const loaded = await ctx.manturAssets.load(agent, 'assets-report.json'); const rows = loaded.rows.filter(row => row.table === '角色资产').slice(0, 2)
@@ -124,7 +128,7 @@ it('applies a controlled Agent batch for two rows or rejects the whole batch on 
 it.each(['source', 'finalize', 'conflict'])('reopens an interrupted %s write without reporting success early', async (mode) => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-assets-recovery-')); const ctx = new Context()
   try {
-    await cp(assets, join(root, 'assets-report.json')); const transport = connection(); ctx.provide('connection', transport.service as never); ctx.provide('typert', {} as never); await ctx.plugin(SystemPrompt, { includeHarnessIdentity: false }); await ctx.plugin(Tools); await ctx.plugin(LocalFileSystem, { cwd: root }); await ctx.plugin(Assets, { maxBytes: 9_000_000, maxEntries: 100, maxMediaBytes: 50_000_000 })
+    await writeFile(join(root, 'assets-report.json'), assets); const transport = connection(); ctx.provide('connection', transport.service as never); ctx.provide('typert', {} as never); await ctx.plugin(SystemPrompt, { includeHarnessIdentity: false }); await ctx.plugin(Tools); await ctx.plugin(LocalFileSystem, { cwd: root }); await ctx.plugin(Assets, { maxBytes: 9_000_000, maxEntries: 100, maxMediaBytes: 50_000_000 })
     const agent = { ctx, session: { id: 'recover-session', header: { cwd: root } } } as never; const loaded = await ctx.manturAssets.load(agent, 'assets-report.json'); const row = loaded.rows.find(value => value.table === '角色资产')!
     const request = await ctx.manturAssets.prepare(agent, loaded.source, [{ key: row.key, fingerprint: row.fingerprint, prompt: `${row.prompt}，恢复版`, negative: row.negative }], '恢复测试')
     await ctx.manturAssets.proposeRemote(agent, request.requestId, request.source.path, request.edits)
@@ -158,7 +162,7 @@ it.each(['source', 'finalize', 'conflict'])('reopens an interrupted %s write wit
 it('allows only one of two first journal writers to win the create-if-absent race', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-assets-race-')); const ctx = new Context()
   try {
-    await cp(assets, join(root, 'assets-report.json')); const transport = connection(); ctx.provide('connection', transport.service as never); ctx.provide('typert', {} as never); await ctx.plugin(SystemPrompt, { includeHarnessIdentity: false }); await ctx.plugin(Tools); await ctx.plugin(LocalFileSystem, { cwd: root }); await ctx.plugin(Assets, { maxBytes: 9_000_000, maxEntries: 100, maxMediaBytes: 50_000_000 })
+    await writeFile(join(root, 'assets-report.json'), assets); const transport = connection(); ctx.provide('connection', transport.service as never); ctx.provide('typert', {} as never); await ctx.plugin(SystemPrompt, { includeHarnessIdentity: false }); await ctx.plugin(Tools); await ctx.plugin(LocalFileSystem, { cwd: root }); await ctx.plugin(Assets, { maxBytes: 9_000_000, maxEntries: 100, maxMediaBytes: 50_000_000 })
     const first = { ctx, session: { id: 'race-a', header: { cwd: root } } } as never; const second = { ctx, session: { id: 'race-b', header: { cwd: root } } } as never
     const [a, b] = await Promise.all([ctx.manturAssets.load(first, 'assets-report.json'), ctx.manturAssets.load(second, 'assets-report.json')]); const rowA = a.rows[0]!; const rowB = b.rows[1]!
     const original = ctx.fs.writeText.bind(ctx.fs); let arrivals = 0

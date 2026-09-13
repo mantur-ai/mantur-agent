@@ -37,7 +37,7 @@ function validLayout(): NpmPackageLock {
 }
 
 describe('npm install layout verifier', () => {
-  it('creates two incompatible versions of every DSH package', () => {
+  it('creates two incompatible versions of the CLI dependency closure', () => {
     const index: RegistryIndex = new Map([
       ['@deepseek-ai/dsh', new Map([['0.1.1-rc.2', {
         name: '@deepseek-ai/dsh',
@@ -48,6 +48,10 @@ describe('npm install layout verifier', () => {
       ['@deepseek-ai/dsh-child', new Map([['0.1.1-rc.2', {
         name: '@deepseek-ai/dsh-child',
         version: '0.1.1-rc.2',
+      }]])],
+      ['@deepseek-ai/dsh-desktop', new Map([['0.1.10', {
+        name: '@deepseek-ai/dsh-desktop',
+        version: '0.1.10',
       }]])],
       ['@deepseek-ai/cordis', new Map([['4.0.1', {
         name: '@deepseek-ai/cordis',
@@ -67,7 +71,26 @@ describe('npm install layout verifier', () => {
       version: '0.2.0',
       dependencies: { '@deepseek-ai/dsh-child': '^0.2.0' },
     })
+    expect(dual.get('@deepseek-ai/dsh-desktop')).toBe(index.get('@deepseek-ai/dsh-desktop'))
     expect(dual.get('@deepseek-ai/cordis')).toBe(index.get('@deepseek-ai/cordis'))
+  })
+
+
+  it('rejects a reachable package without the workspace release version', () => {
+    const index: RegistryIndex = new Map([
+      ['@deepseek-ai/dsh', new Map([['0.1.3', {
+        name: '@deepseek-ai/dsh',
+        version: '0.1.3',
+        dependencies: { '@deepseek-ai/dsh-child': '^0.1.3' },
+      }]])],
+      ['@deepseek-ai/dsh-child', new Map([['0.1.2', {
+        name: '@deepseek-ai/dsh-child',
+        version: '0.1.2',
+      }]])],
+    ])
+    expect(() => buildDualDshRegistry(index, '0.1.3')).toThrow(
+      '@deepseek-ai/dsh-child has no workspace version 0.1.3',
+    )
   })
 
   it('accepts isolated DSH releases with one shared Cordis installation', () => {

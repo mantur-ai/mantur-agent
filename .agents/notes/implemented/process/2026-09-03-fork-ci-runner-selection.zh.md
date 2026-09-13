@@ -6,13 +6,13 @@ Status: implemented
 
 ## Problem
 
-拉取请求工作流使用 DeepSeek 上游组织拥有的大规格运行器标签。公开的 `mantur-ai/mantur-harness` Fork 没有注册这些标签对应的运行器，因此 Linux 和原生 Windows 作业会一直排队且不会启动任何步骤。
+拉取请求工作流使用 DeepSeek 上游组织拥有的大规格运行器标签。公开的 `mantur-ai/mantur-agent` Fork 没有注册这些标签对应的运行器，因此 Linux 和原生 Windows 作业会一直排队且不会启动任何步骤。
 
 Cloudflare 预览工作流还依赖上游 Pages 项目、部署令牌与 Access 服务凭据。Mantur Fork 不拥有这套外部基础设施，但其产品检查必须保持完整且可见。
 
 ## Decision
 
-拉取请求工作流在 GitHub 分配各作业前通过 `github.repository` 选择运行器。在 `mantur-ai/mantur-harness` 中，三个高容量 Linux 作业使用 `ubuntu-24.04`，四个原生 Windows 作业使用 `windows-2025`。这些作业保留原有命令、阻塞状态与聚合依赖。
+拉取请求工作流在 GitHub 分配各作业前通过 `github.repository` 选择运行器。在 `mantur-ai/mantur-agent` 中，三个高容量 Linux 作业使用 `ubuntu-24.04`，四个原生 Windows 作业使用 `windows-2025`。这些作业保留原有命令、阻塞状态与聚合依赖。
 
 Fork 档位将编译器密集型门禁的扇出限制为两个，运行两个单 worker 覆盖率分区且不与豁免套件重叠，并将 lint、publint、录制会话和浏览器 worker 上限设为两个。Windows 构建对串行执行，Windows 覆盖率使用相同的双分区串行档位，观测聚合每次运行两个门禁。这些限制匹配四核托管资源，同时保留全部检查。
 

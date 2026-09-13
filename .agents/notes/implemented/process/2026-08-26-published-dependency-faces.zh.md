@@ -78,6 +78,8 @@ pnpm run benchmark:npm-resolution:next -- --runs=1 --finalist-runs=5 --finalists
 
 生成后的策略目前在 13 个包中留下 27 条位于 `dependencies` 的受管 Host 运行时边。两条边仍位于 `peerDependencies`：`dsh-api-remotes → dsh-scope` 使用 `carrierKeyOf`，`dsh-session → dsh-scope` 使用 `scopeOf` 与 `scopeTarget`。
 
+双版本 npm 安装布局检查从 CLI 包遍历 DSH 依赖。闭包外独立版本的应用保留其注册表元数据；可达包缺少核心发行版本时仍报错。
+
 ## 考虑过的替代方案
 
 **把内部关系继续保留为 peer。** npm 必须沿汇合的祖先路径放置并验证每个必需 peer；即使内部版本全部兼容，也会重新产生已报告的安装耗时问题。

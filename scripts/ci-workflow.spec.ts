@@ -278,44 +278,44 @@ describe('CI workflow', () => {
     for (const jobName of linuxJobs) {
       const job = workflowJob(workflow, jobName)
       expect(job.if).toBe("github.event_name == 'pull_request'")
-      expect(job['runs-on']).toContain("github.repository == 'mantur-ai/mantur-harness'")
+      expect(job['runs-on']).toContain("github.repository == 'mantur-ai/mantur-agent'")
       expect(job['runs-on']).toContain("'ubuntu-24.04'")
       expect(job['runs-on']).toContain("'dsh-ubuntu-24-04-16core'")
     }
     for (const jobName of windowsJobs) {
       const job = workflowJob(workflow, jobName)
       expect(job.if).toBe("github.event_name == 'pull_request'")
-      expect(job['runs-on']).toContain("github.repository == 'mantur-ai/mantur-harness'")
+      expect(job['runs-on']).toContain("github.repository == 'mantur-ai/mantur-agent'")
       expect(job['runs-on']).toContain("'windows-2025'")
       expect(job['runs-on']).toContain("'dsh-windows-2025-16core'")
     }
 
     expect(workflowJob(workflow, 'node-24').env).toMatchObject({
-      DSH_GATE_CONCURRENCY: "${{ github.repository == 'mantur-ai/mantur-harness' && '2' || '8' }}",
+      DSH_GATE_CONCURRENCY: "${{ github.repository == 'mantur-ai/mantur-agent' && '2' || '8' }}",
     })
     expect(workflowJob(workflow, 'node-24-coverage').env).toMatchObject({
-      DSH_COVERAGE_MAX_WORKERS: "${{ github.repository == 'mantur-ai/mantur-harness' && '2' || '6' }}",
-      DSH_COVERAGE_PARTITIONS: "${{ github.repository == 'mantur-ai/mantur-harness' && '2' || '4' }}",
-      DSH_GATE_CONCURRENCY: "${{ github.repository == 'mantur-ai/mantur-harness' && '1' || '3' }}",
+      DSH_COVERAGE_MAX_WORKERS: "${{ github.repository == 'mantur-ai/mantur-agent' && '2' || '6' }}",
+      DSH_COVERAGE_PARTITIONS: "${{ github.repository == 'mantur-ai/mantur-agent' && '2' || '4' }}",
+      DSH_GATE_CONCURRENCY: "${{ github.repository == 'mantur-ai/mantur-agent' && '1' || '3' }}",
     })
     expect(workflowJob(workflow, 'node-24-consumers').env).toMatchObject({
-      DSH_GATE_CONCURRENCY: "${{ github.repository == 'mantur-ai/mantur-harness' && '2' || '10' }}",
-      DSH_OXLINT_THREADS: "${{ github.repository == 'mantur-ai/mantur-harness' && '2' || '8' }}",
-      DSH_PUBLINT_CONCURRENCY: "${{ github.repository == 'mantur-ai/mantur-harness' && '2' || '8' }}",
-      DSH_WEB_SNAPSHOT_WORKERS: "${{ github.repository == 'mantur-ai/mantur-harness' && '2' || '6' }}",
-      DSH_SNAPSHOT_MAX_CONCURRENCY: "${{ github.repository == 'mantur-ai/mantur-harness' && '2' || vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '12' || '32' }}",
+      DSH_GATE_CONCURRENCY: "${{ github.repository == 'mantur-ai/mantur-agent' && '2' || '10' }}",
+      DSH_OXLINT_THREADS: "${{ github.repository == 'mantur-ai/mantur-agent' && '2' || '8' }}",
+      DSH_PUBLINT_CONCURRENCY: "${{ github.repository == 'mantur-ai/mantur-agent' && '2' || '8' }}",
+      DSH_WEB_SNAPSHOT_WORKERS: "${{ github.repository == 'mantur-ai/mantur-agent' && '2' || '6' }}",
+      DSH_SNAPSHOT_MAX_CONCURRENCY: "${{ github.repository == 'mantur-ai/mantur-agent' && '2' || vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '12' || '32' }}",
     })
     expect(workflowJob(workflow, 'windows-build').env).toMatchObject({
-      DSH_GATE_CONCURRENCY: "${{ github.repository == 'mantur-ai/mantur-harness' && '1' || '' }}",
+      DSH_GATE_CONCURRENCY: "${{ github.repository == 'mantur-ai/mantur-agent' && '1' || '' }}",
     })
     expect(workflowJob(workflow, 'windows-coverage').env).toMatchObject({
-      DSH_COVERAGE_MAX_WORKERS: "${{ github.repository == 'mantur-ai/mantur-harness' && '2' || '6' }}",
-      DSH_COVERAGE_PARTITIONS: "${{ github.repository == 'mantur-ai/mantur-harness' && '2' || '4' }}",
-      DSH_GATE_CONCURRENCY: "${{ github.repository == 'mantur-ai/mantur-harness' && '1' || '3' }}",
+      DSH_COVERAGE_MAX_WORKERS: "${{ github.repository == 'mantur-ai/mantur-agent' && '2' || '6' }}",
+      DSH_COVERAGE_PARTITIONS: "${{ github.repository == 'mantur-ai/mantur-agent' && '2' || '4' }}",
+      DSH_GATE_CONCURRENCY: "${{ github.repository == 'mantur-ai/mantur-agent' && '1' || '3' }}",
     })
     expect(workflowJob(workflow, 'windows-observational').env).toMatchObject({
-      DSH_GATE_CONCURRENCY: "${{ github.repository == 'mantur-ai/mantur-harness' && '2' || '' }}",
-      DSH_PUBLINT_CONCURRENCY: "${{ github.repository == 'mantur-ai/mantur-harness' && '2' || '8' }}",
+      DSH_GATE_CONCURRENCY: "${{ github.repository == 'mantur-ai/mantur-agent' && '2' || '' }}",
+      DSH_PUBLINT_CONCURRENCY: "${{ github.repository == 'mantur-ai/mantur-agent' && '2' || '8' }}",
     })
 
     const preview = workflowJob(previewWorkflow, 'preview')

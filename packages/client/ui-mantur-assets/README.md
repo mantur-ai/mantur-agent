@@ -48,7 +48,7 @@ Mounting the tool changes the request prefix. Proposal messages append to the ex
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- Journal updates retain the filesystem version observed before reading and use conditional writes. Candidate discovery is direct-child only, stays inside the selected project root, and previews verify the file signature before issuing a loopback URL. Concurrent calls through one LocalFileSystem instance are covered; cross-process writers and power-loss durability are not verified. Tests read an acceptance report from an external volume and modify private temporary copies; they require that local fixture.
+- Journal updates retain the filesystem version observed before reading and use conditional writes. Candidate discovery is direct-child only, stays inside the selected project root, and previews verify the file signature before issuing a loopback URL. Concurrent calls through one LocalFileSystem instance are covered; cross-process writers and power-loss durability are not verified. Tests create synthetic reports and media headers inside private temporary roots and require no external user files.
 
 <a id="dev-note"></a>
 ### Dev Note

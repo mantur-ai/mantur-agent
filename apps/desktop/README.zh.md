@@ -133,6 +133,6 @@ macOS Intel、macOS Apple Silicon 与 Windows 使用同一个更新控制器。m
 - 构建出内部安装包不等于获得分发批准。OpenChatCut 的 AGPL 源码交付义务、Remotion 的实体与用途条款、FFmpeg 与 ffprobe 的 GPL/LGPL 义务、需保留的 notice、二进制再分发条款及全部生产依赖审计发现，都必须针对精确补丁 tree 完成审核后才能公开发布。
 - 本地回调、加密存储、模拟 preload 和内置 CLI 测试不能证明真实网站授权。CLI 余额夹具使用受控本地响应。macOS 和 Windows 原生账号存储、浏览器返回、安装包资源、PostgreSQL 16 与经授权的测试站检查仍需分别验收；参见[浏览器授权决策](../../.agents/notes/implemented/architecture/2026-09-08-browser-account-authorization.zh.md)。
 - `Desktop package` 产物仍是未签名的内部安装包。macOS Gatekeeper 与 Windows SmartScreen 可能对这些文件显示警告；对外分发 macOS 客户端时只能使用 `Desktop release` 产物。
-- 原生图标源文件是已确认的 1254 px 正方形 RGB PNG，保留原图，不裁剪或改色，Web 客户端单独使用透明 Logo。macOS 和 Windows 包会在原生构建时生成各自的平台图标格式；当前没有矢量源文件。
+- 原生图标源是 1024 像素 RGBA PNG，带透明圆角和居中的蓝色无限环徽记。Web 客户端单独使用透明徽标。macOS 和 Windows 安装包在原生构建时生成各自平台的图标格式；尚无矢量源文件。
 - 已签名的 release 工作流只发布 macOS。Windows 在具备代码签名身份与受保护的发布路径之前不支持外部更新。
 - 每个目标只在其原生 runner 同时完成打包和 smoke 后有效。一个架构上的构建不能作为另一目标的证据。

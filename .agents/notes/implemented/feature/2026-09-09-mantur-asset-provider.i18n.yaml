@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-09-mantur-asset-provider.md
-2026-09-09-mantur-asset-provider.md: fcb4e0e44e366eba0d001dcfcfae2980a53bee76
-2026-09-09-mantur-asset-provider.zh.md: 76a20e6f5be450033fa6442cba5e907631daab3b
+2026-09-09-mantur-asset-provider.md: 603f5f5069e354b98cf12dba70ec5bfa1d9f5c05
+2026-09-09-mantur-asset-provider.zh.md: b1a2fcdb0a0622c260fa7f4cd4d1fd605a35c0f3

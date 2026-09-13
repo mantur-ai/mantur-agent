@@ -26,4 +26,4 @@ The panel previews signature-validated project-local images and videos. Recovery
 
 ## Verification
 
-Failure injection covers replacement, history completion, external source edits, and concurrent initial journal writes. The local acceptance fixture contains twelve images and ten filename matches; remote clip URLs are not preview evidence.
+Failure injection covers replacement, history completion, external source edits, and concurrent initial journal writes. Portable Host tests create a three-table synthetic report and signature-only media fixtures in private temporary roots. They verify serving and identity checks, not media decoding or remote clip availability.
