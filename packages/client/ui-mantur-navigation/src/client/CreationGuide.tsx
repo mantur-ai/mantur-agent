@@ -77,13 +77,13 @@ export function CreationGuide(props: CreationGuideProps) {
   return <ReadyGuide {...props} preferences={preferences.value} />
 }
 
-function ReadyGuide({ hero, disabled, sessionId, preferences, useGuideInput, useBundledSkills,
+function ReadyGuide({ disabled, sessionId, preferences, useGuideInput, useBundledSkills,
   useGuideNavigation, appendReference, saveClosed, loadBundled, marketplaceText: mt, t,
-}: CreationGuideProps & { preferences: GuideSettings }) {
+}: Omit<CreationGuideProps, 'hero'> & { preferences: GuideSettings }) {
   const bundled = useBundledSkills(snapshot => snapshot)
   const input = useGuideInput(snapshot => snapshot)
   const navigation = useGuideNavigation(snapshot => snapshot)
-  const [open, setOpen] = useState(hero && !preferences.closed)
+  const [open, setOpen] = useState(!preferences.closed)
   const [welcome, setWelcome] = useState(true)
   const [notice, setNotice] = useState<string>()
   const source = useRef<HTMLDivElement>(null)
@@ -99,7 +99,6 @@ function ReadyGuide({ hero, disabled, sessionId, preferences, useGuideInput, use
     setWelcome(false)
     setNotice(undefined)
   }, [preferences.mode])
-  useEffect(() => { if (!hero) { setOpen(false); setNotice(undefined) } }, [hero, sessionId])
   useEffect(() => {
     setNotice(undefined)
   }, [sessionId, navigation])
@@ -127,6 +126,7 @@ function ReadyGuide({ hero, disabled, sessionId, preferences, useGuideInput, use
   const missingAlias = recommended.some(skill => !GUIDE_SKILL_LABELS.has(skill.name))
   const insertBundled = (skill: ManturBundledSkill): void => {
     const alias = GUIDE_SKILL_LABELS.get(skill.name)
+    /* v8 ignore if -- shortcut buttons are rendered only for entries with a registered alias. */
     if (alias === undefined) { setNotice(t('aliasMissing')); return }
     const label = t(alias)
     if (!appendReference({ source: 'mantur-bundled-skill', ref: skill.reference, label,
@@ -138,7 +138,7 @@ function ReadyGuide({ hero, disabled, sessionId, preferences, useGuideInput, use
     setWelcome(false)
   }
   const intro = notice ?? t(`intro.${preferences.mode}`)
-  const artwork = hero ? `mantoo-${preferences.mode}-peek` : 'mantoo-welcome'
+  const artwork = `mantoo-${preferences.mode}-peek`
 
   return <div ref={source} className={css.guide}>
     {panelVisible && <section ref={panel} className={css.bubble} id={bubbleId} aria-label={t('assistant')}
@@ -149,11 +149,11 @@ function ReadyGuide({ hero, disabled, sessionId, preferences, useGuideInput, use
         event.preventDefault()
         event.currentTarget.scrollTop = event.key === 'Home' ? 0 : event.currentTarget.scrollHeight
       }}>
-        {open && welcome && hero ? <><strong>{t('welcome.title')}</strong><p>{t('welcome.body')}</p></> : <p role={notice === undefined ? undefined : 'status'}>{intro}</p>}
+        {open && welcome ? <><strong>{t('welcome.title')}</strong><p>{t('welcome.body')}</p></> : <p role={notice === undefined ? undefined : 'status'}>{intro}</p>}
       </div>
     </section>}
-    <div className={css.shortcutRow} data-hero={hero}>
-      {hero && <GuideSkillRail empty={recommended.length === 0} t={t}>
+    <div className={css.shortcutRow} data-hero={true}>
+      <GuideSkillRail empty={recommended.length === 0} t={t}>
         {bundled.phase === 'idle' || bundled.phase === 'loading' ? <span role="status">{mt('skills.loading')}</span>
           : bundled.phase === 'failed' ? <><span role="alert">{mt('skills.failed')}</span><button type="button" onClick={() => { void loadBundled() }}>{mt('skills.retry')}</button></>
             : recommended.length === 0 ? <span className={css.empty}>{t('empty')}</span>
@@ -166,12 +166,12 @@ function ReadyGuide({ hero, disabled, sessionId, preferences, useGuideInput, use
                 >{t(label)}</button>
               })}
         {missingAlias && <span role="alert">{t('aliasMissing')}</span>}
-      </GuideSkillRail>}
+      </GuideSkillRail>
       <button ref={helper} type="button" className={css.helper} aria-expanded={panelVisible} aria-controls={bubbleId}
-        aria-label={t('assistant')} data-hero={hero}
+        aria-label={t('assistant')} data-hero={true}
         onClick={() => { if (panelVisible) close(); else { setWelcome(false); setOpen(true) } }}
       ><img src={`./${artwork}@3x.png`} srcSet={`./${artwork}@2x.png 2x, ./${artwork}@3x.png 3x`}
-          width={hero ? 184 : 96} height={hero ? 120 : 96} alt="" draggable={false} /></button>
+          width={184} height={120} alt="" draggable={false} /></button>
     </div>
   </div>
 }

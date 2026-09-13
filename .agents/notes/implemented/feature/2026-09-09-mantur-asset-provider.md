@@ -27,3 +27,5 @@ The panel previews signature-validated project-local images and videos. Recovery
 ## Verification
 
 Failure injection covers replacement, history completion, external source edits, and concurrent initial journal writes. Portable Host tests create a three-table synthetic report and signature-only media fixtures in private temporary roots. They verify serving and identity checks, not media decoding or remote clip availability.
+
+Recovery rejects an absent or inconsistent pending proposal before either journal reservation or source replacement. A regression fixture preserves the original source bytes when the persisted proposal status is changed to requested.

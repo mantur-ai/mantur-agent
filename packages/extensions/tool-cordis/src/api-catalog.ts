@@ -1396,7 +1396,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: '@Remote(\'recover\') async recover(agent: Agent, expected: AssetVersion): Promise<AssetSnapshot>',
-        description: 'Retry only the exact pending write or finalize its already-written bytes.',
+        description: 'Retry only the exact pending write or finalize its already-written bytes. Missing or inconsistent proposals reject before either file is written.',
         parameters: [{ name: 'agent', description: 'Session reopening the selected report.' }, { name: 'expected', description: 'Journal generation shown by the recovery UI.' }],
         returns: 'Completed state; conflicting source bytes remain untouched.',
       },

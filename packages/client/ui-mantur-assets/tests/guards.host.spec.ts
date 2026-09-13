@@ -234,3 +234,119 @@ it.each(['prepare', 'apply', 'snapshot'] as const)('rejects source replacement a
   await expect(work).rejects.toMatchObject({ code: 'FS_STALE_VERSION' })
   expect(await readFile(loaded.source.path, 'utf8')).toContain('external replacement')
 })
+
+
+async function interrupted() {
+  const loaded = await ctx.manturAssets.load(agent, 'assets.json')
+  const row = loaded.rows[0]!
+  const edits = [{ key: row.key, fingerprint: row.fingerprint, prompt: 'new prompt', negative: '' }]
+  const request = await ctx.manturAssets.prepare(agent, loaded.source, edits, 'revise')
+  await ctx.manturAssets.proposeRemote(agent, request.requestId, request.source.path, edits)
+  const original = ctx.fs.writeText.bind(ctx.fs)
+  const write = vi.spyOn(ctx.fs, 'writeText').mockImplementation((target, ...args) =>
+    target.displayPath === loaded.source.path ? Promise.reject(new Error('interrupted')) : original(target, ...args))
+  try { await expect(ctx.manturAssets.apply(agent, request.requestId)).rejects.toThrow('interrupted') }
+  finally { write.mockRestore() }
+  return ctx.manturAssets.load(agent, 'assets.json')
+}
+
+it('requires recovery before accepting new drafts, requests, proposals or applications', async () => {
+  const pending = await interrupted()
+  await expect(ctx.manturAssets.saveDraft(agent, { source: pending.source, stateVersion: pending.stateVersion, edits: [] }))
+    .rejects.toThrow('unfinished source write')
+  await expect(ctx.manturAssets.prepare(agent, pending.source, [], 'another')).rejects.toThrow('unfinished source write')
+  await expect(ctx.manturAssets.proposeRemote(agent, 'another', pending.source.path, [])).rejects.toThrow('unfinished source write')
+  await expect(ctx.manturAssets.apply(agent, 'another')).rejects.toThrow('unfinished source write')
+})
+
+it.each(['path', 'digest', 'proposal', 'missing proposal'] as const)('rejects an inconsistent pending %s before changing source bytes', async (field) => {
+  const loaded = await interrupted()
+  const pending = loaded.state.pending!
+  if (field === 'path') pending.source = { ...pending.source, path: 'other.json' }
+  else if (field === 'digest') pending.afterSha = 'invalid'
+  else if (field === 'proposal') loaded.state.proposals[0]!.status = 'requested'
+  else loaded.state.proposals = []
+  await writeFile(journal, JSON.stringify(loaded.state))
+  const invalidJournal = await readFile(journal, 'utf8')
+  const current = await ctx.manturAssets.load(agent, 'assets.json')
+  await expect(ctx.manturAssets.recover(agent, current.stateVersion!)).rejects.toThrow(field.includes('proposal') ? 'proposal' : 'pending asset write')
+  expect(await readFile(journal, 'utf8')).toBe(invalidJournal)
+  expect(await readFile(join(root, 'assets.json'), 'utf8')).toBe(source)
+})
+
+it('invalidates a media token while its byte read is in flight', async () => {
+  await writeFile(join(root, 'preview.png'), Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+  await ctx.manturAssets.load(agent, 'assets.json')
+  const media = await ctx.manturAssets.preview(agent, 'preview.png')
+  const read = ctx.fs.readBytes.bind(ctx.fs)
+  vi.spyOn(ctx.fs, 'readBytes').mockImplementationOnce(async (...args) => {
+    const bytes = await read(...args)
+    ctx.emit('session/disposed', agent.session)
+    return bytes
+  })
+  const response = await route(new Request(new URL(media.url, 'http://127.0.0.1')))
+  expect(response.status).toBe(404)
+})
+
+it('associates a candidate with the longest matching asset identity', async () => {
+  const value = JSON.parse(source) as { 角色资产: Array<Record<string, string>> }
+  value.角色资产.push({ ...value.角色资产[0]!, 资产ID: 'CHAR-1-V2' })
+  await writeFile(join(root, 'assets.json'), JSON.stringify(value))
+  await writeFile(join(root, 'CHAR-1-V2-preview.png'), Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+  await ctx.manturAssets.load(agent, 'assets.json')
+  const candidates = await ctx.manturAssets.candidates(agent, '')
+  expect(candidates[0]!.assetId).toBe('CHAR-1-V2')
+})
+
+
+it('rejects a source replaced again before history completion', async () => {
+  const loaded = await interrupted()
+  const original = ctx.fs.writeText.bind(ctx.fs)
+  vi.spyOn(ctx.fs, 'writeText').mockImplementation(async (target, ...args) => {
+    const result = await original(target, ...args)
+    if (target.displayPath === loaded.source.path) await writeFile(loaded.source.path, 'external replacement')
+    return result
+  })
+  await expect(ctx.manturAssets.recover(agent, loaded.stateVersion!)).rejects.toThrow('changed before completion')
+  expect(await readFile(loaded.source.path, 'utf8')).toBe('external replacement')
+})
+
+it('rejects a journal replaced after its verified read and before returning the snapshot', async () => {
+  const loaded = await interrupted()
+  const original = ctx.fs.stat.bind(ctx.fs)
+  let journalReads = 0
+  vi.spyOn(ctx.fs, 'stat').mockImplementation(async (target, ...args) => {
+    if (target.displayPath === journal && ++journalReads === 4) {
+      await writeFile(journal, JSON.stringify(loaded.state) + ' ')
+    }
+    return original(target, ...args)
+  })
+  await expect(ctx.manturAssets.load(agent, 'assets.json')).rejects.toThrow('Journal changed while reading')
+})
+
+it('returns zero for an unreported discovery size', async () => {
+  await writeFile(join(root, 'preview.jpg'), Buffer.from([255, 216, 255]))
+  await ctx.manturAssets.load(agent, 'assets.json')
+  const entries = await ctx.fs.listDir(await ctx.fs.resolve(root))
+  vi.spyOn(ctx.fs, 'listDir').mockResolvedValueOnce(entries.map(({ name, type, target }) => ({ name, type, target })))
+  const candidates = await ctx.manturAssets.candidates(agent, '')
+  expect(candidates[0]!.size).toBe(0)
+})
+
+it('rejects ranges on an empty explicitly bound clip', async () => {
+  await writeFile(join(root, 'empty.mp4'), '')
+  await writeFile(join(root, 'manifest.json'), JSON.stringify([{ clip_id: 'empty', file: 'empty.mp4', sha256: fingerprint('') }]))
+  await ctx.manturAssets.load(agent, 'assets.json', undefined, 'manifest.json')
+  const media = await ctx.manturAssets.media(agent, 'empty')
+  const response = await route(new Request(new URL(media.url, 'http://127.0.0.1'), { headers: { range: 'bytes=-1' } }))
+  expect(response.status).toBe(416)
+})
+
+it('refuses a file target whose provider display path retains a directory separator', async () => {
+  const original = ctx.fs.resolve.bind(ctx.fs)
+  vi.spyOn(ctx.fs, 'resolve').mockImplementation(async (...args) => {
+    const target = await original(...args)
+    return args[0] === 'assets.json' ? { ...target, displayPath: target.displayPath + '/' } : target
+  })
+  await expect(ctx.manturAssets.load(agent, 'assets.json')).rejects.toThrow('must be a file')
+})

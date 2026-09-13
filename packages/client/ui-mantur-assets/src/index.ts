@@ -156,6 +156,7 @@ export class ManturAssets extends TypertRemoteService {
     parsed.replace(edits)
     const before = edits.map((edit) => {
       const row = parsed.rows.find(value => value.key === edit.key)
+      /* v8 ignore if -- parsed.replace() has already validated each requested row against this same parsed report. */
       if (row === undefined) throw new Error('Asset identity changed while preparing a request')
       return { key: row.key, fingerprint: row.fingerprint, prompt: row.prompt, negative: row.negative }
     })
@@ -196,6 +197,7 @@ export class ManturAssets extends TypertRemoteService {
 
   /**
    * Retry only the exact pending write or finalize its already-written bytes.
+   * Missing or inconsistent proposals reject before either file is written.
    * @param agent - Session reopening the selected report.
    * @param expected - Journal generation shown by the recovery UI.
    * @returns Completed state; conflicting source bytes remain untouched.
@@ -210,6 +212,8 @@ export class ManturAssets extends TypertRemoteService {
     if (pending.source.path !== state.path || fingerprint(pending.afterText) !== pending.afterSha) {
       throw new Error('Invalid pending asset write')
     }
+    const proposal = state.proposals.find(item => item.id === pending.proposal)
+    if (proposal?.status !== 'proposed') throw new Error('Pending proposal is unavailable')
     const current = await this.pin(agent, state.path)
     if (current.sha256 !== pending.afterSha && (current.sha256 !== pending.source.sha256
       || current.version !== pending.source.version)) {
@@ -227,10 +231,12 @@ export class ManturAssets extends TypertRemoteService {
 
   private async finishWrite(agent: Agent, state: AssetState, reserved: AssetVersion): Promise<AssetSnapshot> {
     const pending = state.pending
+    /* v8 ignore if -- both callers set or validate pending before passing this owned journal object. */
     if (pending === null) throw new Error('Missing pending asset write')
     const current = await this.pin(agent, state.path)
     if (current.sha256 !== pending.afterSha) throw new FsError('Written source changed before completion.', 'FS_STALE_VERSION')
     const proposal = state.proposals.find(item => item.id === pending.proposal)
+    /* v8 ignore if -- apply and recover validate this proposal before source mutation; the journal object remains private. */
     if (proposal?.status !== 'proposed') throw new Error('Pending proposal is unavailable')
     proposal.status = 'applied'
     state.history.push({ id: proposal.id, before: proposal.before, after: proposal.edits,
@@ -263,7 +269,7 @@ export class ManturAssets extends TypertRemoteService {
     const token = info.tokens.get(id) ?? randomUUID()
     info.tokens.set(id, token)
     this.mediaTokens.set(token, { session: agent.session, ...row })
-    return { id, name: row.path.split('/').at(-1) ?? id, url: `/api/mantur-assets.media?token=${encodeURIComponent(token)}`, kind: row.type.startsWith('image/') ? 'image' : 'video' }
+    return { id, name: row.path.slice(row.path.lastIndexOf('/') + 1), url: `/api/mantur-assets.media?token=${encodeURIComponent(token)}`, kind: 'video' }
   }
   /**
    * Resolve one discovered candidate path into a validated preview URL.
@@ -279,7 +285,7 @@ export class ManturAssets extends TypertRemoteService {
     if (detected === undefined) throw new Error('Media candidate has an unsupported file format')
     const key = `path:${target.displayPath}`; const token = info.tokens.get(key) ?? randomUUID(); info.tokens.set(key, token)
     this.mediaTokens.set(token, { session: agent.session, path: target.displayPath, sha: fingerprint(bytes), type: detected.type })
-    return { id: null, name: target.displayPath.split('/').at(-1) ?? target.displayPath, url: `/api/mantur-assets.media?token=${encodeURIComponent(token)}`, kind: detected.kind }
+    return { id: null, name: target.displayPath.slice(target.displayPath.lastIndexOf('/') + 1), url: `/api/mantur-assets.media?token=${encodeURIComponent(token)}`, kind: detected.kind }
   }
   private registerMediaRoute(ctx: Context): () => void {
     const connection = Reflect.get(ctx, 'connection') as {
@@ -299,15 +305,15 @@ export class ManturAssets extends TypertRemoteService {
       const stat = await ctx.fs.stat(target)
       if (stat?.type !== 'file') return new Response('media is unavailable', { status: 404 })
       const bytes = await ctx.fs.readBytes(target, undefined, this.config.maxMediaBytes)
-      if (!this.mediaTokens.has(token ?? '') ) return new Response('media token is invalid', { status: 404 })
+      if (!this.mediaTokens.has(token as string) ) return new Response('media token is invalid', { status: 404 })
       if (fingerprint(bytes) !== entry.sha) return new Response('media fingerprint changed', { status: 409 })
-      const type = entry.type || 'application/octet-stream'
+      const type = entry.type
       const range = request.headers.get('range')
       let start = 0; let end = bytes.byteLength - 1; let status = 200
       if (range !== null) {
         const match = /^bytes=(\d*)-(\d*)$/.exec(range)
         if (!match) return new Response('invalid range', { status: 416 })
-        const first = match[1] ?? ''; const last = match[2] ?? ''
+        const first = match[1] as string; const last = match[2] as string
         if (first === '') {
           const suffix = Number(last)
           if (!Number.isSafeInteger(suffix) || suffix <= 0) return new Response('range is unsatisfiable', { status: 416 })

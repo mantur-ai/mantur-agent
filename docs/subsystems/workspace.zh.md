@@ -248,6 +248,7 @@ Host service. Each write is source-CAS guarded and journals recovery before repl
 
 /**
  * Retry only the exact pending write or finalize its already-written bytes.
+ * Missing or inconsistent proposals reject before either file is written.
  * @param agent - Session reopening the selected report.
  * @param expected - Journal generation shown by the recovery UI.
  * @returns Completed state; conflicting source bytes remain untouched.
