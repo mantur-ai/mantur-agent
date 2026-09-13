@@ -55,6 +55,7 @@ const definition: ConversationNodeDefinition<OpeningState> = {
       const parsed = metadata.omit({ kind: true }).parse(JSON.parse(content[0].text) as unknown)
       return { opening: { sessionId: parsed.sessionId as SessionId, seq: match.event.seq } }
     }
+    /* v8 ignore next -- match() admits updates only for tool/result and tool/code-dispatch. */
     if (match.event.type !== 'tool/result') return context.state
     const parsed = metadata.parse(match.event.data.meta)
     return { opening: { sessionId: parsed.sessionId as SessionId, seq: match.event.seq } }

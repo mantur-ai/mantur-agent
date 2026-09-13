@@ -29,17 +29,18 @@ async function setup() {
   runtime.ctx.provide('layout', { openWorkbench } as never)
   new UiConversation(runtime.ctx, runtime.sessions)
   let suppress!: () => void
+  let stop!: () => void
   const feature = await runtime.mount({
     inject: ['uiConversation', 'sessions', 'layout'],
     apply: (ctx) => {
       const opening = installAgentOpening(ctx)
       suppress = opening.suppress
-      opening.observe(openWorkbench)
+      stop = opening.observe(openWorkbench)
     },
   })
   await runtime.sessions.add({ id: 'a' }, { current: true })
   const append = (event: SessionEvent) => runtime.sessions.appendEvent('a', { type: 'event', event })
-  return { runtime, openWorkbench, suppress, append, feature }
+  return { runtime, openWorkbench, suppress, append, feature, stop }
 }
 
 it('opens once after successful live completion and suppresses later turns after manual collapse', async () => {
@@ -143,5 +144,47 @@ it('rejects invalid result metadata without opening a panel', async () => {
   const invalid = result(2, 'invalid', '')
   await append(invalid)
   expect(error).toHaveBeenCalledOnce()
+  expect(openWorkbench).not.toHaveBeenCalled()
+})
+
+
+it('releases observation when returning home and when the boundary control unmounts', async () => {
+  const { runtime, append, openWorkbench, suppress, stop } = await setup()
+  await runtime.sessions.setCurrent(undefined)
+  suppress()
+  await runtime.sessions.setCurrent('a')
+  stop()
+  await append(call(1, 'unmounted'))
+  await append(result(2, 'unmounted'))
+  expect(openWorkbench).not.toHaveBeenCalled()
+})
+
+it('tracks a pending replayed start until its new completion arrives', async () => {
+  const { runtime, append, openWorkbench } = await setup()
+  await runtime.sessions.replaceEvents('a', [{ type: 'event', event: call(1, 'pending-replay') }], true)
+  expect(openWorkbench).not.toHaveBeenCalled()
+  await append(result(2, 'pending-replay'))
+  expect(openWorkbench).toHaveBeenCalledOnce()
+})
+
+it('rejects a programmatic opening without the single JSON result', async () => {
+  const { append, openWorkbench } = await setup()
+  const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+  onTestFinished(() => { error.mockRestore() })
+  const data = { rootCallId: 'program' as never, parentCallId: 'program' as never,
+    subCallId: 'program:code:invalid' as never, name: 'open_editing_workbench', arguments: {} }
+  await append({ seq: SessionSeq(1), time: 1, type: 'tool/code-dispatch-start', data })
+  await append({ seq: SessionSeq(2), time: 2, type: 'tool/code-dispatch', data: { ...data, isError: false, content: [] } })
+  expect(error).toHaveBeenCalledOnce()
+  expect(openWorkbench).not.toHaveBeenCalled()
+})
+
+
+it('does not open completed calls loaded together from history', async () => {
+  const { runtime, openWorkbench } = await setup()
+  await runtime.sessions.replaceEvents('a', [
+    { type: 'event', event: call(1, 'completed-history') },
+    { type: 'event', event: result(2, 'completed-history') },
+  ], true)
   expect(openWorkbench).not.toHaveBeenCalled()
 })

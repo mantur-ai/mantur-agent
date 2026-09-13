@@ -97,6 +97,7 @@ function ScriptEditor(props: WorkbenchProps & { session: SessionId | undefined }
     finally { if (live.current) setBusy(false) }
   }
   async function browse(directory: string) {
+    /* v8 ignore next -- this handler is attached only to controls rendered for the selected project or document. */
     if (session === undefined) return
     const token = ++navigation.current
     await run(async () => {
@@ -106,6 +107,7 @@ function ScriptEditor(props: WorkbenchProps & { session: SessionId | undefined }
   }
   async function open(entry: ScriptEntry) {
     if (entry.directory) return browse(entry.path)
+    /* v8 ignore next -- this handler is attached only to controls rendered for the selected project or document. */
     if (session === undefined) return
     const token = ++navigation.current
     await run(async () => {
@@ -114,6 +116,7 @@ function ScriptEditor(props: WorkbenchProps & { session: SessionId | undefined }
     })
   }
   async function save(text: string) {
+    /* v8 ignore next -- this handler is attached only to controls rendered for the selected project or document. */
     if (session === undefined || draft === undefined) return
     await run(async () => {
       const document = await props.save(session, draft.base, text)
@@ -122,10 +125,12 @@ function ScriptEditor(props: WorkbenchProps & { session: SessionId | undefined }
     })
   }
   async function refresh() {
+    /* v8 ignore next -- this handler is attached only to controls rendered for the selected project or document. */
     if (session === undefined || path === undefined) return
     await run(async () => { actions.observed(session, await props.read(session, path)) })
   }
   async function send() {
+    /* v8 ignore next -- this handler is attached only to controls rendered for the selected project or document. */
     if (session === undefined || path === undefined || draft === undefined) return
     if (dirty) { setError(t('saveFirst')); return }
     const token = navigation.current
@@ -178,7 +183,10 @@ function ScriptEditor(props: WorkbenchProps & { session: SessionId | undefined }
         {draft.previous !== undefined && <details className={css.diff}>
           <summary>{t('diff')}</summary>
           <div className={css.compare}><section><h3>{t('previous')}</h3><pre>{draft.previous.content}</pre></section><section><h3>{t('current')}</h3><pre>{draft.base.content}</pre></section></div>
-          <button type="button" disabled={busy || dirty || draft.conflict !== undefined} onClick={() => { if (draft.previous !== undefined) void save(draft.previous.content) }}>{t('undo')}</button>
+          <button type="button" disabled={busy || dirty || draft.conflict !== undefined} onClick={() => {
+            /* v8 ignore next -- this button is rendered only while the captured draft has a previous generation. */
+            if (draft.previous !== undefined) void save(draft.previous.content)
+          }}>{t('undo')}</button>
         </details>}
         {!reading && range.end > range.start && <form className={css.rewrite} onSubmit={(event) => { event.preventDefault(); void send() }}>
           <details><summary>{t('selection')}</summary><blockquote>{draft.text.slice(range.start, range.end)}</blockquote></details>

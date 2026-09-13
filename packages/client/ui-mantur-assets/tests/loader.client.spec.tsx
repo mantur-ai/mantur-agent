@@ -13,6 +13,7 @@ import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { useSyncExternalStore, type ComponentProps, type ComponentType } from 'react'
 import { expect, it, vi } from 'vitest'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { AssetSnapshot } from '../src/types.ts'
 import type { AssetCommands } from '../src/client/AssetsPanel.tsx'
 import type { AssetsPanel } from '../src/client/AssetsPanel.tsx'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
@@ -36,12 +37,22 @@ it('loads asset slots before their shell, resolves Chinese copy, mounts on click
     ctx.provide('uiConversation', {} as Context['uiConversation'])
     const session = 'asset-loader-session' as SessionId
     const sessionState = { current: session, byId: {} }
-    ctx.provide('sessions', { list: { getSnapshot: () => sessionState } } as Context['sessions'])
+    const send = vi.fn(async (_text: string) => {})
+    let bound = true
+    ctx.provide('sessions', { list: { getSnapshot: () => sessionState }, binding: () => bound ? { ctx: { get: () => ({ send }) } } : undefined } as unknown as Context['sessions'])
     const disposeRemote = vi.fn(async () => {})
+    const snapshot: AssetSnapshot = { source: { path: '/project/assets.json', version: 'v1' as never, sha256: 'hash' }, stateVersion: null, state: { format: 1, path: '/project/assets.json', drafts: [], proposals: [], history: [], pending: null }, rows: [], projectState: null }
     const remote = {
       $mount: vi.fn(async () => disposeRemote),
       manturScript: { list: async () => ({ ok: true, value: [] }) },
-      manturAssets: { load: vi.fn(async () => { throw new Error('controlled provider error') }) },
+      manturAssets: {
+        load: vi.fn(async (): Promise<{ ok: true; value: AssetSnapshot } | { ok: false; error: { message: string } }> => { throw new Error('controlled provider error') }),
+        saveDraft: vi.fn(async () => ({ ok: true, value: snapshot })),
+        prepare: vi.fn(async () => ({ ok: true, value: { requestId: 'proposal-1', source: snapshot.source, edits: [] } })),
+        apply: vi.fn(async () => ({ ok: true, value: snapshot })),
+        candidates: vi.fn(async () => ({ ok: true, value: [] })),
+        preview: vi.fn(async () => ({ ok: true, value: { id: null, name: 'image.png', kind: 'image', url: '/preview' } })),
+      },
     }
     ctx.provide('remote', remote as unknown as Context['remote'])
     ctx.provide('remote.manturAssets', remote.manturAssets)
@@ -99,6 +110,21 @@ it('loads asset slots before their shell, resolves Chinese copy, mounts on click
     fireEvent.click(view.getByRole('button', { name: '读取' }))
     expect((await view.findByRole('alert')).textContent).toBe('controlled provider error')
     expect(remote.manturAssets.load).toHaveBeenCalledWith(session, '资产/资产提取结果/assets-report.json')
+    const commands = (slots.entries('main.workbench.assets.content')[0]!.inject as unknown as () => AssetCommands)()
+    remote.manturAssets.load.mockResolvedValueOnce({ ok: false, error: { message: 'asset report changed' } })
+    await expect(commands.load(session, 'assets.json')).rejects.toThrow('asset report changed')
+    remote.manturAssets.load.mockResolvedValueOnce({ ok: true, value: snapshot })
+    await expect(commands.load(session, 'assets.json')).resolves.toBe(snapshot)
+    await expect(commands.save(session, snapshot, [])).resolves.toBe(snapshot)
+    expect(remote.manturAssets.saveDraft).toHaveBeenCalledWith(session, { source: snapshot.source, stateVersion: null, edits: [] })
+    await expect(commands.apply(session, 'proposal-1')).resolves.toBe(snapshot)
+    await expect(commands.candidates(session, 'images')).resolves.toEqual([])
+    await expect(commands.preview(session, 'image.png')).resolves.toMatchObject({ name: 'image.png', url: '/preview' })
+    await expect(commands.request(session, snapshot, [], 'rewrite')).resolves.toBe('proposal-1')
+    expect(JSON.parse(send.mock.calls[0]![0])).toMatchObject({ requestId: 'proposal-1', source: snapshot.source })
+    bound = false
+    await expect(commands.request(session, snapshot, [], 'rewrite')).rejects.toThrow('owning conversation')
+    expect(send).toHaveBeenCalledOnce()
     const entry = [...ctx.loader.entries()].find(item => item.options.name === 'assets')!
     await act(async () => { await entry.fiber!.dispose() })
     expect(slots.entries('main.workbench.assets.tab')).toHaveLength(0)

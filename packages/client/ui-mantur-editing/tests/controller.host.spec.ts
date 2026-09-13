@@ -324,3 +324,9 @@ it('does not stop the editor process when MCP disconnection is unconfirmed', asy
   await expect(ctx.manturEditing.stopForShutdown()).rejects.toThrow('installation is blocked')
   expect(harness.stopped[0]).not.toHaveBeenCalled()
 })
+
+
+it('presents the editor opening tool as a workspace action', async () => {
+  const { ctx } = await setup()
+  expect(ctx.tools.get('open_editing_workbench')!.presentCall?.({})).toMatchObject({ card: 'generic', kind: 'other' })
+})

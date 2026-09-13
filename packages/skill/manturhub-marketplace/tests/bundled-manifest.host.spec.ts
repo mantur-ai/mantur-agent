@@ -1,16 +1,19 @@
 /** Immutable bundled resources reject altered inventories and files before loading instructions. */
 import { createHash } from 'node:crypto'
 import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
+import * as fsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { agentEvents, Inbox, type Agent } from '@deepseek-ai/dsh-agent'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { Session, SessionId, type UserMessage } from '@deepseek-ai/dsh-session'
 import ManturHubMarketplace from '../src/index.ts'
-import { loadBundledSkill } from '../src/bundled-catalog.ts'
+import { loadBundledSkill, readBundledCatalog } from '../src/bundled-catalog.ts'
 import { bundledSkillDigest, bundledSkillDirectory, bundledSkillReference, parseBundledManifest, verifyBundledSkill } from '../src/bundled-manifest.ts'
+
+vi.mock('node:fs/promises', async importOriginal => ({ ...await importOriginal<typeof import('node:fs/promises')>() }))
 
 const markdown = '---\nname: example\ndescription: Test skill\nversion: 1.0.0\n---\nInstructions\n'
 const identity = {
@@ -20,6 +23,7 @@ const identity = {
 const skill = { ...identity, digest: bundledSkillDigest(identity) }
 const temporary: string[] = []
 afterEach(async () => {
+  vi.restoreAllMocks()
   await Promise.all(temporary.splice(0).map(path => rm(path, { recursive: true, force: true })))
 })
 async function fixture(): Promise<string> {
@@ -122,6 +126,11 @@ it('serves local identities without calling account methods or reading same-name
     const invoke = (messages: UserMessage[]) => agentEvents(ctx, agent).waterfall('agent/pre-step',
       { messages, turn: 1, step: 1, signal: new AbortController().signal },
       () => Promise.resolve({ kind: 'enter' as const, messages }))
+    const rejected = await agentEvents(ctx, agent).waterfall('agent/pre-step',
+      { messages: [user], turn: 1, step: 1, signal }, () => Promise.resolve({ kind: 'reject' as const }))
+    expect(rejected).toEqual({ kind: 'reject' })
+    const image = createUserMessage({ source: { kind: 'user' }, content: [{ type: 'image', attachment: { attachmentId: `sha256:${'a'.repeat(64)}` as never, mediaType: 'image/png', bytes: 1, width: 1, height: 1 } }] })
+    await expect(invoke([image])).resolves.toMatchObject({ messages: [image] })
     const decision = await invoke([user])
     if (decision.kind !== 'enter') throw new Error('Expected admitted bundled instructions')
     expect(decision.messages).toHaveLength(2)
@@ -143,10 +152,97 @@ it('serves local identities without calling account methods or reading same-name
     await expect(invoke([external])).resolves.toMatchObject({ messages: [external] })
     const invalid = createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: '/mantur-builtin:example@0.0.0#bad' }] })
     await expect(invoke([invalid])).rejects.toThrow('Invalid App-bundled Skill reference')
+    const restricted = await catalog(markdown.replace('version: 1.0.0', 'version: 1.0.0\nuser-invocable: false'))
+    const restrictedContext = new Context()
+    try {
+      new ManturHubMarketplace(restrictedContext, { dshHome: root, bundledSkillDir: restricted.root })
+      const restrictedUser = createUserMessage({ source: { kind: 'user' }, content: [
+        { type: 'text', text: `/mantur-builtin:${bundledSkillReference(restricted.pinned)}` },
+      ] })
+      await expect(agentEvents(restrictedContext, { ...agent, ctx: restrictedContext }).waterfall('agent/pre-step',
+        { messages: [restrictedUser], turn: 1, step: 1, signal },
+        () => Promise.resolve({ kind: 'enter' as const, messages: [restrictedUser] }))).rejects.toThrow('not user-invocable')
+    } finally { await restrictedContext.fiber.dispose() }
     const unconfigured = new ManturHubMarketplace(unconfiguredContext, { dshHome: root })
     await expect(unconfigured.bundled(signal)).rejects.toThrow('not configured')
   } finally {
     await ctx.fiber.dispose()
     await unconfiguredContext.fiber.dispose()
   }
+})
+
+
+const limits = { maxMetadataBytes: 65536, maxFiles: 10, maxUnpackedBytes: 65536 }
+async function catalog(text = markdown) {
+  const root = await fixture()
+  const item = { ...identity, files: [{ path: 'SKILL.md', bytes: Buffer.byteLength(text),
+    sha256: createHash('sha256').update(text).digest('hex') }] }
+  const pinned = { ...item, digest: bundledSkillDigest(item) }
+  const directory = join(root, bundledSkillDirectory(pinned))
+  await mkdir(directory)
+  await writeFile(join(directory, 'SKILL.md'), text)
+  await writeFile(join(root, 'manifest.json'), JSON.stringify({ formatVersion: 1, skills: [pinned] }))
+  return { root, pinned, directory }
+}
+
+it('rejects resource and metadata limits before reading bundled instructions', async () => {
+  const { root } = await catalog()
+  for (const bound of [{ maxMetadataBytes: 1 }, { maxFiles: 0 }, { maxUnpackedBytes: 1 }]) {
+    await expect(readBundledCatalog(root, { ...limits, ...bound })).rejects.toThrow(/limit/)
+  }
+  await expect(loadBundledSkill(undefined, skill, limits)).rejects.toThrow('not configured')
+})
+
+it.each([
+  ['missing frontmatter', 'no frontmatter', 'missing YAML frontmatter'],
+  ['invalid frontmatter', '---\nname: [invalid\n---\nbody', 'Invalid App-bundled'],
+  ['mismatched name', markdown.replace('name: example', 'name: another'), 'name differs'],
+] as const)('rejects %s even when its file digest is valid', async (_name, text, error) => {
+  const { root, pinned } = await catalog(text)
+  await expect(loadBundledSkill(root, pinned, limits)).rejects.toThrow(error)
+})
+
+it.each([
+  ['SKILL.md', 'SKILL.md'], ['SKILL.md', 'skill.md'], ['z.txt', 'SKILL.md'], ['other.txt'],
+])('rejects an invalid ordered inventory %o', (...paths) => {
+  const files = paths.map(path => ({ ...skill.files[0]!, path }))
+  const item = { ...skill, files }
+  item.digest = bundledSkillDigest(item)
+  expect(() => parseBundledManifest({ formatVersion: 1, skills: [item] })).toThrow('Invalid bundled skill inventory')
+})
+
+it('rejects a file in place of the bundle root and a bundle lacking instructions', async () => {
+  const root = await fixture()
+  await expect(verifyBundledSkill(join(root, 'SKILL.md'), skill)).rejects.toThrow('root must be a directory')
+  const empty = { ...skill, files: [] }
+  await rm(join(root, 'SKILL.md'))
+  await expect(verifyBundledSkill(root, empty)).rejects.toThrow('no SKILL.md')
+})
+
+it('verifies nested resources and rejects a resized file', async () => {
+  const root = await fixture()
+  await mkdir(join(root, 'references'))
+  await writeFile(join(root, 'references', 'sample.txt'), 'sample')
+  const nested = { ...skill, files: [...skill.files, { path: 'references/sample.txt', bytes: 6,
+    sha256: createHash('sha256').update('sample').digest('hex') }] }
+  expect(await verifyBundledSkill(root, nested)).toBe(markdown)
+  await writeFile(join(root, 'references', 'sample.txt'), 'resized sample')
+  await expect(verifyBundledSkill(root, nested)).rejects.toThrow('file differs')
+})
+
+
+it('rejects a manifest that grows after its initial size observation', async () => {
+  const { root } = await catalog()
+  const open = fsPromises.open
+  vi.spyOn(fsPromises, 'open').mockImplementationOnce(async (...args) => {
+    const handle = await open(...args)
+    const stat = handle.stat.bind(handle)
+    vi.spyOn(handle, 'stat').mockImplementationOnce(async () => {
+      const before = await stat()
+      await fsPromises.appendFile(join(root, 'manifest.json'), ' ')
+      return before
+    })
+    return handle
+  })
+  await expect(readBundledCatalog(root, limits)).rejects.toThrow('changed during its read')
 })

@@ -150,9 +150,18 @@ const {existsSync,writeFileSync,writeSync}=require('node:fs');
 const {join}=require('node:path');
 const root=process.argv[1];
 writeFileSync('pipe-holder.txt','ready');
+process.send('pipe-held');
+process.disconnect();
 const timer=setInterval(()=>{if(existsSync(join(root,'release-pipe.txt'))){clearInterval(timer);writeSync(2,'late pipe write');process.exit(0);}},10);
 `
-  const config = await fixture('', '', `spawn(process.execPath, ['-e', ${JSON.stringify(holder)}, process.cwd()], {stdio:['ignore','ignore',2]});`)
+  const config = await fixture('', '', `
+const holder = spawn(process.execPath, ['-e', ${JSON.stringify(holder)}, process.cwd()], {stdio:['ignore','ignore',2,'ipc']});
+await new Promise((resolve,reject) => {
+  holder.once('message', message => message === 'pipe-held' ? resolve() : reject(new Error('Invalid pipe holder acknowledgement')));
+  holder.once('error', reject);
+  holder.once('exit', () => reject(new Error('Pipe holder exited before acknowledgement')));
+});
+holder.unref();`)
   const runtime = await startEditor({ ...config, stopTimeoutMs: 60_000 }, await temp(), 'late-pipe' as SessionId, 'http://127.0.0.1:5298')
   const child = children.at(-1)!
   let finished = false

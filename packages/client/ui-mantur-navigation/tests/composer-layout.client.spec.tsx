@@ -4,7 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { ComponentProps } from 'react'
-import { ManturComposerLayout } from '../src/client/ManturComposerLayout.tsx'
+import { ManturComposerLayout, ManturComposerAccessory } from '../src/client/ManturComposerLayout.tsx'
 import { zh } from '../src/client/project-locales.ts'
 import type { AutomaticProjectState } from '../src/client/automatic-project.ts'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -76,4 +76,13 @@ it('does not reserve a project status container while the home draft is idle', (
   const footer = view.container.querySelector('[data-workspace-footer]')!
   expect(footer.children).toHaveLength(1)
   expect(footer.firstElementChild).toBe(screen.getByRole('button', { name: 'Workspace' }))
+})
+
+
+it.each([true, false])('passes the composer disabled=%s state to its permission control', (disabled) => {
+  const renderSlot = vi.fn<ComponentProps<typeof ManturComposerAccessory>['renderSlot']>(() => <button>Permissions</button>)
+  const props = { disabled, renderSlot } as ComponentProps<typeof ManturComposerAccessory>
+  render(<ManturComposerAccessory {...props} />)
+  expect(screen.getByRole('button', { name: 'Permissions' })).toBeTruthy()
+  expect(renderSlot).toHaveBeenCalledWith('conversation.composer.bar.accessory.permissions', { disabled })
 })

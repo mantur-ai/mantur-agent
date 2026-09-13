@@ -7,7 +7,7 @@ import { LocalFileSystem } from '@deepseek-ai/dsh-fs-local'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
-import { afterEach, beforeEach, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import ManturScript from '../src/index.ts'
 
 let ctx: Context
@@ -25,7 +25,7 @@ beforeEach(async () => {
   await ctx.plugin(ManturScript, { maxBytes: 4096, maxEntries: 20 })
   agent = { ctx, session: { header: { cwd: root } } } as Agent
 })
-afterEach(async () => { await ctx.fiber.dispose(); await rm(root, { recursive: true, force: true }) })
+afterEach(async () => { vi.restoreAllMocks(); await ctx.fiber.dispose(); await rm(root, { recursive: true, force: true }) })
 
 it('saves the observed file and refuses a stale generation without overwriting the external edit', async () => {
   const original = await ctx.manturScript.read(agent, '01.md')
@@ -78,7 +78,8 @@ it('lists direct script files and folders without treating arbitrary project fil
   await writeFile(join(root, 'ignore.json'), '{}')
   await writeFile(join(root, '.hidden.md'), 'private')
   await mkdir(join(root, 'scripts'))
-  expect((await ctx.manturScript.list(agent, '')).map(x => [x.name, x.directory])).toEqual([['scripts', true], ['01.md', false]])
+  await writeFile(join(root, '02.txt'), 'next')
+  expect((await ctx.manturScript.list(agent, '')).map(x => [x.name, x.directory])).toEqual([['scripts', true], ['01.md', false], ['02.txt', false]])
   await expect(ctx.manturScript.read(agent, 'ignore.json')).rejects.toThrow('Markdown')
 })
 
@@ -89,4 +90,55 @@ it('normalizes CRLF before selection and rejects oversized or invalid UTF-8 docu
   await expect(ctx.manturScript.save(agent, { ...current, content: '文'.repeat(2000) })).rejects.toMatchObject({ code: 'FS_TOO_LARGE' })
   await writeFile(join(root, '01.md'), Buffer.from([0xff, 0xfe, 0xff]))
   await expect(ctx.manturScript.read(agent, '01.md')).rejects.toThrow()
+})
+
+
+it('bounds discovery and rejects missing files, folders and files removed before save', async () => {
+  await mkdir(join(root, 'folder.md'))
+  await expect(ctx.manturScript.read(agent, 'folder.md')).rejects.toMatchObject({ code: 'FS_NOT_REGULAR_FILE' })
+  await expect(ctx.manturScript.read(agent, 'missing.md')).rejects.toMatchObject({ code: 'FS_NOT_REGULAR_FILE' })
+  const observed = await ctx.manturScript.read(agent, '01.md')
+  await rm(join(root, '01.md'))
+  await expect(ctx.manturScript.save(agent, observed)).rejects.toMatchObject({ code: 'FS_STALE_VERSION' })
+  for (let i = 0; i < 21; i++) await writeFile(join(root, `${i}.txt`), '')
+  await expect(ctx.manturScript.list(agent, '')).rejects.toThrow('entry limit')
+})
+
+it.each([false, true])('rejects a document changed during read, removed=%s', async (removed) => {
+  const read = ctx.fs.readBytes.bind(ctx.fs)
+  vi.spyOn(ctx.fs, 'readBytes').mockImplementationOnce(async (...args) => {
+    const bytes = await read(...args)
+    if (removed) await rm(join(root, '01.md'))
+    else await writeFile(join(root, '01.md'), 'changed externally')
+    return bytes
+  })
+  await expect(ctx.manturScript.read(agent, '01.md')).rejects.toMatchObject({ code: 'FS_STALE_VERSION' })
+})
+
+it('presents replacement and refuses a tool call without an owning Agent', async () => {
+  const doc = await ctx.manturScript.read(agent, '01.md')
+  const args = { path: doc.path, version: doc.version, start: 0, end: 1, selected: '#', replacement: 'X' }
+  expect(ctx.tools.get('replace_script_selection')!.presentCall?.(args)).toMatchObject({ subtitle: doc.path })
+  const result = await ctx.tools.execute({ name: 'replace_script_selection', arguments: args,
+    callId: ToolCallId('no-agent'), signal: new AbortController().signal })
+  expect(result.isError).toBe(true)
+  expect(JSON.stringify(result.content)).toContain('owning Agent')
+})
+
+it.each([{ start: -1, end: 2 }, { start: 0, end: 0 }, { start: 0, end: 999 }])('rejects out-of-range selection %o', async (range) => {
+  const doc = await ctx.manturScript.read(agent, '01.md')
+  const result = await ctx.tools.execute({ name: 'replace_script_selection', arguments: {
+    path: doc.path, version: doc.version, ...range, selected: '#', replacement: 'X',
+  }, agent, callId: ToolCallId('invalid-range'), signal: new AbortController().signal })
+  expect(result.isError).toBe(true)
+  expect(await readFile(join(root, '01.md'), 'utf8')).toBe(content)
+})
+
+
+it('requires sandbox authorization when the filesystem advertises a sandbox mode', async () => {
+  const isolated = new Context()
+  isolated.provide('typert', {} as never)
+  isolated.provide('fs', { sandboxMode: 'read-only' } as never)
+  try { expect(() => new ManturScript(isolated, { maxBytes: 4096, maxEntries: 20 })).toThrow('sandboxPolicy') }
+  finally { await isolated.fiber.dispose() }
 })

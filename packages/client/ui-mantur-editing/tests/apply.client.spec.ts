@@ -37,6 +37,11 @@ describe('editing workbench composition', () => {
     await fiber.await()
     expect(slots.entries('main.workbench.editing.content')[0]?.component).toBe(Workbench)
     expect(slots.entries('main.workbench.toggle.editing')).toHaveLength(1)
+    const toggle = slots.entries('main.workbench.toggle.editing')[0]!
+    const control = (toggle.inject as unknown as () => client.WorkbenchToggleInjection)()
+    const stopObserving = control.observeAutomaticOpening(layout.openWorkbench)
+    control.suppressAutomaticOpening()
+    stopObserving()
     const entry = slots.entries('main.workbench.editing.content')[0]!
     const face = (entry.inject as unknown as () => client.WorkbenchInjection)()
     await expect(face.openWorkspace('session-a' as never)).resolves.toEqual({ editorUrl: 'http://127.0.0.1:5300/', directory: '/project/editing' })

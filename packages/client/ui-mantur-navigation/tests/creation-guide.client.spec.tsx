@@ -230,3 +230,26 @@ describe('Mantur creation guide', () => {
     expect(screen.queryByRole('button', { name: zh.more })).toBeNull()
   })
 })
+
+
+it('scrolls the guide text with Home and End without hijacking other keys', () => {
+  const view = render(guide(props()))
+  const text = view.container.querySelector('[tabindex="0"]') as HTMLDivElement
+  Object.defineProperty(text, 'scrollHeight', { value: 240 })
+  text.scrollTop = 30
+  fireEvent.keyDown(text, { key: 'End' })
+  expect(text.scrollTop).toBe(240)
+  fireEvent.keyDown(text, { key: 'Home' })
+  expect(text.scrollTop).toBe(0)
+  fireEvent.keyDown(text, { key: 'ArrowDown' })
+  expect(text.scrollTop).toBe(0)
+  fireEvent.keyDown(text.firstElementChild!, { key: 'End' })
+  expect(text.scrollTop).toBe(0)
+})
+
+it.each(['idle', 'loading'] as const)('shows %s bundled resources without inserting a shortcut', (phase) => {
+  const p = { ...props(), useBundledSkills: (select: (value: unknown) => unknown) => select({ phase }) }
+  render(guide(p))
+  expect(screen.getByRole('status').textContent).toBe(marketZh['skills.loading'])
+  expect(p.appendReference).not.toHaveBeenCalled()
+})

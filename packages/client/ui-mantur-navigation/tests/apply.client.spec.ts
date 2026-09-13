@@ -28,12 +28,15 @@ vi.mock('@deepseek-ai/dsh-mantur-projects/remote', () => ({
 async function bench() {
   const ctx = new Context()
   vi.stubGlobal('sessionStorage', { getItem: () => null, setItem: vi.fn(), removeItem: vi.fn() })
-  const resolveBundled = vi.fn(async (reference: string, signal: AbortSignal) => {
+  const resolveBundled = vi.fn<(reference: string, signal: AbortSignal) => Promise<
+    { ok: true; value: { reference: string } } | { ok: false; error: { message: string } }
+  >>(async (reference, signal) => {
     signal.throwIfAborted()
     return { ok: true, value: { reference } }
   })
+  const bundled = vi.fn().mockResolvedValue({ ok: true, value: [] })
   const remote = new TestRemote(ctx, {
-    manturMarketplace: { bundled: () => ({ ok: true, value: [] }), resolveBundled }, manturAccount: {},
+    manturMarketplace: { bundled, resolveBundled }, manturAccount: {},
     manturProjects: { settings: () => ({ ok: true, value: { source: 'unconfigured' } }) },
   })
   remote.$mount = () => Promise.resolve(() => Promise.resolve())
@@ -71,7 +74,8 @@ async function bench() {
       'settings.general.item': { kind: 'list', scope: 'root' },
     },
   } as never, () => null)
-  return { ctx, remote, locale, slots, preferences, binding, appendReference, inputState, pickDirectory, registerSource, resolveBundled }
+  return { ctx, remote, locale, slots, preferences, binding, appendReference, inputState, pickDirectory,
+    registerSource, resolveBundled, bundled }
 }
 
 describe('ui-mantur-navigation apply', () => {
@@ -83,6 +87,8 @@ describe('ui-mantur-navigation apply', () => {
       const source = subject.registerSource.mock.calls.find(([entry]) => entry.name === 'mantur-bundled-skill')?.[0]
       const codec = source?.codec
       expect(codec).toBeDefined()
+      await expect(source!.candidates({} as never, {} as never)).resolves.toEqual([])
+      expect(() => source!.onPick({} as never)).toThrow('homepage shortcuts')
       if (codec === undefined) throw new Error('Bundled reference codec was not registered')
       const reference = `short-drama@1.0.0#${'a'.repeat(64)}`
       const controller = new AbortController()
@@ -91,6 +97,8 @@ describe('ui-mantur-navigation apply', () => {
       expect(subject.resolveBundled).toHaveBeenLastCalledWith(reference, controller.signal)
       subject.resolveBundled.mockRejectedValueOnce(new Error('Bundled identity unavailable'))
       await expect(codec.serialize(reference, controller.signal)).rejects.toThrow('Bundled identity unavailable')
+      subject.resolveBundled.mockResolvedValueOnce({ ok: false, error: { message: 'version unavailable' } })
+      await expect(codec.serialize(reference, controller.signal)).rejects.toThrow('version unavailable')
       controller.abort(new Error('Send cancelled'))
       await expect(codec.serialize(reference, controller.signal)).rejects.toThrow('Send cancelled')
     } finally { await fiber.dispose() }
@@ -143,6 +151,8 @@ describe('ui-mantur-navigation apply', () => {
       const value = (entry?.inject as unknown as () => DesktopUpdateInjected)()
       expect(value.hooks.updates.getSnapshot().snapshot).toEqual(snapshot)
       expect(value.controller).toBeTruthy()
+      const settings = subject.slots.entries('settings.general.item').find(entry => entry.options.id === 'mantur.desktop-update')!
+      expect((settings.inject as unknown as () => DesktopUpdateInjected)().controller).toBe(value.controller)
       expect(subject.locale.bind('updates.mantur')('download')).toBe('下载更新')
     } finally { await fiber.dispose() }
     expect(unsubscribe).toHaveBeenCalledOnce()
@@ -195,6 +205,7 @@ describe('ui-mantur-navigation apply', () => {
     expect(path.hooks.automaticProject).toBe(footer.hooks.automaticProject)
     await path.chooseRoot()
     await footer.reloadRoot()
+    await path.reloadRoot()
     expect(subject.pickDirectory).toHaveBeenCalledOnce()
     expect(footer.hooks.automaticProject.getSnapshot()).toMatchObject({ loading: false, settings: { source: 'unconfigured' } })
 
@@ -239,6 +250,9 @@ describe('ui-mantur-navigation apply', () => {
       const reference = { source: 'skill', ref: 'short-drama', label: '爽文短剧剧本创作', clipboardText: '/short-drama' }
       expect(createGuide(undefined).appendReference(reference)).toBe(true)
       const guide = createGuide('guide-session' as SessionId)
+      subject.bundled.mockResolvedValueOnce({ ok: false, error: { message: 'bundled resources missing' } })
+      await guide.loadBundled()
+      expect(guide.hooks.bundledSkills.getSnapshot()).toMatchObject({ phase: 'failed' })
       const navigation = (subject.slots.entries('sidebar.navigation')[0]!.inject as unknown as () => MarketplaceNavigationInjected)()
       const changed = vi.fn()
       const unsubscribe = guide.hooks.guideNavigation.subscribe(changed)

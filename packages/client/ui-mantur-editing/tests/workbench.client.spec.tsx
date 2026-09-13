@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
-import { WorkbenchToggle, Workbench } from '../src/client/Workbench.tsx'
+import { WorkbenchToggle, Workbench, EditingTab } from '../src/client/Workbench.tsx'
 import { localEditorUrl } from '../src/settings.ts'
 import { en, zh } from '../src/client/locales.ts'
 import type { ComponentProps } from 'react'
@@ -29,6 +29,18 @@ async function mount(dictionary = en) {
 }
 
 describe('Session editor workbench', () => {
+  it('exposes the selected editor tab and routes explicit selection', () => {
+    const selectEditing = vi.fn()
+    const props = { selected: false, selectEditing, t: (key: keyof typeof en) => en[key] } as ComponentProps<typeof EditingTab>
+    const view = render(<EditingTab {...props} />)
+    const tab = view.getByRole('button', { name: en.tab })
+    expect(tab.getAttribute('aria-pressed')).toBe('false')
+    fireEvent.click(tab)
+    expect(selectEditing).toHaveBeenCalledOnce()
+    view.rerender(<EditingTab {...props} selected />)
+    expect(tab.getAttribute('aria-pressed')).toBe('true')
+  })
+
   it('observes live opening and suppresses only a same-Session collapse', () => {
     const props = propsFor()
     const openWorkbench = vi.fn()

@@ -11,7 +11,7 @@ import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { UiConversation } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { ScriptVersion } from '../src/types.ts'
+import type { ScriptDocument, ScriptVersion } from '../src/types.ts'
 import * as script from '../src/client/index.ts'
 import * as editing from '../../ui-mantur-editing/src/client/index.ts'
 import { Workbench } from '../src/client/Workbench.tsx'
@@ -44,7 +44,8 @@ async function setup(assetPlugin?: { inject: string[]; apply: (ctx: Context) => 
   }
   ctx.provide('sessions', sessions as never)
   new UiConversation(ctx, sessions as never)
-  const manturScript = { list: async () => ({ ok: true, value: [] }) }
+  const manturScript = { list: vi.fn().mockResolvedValue({ ok: true, value: [] }),
+    read: vi.fn(), save: vi.fn() }
   ctx.provide('remote', { $mount: vi.fn(async () => async () => {}), manturScript } as never)
   ctx.provide('remote.manturScript', manturScript as never)
   ctx.provide('remote.manturEditing', {} as never)
@@ -64,7 +65,8 @@ async function setup(assetPlugin?: { inject: string[]; apply: (ctx: Context) => 
   await ctx.loader.create({ name: 'cordis:include', config: { path: pathToFileURL(config).href } })
   await ctx.loader.await()
   const fiber = [...ctx.loader.entries()].find(entry => entry.options.name === 'script-shell')!.fiber!
-  return { ctx, slots, fiber, layout, send, sessions, locale, select: (id: SessionId) => { current = id }, unbind: () => { bound = false } }
+  return { ctx, slots, fiber, layout, send, sessions, locale, manturScript,
+    select: (id: SessionId) => { current = id }, unbind: () => { bound = false } }
 }
 
 async function assets() {
@@ -234,4 +236,22 @@ it('sends the logged request only through its captured Session and rejects a swi
   select('session-a' as SessionId); unbind()
   await expect(commands.send('session-a' as SessionId, selection, '缺少会话')).rejects.toThrow('unavailable')
   expect(send).toHaveBeenCalledOnce()
+})
+
+
+it('uses the captured Session for file commands and surfaces host rejection', async () => {
+  const { slots, manturScript } = await setup()
+  const commands = (slots.entries('main.workbench')[0]!.inject as unknown as () => script.ScriptCommands)()
+  const session = 'session-a' as SessionId
+  const document: ScriptDocument = { path: '/project/script.md', content: 'before', version: 'version' as ScriptVersion }
+  manturScript.read.mockResolvedValueOnce({ ok: true, value: document })
+  manturScript.save.mockResolvedValueOnce({ ok: true, value: { ...document, content: 'after' } })
+  await expect(commands.list(session, 'scripts')).resolves.toEqual([])
+  await expect(commands.read(session, document.path)).resolves.toEqual(document)
+  await expect(commands.save(session, document, 'after')).resolves.toEqual({ ...document, content: 'after' })
+  expect(manturScript.list).toHaveBeenCalledWith(session, 'scripts')
+  expect(manturScript.read).toHaveBeenCalledWith(session, document.path)
+  expect(manturScript.save).toHaveBeenCalledWith(session, { ...document, content: 'after' })
+  manturScript.read.mockResolvedValueOnce({ ok: false, error: { message: 'file changed' } })
+  await expect(commands.read(session, document.path)).rejects.toThrow('file changed')
 })
