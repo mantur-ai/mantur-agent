@@ -26,6 +26,7 @@ async function bench(mode: 'standalone' | 'desktop-managed' = 'standalone', avai
   ctx.provide('locale', locale)
   const remote = new TestRemote(ctx, {
     manturAccount: {
+      balanceRefreshIntervalMs: vi.fn(async () => ({ ok: true, value: 5000 })),
       identityMode: vi.fn(() => Promise.resolve(available
         ? { ok: true, value: mode }
         : { ok: false, error: { code: 'gateway/internal', message: 'unavailable' } })),
@@ -47,6 +48,7 @@ async function bench(mode: 'standalone' | 'desktop-managed' = 'standalone', avai
       'settings.section': { kind: 'list', scope: 'root' },
       'settings.onboarding': { kind: 'list', scope: 'root' },
       'shell.overlay': { kind: 'list', scope: 'root' },
+      'sidebar.footer.action': { kind: 'list', scope: 'root' },
     },
   } as never, () => null)
   return { ctx, slots, locale }
@@ -74,6 +76,7 @@ describe('ui-mantur-account apply', () => {
       const props = (entry.inject as unknown as (actions: typeof view.actions) => NativeAccountDialogInjected)(view.actions)
       const settings = (subject.slots.entries('settings.section')[0]!.inject as unknown as () => NativeAccountInjected)()
       expect(props.hooks.nativeAccount).toBe(settings.hooks.nativeAccount)
+      expect(subject.slots.entries('sidebar.footer.action')).toHaveLength(1)
       expect(subject.slots.entries('settings.onboarding')).toEqual([])
       document.body.append(modal)
       expect(() => subject.ctx.bail('mantur/native-account-open')).toThrow('unavailable')
@@ -111,6 +114,7 @@ describe('ui-mantur-account apply', () => {
     const fiber = subject.ctx.plugin({ inject: [...inject], apply })
     try {
       await fiber.await()
+      expect(subject.slots.entries('sidebar.footer.action')).toHaveLength(1)
       expect(subject.slots.entries('settings.onboarding')).toEqual([])
       expect(subject.slots.entries('settings.section')[0]!.component).toBe(NativeAccountSection)
       const props = (subject.slots.entries('settings.section')[0]!.inject as unknown as () => NativeAccountInjected)()
@@ -129,6 +133,7 @@ describe('ui-mantur-account apply', () => {
     const fiber = subject.ctx.plugin({ inject: [...inject], apply })
     try {
       await fiber.await()
+      expect(subject.slots.entries('sidebar.footer.action')).toHaveLength(1)
       expect(subject.slots.entries('settings.onboarding')).toEqual([])
       const props = (subject.slots.entries('settings.section')[0]!.inject as unknown as () => NativeAccountInjected)()
       expect(props.hooks.nativeAccount.getSnapshot().failure).toEqual({ kind: 'unavailable' })

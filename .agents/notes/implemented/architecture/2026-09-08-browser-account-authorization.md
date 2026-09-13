@@ -18,6 +18,8 @@ Response-loss recovery retries the exact encrypted exchange before the original 
 
 The [embedded CLI](../../../../apps/desktop/cli-runtime/README.md) is an unmodified fixed archive with a separate production lock. Main provides a profile-local launcher using the application's Electron Node runtime and desktop-managed identity. Broker-v2 keeps the upstream device secret in Main and grants the CLI only a private per-command descriptor. Missing resources or identity fail explicitly. These changes use desktop ownership and existing authorization/command plugins; no agent-loop change is required.
 
+The native sidebar balance uses a fixed `balance()` Remote over the existing Main-owned API broker. The server’s numeric Mantou balance is the only displayed amount; account changes and logout invalidate pending replies, and failed refreshes remove stale values. The footer contains only a yellow bun icon and number. Visible clients poll at the Host-validated `balanceRefreshIntervalMs` cadence and refresh on account changes, window focus and network reconnection. Hidden clients pause polling; disposal removes the timer and listeners. Pending refreshes retain the confirmed number with an accessible busy state. Credentials remain inside their existing owner, and balance presentation does not enter Session history or model requests.
+
 ## Alternatives considered
 
 **Native password and registration forms.** The user selected existing website login and device consent as the only desktop login path. The browser flow replaces the corresponding v1 sections of the [native account proposal](../../proposed/architecture/2026-09-07-desktop-native-account-identity.md); its broker ownership and native-platform acceptance requirements remain relevant.

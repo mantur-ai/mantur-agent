@@ -566,7 +566,7 @@ describe('Desktop release workflow', () => {
       }
     }
     const feed = (tag: string): string => `<?xml version="1.0" encoding="UTF-8"?>
-      <feed><entry><title>Mantur Agent</title><link href="https://github.com/mantur-ai/mantur-harness/releases/tag/${tag}"/><content>Release</content></entry></feed>`
+      <feed><entry><title>ManTur Agent</title><link href="https://github.com/mantur-ai/mantur-harness/releases/tag/${tag}"/><content>Release</content></entry></feed>`
     const metadata = `version: ${desktopVersion}
 files:
   - url: Mantur-Agent-macOS-arm64.zip

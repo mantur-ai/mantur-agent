@@ -556,7 +556,11 @@ export class SessionInputShell implements SessionInput {
     if (this.snapshot.phase !== 'plain' && this.snapshot.phase !== 'claimed') return false
     const present = this.projection.occurrences.some(item =>
       item.source === reference.source && item.ref === reference.ref)
-    const end = this.projection.detectText.length
+    let end = this.projection.detectText.length
+    if (!present && end > 0 && !/\s$/u.test(this.projection.detectText)) {
+      if (!this.insertText(' ', { start: end, end, draftRev: this.rev })) return false
+      end = this.projection.detectText.length
+    }
     if (!present && !this.insertReference(reference, { start: end, end, draftRev: this.rev })) return false
     this.applyEdit(() => { $getRoot().selectEnd() })
     this.editor.focus()

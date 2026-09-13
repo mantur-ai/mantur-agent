@@ -1,8 +1,8 @@
 ---
-description: "Mantur Agent desktop introduction, installation, creative workflows, and contributor entry points."
+description: "ManTur Agent desktop introduction, installation, creative workflows, and contributor entry points."
 ---
 
-# Mantur Agent · 漫途 Agent
+# ManTur Agent
 
 English | [中文](README.zh.md)
 
@@ -10,7 +10,7 @@ An AI desktop workspace for scriptwriting, AI drama production, and creative ass
 
 [Download & installation guide](https://guiyi2023.feishu.cn/docx/Iq3id4fr8o2uo9xKfpEcIck9nRf) · [ManturHub](https://hub.mantur.ai) · [Report an issue](https://github.com/mantur-ai/mantur-agent/issues)
 
-![Mantur Agent home and file import](docs/assets/mantur-agent/home.png)
+![ManTur Agent home and file import](docs/assets/mantur-agent/home.png)
 
 ## What you can do
 
@@ -41,7 +41,7 @@ Actual desktop screenshots from an empty demonstration profile. Marketplace entr
 
 1. Open the [installation guide](https://guiyi2023.feishu.cn/docx/Iq3id4fr8o2uo9xKfpEcIck9nRf) and download the attachment for your computer. The guide identifies the available version.
 2. On **macOS Apple Silicon**, open the DMG and drag the app into Applications. On **Windows x64**, run the EXE and follow the installer. An Intel Mac installer is not currently provided through this guide.
-3. Open Mantur Agent. In Settings, configure your model provider and select a model. Use your own provider credentials; an installer does not include a shared model API key.
+3. Open ManTur Agent. In Settings, configure your model provider and select a model. Use your own provider credentials; an installer does not include a shared model API key.
 4. Select a workspace, create a conversation, and add your script or reference materials. Send a specific request and review the Agent’s output.
 
 The Windows installer includes the application runtime; its extraction progress is not another application download. Windows may show an unknown-publisher warning because the supplied installer lacks a Windows signing certificate. The supplied Mac package has Developer ID signing but is not notarized. See the guide for the exact package and installation notes.
@@ -90,6 +90,6 @@ For native packaging, signing prerequisites, and packaged smoke checks, use the 
 
 ## Open-source foundations and license
 
-Mantur Agent is the Mantur drama-production edition built on [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness), developed upstream by DeepSeek AI, and its [Cordis](https://github.com/cordiverse/cordis) plugin architecture. This repository maintains the Mantur product adaptations.
+ManTur Agent is the Mantur drama-production edition built on [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness), developed upstream by DeepSeek AI, and its [Cordis](https://github.com/cordiverse/cordis) plugin architecture. This repository maintains the Mantur product adaptations.
 
 Repository code is under the [MIT License](LICENSE). Third-party components retain their own licenses; see [Third-party notices](THIRD_PARTY_NOTICES.md) and the [desktop distribution requirements](apps/desktop/README.md). The repository license does not replace the terms of bundled editing, media, or cloud services. Read the [safety notice](SAFETY.md) before running source builds.

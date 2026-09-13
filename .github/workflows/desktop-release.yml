@@ -53,8 +53,8 @@ jobs:
           esac
           node --input-type=module <<'NODE' >> "$GITHUB_OUTPUT"
           const include = [
-            { arch: 'arm64', runner: 'macos-15', script: 'desktop:dist:mac:arm64', app: 'apps/desktop/dist/mac-arm64/漫途Agent.app' },
-            { arch: 'x64', runner: 'macos-15-intel', script: 'desktop:dist:mac:x64', app: 'apps/desktop/dist/mac/漫途Agent.app' },
+            { arch: 'arm64', runner: 'macos-15', script: 'desktop:dist:mac:arm64', app: 'apps/desktop/dist/mac-arm64/ManTur Agent.app' },
+            { arch: 'x64', runner: 'macos-15-intel', script: 'desktop:dist:mac:x64', app: 'apps/desktop/dist/mac/ManTur Agent.app' },
           ].filter(target => process.env.ARCHITECTURES === 'both' || target.arch === 'arm64')
           process.stdout.write(`matrix=${JSON.stringify({ include })}\n`)
           NODE
@@ -275,6 +275,6 @@ jobs:
           gh release create "$TAG" release/* \
             --repo "$GITHUB_REPOSITORY" \
             --verify-tag \
-            --title "漫途Agent $VERSION" \
+            --title "ManTur Agent $VERSION" \
             --generate-notes \
             "${prerelease[@]}"

@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { app, BrowserWindow, dialog, ipcMain, Menu, safeStorage, shell } from 'electron'
 import electronUpdater from 'electron-updater'
+import { clearDesktopConnectionCookies } from './browser-session.ts'
 import { requestUpdateSave } from './update-save.ts'
 import { installUpdateBridge } from './update-bridge.ts'
 import { installFileImportBridge } from './file-import-bridge.ts'
@@ -26,7 +27,7 @@ import { startDesktopService, type DesktopService } from './runtime.ts'
 import { buildApplicationMenu } from './update-menu.ts'
 import { startAutoUpdates, type DesktopUpdateController, type DesktopUpdateState } from './updater.ts'
 
-const APP_NAME = '漫途Agent'
+const APP_NAME = 'ManTur Agent'
 const APP_ICON = fileURLToPath(new URL('../resources/mantur-app-icon.png', import.meta.url))
 const STARTUP_PAGE = fileURLToPath(new URL('../resources/startup.html', import.meta.url))
 
@@ -246,6 +247,8 @@ async function launch(): Promise<void> {
     })
     try {
       serviceUrl = await service.ready
+      const removed = await clearDesktopConnectionCookies(window.webContents.session.cookies)
+      if (removed > 0) writeDesktopLog(`desktop connection: retired ${String(removed)} loopback authentication cookies`)
       await window.loadURL(serviceUrl)
       startUpdates()
       return

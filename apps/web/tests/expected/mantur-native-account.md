@@ -2,7 +2,7 @@
 
 - region "登录漫途账号":
   - heading "登录漫途账号" [level=1]
-  - paragraph: 在浏览器中登录并授权，完成后自动返回漫途 Agent。
+  - paragraph: 在浏览器中登录并授权，完成后自动返回ManTur Agent。
   - button "登录漫途账号"
 
 ## Browser waiting

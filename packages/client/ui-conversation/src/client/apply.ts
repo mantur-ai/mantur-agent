@@ -9,6 +9,7 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
+import { importedFileReference } from './input/imported-files.ts'
 import { UiConversation } from './conversation/assembly.ts'
 import type { ViewTab } from './contract/views.ts'
 import type {
@@ -335,7 +336,14 @@ export function apply(ctx: Context): void {
               const refs = await (typeof selection === 'string' ? native.pick(selection) : native.importFiles(selection))
               unlock()
               if (!shell.isDraftSettled()) throw new Error(t('file.ownerClosed'))
-              if (refs.length > 0) shell.setDraft([shell.snapshot.draft, t('file.references'), JSON.stringify(refs, null, 2)].filter(Boolean).join('\n'))
+              const references = refs.map((ref) => {
+                const reference = importedFileReference(ref)
+                if (reference === undefined) throw new Error(t('file.invalidName'))
+                return reference
+              })
+              for (const reference of references) {
+                if (!shell.appendReference(reference)) throw new Error(t('file.ownerClosed'))
+              }
             } finally { unlock() }
           },
         }),

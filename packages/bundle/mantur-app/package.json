@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-mantur-app",
-  "description": "The Mantur Agent desktop profile layer over dsh-base and dsh-web-app",
+  "description": "The ManTur Agent desktop profile layer over dsh-base and dsh-web-app",
   "version": "0.1.3",
   "publishConfig": {
     "access": "public"

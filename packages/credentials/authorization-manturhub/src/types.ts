@@ -19,6 +19,11 @@ export type ManturAccountStatus =
   | { readonly status: 'signed-out' }
   | { readonly status: 'signed-in'; readonly account: ManturAccount }
 
+/** Fresh ManturHub credit balance, in Mantou units; signed-out has no numeric balance. */
+export type ManturBalanceStatus =
+  | { readonly status: 'signed-out' }
+  | { readonly status: 'available'; readonly balance: number }
+
 /** Browser-safe instructions for one device-login attempt. */
 export interface ManturLoginStart {
   readonly attemptId: ManturLoginAttemptId

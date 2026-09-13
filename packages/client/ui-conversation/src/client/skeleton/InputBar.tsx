@@ -17,7 +17,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, KeyboardEvent, MouseEvent, ReactNode } from 'react'
 import clsx from 'clsx'
 import {
-  IconPlusOutline16, IconWarningOutline16, Toast, Tooltip,
+  IconPlusOutline16, IconWarningOutline16, IconPaperclipOutline16, IconFolderOpenOutline16, Toast, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 // Type-only: the `plan` projection key merge (the TodoDock posture — the
 // composer reads a host-computed value; the domain owns the key).
@@ -471,8 +471,18 @@ export const InputBar = memo(function InputBar({
               </button>
             </Tooltip>
             {importFiles !== undefined && <>
-              <button type="button" disabled={!canAcceptDrop} onClick={() => { importNativeFiles('file') }}>{t('file.choose')}</button>
-              <button type="button" disabled={!canAcceptDrop} onClick={() => { importNativeFiles('directory') }}>{t('file.chooseFolder')}</button>
+              <Tooltip label={t('file.choose')} side="top" delayMs={500}>
+                <button type="button" className={css.add} aria-label={t('file.choose')}
+                  disabled={!canAcceptDrop} onMouseDown={keepFocus} onClick={() => { importNativeFiles('file') }}>
+                  <IconPaperclipOutline16 size={14} />
+                </button>
+              </Tooltip>
+              <Tooltip label={t('file.chooseFolder')} side="top" delayMs={500}>
+                <button type="button" className={css.add} aria-label={t('file.chooseFolder')}
+                  disabled={!canAcceptDrop} onMouseDown={keepFocus} onClick={() => { importNativeFiles('directory') }}>
+                  <IconFolderOpenOutline16 size={14} />
+                </button>
+              </Tooltip>
             </>}
             <div className={css.modes}>
               {accessSelect}

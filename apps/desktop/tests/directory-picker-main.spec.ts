@@ -13,7 +13,7 @@ const native = vi.hoisted(() => ({
     getPath: () => '/desktop-documents', dock: { setIcon: vi.fn() }, quit: vi.fn(), exit: vi.fn(),
   },
   window: {
-    webContents: { mainFrame: { url: 'http://127.0.0.1:40001/' },
+    webContents: { session: { cookies: { get: vi.fn(async () => []), remove: vi.fn(async () => {}) } }, mainFrame: { url: 'http://127.0.0.1:40001/' },
       setWindowOpenHandler: vi.fn(), on: vi.fn<(name: string, handler: unknown) => void>(), isDestroyed: () => false },
     once: vi.fn(), on: vi.fn<(name: string, handler: unknown) => void>(),
     loadFile: vi.fn(async () => {}), loadURL: vi.fn(async () => {}), isDestroyed: () => false,
@@ -107,6 +107,16 @@ async function startup() {
 }
 
 describe('desktop directory picker wiring', () => {
+  it('waits for old connection cookies to be removed before loading the new Host', async () => {
+    const cleared = Promise.withResolvers<never[]>()
+    native.window.webContents.session.cookies.get.mockReturnValueOnce(cleared.promise)
+    await import('../src/main.ts')
+    await vi.waitFor(() => { expect(native.window.webContents.session.cookies.get).toHaveBeenCalledOnce() })
+    expect(native.window.loadURL).not.toHaveBeenCalled()
+    cleared.resolve([])
+    await vi.waitFor(() => { expect(native.window.loadURL).toHaveBeenCalledExactlyOnceWith('http://127.0.0.1:40001/') })
+  })
+
   it('exposes one fixed parameterless preload operation', async () => {
     await import('../src/preload.ts')
     const registration = native.contextBridge.exposeInMainWorld.mock.calls.find(([name]) => name === 'manturDirectoryPicker')
@@ -118,7 +128,7 @@ describe('desktop directory picker wiring', () => {
     expect(native.ipcRenderer.invoke).toHaveBeenCalledExactlyOnceWith('mantur:directory-picker:pick')
   })
 
-  it('refuses update preparation before draft or Host saving while a chooser is open', async () => {
+  it('refuses update preparation before Host saving while a chooser is open', async () => {
     const subject = await startup()
     const result = Promise.withResolvers<OpenDialogReturnValue>()
     native.dialog.showOpenDialog.mockReturnValueOnce(result.promise)
@@ -135,28 +145,26 @@ describe('desktop directory picker wiring', () => {
     } finally { result.resolve({ canceled: true, filePaths: [] }); await pending }
     await expect(subject.pick()).resolves.toBeNull()
     await subject.beforeInstall()
-    expect(native.drafts.prepare).toHaveBeenCalledOnce()
+    expect(native.drafts.prepare).not.toHaveBeenCalled()
     expect(native.requestUpdateSave).toHaveBeenCalledOnce()
     expect(native.service.stopAndVerifyExit).toHaveBeenCalledOnce()
   })
 
   it('blocks selection during update preparation and preserves save failure', async () => {
     const subject = await startup()
-    const checkpoint = Promise.withResolvers<number>()
-    native.drafts.prepare.mockReturnValueOnce(checkpoint.promise)
+    const checkpoint = Promise.withResolvers<never[]>()
+    native.requestUpdateSave.mockReturnValueOnce(checkpoint.promise)
     const preparing = subject.beforeInstall()
-    const error = new Error('draft checkpoint failed')
+    const error = new Error('Host checkpoint failed')
     const rejected = expect(preparing).rejects.toBe(error)
     try {
       await expect(subject.pick()).rejects.toThrow(desktopCopy('en').directoryPickerUnavailable)
       expect(native.dialog.showOpenDialog).not.toHaveBeenCalled()
-      expect(native.dialog.showMessageBox).toHaveBeenCalledExactlyOnceWith(native.window, expect.objectContaining({
-        title: desktopCopy('en').updateSavingTitle, signal: expect.any(AbortSignal),
-      }))
+      expect(native.dialog.showMessageBox).not.toHaveBeenCalled()
       expect(native.drafts.release).not.toHaveBeenCalled()
     } finally { checkpoint.reject(error); await rejected }
-    expect(native.drafts.release).toHaveBeenCalledOnce()
-    expect(native.requestUpdateSave).not.toHaveBeenCalled()
+    expect(native.drafts.release).not.toHaveBeenCalled()
+    expect(native.requestUpdateSave).toHaveBeenCalledOnce()
     expect(native.service.stopAndVerifyExit).not.toHaveBeenCalled()
     await expect(subject.pick()).resolves.toBeNull()
   })

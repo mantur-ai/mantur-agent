@@ -54,6 +54,8 @@ Session 首次绑定或缓存的 Session 成为 current 时，shell 会在渲染
 
 根作用域准备策略在原生恢复后启用未关联编辑器。首次发送锁定该编辑器、取得真实 Session、等待目标草稿恢复，并在普通提交前转移完整文档与图片。原生转移在单个检查点发布两个归属前立即核验取消状态与当前选择。发布后取消会将目标草稿保留为未发送状态，不改变当前选择。手动选择项目使用同样的完整文档转移，并拒绝非空目标。
 
+原生文件导入把文件或文件夹名称作为标签加入原始编辑器，提交时使用已注册的 `reference` codec。文件引用语法决定可表示的路径；导入不会把 JSON 清单写入草稿。添加文件和添加文件夹使用输入框现有图标按钮样式。
+
 默认发送采用乐观提交：Enter 在同一事务里清空草稿、occurrence 表和撤销历史，composer 保持 `plain`，发送作为 detached attempt 运行，发送期间可以继续输入和提交。`sendSession` 在序列化之前用投递模式注册 Session 提交回显（`session.beginSubmission`）；Session 根据该模式与当前运行状态推导位置，因此空闲发送进入 transcript，繁忙时 Queue 进入 QueueDock，繁忙时 Steer 进入 pending-steering 区域。随后让出一帧，图片经浏览器原生 `FileReader` data-URL 路径编码。多个并发发送失败时，在用户编辑还原内容之前按提交顺序合并还原；命令提交保持冻结的 `submitting` 阶段。Detached attempt 持有图片 id，直到 admission 完成或 Session scope 销毁。回显以 observed 退休时，durable 图片缓存立即公开预览 URL，同时读取 admitted 附件，随后用规范化 URL 替换预览，并在两个 URL 各自停止使用后撤销。直接 subagent continuation 不创建本地回显，因为其 transport 不保留浏览器 request id。
 
 普通 composer 运行时，如果草稿为空或输入不可用，主指针操作保持为 Stop。可提交的文字或附件会把同一位置切换为 Queue Send；清空或成功提交草稿后恢复 Stop。繁忙态 Enter 设置继续选择 Queue 或 Steer 键盘操作。可继续 subagent 保留独立的 Send 与 Stop 操作（[决策](../../../.agents/notes/implemented/bug-fix/2026-08-20-running-draft-primary-send.zh.md)）。

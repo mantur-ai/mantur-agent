@@ -1,8 +1,8 @@
 ---
-description: "漫途 Agent 桌面端的产品介绍、安装使用、创作流程与开发贡献入口。"
+description: "ManTur Agent 桌面端的产品介绍、安装使用、创作流程与开发贡献入口。"
 ---
 
-# Mantur Agent · 漫途 Agent
+# ManTur Agent
 
 [English](README.md) | 中文
 
@@ -10,7 +10,7 @@ description: "漫途 Agent 桌面端的产品介绍、安装使用、创作流�
 
 [下载安装与使用指南](https://guiyi2023.feishu.cn/docx/Iq3id4fr8o2uo9xKfpEcIck9nRf) · [ManturHub](https://hub.mantur.ai) · [反馈问题](https://github.com/mantur-ai/mantur-agent/issues)
 
-![漫途 Agent 首页与文件导入](docs/assets/mantur-agent/home.png)
+![ManTur Agent 首页与文件导入](docs/assets/mantur-agent/home.png)
 
 ## 可以用它做什么
 
@@ -41,7 +41,7 @@ description: "漫途 Agent 桌面端的产品介绍、安装使用、创作流�
 
 1. 打开[安装使用指南](https://guiyi2023.feishu.cn/docx/Iq3id4fr8o2uo9xKfpEcIck9nRf)，下载适合自己电脑的附件，以指南标注的可用版本为准。
 2. **macOS Apple Silicon**：打开 DMG，将应用拖入“应用程序”。**Windows x64**：运行 EXE，按安装程序提示完成安装。该指南目前不提供 Intel Mac 安装包。
-3. 打开漫途 Agent，在设置中配置模型提供商并选择模型。请使用自己的提供商凭证；安装包不附带供所有用户共用的模型 API Key。
+3. 打开ManTur Agent，在设置中配置模型提供商并选择模型。请使用自己的提供商凭证；安装包不附带供所有用户共用的模型 API Key。
 4. 选择工作区，创建对话，添加剧本或参考素材。发送具体要求，检查 Agent 返回的结果。
 
 Windows 安装包包含应用运行环境，解压进度并不是再次下载应用。所提供的 Windows 安装包尚无 Windows 签名证书，系统可能提示“未知发布者”；所提供的 Mac 包具有 Developer ID 签名，但尚未公证。具体文件及安装说明请查看指南。
@@ -90,6 +90,6 @@ pnpm run build:mantur
 
 ## 开源基础与许可证
 
-漫途 Agent 是基于 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 构建的漫途漫剧制作版本，沿用 DeepSeek AI 开发的上游框架及其 [Cordis](https://github.com/cordiverse/cordis) 插件架构。本仓库维护漫途产品适配。
+ManTur Agent 是基于 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 构建的漫途漫剧制作版本，沿用 DeepSeek AI 开发的上游框架及其 [Cordis](https://github.com/cordiverse/cordis) 插件架构。本仓库维护漫途产品适配。
 
 仓库代码采用 [MIT 许可证](LICENSE)。第三方组件保留各自许可证，详见[第三方声明](THIRD_PARTY_NOTICES.md)及[桌面分发要求](apps/desktop/README.zh.md)。仓库许可证不替代内置剪辑、媒体组件或云服务自身的条款。从源码运行前请阅读[安全说明](SAFETY.zh.md)。

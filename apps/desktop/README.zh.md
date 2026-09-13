@@ -1,12 +1,16 @@
-# 漫途Agent 桌面端
+# ManTur Agent 桌面端
 
 [English](README.md) | 中文
 
-桌面应用是由漫途（Mantur）打造、专门在本地完成漫剧创作与生产的漫途Agent。Electron 只负责原生窗口和一个子进程；子进程在随机 loopback 端口启动随附的 `dsh --profile mantur` 应用。开发应用与打包应用都把已确认的蓝色无限环 Logo 用于原生窗口、macOS Dock、关于面板和安装包资源。桌面包不会实现另一套 agent 运行时。
+桌面应用是由漫途（Mantur）打造、专门在本地完成漫剧创作与生产的ManTur Agent。Electron 只负责原生窗口和一个子进程；子进程在随机 loopback 端口启动随附的 `dsh --profile mantur` 应用。开发应用与打包应用都把奶白色吉祥物图标（黄色螺旋、水平居中的蓝色无限环徽记，1024 像素透明画布和平滑圆角）用于原生窗口、macOS Dock、打包版关于面板和安装包资源。桌面包不会实现另一套 agent 运行时。
 
 Windows 使用 NSIS 安装向导，允许选择应用安装目录。EXE 随附应用资源，解压进度不表示再次下载应用。浏览器登录创建接口不存在时，客户端会单独提示服务器路由不可用，与网络错误和响应不兼容区分。打包成功不代表正式站登录可用，也不代表具备 Windows 签名身份。
 
 重复发起同一登录请求时，客户端接受服务器返回的 0 至 600 秒剩余有效期，并保留原始绝对过期时间。
+
+在交换新 Host 的启动 token 前，Main 仅从桌面窗口的 Cookie 存储移除 `127.0.0.1` 根路径下的 `dsh-auth-` 连接凭据。Cookie 跨端口共享，随机端口重启遗留的凭据可能使 HTTP 请求头超限，导致插件加载返回 431。清理保留漫途账号凭据、会话、浏览器偏好和无关 Cookie；完成移除后才导航，移除失败则停止启动。
+
+macOS 原生关于面板从应用包读取图标，因此未打包的开发程序在该面板保留 Electron 图标，Dock 图标使用产品 PNG。
 
 ## 不打包开发
 
@@ -49,7 +53,7 @@ Chrome for Testing 下载 URL 将版本号放在目录中，并使用 `chrome-he
 
 编辑器的固定版本渲染器补丁公开每个浏览器子进程及管道关闭的完成证据。安装准备同时等待该证据和公开浏览器关闭操作；缺失证据或清理失败仍会阻止安装。见[渲染浏览器关闭](../../.agents/notes/implemented/bug-fix/2026-09-09-mantur-render-browser-close.zh.md)。
 
-macOS 命令先由 electron-builder 完成签名并生成更新 ZIP，再用 Apple 的 `hdiutil` 创建 DMG。构建阶段使用临时唯一卷名，避免与已安装或已挂载的同名应用冲突；最终镜像会恢复 `漫途Agent` 卷名、加入 Applications 快捷方式，并生成独立的更新 blockmap。挂载点使用 macOS `getconf DARWIN_USER_TEMP_DIR` 下的独立临时目录，镜像文件仍位于构建输出目录；解析或创建挂载点失败会停止打包。
+macOS 命令先由 electron-builder 完成签名并生成更新 ZIP，再用 Apple 的 `hdiutil` 创建 DMG。构建阶段使用临时唯一卷名，避免与已安装或已挂载的同名应用冲突；最终镜像会恢复 `ManTur Agent` 卷名、加入 Applications 快捷方式，并生成独立的更新 blockmap。挂载点使用 macOS `getconf DARWIN_USER_TEMP_DIR` 下的独立临时目录，镜像文件仍位于构建输出目录；解析或创建挂载点失败会停止打包。
 
 在没有 Developer ID 凭据的情况下进行本地 Apple Silicon 验收时，请在独立、干净的构建副本中运行 `pnpm run desktop:dist:mac:arm64:local`。该命令明确选择 electron-builder 的 ad-hoc 身份，关闭证书自动发现及公证，并要求严格签名校验。标准签名器在生成 ZIP 前封装已装配的应用；创建 DMG 前还必须通过 `codesign --verify --deep --strict`。签名后不得修改应用内容。这种本地身份只证明应用包完整性，不表示 Apple 认可、已公证、通过 Gatekeeper 或适用于公开更新。正式发行工作流及证书要求保持不变；见[本地签名决策](../../.agents/notes/implemented/bug-fix/2026-09-09-local-macos-bundle-signing.zh.md)。
 
@@ -83,6 +87,8 @@ smoke 还会检查内置 CLI 的固定来源记录、包版本、许可证和依
 | Secret | `APPLE_APP_SPECIFIC_PASSWORD` | 该 Apple ID 的 App 专用密码 |
 
 工作流会把选中的原生 `latest-mac.yml` 合并为一份可区分架构的更新通道，并把完整候选产物与 `SHA256SUMS` 保留七天。必须从精确匹配 `v<apps/desktop 版本>` 的 tag 运行；electron-updater 可以从 GitHub feed 中选择这种兼容 semver 的预发布 tag。`publish=false` 会在组装候选产物后停止。`publish=true` 还要求审批变量指向完整固定源码配置的 SHA-256 摘要，之后才会创建 GitHub release，并同时上传 DMG、更新 ZIP、blockmap、更新元数据与哈希。工作流会拒绝使用已有 release 的 tag，不会替换已发布文件；仓库级 Release Immutability 则会继续阻止之后修改 tag 或产物。
+
+每次交付安装包或更新发布状态，都必须在[飞书产品与安装使用指南](https://guiyi2023.feishu.cn/docx/Iq3id4fr8o2uo9xKfpEcIck9nRf)中追加带日期和版本号的用户更新日志，并保留历史记录与附件。日志说明用户可见的改进、问题修复、更新步骤、支持平台、已知限制，以及经过验证的安装包下载和自动更新状态；仅上传安装包不代表自动更新通道已经可用。最新记录排在最前，同时更新受影响的安装与使用说明。
 
 ## 运行时设计
 
@@ -118,7 +124,7 @@ macOS Intel、macOS Apple Silicon 与 Windows 使用同一个更新控制器。m
 
 桌面对话框接受本机文件与文件夹拖拽，并提供添加文件和添加文件夹按钮。文档逐字节复制到 `userData/attachments` 下的独立目录，保留嵌套路径和空目录。文件名不限定接受类型：Markdown、Word、音频等资料均保留原始字节。失败批次被清理并显示错误，不修改原文件。符号链接及包含附件存储目录的导入会被拒绝。
 
-保存路径加入原始草稿，经普通用户消息记录入日志。切换 Session 后，导入结果不会加入其他 Session。文档解读使用 Agent 文件工具，导入本身不承诺提取 Word 正文。图片保留预览和图片提交路径。纯浏览器部署保留图片接收能力。[原生导入决策](../../.agents/notes/implemented/feature/2026-09-11-desktop-file-import.zh.md)记录存储与测试范围。
+导入项以文件或文件夹引用标签显示原始名称，按 Backspace/Delete 可移除标签而不删除已复制文件。添加文件与添加文件夹沿用输入框现有图标按钮样式。提交时，标签转为包含保存路径的文件引用（必要时加引号），经普通用户消息记录入日志。路径含双引号或控制字符时会明确提示重命名。切换 Session 后，导入结果不会加入其他 Session。文档解读使用 Agent 文件工具，导入本身不承诺提取 Word 正文。图片保留预览和图片提交路径。纯浏览器部署保留图片接收能力。[原生导入决策](../../.agents/notes/implemented/feature/2026-09-11-desktop-file-import.zh.md)记录存储与测试范围。
 
 ## 已知限制
 
@@ -127,6 +133,6 @@ macOS Intel、macOS Apple Silicon 与 Windows 使用同一个更新控制器。m
 - 构建出内部安装包不等于获得分发批准。OpenChatCut 的 AGPL 源码交付义务、Remotion 的实体与用途条款、FFmpeg 与 ffprobe 的 GPL/LGPL 义务、需保留的 notice、二进制再分发条款及全部生产依赖审计发现，都必须针对精确补丁 tree 完成审核后才能公开发布。
 - 本地回调、加密存储、模拟 preload 和内置 CLI 测试不能证明真实网站授权。CLI 余额夹具使用受控本地响应。macOS 和 Windows 原生账号存储、浏览器返回、安装包资源、PostgreSQL 16 与经授权的测试站检查仍需分别验收；参见[浏览器授权决策](../../.agents/notes/implemented/architecture/2026-09-08-browser-account-authorization.zh.md)。
 - `Desktop package` 产物仍是未签名的内部安装包。macOS Gatekeeper 与 Windows SmartScreen 可能对这些文件显示警告；对外分发 macOS 客户端时只能使用 `Desktop release` 产物。
-- 原生图标源文件是带白色圆角底和透明外角的 1024 px PNG，Web 客户端单独使用透明 Logo。macOS 和 Windows 包会在原生构建时生成各自的平台图标格式；当前没有矢量源文件。
+- 原生图标源文件是已确认的 1254 px 正方形 RGB PNG，保留原图，不裁剪或改色，Web 客户端单独使用透明 Logo。macOS 和 Windows 包会在原生构建时生成各自的平台图标格式；当前没有矢量源文件。
 - 已签名的 release 工作流只发布 macOS。Windows 在具备代码签名身份与受保护的发布路径之前不支持外部更新。
 - 每个目标只在其原生 runner 同时完成打包和 smoke 后有效。一个架构上的构建不能作为另一目标的证据。

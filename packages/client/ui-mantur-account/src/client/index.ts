@@ -6,6 +6,9 @@ import manturAccountRemote from '@deepseek-ai/dsh-authorization-manturhub/remote
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
+import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
+import { AccountBalanceClient } from './balance.ts'
+import { AccountBalance } from './AccountBalance.tsx'
 import { AccountSection, type AccountSectionInjected } from './AccountSection.tsx'
 import { ManturAccountStore } from './store.ts'
 import { NativeAccountClient } from './native-account.ts'
@@ -51,6 +54,18 @@ export async function apply(ctx: Context): Promise<void> {
     if (!identity.ok || identity.value === 'desktop-managed') {
       const client = new NativeAccountClient(identity.ok ? window.manturAccount : undefined)
       scope.effect(() => client.connect(), 'ui-mantur-account: native account observation')
+      const cadence = await scope.remote.manturAccount.balanceRefreshIntervalMs()
+      if (!cadence.ok) throw new Error('Mantur balance refresh configuration unavailable')
+      const balance = new AccountBalanceClient(() => scope.remote.manturAccount.balance(), cadence.value)
+      scope.effect(() => balance.connect(client.store), 'ui-mantur-account: balance observation')
+      scope.slots.inject('sidebar.footer.action', () => scope.slots.register({
+        name: 'sidebar.footer.action', id: 'mantur.balance', order: -10, locale: NS,
+        inject: () => ({ hooks: { balance: balance.store },
+          formatBalance: (value: number) => new Intl.NumberFormat(scope.locale.getSnapshot().active, {
+            maximumFractionDigits: 8,
+          }).format(value) }),
+      }, AccountBalance))
+
       const injected = (): NativeAccountInjected => ({
         run: action => client.run(action), hooks: { nativeAccount: client.store }, t,
         formatExpiry: time => new Intl.DateTimeFormat(scope.locale.getSnapshot().active, {

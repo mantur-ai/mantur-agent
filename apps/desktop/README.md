@@ -1,12 +1,16 @@
-# Mantur Agent desktop
+# ManTur Agent desktop
 
 English | [中文](README.zh.md)
 
-The desktop application is 漫途Agent, built by Mantur to create and produce comic dramas locally. Electron owns the native window and one child process; the child starts the shipped `dsh --profile mantur` application on a random loopback port. Development and packaged applications use the approved blue infinity-loop logo for the native window, macOS Dock, About panel, and installer assets. The desktop package does not implement another agent runtime.
+The desktop application is ManTur Agent, built by Mantur to create and produce comic dramas locally. Electron owns the native window and one child process; the child starts the shipped `dsh --profile mantur` application on a random loopback port. Development and packaged applications use the cream mascot icon with a yellow spiral, centered horizontal blue infinity emblem, and smooth rounded corners on a transparent 1024-pixel canvas for the native window, macOS Dock, packaged About panel, and installer assets. The desktop package does not implement another agent runtime.
 
 Windows uses the NSIS installation wizard with a selectable application directory. The EXE carries the application resources; its extraction progress is not a second application download. A missing browser-login create endpoint reports an unavailable server route separately from network and incompatible-response failures. Successful packaging does not verify production login availability or provide a Windows signing identity.
 
 Create-attempt retries accept the server's remaining lifetime from zero to 600 seconds while retaining the original absolute expiry.
+
+Before exchanging a new Host launch token, Main removes only root-scoped `dsh-auth-` connection cookies for `127.0.0.1` from the desktop window's cookie store. Cookies are shared across ports; retaining cookies from random-port restarts can exceed HTTP request-header limits and block plugin loading with 431. This cleanup preserves account credentials, sessions, browser preferences and unrelated cookies. Removal must finish before navigation; failures stop startup.
+
+On macOS, the native About panel reads its icon from the application bundle. The unpackaged development executable therefore retains Electron’s About icon; its Dock icon uses the product PNG.
 
 ## Develop without packaging
 
@@ -49,7 +53,7 @@ Editor staging excludes only the webpack build cache, the duplicate `.remotion/c
 
 The editor's pinned renderer patch exposes each browser child's process-and-pipe close completion. Installation preparation waits for that evidence and the public browser close operation; missing evidence or cleanup failure remains blocking. See [render browser closure](../../.agents/notes/implemented/bug-fix/2026-09-09-mantur-render-browser-close.md).
 
-The macOS commands let electron-builder sign and produce the update ZIP, then create the DMG with Apple's `hdiutil`. A temporary unique volume name prevents collisions with an installed or mounted copy of the application; the finished image restores the `漫途Agent` volume name, adds an Applications shortcut, and receives a separate update blockmap. The mountpoint uses a unique directory under macOS `getconf DARWIN_USER_TEMP_DIR`, while image files stay under the build output directory; failure to resolve or create the mountpoint stops packaging.
+The macOS commands let electron-builder sign and produce the update ZIP, then create the DMG with Apple's `hdiutil`. A temporary unique volume name prevents collisions with an installed or mounted copy of the application; the finished image restores the `ManTur Agent` volume name, adds an Applications shortcut, and receives a separate update blockmap. The mountpoint uses a unique directory under macOS `getconf DARWIN_USER_TEMP_DIR`, while image files stay under the build output directory; failure to resolve or create the mountpoint stops packaging.
 
 For local Apple Silicon acceptance without Developer ID credentials, use `pnpm run desktop:dist:mac:arm64:local` in a separate clean build checkout. It explicitly selects electron-builder's ad-hoc identity, disables certificate discovery and notarization, and requires strict signature verification. The standard signer seals the assembled bundle before the ZIP is produced; an additional `codesign --verify --deep --strict` check must pass before DMG creation. Do not modify the signed application afterward. This local identity proves bundle integrity, not Apple approval, notarization, Gatekeeper acceptance or suitability for public updates. The signed release workflow and its certificate requirements are unchanged; see the [local signature decision](../../.agents/notes/implemented/bug-fix/2026-09-09-local-macos-bundle-signing.md).
 
@@ -83,6 +87,8 @@ Before public distribution, enable Release Immutability in the repository settin
 | Secret | `APPLE_APP_SPECIFIC_PASSWORD` | App-specific password for that Apple ID |
 
 The workflow combines the selected native `latest-mac.yml` files into one architecture-aware update channel and retains the complete candidate plus `SHA256SUMS` for seven days. Run it from the exact `v<apps/desktop version>` tag; this semver-compatible tag lets electron-updater select prereleases from the GitHub feed. `publish=false` stops after assembling the candidate. `publish=true` additionally requires the approval variable to name the SHA-256 digest of the complete pinned source configuration before it creates a GitHub release with the DMGs, update ZIPs, blockmaps, update metadata, and hashes. The workflow refuses a tag that already owns a release instead of replacing published files; repository-level Release Immutability then prevents later tag or asset changes.
+
+Every installer delivery or release update must add a dated, versioned user changelog to the [Feishu product and installation guide](https://guiyi2023.feishu.cn/docx/Iq3id4fr8o2uo9xKfpEcIck9nRf). Keep earlier entries and attachments. Describe user-visible improvements, fixes, update steps, supported platforms, known limitations, and the verified availability of installer downloads and automatic updates; an uploaded installer alone does not establish an available update feed. Place the newest entry first and update the affected installation and usage instructions in the same pass.
 
 ## Runtime design
 
@@ -118,7 +124,7 @@ The desktop uses the original per-Session browser draft storage. It no longer ex
 
 The desktop composer accepts native file and folder drops and provides Add files and Add folder buttons. Selected documents are copied byte-for-byte into unique directories below `userData/attachments`, including nested paths and empty directories. Names do not determine accepted file types: Markdown, Word documents, audio and other materials retain their original bytes. A failed batch is removed and the error is shown; original files are not changed. Symlinks and imports containing the attachment store are rejected.
 
-Saved paths are appended to the originating draft and travel through ordinary user-message logging. Import completion cannot append to another Session after navigation. Document interpretation uses the Agent’s file tools; import does not claim to extract Word text. Images retain their preview and image submission path. Browser-only deployments retain image intake. The [native import decision](../../.agents/notes/implemented/feature/2026-09-11-desktop-file-import.md) records the storage and testing scope.
+Imported entries appear as file or folder reference chips with their original names. Backspace/Delete removes the chip without deleting the copied file. The composer uses its existing icon-button style for Add files and Add folder. At submission, chips serialize to quoted file mentions containing the saved paths and travel through ordinary user-message logging. Paths with double quotes or control characters are rejected with a rename instruction. Import completion cannot append to another Session after navigation. Document interpretation uses the Agent’s file tools; import does not claim to extract Word text. Images retain their preview and image submission path. Browser-only deployments retain image intake. The [native import decision](../../.agents/notes/implemented/feature/2026-09-11-desktop-file-import.md) records the storage and testing scope.
 
 ## Known limitations
 
@@ -127,6 +133,6 @@ Saved paths are appended to the originating draft and travel through ordinary us
 - A built internal installer is not distribution approval. OpenChatCut's AGPL source-delivery obligations, Remotion's entity and use terms, FFmpeg and ffprobe GPL/LGPL obligations, retained notices, binary redistribution terms, and every production audit finding require review for the exact patched tree before public release.
 - Local callback, encrypted-store, simulated-preload and embedded-CLI tests do not establish real website authorization. The CLI balance fixture uses a controlled local response. Native macOS and Windows account storage, browser return, installer resources, PostgreSQL 16 and authorized test-site checks remain separate acceptance requirements; see the [browser authorization decision](../../.agents/notes/implemented/architecture/2026-09-08-browser-account-authorization.md).
 - The `Desktop package` artifacts remain unsigned internal installers. macOS Gatekeeper and Windows SmartScreen can warn for those files; use only the `Desktop release` artifacts for external macOS distribution.
-- The native icon source is a 1024 px PNG with a white rounded tile and transparent outer corners. The Web client uses the transparent logo separately. macOS and Windows packages derive their platform icon formats during the native build; a vector source remains unavailable.
+- The native icon source is the approved 1254 px square RGB PNG, preserved without cropping or recoloring. The Web client uses the transparent logo separately. macOS and Windows packages derive their platform icon formats during the native build; a vector source remains unavailable.
 - The signed release workflow publishes macOS only. Windows external updates remain unsupported until a Windows code-signing identity and protected publication path exist.
 - Each target is valid only after its native runner completes both packaging and the smoke. A build on one architecture is not evidence for another target.

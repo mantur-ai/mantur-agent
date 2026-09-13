@@ -11,6 +11,8 @@ kind: "package-reference"
 
 这个 Host 包把 ManturHub 请求路由到已选的线上或测试部署。`standalone` 身份拥有逐 origin 的凭据记录与设备码 flow；`desktop-managed` 身份委托 Electron Main，绝不读取这些记录。生成的 Remote 暴露身份模式与脱敏账号状态，不返回 API Key 或环境配置。
 
+不含凭据的 `balance()` Remote 从所选环境的 `/api/v1/me` 读取并仅返回数值形式的馒头余额。桌面托管请求通过 Main 现有的凭据作用域 broker。未登录状态没有余额数值；HTTP 失败或响应字段无效会明确失败，不返回缓存数值或凭据详情。
+
 ## 目录
 
 - [配置](#configuration)
@@ -23,6 +25,8 @@ kind: "package-reference"
 <a id="configuration"></a>
 
 ## 配置
+
+`balanceRefreshIntervalMs` 配置可见客户端的余额轮询间隔，默认 5000 毫秒，接受 1000 至 2147483647 的整数。对应无密钥 Remote 仅返回该间隔。
 
 `environment` 默认为 `production`。`baseUrl` 默认为 `https://hub.mantur.ai`，用于命名线上 origin；`testBaseUrl` 用于命名可选测试 origin，选择 `test` 前必须先配置。两个值都必须是不含凭据、路径、查询或片段的 HTTP(S) origin，且测试 origin 必须与线上不同。维护者通过本机 `cordis.patch.yml` 的 `mantur-account` 条目选择环境；账号浏览器 Remote 无法读取或更改环境。变更后重启桌面应用会清空内存中的账号与广场状态。
 

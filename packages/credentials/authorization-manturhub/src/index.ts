@@ -11,6 +11,7 @@ import { z } from 'zod'
 import type {
   ManturAccount,
   ManturAccountStatus,
+  ManturBalanceStatus,
   ManturEnvironment,
   ManturIdentityMode,
   ManturLoginAttemptId,
@@ -30,6 +31,8 @@ export const MANTUR_PRODUCTION_BASE_URL = 'https://hub.mantur.ai'
 
 /** ManturHub deployment endpoint. */
 export interface Config {
+  /** Visible-client balance polling cadence in milliseconds. */
+  readonly balanceRefreshIntervalMs?: number
   /** Standalone credential storage or Electron Main ownership; no cross-mode credential lookup. */
   readonly identity?: ManturIdentityMode
   /** Explicit Main transport and command budgets, required for desktop-managed identity. */
@@ -49,6 +52,7 @@ interface ResolvedEnvironment {
 }
 
 interface ResolvedConfig {
+  readonly balanceRefreshIntervalMs: number
   readonly native?: NativeAccountConfiguration
   readonly active: ResolvedEnvironment
   readonly production: ResolvedEnvironment
@@ -163,6 +167,7 @@ export function manturAccountCredential(environment: ManturEnvironment, baseUrl:
 
 /** Resolve and validate every configured endpoint and the active deployment. */
 function resolveConfig(config: Config): ResolvedConfig {
+  const balanceRefreshIntervalMs = z.number().int().min(1000).max(2_147_483_647).parse(config.balanceRefreshIntervalMs ?? 5000)
   const productionBaseUrl = parseOrigin('baseUrl', config.baseUrl ?? MANTUR_PRODUCTION_BASE_URL)
   const production: ResolvedEnvironment = {
     environment: 'production',
@@ -191,10 +196,10 @@ function resolveConfig(config: Config): ResolvedConfig {
     if (test === undefined) {
       throw new TypeError('authorization-manturhub: testBaseUrl is required when environment is "test"')
     }
-    return { active: test, production, test,
+    return { balanceRefreshIntervalMs, active: test, production, test,
       ...(native === undefined ? {} : { native: { ...native, origin: test.baseUrl.origin, environment } }) }
   }
-  return { active: production, production, ...(test === undefined ? {} : { test }),
+  return { balanceRefreshIntervalMs, active: production, production, ...(test === undefined ? {} : { test }),
     ...(native === undefined ? {} : { native: { ...native, origin: production.baseUrl.origin, environment } }) }
 }
 
@@ -281,6 +286,7 @@ export class ManturHubAuthorization extends TypertRemoteService {
   static inject = ['authorization', 'credentials']
 
   static Config: s<Config> = s.object({
+    balanceRefreshIntervalMs: s.number().default(5000),
     identity: s.union(['standalone', 'desktop-managed']).default('standalone'),
     native: s.union([s.const(undefined), s.object({ environmentLabel: s.string().required(), requestTimeoutMs: s.number().required(),
       maxResponseBytes: s.number().required(), leaseMs: s.number().required(), revocationRetryMs: s.number().required() })]),
@@ -361,6 +367,13 @@ export class ManturHubAuthorization extends TypertRemoteService {
   identityMode(): ManturIdentityMode { return this.config.native === undefined ? 'standalone' : 'desktop-managed' }
 
   /**
+   * Expose the configured cadence for visible-client balance reads.
+   * @returns polling interval in milliseconds.
+   */
+  @Remote
+  balanceRefreshIntervalMs(): number { return this.config.balanceRefreshIntervalMs }
+
+  /**
    * Freeze native command identity and brokered API admission, then join trees, leases and IPC cleanup.
    * The parent must keep IPC connected until this operation completes.
    * @returns the same completion on every call; retained cleanup failures reject.
@@ -411,6 +424,23 @@ export class ManturHubAuthorization extends TypertRemoteService {
       redirect: options.redirect ?? 'error',
       ...(options.signal === undefined ? {} : { signal: options.signal }),
     })
+  }
+
+  /**
+   * Fetch the current account's Mantou balance from the configured deployment.
+   * @returns the server balance, or signed-out when no local grant is active.
+   * @throws when the upstream request fails or its balance is invalid; no cached balance is returned.
+   */
+  @Remote
+  async balance(): Promise<ManturBalanceStatus> {
+    try {
+      const response = await this.request('/api/v1/me', { authenticated: true })
+      if (response === undefined) return { status: 'signed-out' }
+      const account = z.object({ balance: z.number() }).parse(await requireJson(response))
+      return { status: 'available', balance: account.balance }
+    } catch (error) {
+      throw new RemoteError('gateway/internal', 'ManturHub balance could not be read', {}, { cause: error })
+    }
   }
 
   /**
@@ -556,7 +586,7 @@ export class ManturHubAuthorization extends TypertRemoteService {
     }
     this.publishStart(attempt, verificationUrl, created.user_code, created.expires_in)
     session.notify({
-      message: 'Continue in your browser to authorize Mantur Agent.',
+      message: 'Continue in your browser to authorize ManTur Agent.',
       url: verificationUrl.toString(),
       code: created.user_code,
     })

@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-manturhub-marketplace",
-  "description": "ManturHub Skill and Recipe catalogs with secure local Skill installation for Mantur Agent",
+  "description": "ManturHub Skill and Recipe catalogs with secure local Skill installation for ManTur Agent",
   "version": "0.1.3",
   "publishConfig": {
     "access": "public"

@@ -1,5 +1,5 @@
 ---
-description: "漫途Agent 桌面产品在随附 Web profile 之上的组装层，供构建品牌化本地漫剧客户端的维护者使用。"
+description: "ManTur Agent 桌面产品在随附 Web profile 之上的组装层，供构建品牌化本地漫剧客户端的维护者使用。"
 kind: "package-bundle"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-bundle"
 
 ## 概述
 
-本 bundle 是随产品交付的 `mantur` profile 最后一层。它保留 Web 运行时、模型选择器、权限选择器、Models 设置、DeepSeek API Key 配置与底层 Agent 能力，同时把通用产品身份替换为漫途Agent：一个由漫途（Mantur）打造、用于本地漫剧创作与生产的 Agent。它挂载独立漫途品牌、广场导航与账号插件，并禁用官方品牌条目、预览版公告、Agent Preset 界面、Plan 界面、预览版徽标与通用 Web GUI 提示词身份。
+本 bundle 是随产品交付的 `mantur` profile 最后一层。它保留 Web 运行时、模型选择器、权限选择器、Models 设置、DeepSeek API Key 配置与底层 Agent 能力，同时把通用产品身份替换为ManTur Agent：一个由漫途（Mantur）打造、用于本地漫剧创作与生产的 Agent。它挂载独立漫途品牌、广场导航与账号插件，并禁用官方品牌条目、预览版公告、Agent Preset 界面、Plan 界面、预览版徽标与通用 Web GUI 提示词身份。
 
 ## 目录
 
@@ -56,12 +56,12 @@ kind: "package-bundle"
 
 #### 模型会看到什么
 
-系统提示词服务省略通用 Harness 身份。漫途身份项在协作式提示词转换后替换 Agent Preset 的有效 persona，使用一段中文 persona 明确漫途Agent、漫途归属、本地执行，以及从故事和剧本到分镜、视觉素材、音频、剪辑与制作交付的漫剧工作。本层还禁用 Web 表面提示词，不再添加第二套产品身份。
+系统提示词服务省略通用 Harness 身份。漫途身份项在协作式提示词转换后替换 Agent Preset 的有效 persona，使用一段中文 persona 明确ManTur Agent、漫途归属、本地执行，以及从故事和剧本到分镜、视觉素材、音频、剪辑与制作交付的漫剧工作。本层还禁用 Web 表面提示词，不再添加第二套产品身份。
 
 ##### 漫途 persona
 
 ```markdown
-你是漫途Agent，由漫途（Mantur）打造，专门在用户电脑本地完成漫剧创作与生产。你的职责是围绕漫剧项目完成故事构思、剧本、分镜、视觉素材、音频、剪辑方案和制作交付。你应使用当前本地工作区与可用工具直接推进制作，在获得必要授权后执行本地操作，并保持项目文件清晰有序。你的工作目录是 {{cwd}}。
+你是ManTur Agent，由漫途（Mantur）打造，专门在用户电脑本地完成漫剧创作与生产。你的职责是围绕漫剧项目完成故事构思、剧本、分镜、视觉素材、音频、剪辑方案和制作交付。你应使用当前本地工作区与可用工具直接推进制作，在获得必要授权后执行本地操作，并保持项目文件清晰有序。你的工作目录是 {{cwd}}。
 ```
 
 #### Token 影响

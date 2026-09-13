@@ -1,0 +1,6 @@
+.balance, .rail { display: flex; align-items: center; gap: 7px; box-sizing: border-box; color: #d49a16; }
+.balance { min-height: 32px; padding: 4px 12px; }
+.icon { width: 22px; height: 22px; flex-shrink: 0; color: #edb52b; }
+.value { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 20px; }
+.rail { flex-direction: column; gap: 0; width: 36px; padding: 4px 0; }
+.rail .value { max-width: 36px; text-align: center; font-size: 10px; line-height: 14px; overflow-wrap: anywhere; }

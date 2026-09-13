@@ -221,7 +221,7 @@ describe.skipIf(MODE === 'record')('web snapshot: Mantur product identity', () =
 
   it('shows the Mantur brand without the official mark, preview badge, preset, or plan control', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-mantur-brand'))
-    await expect.poll(() => page.getByText('漫途Agent', { exact: true }).count(), { timeout: 10_000 })
+    await expect.poll(() => page.getByText('ManTur Agent', { exact: true }).count(), { timeout: 10_000 })
       .toBe(1)
     await page.getByText('故事起于一念，余下交给漫途', { exact: true }).waitFor({ timeout: 10_000 })
     expect(await page.getByText('探索未至之境', { exact: true }).count()).toBe(0)
@@ -424,7 +424,7 @@ describe.skipIf(MODE === 'record')('web snapshot: Mantur product identity', () =
     try {
       await englishPage.goto(englishScaffold.authenticatedUrl, { waitUntil: 'load' })
       await englishPage.waitForSelector('[class*="frame"]', { timeout: 30_000 })
-      await englishPage.getByText('漫途Agent', { exact: true }).waitFor({ timeout: 10_000 })
+      await englishPage.getByText('ManTur Agent', { exact: true }).waitFor({ timeout: 10_000 })
       expect(await englishPage.getByRole('heading', { name: 'Sign in to Mantur' }).count()).toBe(0)
       await englishPage.getByText('Every story starts with an idea. Mantur handles the rest.', { exact: true })
         .waitFor({ timeout: 10_000 })
@@ -454,7 +454,7 @@ describe.skipIf(MODE === 'record')('web snapshot: Mantur product identity', () =
     try {
       const assembly = await scaffold.ctx.systemPrompt.assemble({ scope: handle.agent })
       expect(assembly.sections.find(section => section.name === 'deployment:persona')?.text)
-        .toContain('你是漫途Agent，由漫途（Mantur）打造')
+        .toContain('你是ManTur Agent，由漫途（Mantur）打造')
       expect(assembly.sections.some(section => section.name === 'harness:identity')).toBe(false)
       expect(assembly.sections.some(section => section.name === 'harness:source')).toBe(false)
       expect(assembly.sections.some(section => section.name === 'app:web-surface')).toBe(false)

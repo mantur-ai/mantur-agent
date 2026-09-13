@@ -10,7 +10,7 @@ The shipped desktop composer rejects non-image files and does not retain dropped
 
 ## Decision
 
-The desktop imports explicitly selected local documents and directories as durable copies and appends their paths to the originating composer. These references use ordinary logged user text; no unlogged model context is added. Import preserves original bytes and directory structure without depending on MIME detection or document conversion.
+The desktop imports explicitly selected local documents and directories as durable copies and adds named file/folder reference chips to the originating composer. The shared reference codec serializes their copied paths only when sending; raw import JSON does not enter the editor. Buttons use the composer’s existing icon control. Reference syntax rejects double quotes and control characters explicitly. These references use ordinary logged user text; no unlogged model context is added. Import preserves original bytes and directory structure without depending on MIME detection or document conversion.
 
 The importer owns a unique batch directory and publishes its results only after every entry succeeds. Failure removes that batch. Original files remain unchanged, duplicate names receive separate parent directories, and symlinks and self-containing imports fail explicitly. IPC accepts only the authenticated native main frame. A pending import locks its originating composer; navigation cannot redirect completion into a different draft.
 

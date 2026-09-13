@@ -12,9 +12,9 @@ const desktopRoot = resolve(import.meta.dirname, '..')
 
 function packagedPaths(): { electronExecutable: string; resourcesRoot: string; nativeResourcesRoot: string; updateConfig: string } {
   if (process.platform === 'darwin') {
-    const app = join(desktopRoot, 'dist', process.arch === 'arm64' ? 'mac-arm64' : 'mac', '漫途Agent.app')
+    const app = join(desktopRoot, 'dist', process.arch === 'arm64' ? 'mac-arm64' : 'mac', 'ManTur Agent.app')
     return {
-      electronExecutable: join(app, 'Contents', 'MacOS', '漫途Agent'),
+      electronExecutable: join(app, 'Contents', 'MacOS', 'ManTur Agent'),
       resourcesRoot: join(app, 'Contents', 'Resources', 'app'),
       nativeResourcesRoot: join(app, 'Contents', 'Resources'),
       updateConfig: join(app, 'Contents', 'Resources', 'app-update.yml'),
@@ -23,7 +23,7 @@ function packagedPaths(): { electronExecutable: string; resourcesRoot: string; n
   if (process.platform === 'win32') {
     const directory = join(desktopRoot, 'dist', 'win-unpacked')
     return {
-      electronExecutable: join(directory, '漫途Agent.exe'),
+      electronExecutable: join(directory, 'ManTur Agent.exe'),
       resourcesRoot: join(directory, 'resources', 'app'),
       nativeResourcesRoot: join(directory, 'resources'),
       updateConfig: join(directory, 'resources', 'app-update.yml'),
@@ -108,7 +108,7 @@ try {
   const html = await response.text()
   if (!response.ok) throw new Error(`packaged dsh Web returned HTTP ${String(response.status)}`)
   if (!html.includes('__DSH_BOOT__')) throw new Error('packaged dsh Web did not return its boot payload')
-  if (!html.includes('<title>漫途Agent</title>')) throw new Error('packaged Web title is not 漫途Agent')
+  if (!html.includes('<title>ManTur Agent</title>')) throw new Error('packaged Web title is not ManTur Agent')
   console.log(`desktop packaged smoke: ${String(response.status)} ${new URL(url).origin}`)
 } finally {
   service.stop()
