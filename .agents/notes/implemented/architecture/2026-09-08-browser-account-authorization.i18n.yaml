@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-08-browser-account-authorization.md
-2026-09-08-browser-account-authorization.md: 1a5303d7a176c3ea667321af6160c819fd2d6f06
-2026-09-08-browser-account-authorization.zh.md: 00efecbf2f0e1e9f98c5ac39331fd79b0119f0dd
+2026-09-08-browser-account-authorization.md: c4275b3b493cd0d874fccb7d61f62976971bfeca
+2026-09-08-browser-account-authorization.zh.md: aa96addf11ce3fe09d5ac54fd1cdbf8dc2627377

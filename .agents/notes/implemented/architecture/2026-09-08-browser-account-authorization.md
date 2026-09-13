@@ -20,6 +20,8 @@ The [embedded CLI](../../../../apps/desktop/cli-runtime/README.md) is an unmodif
 
 The native sidebar balance uses a fixed `balance()` Remote over the existing Main-owned API broker. The server’s numeric Mantou balance is the only displayed amount; account changes and logout invalidate pending replies, and failed refreshes remove stale values. The footer contains only a yellow bun icon and number. Visible clients poll at the Host-validated `balanceRefreshIntervalMs` cadence and refresh on account changes, window focus and network reconnection. Hidden clients pause polling; disposal removes the timer and listeners. Pending refreshes retain the confirmed number with an accessible busy state. Credentials remain inside their existing owner, and balance presentation does not enter Session history or model requests.
 
+The Mantur client build registers neither official first-run dialog in Models settings. The account plugin owns native login presentation, so a fresh install never puts the DeepSeek API-key dialog in front of browser account authorization. Provider configuration remains available in Settings.
+
 ## Alternatives considered
 
 **Native password and registration forms.** The user selected existing website login and device consent as the only desktop login path. The browser flow replaces the corresponding v1 sections of the [native account proposal](../../proposed/architecture/2026-09-07-desktop-native-account-identity.md); its broker ownership and native-platform acceptance requirements remain relevant.

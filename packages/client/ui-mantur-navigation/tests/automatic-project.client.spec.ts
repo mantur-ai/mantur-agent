@@ -6,8 +6,8 @@ import type { RemoteResult } from '@deepseek-ai/dsh-api-remotes/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 
 function bench() {
-  const persistence = {
-    prepareIdentity: vi.fn(async () => '51f643d0-1a79-4a3d-8f81-56a55c978621'),
+  const drafts = {
+    prepareIdentity: vi.fn(async () => '51f643d0-1a79-4a3d-8f81-56a55c978621' as import('@deepseek-ai/dsh-client-ui-conversation/client').ConversationDraftId),
     commitTransfer: vi.fn(),
   }
   const remote = {
@@ -19,8 +19,8 @@ function bench() {
   }
   const sessions = { create: vi.fn<AutomaticProjectDeps['sessions']['create']>(async options => options!.sessionId!) }
   const workspace = { pickDirectory: vi.fn<AutomaticProjectDeps['workspace']['pickDirectory']>(async () => '/chosen') }
-  const controller = new AutomaticProjectController({ remote, sessions, workspace, persistence, text: key => key })
-  return { controller, persistence, remote, sessions, workspace }
+  const controller = new AutomaticProjectController({ remote, sessions, workspace, drafts, text: key => key })
+  return { controller, drafts, remote, sessions, workspace }
 }
 
 describe('Mantur automatic project policy', () => {
@@ -30,7 +30,7 @@ describe('Mantur automatic project policy', () => {
     expect(b.controller.store.getSnapshot()).toMatchObject({ settings: { source: 'desktop', rootPath: '/documents/漫途项目' }, loading: false })
     expect(b.remote.prepare).not.toHaveBeenCalled()
     expect(b.sessions.create).not.toHaveBeenCalled()
-    expect(b.persistence.prepareIdentity).not.toHaveBeenCalled()
+    expect(b.drafts.prepareIdentity).not.toHaveBeenCalled()
   })
 
   it('uses one retained identity for failed Session creation, reload and retry', async () => {
@@ -44,12 +44,12 @@ describe('Mantur automatic project policy', () => {
     expect(b.remote.prepare.mock.calls.map((args: [ProjectCreationId, string]) => args[0])).toEqual([firstId, firstId])
     expect(b.remote.prepare).toHaveBeenCalledWith(firstId, `newProject ${firstId.slice(0, 8)}`)
     expect(b.sessions.create.mock.calls[0]).toEqual(b.sessions.create.mock.calls[1])
-    expect(b.persistence.commitTransfer).not.toHaveBeenCalled()
+    expect(b.drafts.commitTransfer).not.toHaveBeenCalled()
   })
 
   it('fails before Host writes when native storage cannot retain the identity', async () => {
     const b = bench()
-    b.persistence.prepareIdentity.mockRejectedValueOnce(new Error('storage denied'))
+    b.drafts.prepareIdentity.mockRejectedValueOnce(new Error('storage denied'))
     await expect(b.controller.prepare(new AbortController().signal)).rejects.toThrow('storageFailed')
     expect(b.remote.prepare).not.toHaveBeenCalled()
     expect(b.sessions.create).not.toHaveBeenCalled()
@@ -65,7 +65,7 @@ describe('Mantur automatic project policy', () => {
     await expect(b.controller.prepare(new AbortController().signal)).rejects.toThrow(message)
     expect(b.controller.store.getSnapshot()).toMatchObject({ preparing: false, error: message })
     expect(b.sessions.create).not.toHaveBeenCalled()
-    expect(b.persistence.prepareIdentity).toHaveBeenCalledOnce()
+    expect(b.drafts.prepareIdentity).toHaveBeenCalledOnce()
   })
 
   it('cancels the next step after a late Host preparation without retiring the identity', async () => {
@@ -79,7 +79,7 @@ describe('Mantur automatic project policy', () => {
     resolve({ ok: true, value: { workspaceId: 'workspace' as PreparedProject['workspaceId'], sessionId: 'session' as SessionId, path: '/project' } })
     await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
     expect(b.sessions.create).not.toHaveBeenCalled()
-    expect(b.persistence.prepareIdentity).toHaveBeenCalledOnce()
+    expect(b.drafts.prepareIdentity).toHaveBeenCalledOnce()
     expect(b.controller.store.getSnapshot()).toMatchObject({ preparing: false, error: null })
   })
 
@@ -203,13 +203,6 @@ describe('Mantur automatic project policy', () => {
     b.remote.settings.mockResolvedValue({ ok: true, value: { source: 'custom', rootPath: '/committed' } })
     await b.controller.load()
     expect(b.controller.store.getSnapshot()).toMatchObject({ settings: { rootPath: '/committed' }, error: null })
-  })
-
-  it('refuses Host creation when the native checkpoint service is unavailable', async () => {
-    const b = bench()
-    const controller = new AutomaticProjectController({ ...b, persistence: undefined, text: key => key })
-    await expect(controller.prepare(new AbortController().signal)).rejects.toThrow('storageFailed')
-    expect(b.remote.prepare).not.toHaveBeenCalled()
   })
 
   it('does not publish a late settings response after disposal', async () => {

@@ -18,7 +18,7 @@ vi.mock('@deepseek-ai/dsh-authorization-manturhub/remote', () => ({
 
 afterEach(() => { vi.unstubAllGlobals() })
 
-async function bench(mode: 'standalone' | 'desktop-managed' = 'standalone', available = true) {
+async function bench(mode: 'standalone' | 'desktop-managed' = 'standalone', available = true, cadenceAvailable = true) {
   const ctx = new Context()
   await ctx.plugin(SlotRegistry).await()
   const locale = new LocaleRuntime(ctx)
@@ -26,10 +26,11 @@ async function bench(mode: 'standalone' | 'desktop-managed' = 'standalone', avai
   ctx.provide('locale', locale)
   const remote = new TestRemote(ctx, {
     manturAccount: {
-      balanceRefreshIntervalMs: vi.fn(async () => ({ ok: true, value: 5000 })),
+      balanceRefreshIntervalMs: vi.fn(async () => cadenceAvailable ? { ok: true, value: 5000 } : { ok: false, error: { code: 'gateway/internal', message: 'unavailable' } }),
       identityMode: vi.fn(() => Promise.resolve(available
         ? { ok: true, value: mode }
         : { ok: false, error: { code: 'gateway/internal', message: 'unavailable' } })),
+      balance: vi.fn(async () => ({ ok: true, value: { status: 'available', balance: 1234.5 } })),
       status: vi.fn(() => Promise.resolve({
         ok: true,
         value: { status: 'signed-out' },
@@ -51,7 +52,7 @@ async function bench(mode: 'standalone' | 'desktop-managed' = 'standalone', avai
       'sidebar.footer.action': { kind: 'list', scope: 'root' },
     },
   } as never, () => null)
-  return { ctx, slots, locale }
+  return { ctx, slots, locale, remote }
 }
 
 describe('ui-mantur-account apply', () => {
@@ -102,6 +103,32 @@ describe('ui-mantur-account apply', () => {
     } finally { await fiber.dispose(); delete window.manturAccount; modal.remove(); appRoot.remove() }
     expect(subscribe).toHaveBeenCalledOnce()
     expect(unsubscribe).toHaveBeenCalledOnce()
+  })
+
+  it('publishes the Host balance with the selected locale and refuses unavailable cadence', async () => {
+    window.manturAccount = { invoke: async () => ({ ok: true, revision: 1, snapshot: {
+      phase: 'signed-in', busy: false, authenticated: true, skipped: false, pendingRevocations: 0,
+      account: { displayName: 'Creator', expiresAt: 1_999_999_999_999 },
+    } }), subscribe: () => () => {} }
+    const subject = await bench('desktop-managed')
+    const fiber = subject.ctx.plugin({ inject: [...inject], apply })
+    try {
+      await fiber.await()
+      const entry = subject.slots.entries('sidebar.footer.action')[0]!
+      const props = (entry.inject as unknown as () => import('../src/client/AccountBalance.tsx').AccountBalanceInjected)()
+      await vi.waitFor(() => { expect(props.hooks.balance.getSnapshot()).toEqual({ phase: 'ready', balance: 1234.5 }) })
+      expect(props.formatBalance(1234.5)).toBe('1,234.5')
+    } finally { await fiber.dispose(); delete window.manturAccount }
+    const unavailable = await bench('desktop-managed', true, false)
+    const rejected = unavailable.ctx.plugin({ inject: [...inject], apply })
+    try {
+      await rejected.await()
+      const errors = await Promise.all([...unavailable.ctx.registry.values()].flatMap(runtime =>
+        [...runtime.fibers].map(fiber => fiber.await().then(() => null, (error: unknown) => String(error)))))
+      expect(errors).toContain('Error: Mantur balance refresh configuration unavailable')
+      expect(unavailable.slots.entries('sidebar.footer.action')).toEqual([])
+    }
+    finally { await rejected.dispose() }
   })
 
   it('selects Main only from the Host mode and supplies narrow native callbacks', async () => {

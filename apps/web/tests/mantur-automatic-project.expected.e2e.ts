@@ -11,6 +11,7 @@ import type {} from '@deepseek-ai/dsh-mantur-projects'
 import type { Browser } from 'playwright'
 import { chromium } from 'playwright'
 import { expect, it, vi } from 'vitest'
+import { prepareBundledSkills } from '../../../scripts/mantur-skills-resources.ts'
 import { DesktopDraftStorage, type DraftCheckpoint } from '../../desktop/src/draft-storage.ts'
 import { captureStableAria, compareOrRefreshGolden, launchWebScaffold, readPersistedEvents, watchConsole, webSnapshotMode, type WebScaffold } from './scaffold.ts'
 import { ZH_BROWSER_LOCALE } from './support.ts'
@@ -63,6 +64,7 @@ it.skipIf(webSnapshotMode() === 'record' || process.platform === 'win32')('resum
     const projectRoot = join(scaffold.workspaceCwd, 'automatic-projects')
     const initialRoot = join(scaffold.workspaceCwd, 'initial-projects')
     await scaffold.ctx.manturProjects.setRoot(initialRoot)
+    await prepareBundledSkills(fileURLToPath(new URL('../../desktop/mantur-skills/source.json', import.meta.url)), join(scaffold.workspaceCwd, '.bundled-skills'))
     const skillRoot = join(scaffold.harnessHome, 'skills', skill.slug)
     await mkdir(skillRoot, { recursive: true })
     await writeFile(join(skillRoot, 'SKILL.md'), `---\nname: ${skill.slug}\ntitle: ${skill.name}\ndescription: ${skill.description}\n---\nHelp write a script.\n`)
@@ -88,7 +90,6 @@ it.skipIf(webSnapshotMode() === 'record' || process.platform === 'win32')('resum
     let prompts = 0
     page.on('request', (request) => { if (new URL(request.url()).pathname === '/api/session/prompt') prompts += 1 })
     await page.goto(scaffold.authenticatedUrl)
-    await page.getByRole('button', { name: '暂时跳过', exact: true }).click()
     const editor = page.locator('[data-composer-input][contenteditable="true"]').first()
     await editor.waitFor()
     expect(scaffold.ctx.workspaceRegistry.list()).toHaveLength(0)
@@ -136,8 +137,8 @@ it.skipIf(webSnapshotMode() === 'record' || process.platform === 'win32')('resum
     const locationAria = await captureStableAria(page, '[role="group"][aria-label="默认项目路径"]', scaffold.workspaceCwd)
     await settings.getByRole('button', { name: '关闭', exact: true }).click()
     await editor.fill('根据参考图编写第一集 ')
-    await page.getByRole('button', { name: '短剧编剧', exact: true }).click()
-    await expect.poll(() => editor.innerText()).toContain('短剧编剧')
+    await page.getByRole('button', { name: '剧本改编', exact: true }).click()
+    await expect.poll(() => editor.innerText()).toContain('剧本改编')
     await editor.evaluate((element, bytes) => {
       const transfer = new DataTransfer()
       transfer.items.add(new File([new Uint8Array(bytes)], 'reference.png', { type: 'image/png' }))
@@ -170,7 +171,6 @@ it.skipIf(webSnapshotMode() === 'record' || process.platform === 'win32')('resum
     const hostPickerCalls = picker.mock.calls.length
     const rootSaveCalls = saveRoot.mock.calls.length
     await page.reload()
-    await page.getByRole('button', { name: '暂时跳过', exact: true }).click()
     await editor.waitFor()
     await page.getByRole('button', { name: '设置', exact: true }).click()
     await pathRow.getByText(projectRoot, { exact: true }).waitFor()
@@ -201,7 +201,7 @@ it.skipIf(webSnapshotMode() === 'record' || process.platform === 'win32')('resum
     expect(persistedRoot).toMatchObject({ global: { rootPath: desktopRoot } })
     expect(existsSync(desktopRoot)).toBe(false)
     await settings.getByRole('button', { name: '关闭', exact: true }).click()
-    await expect.poll(() => editor.innerText()).toContain('短剧编剧')
+    await expect.poll(() => editor.innerText()).toContain('剧本改编')
     expect(await editor.innerText()).toContain('根据参考图编写第一集')
     await page.getByRole('img', { name: 'reference.png', exact: true }).waitFor()
 
@@ -235,7 +235,7 @@ it.skipIf(webSnapshotMode() === 'record' || process.platform === 'win32')('resum
     expect(image?.type === 'image' && image.attachment.name).toBe('reference.png')
     const text = messages[0]!.content.find(block => block.type === 'text')
     expect(text?.type === 'text' && text.text).toContain('根据参考图编写第一集')
-    expect(text?.type === 'text' && text.text).toContain('/short-drama')
+    expect(text?.type === 'text' && text.text).toContain('/mantur-builtin:short-drama')
     expect(JSON.stringify(events)).not.toContain('data:image')
     expect(console.pageErrors).toEqual([])
     expect(console.warnings).toEqual([])
@@ -262,4 +262,56 @@ it.skipIf(webSnapshotMode() === 'record' || process.platform === 'win32')('resum
   }
   if (failures.length === 1) throw failures[0]
   if (failures.length > 1) throw new AggregateError(failures, 'Mantur first-send scenario and cleanup failed', { cause: failures[0] })
+})
+
+it.skipIf(webSnapshotMode() === 'record')('sends the first desktop draft without a native checkpoint bridge and reuses a lost creation response', async () => {
+  const fixtureRoot = await mkdtemp(join(tmpdir(), 'mantur-browser-first-send-'))
+  const server = createServer((_request, response) => {
+    response.writeHead(200, { 'content-type': 'application/json' })
+    response.end(JSON.stringify({ skills: [] }))
+  })
+  let scaffold: WebScaffold | undefined
+  let browser: Browser | undefined
+  const failures: unknown[] = []
+  try {
+    await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve) })
+    const replayOverride = join(fixtureRoot, 'replay.override.json')
+    await writeFile(replayOverride, JSON.stringify(replay))
+    scaffold = await launchWebScaffold({ extraOverlayPath: overlay, extraInstallAnchors: [anchor],
+      manturHubBaseUrl: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
+      replayFixture: join(fixtureRoot, 'override-only.jsonl'), replayOverride })
+    await prepareBundledSkills(fileURLToPath(new URL('../../desktop/mantur-skills/source.json', import.meta.url)), join(scaffold.workspaceCwd, '.bundled-skills'))
+    const projectRoot = join(scaffold.workspaceCwd, 'projects')
+    await scaffold.ctx.manturProjects.setRoot(projectRoot)
+    browser = await chromium.launch()
+    const page = await browser.newPage({ locale: ZH_BROWSER_LOCALE })
+    await page.goto(scaffold.authenticatedUrl)
+    const editor = page.locator('[data-composer-input][contenteditable="true"]').first()
+    await editor.fill('新项目首条消息')
+    expect(await page.evaluate(() => 'manturDrafts' in window)).toBe(false)
+    await page.route('**/api/manturProjects/prepare', async (route) => { await route.fetch(); await route.abort('failed') }, { times: 1 })
+    await page.getByRole('button', { name: '发送消息', exact: true }).click()
+    await page.getByText('项目创建未完成，草稿已保留。可以重试或选择已有项目。', { exact: true }).first().waitFor()
+    expect(scaffold.ctx.workspaceRegistry.list()).toHaveLength(1)
+    expect(await editor.innerText()).toBe('新项目首条消息')
+    const settled = scaffold.whenTurnSettled()
+    await page.getByRole('button', { name: '发送消息', exact: true }).click()
+    const sessionId = await settled
+    await page.getByText(reply, { exact: true }).waitFor()
+    expect(scaffold.ctx.workspaceRegistry.list()).toHaveLength(1)
+    expect(await readdir(projectRoot)).toHaveLength(1)
+    const messages = (await readPersistedEvents(scaffold, sessionId)).filter(event => event.type === 'user/message' && event.data.source.kind === 'user')
+    expect(messages).toHaveLength(1)
+    expect(JSON.stringify(messages[0])).toContain('新项目首条消息')
+  } catch (error) { failures.push(error) }
+  finally {
+    await browser?.close().catch((error: unknown) => { failures.push(error) })
+    await scaffold?.close().catch((error: unknown) => { failures.push(error) })
+    if (server.listening) await new Promise<void>((resolve, reject) => {
+      server.close((error) => { if (error === undefined) resolve(); else reject(error) })
+    }).catch((error: unknown) => { failures.push(error) })
+    await rm(fixtureRoot, { recursive: true, force: true }).catch((error: unknown) => { failures.push(error) })
+  }
+  if (failures.length === 1) throw failures[0]
+  if (failures.length > 1) throw new AggregateError(failures, 'Browser-owned first-send fixture failed')
 })

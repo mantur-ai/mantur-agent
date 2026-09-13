@@ -122,3 +122,19 @@ it('keeps the confirmed number marked as refreshing without overlapping timer re
     expect(client.store.getSnapshot()).toEqual({ phase: 'ready', balance: 19 })
   } finally { stop(); vi.useRealTimers() }
 })
+
+
+it('clears balance when the Host reports logout and ignores an old account transport failure', async () => {
+  const old = Promise.withResolvers<{ ok: true; value: { status: 'signed-out' } }>()
+  const read = vi.fn().mockReturnValueOnce(old.promise).mockResolvedValue({ ok: true, value: { status: 'signed-out' } })
+  const source = createSnapshotStore(account('Old'))
+  const client = new AccountBalanceClient(read, 5000)
+  const stop = client.connect(source)
+  try {
+    source.set(account('New'))
+    await vi.waitFor(() => { expect(client.store.getSnapshot()).toEqual({ phase: 'signed-out' }) })
+    old.reject(new Error('old account request failed'))
+    await vi.waitFor(() => { expect(read).toHaveBeenCalledTimes(2) })
+    expect(client.store.getSnapshot()).toEqual({ phase: 'signed-out' })
+  } finally { stop() }
+})

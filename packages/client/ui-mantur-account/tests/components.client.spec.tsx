@@ -38,6 +38,16 @@ describe('Mantur account components', () => {
     expect(actions.signOut).toHaveBeenCalledOnce()
   })
 
+  it('uses confirmed display names and tolerates an account with no public metadata', () => {
+    const actions = controller()
+    const b = render(<AccountView state={{ phase: 'signed-in', account: { displayName: 'Creator', expiresAt: 123 } }}
+      controller={actions as never} t={t} />)
+    expect(b.getByText('Creator')).toBeTruthy()
+    b.rerender(<AccountView state={{ phase: 'signed-in' }} controller={actions as never} t={t} />)
+    expect(b.queryByText('Creator')).toBeNull()
+    expect(b.getByText(en.signedIn)).toBeTruthy()
+  })
+
   it('renders device instructions and cancels login', () => {
     const actions = controller()
     const view = render(<AccountView

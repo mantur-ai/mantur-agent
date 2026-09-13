@@ -20,6 +20,8 @@ Status: implemented
 
 原生侧边栏余额通过固定的 `balance()` Remote 复用既有 Main 所属 API broker。界面仅显示服务器返回的数值馒头余额；切换账号和退出登录使未完成的请求失效，刷新失败会移除旧数值。底部仅显示黄色馒头图标和数字。可见客户端按 Host 验证的 `balanceRefreshIntervalMs` 间隔同步，并在账号变化、窗口重新获得焦点和网络恢复时立即读取。隐藏时暂停轮询，卸载时清理计时器和监听器。刷新期间保留已确认数字并标记无障碍忙碌状态。凭据保留在既有所有者内，余额展示不进入 Session 历史或模型请求。
 
+漫途客户端构建不会在模型设置中注册官方首次启动弹窗。账号插件负责原生登录展示，因此全新安装不会先用 DeepSeek API Key 弹窗挡住浏览器账号授权。设置中仍可配置模型提供方。
+
 ## Alternatives considered
 
 **原生密码与注册表单。** 用户选定既有网站登录和设备同意作为唯一桌面登录路径。浏览器流程取代[原生账号提案](../../proposed/architecture/2026-09-07-desktop-native-account-identity.zh.md)中的对应 v1 章节；其 broker 所有权和原生平台验收要求仍有效。

@@ -35,6 +35,27 @@ describe('native account controls', () => {
     expect(b.queryByText('已登录')).toBeNull()
   })
 
+  it('resumes an acknowledged exchange, cancels a retained attempt and switches a signed-in account', async () => {
+    const b = bench({ online: true, snapshot: { ...signedOut,
+      attempt: { expiresAt: 1_999_999_999_999, exchangePending: true } } })
+    await act(async () => { fireEvent.click(b.getByRole('button', { name: zh.nativeResumeExchange })) })
+    expect(b.run).toHaveBeenLastCalledWith({ kind: 'refresh' })
+    await act(async () => { fireEvent.click(b.getByRole('button', { name: zh.cancel })) })
+    expect(b.run).toHaveBeenLastCalledWith({ kind: 'sign-out' })
+    b.rerender(<NativeAccountView {...b.props} state={{ online: true, snapshot: { ...signedOut,
+      attempt: { expiresAt: 1_999_999_999_999, exchangePending: false } } }} />)
+    await act(async () => { fireEvent.click(b.getByRole('button', { name: zh.login })) })
+    expect(b.run).toHaveBeenLastCalledWith({ kind: 'browser' })
+    b.rerender(<NativeAccountView {...b.props} state={{ online: true, snapshot: {
+      ...signedOut, phase: 'signed-in', authenticated: true,
+    } }} />)
+    await act(async () => { fireEvent.click(b.getByRole('button', { name: zh.nativeSwitchAccount })) })
+    expect(b.run).toHaveBeenLastCalledWith({ kind: 'switch-account' })
+    b.rerender(<NativeAccountView {...b.props} state={{ online: true, snapshot: signedOut, operation: 'sign-out' }} />)
+    expect(b.getByRole('status').textContent).toBe(zh.signingOut)
+    expect((b.getByRole('button', { name: zh.skip }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
   it('keeps sign-in disabled until state is known, while offline or while Main is busy', () => {
     const b = bench({ online: true })
     expect((b.getByRole('button', { name: '登录漫途账号' }) as HTMLButtonElement).disabled).toBe(true)

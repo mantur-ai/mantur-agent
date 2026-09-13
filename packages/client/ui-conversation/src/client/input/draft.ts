@@ -1,10 +1,11 @@
 /** Resident unassigned editor and its handoff to the ordinary Session submit path. */
 import { Service, type Context } from '@deepseek-ai/cordis'
+import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-locale/client'
-import type { ConversationDraftPreparation, ConversationDrafts } from '../contract/draft.ts'
+import type { ConversationDraftId, ConversationDraftPreparation, ConversationDrafts } from '../contract/draft.ts'
 import type { DraftAttachmentId } from '../contract/input.ts'
 import type { InputHub } from './hub.ts'
 import { SessionInputShell } from './facade.ts'
@@ -15,6 +16,7 @@ export class ConversationDraftController extends Service implements Conversation
   readonly input: SessionInputShell
   private readonly live: { preparation?: ConversationDraftPreparation; ready: boolean } = { ready: false }
   private readonly ready: Promise<void>
+  private identity: ConversationDraftId | undefined
 
   /**
    * @param ctx - Client owner.
@@ -78,6 +80,13 @@ export class ConversationDraftController extends Service implements Conversation
     }), 'conversation: cancel unassigned preparation on navigation')
   }
 
+  async prepareIdentity(): Promise<ConversationDraftId> {
+    await this.ready
+    if (this.hub.persistence !== undefined) return await this.hub.persistence.prepareIdentity() as ConversationDraftId
+    this.identity ??= randomUUID() as ConversationDraftId
+    return this.identity
+  }
+
   register(preparation: ConversationDraftPreparation): () => void {
     if (this.live.preparation !== undefined) throw new Error('Only one unassigned-draft creation policy may be registered.')
     this.live.preparation = preparation
@@ -105,7 +114,10 @@ export class ConversationDraftController extends Service implements Conversation
     await this.hub.waitForDraft(sessionId)
     validate()
     const target = this.hub.shell(sessionId)
-    const move = () => { this.input.moveDraftTo(target) }
+    const move = () => {
+      this.input.moveDraftTo(target)
+      this.identity = undefined
+    }
     if (this.hub.persistence === undefined) move()
     else await this.hub.persistence.commitTransfer(sessionId, move, validate)
   }

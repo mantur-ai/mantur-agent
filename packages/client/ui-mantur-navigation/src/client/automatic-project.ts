@@ -2,7 +2,7 @@
 import type { ClientRemote, RemoteFailure } from '@deepseek-ai/dsh-api-remotes/client'
 import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
-import type { ConversationDraftPreparation, IConversation } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { ConversationDraftPreparation, ConversationDrafts } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { UiWorkspace } from '@deepseek-ai/dsh-client-ui-workspace/client'
 import type { ProjectCreationId, ProjectRootSettings } from '@deepseek-ai/dsh-mantur-projects/types'
 import type {} from '@deepseek-ai/dsh-mantur-projects/remote'
@@ -23,11 +23,11 @@ export interface AutomaticProjectDeps {
   readonly remote: ClientRemote['manturProjects']
   readonly sessions: Pick<ISessions, 'create'>
   readonly workspace: Pick<UiWorkspace, 'pickDirectory'>
-  readonly persistence: IConversation['draftPersistence']
+  readonly drafts: Pick<ConversationDrafts, 'prepareIdentity'>
   readonly text: (key: ProjectKey) => string
 }
 
-/** Uses the native draft checkpoint's identity until its complete draft reaches a real Session. */
+/** Uses the conversation draft's identity until its complete draft reaches a real Session. */
 export class AutomaticProjectController implements ConversationDraftPreparation {
   /** Browser-visible location and preparation state; it contains no fabricated Host entities. */
   readonly store = createSnapshotStore<AutomaticProjectState>({
@@ -37,7 +37,7 @@ export class AutomaticProjectController implements ConversationDraftPreparation 
   private preparing = 0
   private settingsGeneration = 0
 
-  /** @param deps - real Host operations, native draft persistence and localized error copy. */
+  /** @param deps - real Host operations, conversation draft identity and localized error copy. */
   constructor(private readonly deps: AutomaticProjectDeps) {}
 
   /** Read the location without creating a directory or Session. */
@@ -78,7 +78,7 @@ export class AutomaticProjectController implements ConversationDraftPreparation 
   /**
    * Prepare a directory and real Session; draft transfer and send belong to ConversationDrafts.
    * @param signal - stops subsequent steps when the originating draft is abandoned.
-   * @returns the same Session on a retry of the durable draft's creation identity.
+   * @returns the same Session on a retry of the resident draft's creation identity.
    */
   async prepare(signal: AbortSignal): Promise<SessionId> {
     signal.throwIfAborted()
@@ -121,10 +121,9 @@ export class AutomaticProjectController implements ConversationDraftPreparation 
 
   private async creationId(): Promise<ProjectCreationId> {
     try {
-      if (this.deps.persistence === undefined) throw new Error('Native draft persistence is unavailable')
-      return await this.deps.persistence.prepareIdentity() as ProjectCreationId
+      return await this.deps.drafts.prepareIdentity() as string as ProjectCreationId
     } catch {
-      // No Host entity may be created without a durably acknowledged retry identity.
+      // No Host entity may be created without a acknowledged retry identity.
       throw new Error(this.deps.text('storageFailed'))
     }
   }

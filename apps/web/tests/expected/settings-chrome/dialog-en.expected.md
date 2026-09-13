@@ -13,7 +13,7 @@
     - button "Agent presets":
       - img
       - text: Agent presets
-  - button "Open configuration file"
+  - button "Advanced configuration file"
   - button "Close":
     - img
     - text: Close

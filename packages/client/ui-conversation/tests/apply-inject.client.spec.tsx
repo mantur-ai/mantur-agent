@@ -123,7 +123,7 @@ describe('Conversation inject API', () => {
       await runtime.sessions.add({ id: other }, { current: false })
       const drafts = runtime.ctx.conversationDrafts
       const remove = drafts.register({ prepare: async () => {
-        await runtime.ctx.conversation.draftPersistence!.prepareIdentity()
+        await drafts.prepareIdentity()
         return ROOT
       } })
       await vi.waitFor(() => { expect(drafts.enabled.getSnapshot()).toBe(true) })
@@ -400,6 +400,30 @@ describe('Conversation inject API', () => {
       expect(drafts.input.state.getSnapshot()).toMatchObject({ draft: '', occurrences: [] })
       remove()
       expect(drafts.enabled.getSnapshot()).toBe(false)
+    } finally { await b.runtime.dispose() }
+  })
+
+  it('retains an in-memory creation identity through failure and retires it after transfer', async () => {
+    const b = await bench()
+    try {
+      const drafts = b.runtime.ctx.conversationDrafts
+      const identity = await drafts.prepareIdentity()
+      expect(identity).toMatch(/^[0-9a-f-]{36}$/)
+      const prepare = vi.fn(async () => {
+        expect(await drafts.prepareIdentity()).toBe(identity)
+        throw new Error('project connection lost')
+      })
+      const remove = drafts.register({ prepare })
+      drafts.input.setDraft('retry this draft')
+      drafts.input.submit()
+      await vi.waitFor(() => { expect(drafts.input.state.getSnapshot().phase).toBe('plain') })
+      expect(drafts.input.state.getSnapshot().draft).toBe('retry this draft')
+      expect(await drafts.prepareIdentity()).toBe(identity)
+      remove()
+      drafts.register({ prepare: async () => ROOT })
+      drafts.input.submit()
+      await vi.waitFor(() => { expect(b.sessionFake.prompt).toHaveBeenCalledOnce() })
+      expect(await drafts.prepareIdentity()).not.toBe(identity)
     } finally { await b.runtime.dispose() }
   })
 

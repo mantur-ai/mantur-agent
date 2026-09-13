@@ -92,7 +92,7 @@ export async function apply(ctx: Context): Promise<void> {
     scope.effect(() => scope.locale.register('projects.mantur', { zh: projectZh, en: projectEn }), 'ui-mantur-navigation: project dictionaries')
     const projects = new AutomaticProjectController({
       remote: scope.remote.manturProjects, sessions: scope.sessions, workspace: scope.uiWorkspace,
-      persistence: scope.conversation.draftPersistence, text: scope.locale.bind('projects.mantur'),
+      drafts: scope.conversationDrafts, text: scope.locale.bind('projects.mantur'),
     })
     scope.effect(() => () => { projects.dispose() }, 'ui-mantur-navigation: project controller')
     scope.effect(() => scope.conversationDrafts.register(projects), 'ui-mantur-navigation: first-send project policy')
