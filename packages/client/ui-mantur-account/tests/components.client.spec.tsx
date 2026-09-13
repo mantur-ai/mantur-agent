@@ -40,7 +40,7 @@ describe('Mantur account components', () => {
 
   it('uses confirmed display names and tolerates an account with no public metadata', () => {
     const actions = controller()
-    const b = render(<AccountView state={{ phase: 'signed-in', account: { displayName: 'Creator', expiresAt: 123 } }}
+    const b = render(<AccountView state={{ phase: 'signed-in', account: { displayName: 'Creator' } }}
       controller={actions as never} t={t} />)
     expect(b.getByText('Creator')).toBeTruthy()
     b.rerender(<AccountView state={{ phase: 'signed-in' }} controller={actions as never} t={t} />)

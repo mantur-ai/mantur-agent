@@ -43,7 +43,7 @@ describe('native account controls', () => {
     await act(async () => { fireEvent.click(b.getByRole('button', { name: zh.cancel })) })
     expect(b.run).toHaveBeenLastCalledWith({ kind: 'sign-out' })
     b.rerender(<NativeAccountView {...b.props} state={{ online: true, snapshot: { ...signedOut,
-      attempt: { expiresAt: 1_999_999_999_999, exchangePending: false } } }} />)
+      attempt: { expiresAt: 1_999_999_999_999 } } }} />)
     await act(async () => { fireEvent.click(b.getByRole('button', { name: zh.login })) })
     expect(b.run).toHaveBeenLastCalledWith({ kind: 'browser' })
     b.rerender(<NativeAccountView {...b.props} state={{ online: true, snapshot: {

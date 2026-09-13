@@ -91,6 +91,18 @@ describe('ComposerAttachments', () => {
     expect(view.queryByRole('status')).toBeNull()
   })
 
+  it.each([true, false])('uses the file-capable drop label while drop acceptance is %s', (canAcceptDrop) => {
+    const added = vi.fn()
+    const view = render(<ComposerAttachments {...props({ filesSupported: true, canAcceptDrop, onAddImages: added })} />)
+    const file = new File(['script'], 'episode.md', { type: 'text/markdown' })
+    const dataTransfer = { types: ['Files'], files: [file], dropEffect: 'none' }
+    fireEvent.dragEnter(document.body, { dataTransfer })
+    expect(view.getByRole('status').textContent).toBe(canAcceptDrop ? 'file.dropTitle' : '当前无法添加图片')
+    fireEvent.drop(document.body, { dataTransfer })
+    expect(added).toHaveBeenCalledTimes(canAcceptDrop ? 1 : 0)
+    if (canAcceptDrop) expect(added).toHaveBeenCalledWith([file])
+  })
+
   it('tracks nested file drags and clears an aborted drag', () => {
     const view = render(<ComposerAttachments {...props()} />)
     const dataTransfer = { types: ['Files'], files: [], dropEffect: 'none' }
