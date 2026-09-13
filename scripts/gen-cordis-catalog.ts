@@ -87,6 +87,7 @@ export const SERVICE_PAGE: Record<string, string> = {
   webServer: 'web-server.md',
   manturEditing: 'workspace.md',
   manturScript: 'workspace.md',
+  manturAssets: 'workspace.md',
   invariants: 'invariants.md',
   llm: 'llm-streaming.md',
   lsp: 'lsp.md',
@@ -684,6 +685,17 @@ export const FOUNDATION_TYPE_NAMES: ReadonlySet<string> = new Set([
 
 /** Project types deliberately documented outside the subsystems catalog. */
 export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
+  ManturBalanceStatus: 'Fresh Mantou balance and signed-out semantics are documented in packages/credentials/authorization-manturhub/README.md',
+  ManturBundledSkill: 'Pinned offline Skill provenance is documented in packages/skill/manturhub-marketplace/README.md',
+  AssetEntry: 'Guarded report and media observations are documented in packages/client/ui-mantur-assets/README.md',
+  AssetCandidate: 'Guarded report and media observations are documented in packages/client/ui-mantur-assets/README.md',
+  AssetSnapshot: 'Guarded report and media observations are documented in packages/client/ui-mantur-assets/README.md',
+  AssetCommand: 'Guarded report and media observations are documented in packages/client/ui-mantur-assets/README.md',
+  PromptEdit: 'Guarded report and media observations are documented in packages/client/ui-mantur-assets/README.md',
+  SourcePin: 'Guarded report and media observations are documented in packages/client/ui-mantur-assets/README.md',
+  AssetVersion: 'Guarded report and media observations are documented in packages/client/ui-mantur-assets/README.md',
+  AssetProposal: 'Guarded report and media observations are documented in packages/client/ui-mantur-assets/README.md',
+  AssetMedia: 'Guarded report and media observations are documented in packages/client/ui-mantur-assets/README.md',
   ScriptEntry: 'Project file discovery is documented in packages/client/ui-mantur-script/README.md',
   ScriptDocument: 'Versioned script reads are documented in packages/client/ui-mantur-script/README.md',
   ScriptWrite: 'Guarded script saves are documented in packages/client/ui-mantur-script/README.md',

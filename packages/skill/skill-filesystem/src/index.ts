@@ -801,7 +801,7 @@ async function parseSkillFile(path: string, ctx: Context, signal?: AbortSignal, 
   if (raw === undefined) {
     return undefined
   }
-  return parseSkillText(raw, message => ctx.logger.warn(`skill file ${path} ignored: ${message}`))
+  return parseSkillText(raw, (message) => { ctx.logger.warn(`skill file ${path} ignored: ${message}`) })
 }
 
 /**

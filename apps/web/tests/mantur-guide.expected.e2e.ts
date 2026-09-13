@@ -87,9 +87,13 @@ it('keeps offline homepage guidance inside the real conversation column with the
           await page.screenshot({ path: join(images, 'offline-workbench-failure.png') })
           const geometry = await page.getByRole('region', { name: '馒头仔' }).evaluate((element) => {
             const body = element.querySelector<HTMLElement>('[tabindex="0"]')!
-            return { panel: element.getBoundingClientRect().toJSON(), body: body.getBoundingClientRect().toJSON(),
+            const rect = (value: Element) => {
+              const { x, y, width, height } = value.getBoundingClientRect()
+              return { x, y, width, height }
+            }
+            return { panel: rect(element), body: rect(body),
               lineHeight: getComputedStyle(body).lineHeight,
-              seat: element.closest('[data-composer-seat]')!.getBoundingClientRect().toJSON() }
+              seat: rect(element.closest('[data-composer-seat]')!) }
           })
           throw new Error(`Offline workbench ${width}/${name}: ${JSON.stringify(geometry)}`, { cause: error })
         })

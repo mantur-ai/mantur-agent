@@ -17,7 +17,7 @@ const uri = ajvRequire('fast-uri') as {
   resolve(base: string, relative: string): string
 }
 const { ipKeyGenerator } = sdkRequire('express-rate-limit') as {
-  ipKeyGenerator(ip: string, subnet?: number | false): string
+  ipKeyGenerator: (ip: string, subnet?: number | false) => string
 }
 const { Address4, Address6 } = rateLimitRequire('ip-address') as {
   Address4: new (input: string) => { correctForm(): string }
@@ -30,7 +30,7 @@ describe('desktop dependency security', () => {
       base: { a: 1, b: 2 }, result: { a: 3, b: 2 },
     })
     const chain = ['a0: &a0 { k0: 0 }']
-    for (let i = 1; i < 150; i++) chain.push('a' + i + ': &a' + i + ' { <<: *a' + (i - 1) + ', k' + i + ': ' + i + ' }')
+    for (let i = 1; i < 150; i++) chain.push(`a${i}: &a${i} { <<: *a${i - 1}, k${i}: ${i} }`)
     expect(() => yaml.load(chain.join('\n'))).toThrow('maxTotalMergeKeys')
   })
 
@@ -52,7 +52,7 @@ describe('desktop dependency security', () => {
       realm,
     )
     const type = realm.module.exports as { resolve(data: object[]): boolean }
-    const entries = Array.from({ length: 512 }, (_, i) => ({ ['key' + i]: i }))
+    const entries = Array.from({ length: 512 }, (_, i) => ({ [`key${i}`]: i }))
     expect(type.resolve(entries)).toBe(true)
     expect(realm.comparisons).toBeLessThan(512 * 4)
   })

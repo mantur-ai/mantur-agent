@@ -6,6 +6,5 @@ recording: authored
 header:
   class: web-mantur
   pin: true
-  toolSchemasSource: fresh-round-trip
 session:
   source: ../fresh-round-trip/session.jsonl

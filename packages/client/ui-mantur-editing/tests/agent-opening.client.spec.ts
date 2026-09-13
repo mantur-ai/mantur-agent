@@ -138,7 +138,7 @@ it('does not replay a background completion when returning to that Session', asy
 it('rejects invalid result metadata without opening a panel', async () => {
   const { append, openWorkbench } = await setup()
   const error = vi.spyOn(console, 'error').mockImplementation(() => {})
-  onTestFinished(() => error.mockRestore())
+  onTestFinished(() => { error.mockRestore() })
   await append(call(1, 'invalid'))
   const invalid = result(2, 'invalid', '')
   await append(invalid)

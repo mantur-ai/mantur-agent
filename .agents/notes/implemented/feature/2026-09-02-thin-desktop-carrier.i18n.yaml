@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-02-thin-desktop-carrier.md
-2026-09-02-thin-desktop-carrier.md: 1780a2cf727e6066f3114c70ac112ff844a2df64
-2026-09-02-thin-desktop-carrier.zh.md: 609f610e3bd284fa817c055bc770505bb56b4e91
+2026-09-02-thin-desktop-carrier.md: 703b25678e878f1fe86866b7e28735851943f2f0
+2026-09-02-thin-desktop-carrier.zh.md: a012479d79fc50f4afaeb070225f6a3cb3e2f8ab

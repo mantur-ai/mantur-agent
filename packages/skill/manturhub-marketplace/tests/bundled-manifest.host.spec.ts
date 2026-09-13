@@ -128,7 +128,11 @@ it('serves local identities without calling account methods or reading same-name
     const injection = decision.messages[1]!
     expect(injection.source).toEqual({ kind: 'skill-invocation', name: skill.name, form: 'instructions',
       bundled: { version: skill.version, digest: skill.digest } })
-    expect(injection.content).toEqual([{ type: 'text', text: expect.stringContaining('Instructions') }])
+    expect(injection.content).toHaveLength(1)
+    const content = injection.content[0]!
+    expect(content.type).toBe('text')
+    if (content.type !== 'text') throw new Error('Expected bundled instruction text')
+    expect(content.text).toContain('Instructions')
     session.append('turn/start', { turn: 1 })
     for (const message of decision.messages) session.append('user/message', message, { surfaceOp: 'append' })
     const replay = session.snapshotEvents().filter(event => event.type === 'user/message')

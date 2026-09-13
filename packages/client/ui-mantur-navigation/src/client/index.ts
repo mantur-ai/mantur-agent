@@ -1,3 +1,4 @@
+import { bundledSkillClipboard } from './bundled-skills.ts'
 /** Mantur-only sidebar navigation and marketplace page registration. */
 
 import type { Context } from '@deepseek-ai/cordis'
@@ -115,11 +116,11 @@ export async function apply(ctx: Context): Promise<void> {
       candidates: () => Promise.resolve([]),
       onPick: () => { throw new Error('App-bundled Skills are selected through homepage shortcuts') },
       codec: {
-        clipboardText: reference => `/mantur-builtin:${reference}`,
+        clipboardText: bundledSkillClipboard,
         serialize: async (reference, signal) => {
           const result = await scope.remote.manturMarketplace.resolveBundled(reference, signal)
           if (!result.ok) throw new Error(result.error.message)
-          return `/mantur-builtin:${result.value.reference}`
+          return bundledSkillClipboard(result.value.reference)
         },
       },
     }), 'ui-mantur-navigation: bundled references')

@@ -1,4 +1,4 @@
-## Native account from guide
+## Native account from marketplace
 
 - dialog "登录漫途账号":
   - button "返回创作"
@@ -31,13 +31,14 @@
     - button "重新检查登录状态"
     - button "暂时跳过"
 
-## Guide after Skip
+## Marketplace after Skip
 
-- dialog "剧本改编":
-  - heading "剧本改编" [level=2]
-  - button "关闭引导":
+- dialog "爽文短剧剧本创作":
+  - heading "爽文短剧剧本创作" [level=2]
+  - button "关闭":
     - img
-  - paragraph: 尚未安装此技能。安装后可添加到当前对话。
+  - paragraph: 从创意到分集剧本。
+  - text: 剧本创作 版本 1.0.0
   - button "登录后安装"
 
 ## Marketplace after login

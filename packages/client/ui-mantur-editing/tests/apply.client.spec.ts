@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
@@ -25,8 +26,11 @@ describe('editing workbench composition', () => {
     ctx.provide('sessions', sessions as never)
     new UiConversation(ctx, sessions as never)
     const disposeRemote = vi.fn(async () => {})
-    ctx.provide('remote', { $mount: vi.fn(async () => disposeRemote) } as never)
-    ctx.provide('remote.manturEditing', {} as never)
+    const open = vi.fn()
+      .mockResolvedValueOnce({ ok: true, value: { editorUrl: 'http://127.0.0.1:5300/', directory: '/project/editing' } })
+      .mockResolvedValueOnce({ ok: false, error: { message: 'editor refused' } })
+    ctx.provide('remote', { $mount: vi.fn(async () => disposeRemote), manturEditing: { open } } as never)
+    ctx.provide('remote.manturEditing', { open } as never)
     const slots = ctx.get('slots') as SlotRegistry
     slots.register({ name: 'root', children: { 'main.workbench.editing.content': { kind: 'single', scope: 'root' }, 'main.workbench.toggle.editing': { kind: 'single', scope: 'root' }, 'main.workbench.editing.tab': { kind: 'single', scope: 'root' } } } as never, () => null)
     const fiber = ctx.plugin(client)
@@ -35,6 +39,15 @@ describe('editing workbench composition', () => {
     expect(slots.entries('main.workbench.toggle.editing')).toHaveLength(1)
     const entry = slots.entries('main.workbench.editing.content')[0]!
     const face = (entry.inject as unknown as () => client.WorkbenchInjection)()
+    await expect(face.openWorkspace('session-a' as never)).resolves.toEqual({ editorUrl: 'http://127.0.0.1:5300/', directory: '/project/editing' })
+    await expect(face.openWorkspace('session-a' as never)).rejects.toThrow('editor refused')
+    expect(open).toHaveBeenCalledWith('session-a', window.location.origin)
+    expect(face.getLocale()).toBe('zh')
+    const localeNotify = vi.fn()
+    const unsubscribeLocale = face.subscribeLocale(localeNotify)
+    locale.setLocale('en')
+    expect(localeNotify).toHaveBeenCalledOnce()
+    unsubscribeLocale()
     expect(face.getColorScheme()).toBe('light')
     const notify = vi.fn()
     const unsubscribe = face.subscribeTheme(notify)

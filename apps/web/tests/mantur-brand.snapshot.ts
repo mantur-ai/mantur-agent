@@ -27,7 +27,7 @@ const FIXTURE = fileURLToPath(new URL('../../../snapshots/web/fresh-round-trip/s
 const RECIPE_REPLAY_FIXTURE = fileURLToPath(new URL('../../../snapshots/web/lifecycle-chrome/session.jsonl', import.meta.url))
 const SYSTEM_PROMPT_EXPECTED = join(SNAPSHOT_DIR, 'system-prompt.expected.md')
 const TOOL_SCHEMAS_EXPECTED = fileURLToPath(
-  new URL('../../../snapshots/web/fresh-round-trip/tool-schemas.expected.json', import.meta.url),
+  new URL('../../../snapshots/web/mantur-brand/tool-schemas.expected.json', import.meta.url),
 )
 const MARKETPLACE_EXPECTED = join(SNAPSHOT_DIR, 'marketplace.expected.md')
 const ACCOUNT_SETTINGS_EXPECTED = join(SNAPSHOT_DIR, 'account-settings.expected.md')
@@ -477,7 +477,7 @@ describe.skipIf(MODE === 'record')('web snapshot: Mantur product identity', () =
       await compareOrRefreshGolden(
         TOOL_SCHEMAS_EXPECTED,
         formatToolSchemasSnapshot(header.tools ?? []).trimEnd(),
-        'replay',
+        MODE,
       )
     } finally {
       await handle.dispose()

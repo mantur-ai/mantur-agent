@@ -9,9 +9,17 @@ import { randomUUID } from 'node:crypto'
 import Schema from '@deepseek-ai/schemastery'
 import type { AssetCandidate, AssetCommand, AssetEntry, AssetMedia, AssetProposal, ProposalId, AssetSnapshot, AssetState, AssetVersion, PromptEdit, SourcePin } from './types.ts'
 import { fingerprint, report } from './report.ts'
+import { parsePromptEdits } from './prompt-edits.ts'
 
 /** Size and listing limits for report, journal, and media reads. */
-export interface Config { readonly maxBytes: number; readonly maxEntries: number; readonly maxMediaBytes: number }
+export interface Config {
+  /** Maximum bytes per report or journal read. */
+  readonly maxBytes: number
+  /** Maximum direct child entries per selected directory. */
+  readonly maxEntries: number
+  /** Maximum bytes per media validation or preview read. */
+  readonly maxMediaBytes: number
+}
 export const Config: Schema<Config> = Schema.object({
   maxBytes: Schema.number().step(1).min(1).required(),
   maxEntries: Schema.number().step(1).min(1).required(),
@@ -48,7 +56,7 @@ export class ManturAssets extends TypertRemoteService {
       name: 'propose_asset_prompts', description: 'Record a text-only asset prompt proposal for the current requested source. This never generates media or writes a pipeline report.',
       parameters: { requestId: { type: 'string', required: true }, source: { type: 'string', required: true }, edits: { type: 'string', required: true } },
       output: { schema: { type: 'string' }, render: (_a, value) => [{ type: 'text', text: value }] },
-      execute: async (args, exec) => JSON.stringify(await this.propose(exec.agent, args.requestId, args.source, JSON.parse(args.edits))),
+      execute: async (args, exec) => JSON.stringify(await this.propose(exec.agent, args.requestId, args.source, parsePromptEdits(args.edits))),
       presentCall: args => ({ card: 'generic', title: 'Asset prompt proposal', kind: 'other', subtitle: args.requestId }),
     }))
   }
@@ -111,7 +119,7 @@ export class ManturAssets extends TypertRemoteService {
       for (const item of manifest) { if (!item || typeof item !== 'object') throw new Error('Invalid media manifest row'); const row = item as Record<string, unknown>; if (typeof row.clip_id !== 'string' || typeof row.file !== 'string') throw new Error('Media manifest requires clip_id and file'); if (typeof row.sha256 !== 'string' || !/^[a-fA-F0-9]{64}$/.test(row.sha256)) throw new Error('Media manifest requires a SHA-256 digest'); const target = await this.target(agent, row.file, true); const stat = await this.ctx.fs.stat(target); if (stat?.type !== 'file') throw new Error('Media file missing'); media.set(row.clip_id, { path: target.displayPath, sha: row.sha256.toLowerCase(), type: 'video/mp4' }) }
     }
     this.assertLive(agent.session)
-    this.sessions.set(agent.session as object, { source, stateFile, media, tokens: new Map() })
+    this.sessions.set(agent.session, { source, stateFile, media, tokens: new Map() })
     return this.snapshot(agent, source)
   }
   /**
@@ -254,7 +262,7 @@ export class ManturAssets extends TypertRemoteService {
     if (!row) throw new Error('Media has no explicit manifest binding')
     const token = info.tokens.get(id) ?? randomUUID()
     info.tokens.set(id, token)
-    this.mediaTokens.set(token, { session: agent.session as object, ...row })
+    this.mediaTokens.set(token, { session: agent.session, ...row })
     return { id, name: row.path.split('/').at(-1) ?? id, url: `/api/mantur-assets.media?token=${encodeURIComponent(token)}`, kind: row.type.startsWith('image/') ? 'image' : 'video' }
   }
   /**
@@ -270,7 +278,7 @@ export class ManturAssets extends TypertRemoteService {
     const detected = mediaType(bytes, target.displayPath)
     if (detected === undefined) throw new Error('Media candidate has an unsupported file format')
     const key = `path:${target.displayPath}`; const token = info.tokens.get(key) ?? randomUUID(); info.tokens.set(key, token)
-    this.mediaTokens.set(token, { session: agent.session as object, path: target.displayPath, sha: fingerprint(bytes), type: detected.type })
+    this.mediaTokens.set(token, { session: agent.session, path: target.displayPath, sha: fingerprint(bytes), type: detected.type })
     return { id: null, name: target.displayPath.split('/').at(-1) ?? target.displayPath, url: `/api/mantur-assets.media?token=${encodeURIComponent(token)}`, kind: detected.kind }
   }
   private registerMediaRoute(ctx: Context): () => void {
@@ -395,7 +403,7 @@ export class ManturAssets extends TypertRemoteService {
     if (info) for (const token of info.tokens.values()) this.mediaTokens.delete(token)
     this.sessions.delete(session)
   }
-  private async session(agent: Agent) { this.assertLive(agent.session); const found = this.sessions.get(agent.session as object); if (!found) throw new Error('Load an asset project first'); return found }
+  private session(agent: Agent) { this.assertLive(agent.session); const found = this.sessions.get(agent.session); if (!found) throw new Error('Load an asset project first'); return Promise.resolve(found) }
   private async require(agent: Agent, source: SourcePin) { const current = await this.pin(agent, source.path); if (current.sha256 !== source.sha256 || current.version !== source.version) throw new FsError('Source changed; reload before editing.', 'FS_STALE_VERSION'); return current }
 }
 export default ManturAssets

@@ -1,3 +1,4 @@
+import { bundledSkillClipboard } from './bundled-skills.ts'
 /** Mode navigation and contextual guidance beside the resident composer. */
 
 import { useEffect, useId, useRef, useState } from 'react'
@@ -129,7 +130,7 @@ function ReadyGuide({ hero, disabled, sessionId, preferences, useGuideInput, use
     if (alias === undefined) { setNotice(t('aliasMissing')); return }
     const label = t(alias)
     if (!appendReference({ source: 'mantur-bundled-skill', ref: skill.reference, label,
-      clipboardText: `/mantur-builtin:${skill.reference}` })) {
+      clipboardText: bundledSkillClipboard(skill.reference) })) {
       setNotice(t('insertFailed'))
       return
     }

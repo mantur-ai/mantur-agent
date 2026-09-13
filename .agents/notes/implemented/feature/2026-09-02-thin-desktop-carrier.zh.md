@@ -38,6 +38,10 @@ DMG 镜像文件保留在构建输出目录，但 `hdiutil` 挂载点使用 macO
 
 macOS release 工作流通过受保护的 GitHub 环境 secret 为原生 arm64 与 x64 构建执行签名和 notarization。它会先验证 Developer ID 签名、Gatekeeper 评估、stapled ticket 与 packaged smoke，再合并两份架构专属通道文件。只有从精确 `v<version>` tag 发起的显式发布任务才会创建 GitHub release，其中包含两份 DMG、两份更新 ZIP、对应 blockmap、合并后的更新元数据与 SHA-256 哈希。electron-updater 可以从 GitHub feed 中选择这种兼容 semver 的 alpha、beta 与 RC release。工作流会拒绝已存在的 release；发布前还必须启用仓库级 Release Immutability，以阻止之后修改 tag 和产物。在 Windows 具备独立签名身份与发布路径之前，它不会进入外部更新通道。
 
+解包应用所含文件数量超过 macOS runner 的打开文件上限，`@electron/osx-sign` 无法并发检查全部文件。workspace 固定一项依赖补丁，在保留深度优先签名顺序的同时，每次只读取一个目录子项。依赖升级必须保留该限制；只有证明完整解包应用能在 release runner 上完成签名后，才可移除补丁。
+
+内嵌 Mantur Cut 的生产依赖树会在上游构建完成后复制。打包会在依赖清单生成和签名前，从暂存依赖树中移除包管理器可执行目录与构建缓存目录。这些文件不是运行时输入；保留它们会扩大签名范围，并可能带入已有签名不符合发布 timestamp 策略的缓存二进制文件。
+
 ## Alternatives considered
 
 **由后台 Host helper 打开桌面文件夹选择器。** 否决。该进程不拥有 Electron 窗口，无法为选择器指定应用父窗口。窄范围 Main 能力保留既有 Workspace 流程，不把工作区存储移入 Electron，也不把结果失效当成原生对话框取消。
@@ -56,6 +60,10 @@ macOS release 工作流通过受保护的 GitHub 环境 secret 为原生 arm64 �
 
 **通过 Web 应用暴露桌面 updater 状态。** 否决。renderer 有意不提供 Electron preload bridge、Node integration 或桌面专用 HTTP API。原生菜单可以呈现应用生命周期功能，而无需给 Harness profile 或 Web client 增加桌面 transport。
 
+**只提高 release runner 的打开文件上限，而不限制遍历。** 否决。macOS runner 的硬上限仍低于解包应用的并发文件数。这种做法只会把失败推迟到更后面的文件，并使签名继续依赖 host 限制。
+
+**只为减少签名遍历而启用 ASAR。** 否决。载体和内嵌 Mantur Cut 运行时有意为 Loader 解析、原生模块、子进程可执行文件和生成媒体资源使用普通文件系统路径。重新打包该依赖闭包需要独立的运行时证据，不属于签名缺陷修复。
+
 ## Consequences
 
 - 桌面用户可以获得普通安装包，而 Web profile 仍是唯一的交互式 Harness 应用实现。
@@ -64,4 +72,5 @@ macOS release 工作流通过受保护的 GitHub 环境 secret 为原生 arm64 �
 - 更新检查会自动运行，也可由用户手动触发，但下载与重启安装仍由用户决定。stable 用户不会收到预发布版本。只有已签名的 macOS release 产物构成外部更新通道；Windows 对外更新仍需签名凭据与受保护的发布路径。
 - 桌面端改动通过一条受监听的开发命令运行，不生成安装包；开发数据与已安装数据保持分离。
 - 完整运行时依赖闭包与解包文件使安装包大于专用客户端；这项成本避免了第二套应用运行时，并让 Loader 与原生模块路径保持为普通文件路径。
+- macOS 签名会顺序检查解包依赖闭包，以遍历速度换取托管 release runner 上确定的文件描述符上限。
 - 签名与 notarization 凭据仍是受保护的部署输入。内部打包工作流无法访问这些凭据，也不能发布 release。

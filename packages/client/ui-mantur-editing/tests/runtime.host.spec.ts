@@ -100,7 +100,7 @@ describe('owned editor process', () => {
     expect(await readFile(join(config.editorRoot, 'project-root.txt'), 'utf8')).toBe(await realpath(project))
     await Promise.all([runtime.dispose(), runtime.dispose()])
     expect(await readFile(join(config.editorRoot, 'closed.txt'), 'utf8')).toBe('drained')
-    expect(() =>{  runtime.assertRunning() }).toThrow('exited')
+    expect(() => { runtime.assertRunning() }).toThrow('exited')
   })
 
   it('drains a child that never sends ready and reports timeout', async () => {
@@ -146,11 +146,13 @@ it('rejects an unexpected zero exit even if the process was already closed', asy
 
 it('waits for inherited stderr to close after a successful shutdown acknowledgement and parent exit', async () => {
   const holder = `
-const {existsSync,writeFileSync}=require('node:fs');
+const {existsSync,writeFileSync,writeSync}=require('node:fs');
+const {join}=require('node:path');
+const root=process.argv[1];
 writeFileSync('pipe-holder.txt','ready');
-const timer=setInterval(()=>{if(existsSync('release-pipe.txt')){clearInterval(timer);process.stderr.write('late pipe write');}},10);
+const timer=setInterval(()=>{if(existsSync(join(root,'release-pipe.txt'))){clearInterval(timer);writeSync(2,'late pipe write');process.exit(0);}},10);
 `
-  const config = await fixture('', '', `spawn(process.execPath, ['-e', ${JSON.stringify(holder)}], {stdio:['ignore','ignore',2]});`)
+  const config = await fixture('', '', `spawn(process.execPath, ['-e', ${JSON.stringify(holder)}, process.cwd()], {stdio:['ignore','ignore',2]});`)
   const runtime = await startEditor({ ...config, stopTimeoutMs: 60_000 }, await temp(), 'late-pipe' as SessionId, 'http://127.0.0.1:5298')
   const child = children.at(-1)!
   let finished = false

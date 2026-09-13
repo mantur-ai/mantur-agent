@@ -258,6 +258,21 @@ Host service for catalog reads and local Skill installation.
 
 ```ts cordis-catalog
 /**
+ * Read the App's offline Skill entries without requesting account or marketplace data.
+ * @param signal - cancellation supplied by the requesting client.
+ * @returns pinned identities and display titles; missing resources reject the request.
+ */
+@Remote async bundled(signal: AbortSignal): Promise<ManturBundledSkill[]>
+
+/**
+ * Verify that a draft still refers to the exact App resource the user selected.
+ * @param reference - captured name, version and digest, never a user-directory locator.
+ * @param signal - cancellation supplied by the sending draft.
+ * @returns the verified App identity; no installed or online substitute is selected.
+ */
+@Remote async resolveBundled(reference: string, signal: AbortSignal): Promise<ManturBundledSkill>
+
+/**
  * Load the complete public Skill catalog and current local install flags.
  * @returns browser-safe catalog metadata.
  */

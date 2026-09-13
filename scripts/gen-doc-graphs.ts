@@ -99,6 +99,22 @@ const GROUP_ORDER = [
 
 const SERVICE_ROLES: ServiceRole[] = [
   {
+    key: 'manturAssets',
+    pkg: 'client-ui-mantur-assets',
+    title: 'Project asset reports',
+    mode: 'core',
+    consumers: ['client-ui-mantur-assets'],
+    note: 'The Mantur asset plugin owns project-local report discovery, guarded prompt proposals, and signature-validated media previews.',
+  },
+  {
+    key: 'manturScript',
+    pkg: 'client-ui-mantur-script',
+    title: 'Project script editing',
+    mode: 'core',
+    consumers: ['client-ui-mantur-script'],
+    note: 'The Mantur script plugin owns versioned script reads, guarded saves, and explicit selection rewrite requests.',
+  },
+  {
     key: 'manturEditing',
     pkg: 'client-ui-mantur-editing',
     title: 'Session editing workspace',

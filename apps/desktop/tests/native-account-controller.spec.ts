@@ -112,7 +112,7 @@ describe('browser account controller', () => {
     expect(await b.controller.retryRevocations()).toMatchObject({ revoked: 1, failures: [] })
     expect(b.controller.getSnapshot()).toMatchObject({ busy: false, skipped: true, pendingRevocations: 0 })
     expect(b.store.records(b.origin)).toEqual([])
-    const creates = b.transport.mock.calls.filter(([url]) => String(url).endsWith('/client-auth/attempts'))
+    const creates = b.transport.mock.calls.filter(([url]) => (typeof url === 'string' ? url : url instanceof URL ? url.href : url.url).endsWith('/client-auth/attempts'))
     expect(creates).toHaveLength(3)
     expect(creates[1]?.[1]?.body).toBe(creates[0]?.[1]?.body)
     expect(creates[2]?.[1]?.body).toBe(creates[0]?.[1]?.body)

@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
@@ -575,7 +576,7 @@ path: Mantur-Agent-macOS-arm64.zip
 sha512: checksum
 releaseDate: '2026-09-03T00:00:00.000Z'
 `
-    const selectTag = async (tag: string): Promise<string> => {
+    const selectTag = async (tag: string, installedVersion = '0.0.0'): Promise<string> => {
       const executor = {
         request: async (request: { path?: string }) => request.path?.endsWith('.atom') === true
           ? feed(tag)
@@ -586,7 +587,7 @@ releaseDate: '2026-09-03T00:00:00.000Z'
         {
           allowPrerelease: true,
           channel: null,
-          currentVersion: new updaterSemver.SemVer(desktopVersion),
+          currentVersion: new updaterSemver.SemVer(installedVersion),
           fullChangelog: false,
         },
         { executor, isUseMultipleRangeRequest: false, platform: 'darwin' },
@@ -594,19 +595,14 @@ releaseDate: '2026-09-03T00:00:00.000Z'
       return (await provider.getLatestVersion()).tag
     }
     await expect(selectTag(`v${desktopVersion}`)).resolves.toBe(`v${desktopVersion}`)
-    await expect(selectTag(`desktop-v${desktopVersion}`)).rejects.toMatchObject({
-      code: 'ERR_UPDATER_NO_PUBLISHED_VERSIONS',
+    await expect(selectTag(`v${desktopVersion}`, desktopVersion)).rejects.toMatchObject({
+      code: 'ERR_UPDATER_NO_NEWER_RELEASE',
     })
     expect(macos).toMatchObject({
       environment: 'macos-release',
       strategy: {
         'fail-fast': false,
-        matrix: {
-          include: [
-            expect.objectContaining({ arch: 'arm64', runner: 'macos-15' }),
-            expect.objectContaining({ arch: 'x64', runner: 'macos-15-intel' }),
-          ],
-        },
+        matrix: '${{ fromJSON(needs.validate.outputs.matrix) }}',
       },
       env: {
         APPLE_APP_SPECIFIC_PASSWORD: '${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}',
@@ -617,6 +613,27 @@ releaseDate: '2026-09-03T00:00:00.000Z'
       },
     })
     const macosSteps = JSON.stringify(macos.steps)
+    const signingStep = macos.steps.filter(isRecord).find(step => step.name === 'Build, sign, and notarize native installer')
+    if (typeof signingStep?.run !== 'string') {
+      throw new TypeError('Desktop release workflow must define the signing command')
+    }
+    expect(signingStep.run).toContain('ulimit -n "$(ulimit -Hn)"')
+    const workspace: unknown = yaml.load(readFileSync(resolve(root, 'pnpm-workspace.yaml'), 'utf8'))
+    if (!isRecord(workspace) || !isRecord(workspace.patchedDependencies)) {
+      throw new TypeError('pnpm workspace must define patched dependencies')
+    }
+    expect(workspace.patchedDependencies['@electron/osx-sign@1.3.3']).toBe(
+      'patches/@electron__osx-sign@1.3.3.patch',
+    )
+    const requireFromElectronBuilder = createRequire(resolve(root, 'apps/desktop/node_modules/electron-builder/package.json'))
+    const appBuilderLibPackage = requireFromElectronBuilder.resolve('app-builder-lib/package.json')
+    const requireFromAppBuilderLib = createRequire(appBuilderLibPackage)
+    const osxSignWalk = readFileSync(
+      requireFromAppBuilderLib.resolve('@electron/osx-sign/dist/cjs/util.js'),
+      'utf8',
+    )
+    expect(osxSignWalk).toContain('for (const child of children)')
+    expect(osxSignWalk).not.toContain('Promise.all(children.map')
     expect(macosSteps).toContain('codesign --verify --deep --strict')
     expect(macosSteps).toContain('spctl --assess --type execute')
     expect(macosSteps).toContain('xcrun stapler validate')
@@ -625,25 +642,18 @@ releaseDate: '2026-09-03T00:00:00.000Z'
     if (typeof mergeArtifacts?.run !== 'string') {
       throw new TypeError('Desktop release workflow must define the native artifact assembly script')
     }
-    const requiredArtifacts = [
-      'release-input/desktop-macos-arm64/Mantur-Agent-macOS-arm64.dmg',
-      'release-input/desktop-macos-arm64/Mantur-Agent-macOS-arm64.dmg.blockmap',
-      'release-input/desktop-macos-arm64/Mantur-Agent-macOS-arm64.zip',
-      'release-input/desktop-macos-arm64/Mantur-Agent-macOS-arm64.zip.blockmap',
-      'release-input/desktop-macos-x64/Mantur-Agent-macOS-x64.dmg',
-      'release-input/desktop-macos-x64/Mantur-Agent-macOS-x64.dmg.blockmap',
-      'release-input/desktop-macos-x64/Mantur-Agent-macOS-x64.zip',
-      'release-input/desktop-macos-x64/Mantur-Agent-macOS-x64.zip.blockmap',
-    ]
-    const artifactBlock = mergeArtifacts.run.match(/required_artifacts=\(\n([\s\S]*?)\n\s*\)/)
-    if (artifactBlock?.[1] === undefined) {
-      throw new TypeError('Desktop release workflow must declare the required native artifacts')
+    const artifactLoop = mergeArtifacts.run.slice(
+      mergeArtifacts.run.indexOf('arches=(arm64)'),
+      mergeArtifacts.run.indexOf('for artifact in'),
+    )
+    for (const architectures of ['arm64', 'both']) {
+      const selected = execFileSync('bash', ['-c', `${artifactLoop}printf '%s\\n' "\${required_artifacts[@]}"`], {
+        env: { ...process.env, ARCHITECTURES: architectures }, encoding: 'utf8',
+      }).trim().split('\n')
+      expect(selected).toEqual((architectures === 'both' ? ['arm64', 'x64'] : ['arm64']).flatMap(arch =>
+        ['dmg', 'dmg.blockmap', 'zip', 'zip.blockmap'].map(extension =>
+          `release-input/desktop-macos-${arch}/Mantur-Agent-macOS-${arch}.${extension}`)))
     }
-    const declaredArtifacts = artifactBlock[1]
-      .split('\n')
-      .map(line => line.trim())
-      .filter(Boolean)
-    expect(declaredArtifacts).toEqual(requiredArtifacts)
     expect(mergeArtifacts.run).toContain('[ -f "$artifact" ] || {')
     expect(mergeArtifacts.run).toContain('Required desktop release artifact is missing: $artifact')
     expect(mergeArtifacts.run).toContain('exit 1')
