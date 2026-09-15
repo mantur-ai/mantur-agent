@@ -69,6 +69,7 @@ it('joins compiler image references by exact identity and rejects conflicting or
   const source = clips({}, { 图片引用: [{ asset_id: 'CHAR-1', url: 'https://example.com/one.png' }] })
   expect([...imageReferences(JSON.stringify(source))]).toEqual([['CHAR-1', 'https://example.com/one.png']])
   expect(() => imageReferences(JSON.stringify(assets()))).toThrow('storyboard report')
+  expect([...imageReferences(JSON.stringify(clips()))]).toEqual([])
   for (const references of [null, [{ asset_id: 'CHAR-1', url: 'javascript:alert(1)' }], [
     { asset_id: 'CHAR-1', url: 'https://example.com/one.png' }, { asset_id: 'CHAR-1', url: 'https://example.com/two.png' },
   ]]) expect(() => imageReferences(JSON.stringify(clips({}, { 图片引用: references })))).toThrow()

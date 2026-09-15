@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /** Report selection, drafts and explicit media through the production panel. */
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react'
+import { act, render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { ComponentProps } from 'react'
 import { AssetsPanel, type AssetCommands } from '../src/client/AssetsPanel.tsx'
@@ -150,4 +150,120 @@ it('loads newly produced assets when refreshing a previously empty workspace', a
   fireEvent.click(screen.getByRole('button', { name: '刷新' }))
   await screen.findByRole('button', { name: 'CHAR-001-V01 林夏' })
   expect(view.commands.load).toHaveBeenLastCalledWith('empty-session', project.assets, undefined, project.clips)
+})
+
+it('filters episodes and categories, selects multiple rows, and preserves unsaved selections', async () => {
+  const first = { ...snapshot.rows[0]!, negative: 'negative', actualPrompt: 'submitted', template: '{}', actualRequest: '{}', details: [{ name: '集数', value: '1' }, { name: '备注', value: '' }] }
+  const second = { ...first, key: 'clips/CLIP-2' as AssetKey, id: 'CLIP-2', name: '', table: '分镜', kind: 'video' as const, details: [{ name: '集数', value: '2' }] }
+  const view = panel({ ...snapshot, rows: [first, second] }); await load()
+  fireEvent.change(screen.getByLabelText('资产分类'), { target: { value: '分镜' } })
+  expect(screen.queryByRole('button', { name: 'CHAR-001-V01 林夏' })).toBeNull()
+  fireEvent.change(screen.getByLabelText('资产分类'), { target: { value: '' } })
+  fireEvent.change(screen.getByLabelText('集数'), { target: { value: '1' } })
+  expect(screen.queryByRole('button', { name: 'CLIP-2' })).toBeNull()
+  fireEvent.change(screen.getByLabelText('集数'), { target: { value: '' } })
+  const checkbox = screen.getByRole('checkbox', { name: '选择 CHAR-001-V01' })
+  fireEvent.click(checkbox); fireEvent.click(checkbox); fireEvent.click(checkbox)
+  fireEvent.click(screen.getByRole('checkbox', { name: '选择 CLIP-2' }))
+  fireEvent.click(screen.getByRole('button', { name: 'CHAR-001-V01 林夏' }))
+  fireEvent.click(screen.getByRole('button', { name: '保存草稿' }))
+  await waitFor(() => { expect(view.commands.save).toHaveBeenCalledOnce() })
+  expect(view.commands.save.mock.calls[0]![2]).toHaveLength(2)
+  fireEvent.change(screen.getByLabelText('提示词'), { target: { value: 'one' } })
+  fireEvent.change(screen.getByLabelText('提示词'), { target: { value: 'two' } })
+  fireEvent.click(checkbox)
+  expect(screen.getByRole('alert').textContent).toContain('请先保存')
+  expect((checkbox as HTMLInputElement).checked).toBe(true)
+  fireEvent.click(screen.getByRole('button', { name: 'CLIP-2' }))
+  expect(screen.getByRole('heading', { name: 'CLIP-2' })).toBeTruthy()
+})
+it('shows bound image provenance, pending changes and invalid candidate files', async () => {
+  const view = panel({ ...snapshot, rows: [{ ...snapshot.rows[0]!, localMedia: '/bound.png' }], state: { ...snapshot.state,
+    pending: { proposal: 'pending' } as AssetSnapshot['state']['pending'],
+    drafts: [{ edits: [{ key: 'gone', fingerprint: 'old', prompt: 'stale' }] }] as AssetSnapshot['state']['drafts'],
+    proposals: [{ id: 'requested', status: 'requested', instruction: 'request', edits: [{ key: 'k', prompt: 'proposal' }] }, { id: 'done', status: 'applied', instruction: '', edits: [] }] as AssetSnapshot['state']['proposals'] } })
+  view.commands.media.mockResolvedValue({ id: 'CHAR-001-V01', name: 'bound', kind: 'image', url: '/bound' })
+  await load(); fireEvent.click(screen.getByRole('button', { name: 'CHAR-001-V01 林夏' }))
+  await screen.findAllByRole('img')
+  expect(screen.getByLabelText('提示词').closest('fieldset')!.disabled).toBe(true)
+  view.commands.candidates.mockResolvedValue([{ assetId: null, path: 'bad.png', name: 'bad.png', kind: 'image', size: 8, issue: 'unsupported' }, { assetId: null, path: 'big.png', name: 'big.png', kind: 'image', size: 1000, issue: 'too-large' }])
+  fireEvent.click(screen.getByText('候选资产')); fireEvent.click(screen.getByRole('button', { name: '扫描候选' }))
+  await screen.findByText(/bad.png ·/)
+  expect(screen.getByText(/big.png ·/)).toBeTruthy()
+  view.commands.candidates.mockResolvedValue([])
+  fireEvent.click(screen.getByRole('button', { name: '扫描候选' }))
+  await screen.findByText(zh.noFiles)
+})
+it.each([new Error('save failed'), 'rejected'])('reports command failure without losing a selected draft: %s', async (error) => {
+  const view = panel(); await load()
+  fireEvent.click(screen.getByRole('checkbox', { name: '选择 CHAR-001-V01' }))
+  fireEvent.click(screen.getByRole('button', { name: 'CHAR-001-V01 林夏' }))
+  view.commands.save.mockRejectedValueOnce(error)
+  fireEvent.click(screen.getByRole('button', { name: '保存草稿' }))
+  expect((await screen.findByRole('alert')).textContent).toBe(error instanceof Error ? error.message : zh.error)
+})
+it('clears removed projects on refresh and allows switching tabs before a project exists', async () => {
+  const view = panel(); await load()
+  fireEvent.click(screen.getByRole('tab', { name: '资产列表' }))
+  view.commands.projects.mockResolvedValue([])
+  fireEvent.click(screen.getByRole('button', { name: '刷新' }))
+  await screen.findByText('暂无资产')
+  fireEvent.click(screen.getByRole('tab', { name: '分镜 / Clip 列表' }))
+  expect(screen.getByText(zh.emptyClips)).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: '刷新' }))
+  await waitFor(() => { expect(screen.getByRole('region').getAttribute('aria-busy')).toBe('false') })
+})
+it('does not load missing report types or guess a report after refresh', async () => {
+  const view = panel()
+  view.commands.projects.mockResolvedValue([{ ...project, assets: null, clips: null }, { ...project, name: 'other', directory: '/other', clips: null }])
+  view.rerender(<AssetsPanel {...view.props} useSessions={select => select({ current: 'missing-report' } as never)} />)
+  await screen.findByLabelText('项目')
+  fireEvent.click(screen.getByRole('button', { name: '刷新' }))
+  await waitFor(() => { expect(screen.getByRole('region').getAttribute('aria-busy')).toBe('false') })
+  fireEvent.change(screen.getByLabelText('项目'), { target: { value: project.directory } })
+  await waitFor(() => { expect(screen.getByRole('region').getAttribute('aria-busy')).toBe('false') })
+  fireEvent.change(screen.getByLabelText('项目'), { target: { value: '/other' } })
+  await load()
+  fireEvent.click(screen.getByRole('button', { name: 'CHAR-001-V01 林夏' }))
+  fireEvent.change(screen.getByLabelText('提示词'), { target: { value: 'dirty' } })
+  fireEvent.change(screen.getByLabelText('项目'), { target: { value: project.directory } })
+  expect(screen.getByRole('alert').textContent).toContain('请先保存')
+})
+
+it('refreshes the current project with its explicit image manifest', async () => {
+  const view = panel()
+  view.commands.projects.mockResolvedValue([{ ...project, imagesManifest: 'images.json', clips: null }])
+  view.rerender(<AssetsPanel {...view.props} useSessions={select => select({ current: 'manifest-session' } as never)} />)
+  await load()
+  fireEvent.click(screen.getByRole('button', { name: '刷新' }))
+  await waitFor(() => { expect(view.commands.load).toHaveBeenCalledWith('manifest-session', project.assets, 'images.json', undefined) })
+})
+it('shows a sole project with no asset output as empty', async () => {
+  const view = panel()
+  view.commands.projects.mockResolvedValue([{ ...project, assets: null }])
+  view.rerender(<AssetsPanel {...view.props} useSessions={select => select({ current: 'no-assets' } as never)} />)
+  await screen.findByText('暂无资产')
+})
+it('ignores an unavailable project option', async () => {
+  const view = panel()
+  view.commands.projects.mockResolvedValue([project, { ...project, directory: '/other' }])
+  view.rerender(<AssetsPanel {...view.props} useSessions={select => select({ current: 'choices' } as never)} />)
+  fireEvent.change(await screen.findByLabelText('项目'), { target: { value: '' } })
+  expect(view.commands.load).not.toHaveBeenCalledWith('choices', expect.anything(), expect.anything(), expect.anything())
+})
+it.each([new Error('discovery failed'), 'rejected'])('shows discovery errors: %s', async (error) => {
+  const view = panel()
+  view.commands.projects.mockRejectedValueOnce(error)
+  view.rerender(<AssetsPanel {...view.props} useSessions={select => select({ current: 'failed-discovery' } as never)} />)
+  expect((await screen.findByRole('alert')).textContent).toBe(error instanceof Error ? error.message : zh.error)
+})
+it.each([true, false])('ignores late report completion after its Session closes, success=%s', async (success) => {
+  let resolve!: (value: AssetSnapshot) => void
+  let reject!: (cause: unknown) => void
+  const view = panel()
+  view.commands.load.mockImplementationOnce(() => new Promise((yes, no) => { resolve = yes; reject = no }))
+  await waitFor(() => { expect(view.commands.load).toHaveBeenCalledOnce() })
+  view.unmount()
+  await act(async () => { if (success) resolve(snapshot); else reject(new Error('late failure')) })
+  expect(screen.queryByRole('alert')).toBeNull()
 })

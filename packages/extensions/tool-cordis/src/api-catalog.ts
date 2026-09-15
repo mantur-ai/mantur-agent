@@ -1531,6 +1531,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'Direct script files and folders.',
       },
       {
+        signature: '@Remote(\'catalog\') async catalog(agent: Agent): Promise<ScriptEntry[]>',
+        description: 'Discover documents in the workspace root and standard project script folders.',
+        parameters: [{ name: 'agent', description: 'Owning Session.' }],
+        returns: 'Script files from the root, its 剧本 folder, and direct child projects\' 剧本 folders.',
+      },
+      {
         signature: '@Remote(\'read\') async read(agent: Agent, path: string): Promise<ScriptDocument>',
         description: 'Read a bounded UTF-8 document from one observed file generation.',
         parameters: [{ name: 'agent', description: 'Owning Session.' }, { name: 'path', description: 'Script file within its project.' }],

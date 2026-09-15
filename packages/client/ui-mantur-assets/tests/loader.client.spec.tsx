@@ -44,7 +44,7 @@ it('loads asset slots before their shell, resolves Chinese copy, mounts on click
     const snapshot: AssetSnapshot = { source: { path: '/project/assets.json', version: 'v1' as never, sha256: 'hash' }, stateVersion: null, state: { format: 1, path: '/project/assets.json', drafts: [], proposals: [], history: [], pending: null }, rows: [], projectState: null }
     const remote = {
       $mount: vi.fn(async () => disposeRemote),
-      manturScript: { list: async () => ({ ok: true, value: [] }) },
+      manturScript: { catalog: async () => ({ ok: true, value: [] }) },
       manturAssets: {
         projects: vi.fn(async () => ({ ok: true, value: [{ name: 'project', directory: '/project', assets: '资产/资产提取结果/assets-report.json', clips: null, imagesManifest: null, clipsManifest: null }] })),
         load: vi.fn(async (): Promise<{ ok: true; value: AssetSnapshot } | { ok: false; error: { message: string } }> => { throw new Error('controlled provider error') }),
@@ -52,6 +52,8 @@ it('loads asset slots before their shell, resolves Chinese copy, mounts on click
         prepare: vi.fn(async () => ({ ok: true, value: { requestId: 'proposal-1', source: snapshot.source, edits: [] } })),
         apply: vi.fn(async () => ({ ok: true, value: snapshot })),
         candidates: vi.fn(async () => ({ ok: true, value: [] })),
+        list: vi.fn(async () => ({ ok: true, value: [] })),
+        media: vi.fn(async () => ({ ok: true, value: { id: 'asset', name: 'bound.png', kind: 'image', url: '/bound' } })),
         preview: vi.fn(async () => ({ ok: true, value: { id: null, name: 'image.png', kind: 'image', url: '/preview' } })),
       },
     }
@@ -119,6 +121,8 @@ it('loads asset slots before their shell, resolves Chinese copy, mounts on click
     expect(remote.manturAssets.saveDraft).toHaveBeenCalledWith(session, { source: snapshot.source, stateVersion: null, edits: [] })
     await expect(commands.apply(session, 'proposal-1')).resolves.toBe(snapshot)
     await expect(commands.candidates(session, 'images')).resolves.toEqual([])
+    await expect(commands.list(session, 'images')).resolves.toEqual([])
+    await expect(commands.media(session, 'asset')).resolves.toMatchObject({ url: '/bound' })
     await expect(commands.preview(session, 'image.png')).resolves.toMatchObject({ name: 'image.png', url: '/preview' })
     await expect(commands.request(session, snapshot, [], 'rewrite')).resolves.toBe('proposal-1')
     expect(JSON.parse(send.mock.calls[0]![0])).toMatchObject({ requestId: 'proposal-1', source: snapshot.source, instruction: 'rewrite' })

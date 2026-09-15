@@ -112,7 +112,7 @@ export class ManturAssets extends TypertRemoteService {
     const target = await this.target(agent, directory || '.', false); const entries = await this.ctx.fs.listDir(target)
     if (entries.length > this.config.maxEntries) throw new Error('Folder exceeds asset entry limit')
     const candidates: AssetCandidate[] = []
-    for (const item of entries.filter(value => value.type === 'file' && !value.name.startsWith('.') && mediaKind(value.name) !== undefined)) {
+    for (const item of entries.filter(value => value.type === 'file' && !value.name.startsWith('.'))) {
       const kind = mediaKind(item.name)
       if (kind === undefined) continue
       let issue: AssetCandidate['issue']
@@ -426,10 +426,15 @@ export class ManturAssets extends TypertRemoteService {
     const state = await this.readState(stateFile, current.path)
     if (await this.stateVersion(agent) !== version) throw new FsError('Journal changed while reading.', 'FS_STALE_VERSION')
     return { source: current, stateVersion: version, state, rows: report(text).rows.map((row) => {
-      const image = row.kind === 'image' ? info.references?.images.get(row.id) : undefined
-      if (image && row.media && image !== row.media) throw new Error(`Report and storyboard image disagree: ${row.id}`)
-      return { ...row, media: image ?? row.media, localMedia: info.media.get(row.id)?.path ?? '',
-        details: image === undefined ? row.details : [...row.details, { name: '图片引用', value: JSON.stringify({ asset_id: row.id, url: image, source: info.references?.source.path }) }] }
+      const result = { ...row, localMedia: info.media.get(row.id)?.path ?? '' }
+      if (row.kind === 'image' && info.references !== null) {
+        const image = info.references.images.get(row.id)
+        if (image !== undefined) {
+          if (row.media && image !== row.media) throw new Error(`Report and storyboard image disagree: ${row.id}`)
+          return { ...result, media: image, details: [...row.details, { name: '图片引用', value: JSON.stringify({ asset_id: row.id, url: image, source: info.references.source.path }) }] }
+        }
+      }
+      return result
     }), projectState: null }
   }
   private async stateVersion(agent: Agent) {

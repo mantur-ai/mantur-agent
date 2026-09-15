@@ -1,0 +1,16 @@
+- region "剧本工作台":
+  - button "剧本" [pressed]
+  - button "资产"
+  - main:
+    - strong: 第一集
+    - text: 已保存
+    - button "阅读" [pressed]
+    - button "编辑"
+    - button "保存" [disabled]
+    - button "检查文件更新"
+    - article:
+      - heading "第一集" [level=1]
+      - paragraph: 林夏：我等你很久了。
+      - paragraph: 切到“编辑”后选中文字，即可要求改写准确选段。
+    - group: 查看修改前后
+    - status: 已保存

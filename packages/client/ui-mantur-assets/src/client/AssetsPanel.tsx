@@ -134,7 +134,7 @@ function ReportPanel(props: Props & { session: SessionId }) {
     {error && <p role="alert" className={styles.error}>{error}</p>}
     {dirty && snapshot && <button type="button" onClick={() => { observe(snapshot); setDirty(false); setError('') }}>{t('discard')}</button>}
     {!snapshot && !busy && <div className={styles.empty}><h3>{t(projects.length > 1 && !project ? 'chooseProject' : 'emptyTitle')}</h3><p>{t(mode === 'assets' ? 'emptyAssets' : 'emptyClips')}</p></div>}
-    {snapshot && <>
+    {snapshot && project && <>
       {snapshot.state.pending && <p role="status" className={styles.error}>{t('unfinished')} {snapshot.state.pending.proposal}</p>}
       <div className={styles.filters}><input aria-label={t('search')} placeholder={t('search')} value={search} onChange={(event) =>{  setSearch(event.target.value) }} />
         <select aria-label={t('category')} value={table} onChange={(event) =>{  setTable(event.target.value) }}><option value="">{t('all')}</option>{tables.map(value => <option key={value}>{value}</option>)}</select>
@@ -163,7 +163,7 @@ function ReportPanel(props: Props & { session: SessionId }) {
             <button type="button" disabled={!selected.length || !instruction.trim()} onClick={() => void run(async () => {
               await props.request(session, snapshot, edits(snapshot), instruction)
               setDirty(false)
-              if (project) await readProject(project)
+              await readProject(project)
             })}>{t('request')}</button>
           </fieldset>
           {active.actualPrompt && <details><summary>{t('actualPrompt')}</summary><p className={styles.text}>{active.actualPrompt}</p></details>}
@@ -179,7 +179,7 @@ function ReportPanel(props: Props & { session: SessionId }) {
       </details>)}
       <details className={styles.files}><summary>{t('candidates')}</summary><p>{t('candidateHint')}</p>
         <button type="button" disabled={busy || !project} onClick={() => void run(async () => {
-          if (project) setCandidates(await props.candidates(session, `${project.directory}/资产/生成图片`))
+          setCandidates(await props.candidates(session, `${project.directory}/资产/生成图片`))
         })}>{t('scan')}</button>
         <div className={styles.fileList}>{candidates?.filter(value => value.issue === undefined).map(value => <button type="button" key={value.path} onClick={() =>{  setCandidate(value) }}>{value.name}</button>)}{candidates?.length === 0 && <p>{t('noFiles')}</p>}</div>
         {candidates?.some(value => value.issue !== undefined) && <section aria-label={t('unavailableFiles')}><h3>{t('unavailableFiles')}</h3>{candidates.filter(value => value.issue !== undefined).map(value => <p key={value.path}>{value.name} · {t(value.issue === 'too-large' ? 'oversized' : 'damaged')}</p>)}</section>}

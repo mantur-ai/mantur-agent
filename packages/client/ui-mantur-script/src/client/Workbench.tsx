@@ -59,7 +59,6 @@ function ScriptEditor(props: WorkbenchProps & { session: SessionId | undefined }
   const path = props.useStore(s => session === undefined ? undefined : s.paths[session])
   const draft = props.useStore(s => session === undefined || path === undefined ? undefined : s.drafts[session]?.[path])
   const [entries, setEntries] = useState<ScriptEntry[]>([])
-  const [folder, setFolder] = useState('')
   const [reading, setReading] = useState(true)
   const [range, setRange] = useState({ start: 0, end: 0 })
   const [instruction, setInstruction] = useState('')
@@ -83,10 +82,18 @@ function ScriptEditor(props: WorkbenchProps & { session: SessionId | undefined }
   useEffect(() => {
     if (session === undefined) return
     let active = true
-    void props.list(session, '').then((value) => { if (active) setEntries(value) })
+    setEntries([])
+    void props.list(session, '').then(async (value) => {
+      if (!active) return
+      setEntries(value)
+      const only = value.length === 1 ? value[0] : undefined
+      if (path === undefined && only !== undefined) {
+        await props.read(session, only.path).then((document) => { if (active) actions.open(session, document) })
+      }
+    })
       .catch((error: unknown) => { if (active) setError(String(error)) })
     return () => { active = false }
-  }, [session, props.list])
+  }, [session, props.list, props.read, actions])
   useEffect(() => { setRange({ start: 0, end: 0 }) }, [path, draft?.base.version])
   useEffect(() => { setReading(true); setStatus(undefined) }, [path])
 
@@ -96,17 +103,7 @@ function ScriptEditor(props: WorkbenchProps & { session: SessionId | undefined }
     catch (error) { if (live.current) setError(error instanceof Error ? error.message : String(error)) }
     finally { if (live.current) setBusy(false) }
   }
-  async function browse(directory: string) {
-    /* v8 ignore next -- this handler is attached only to controls rendered for the selected project or document. */
-    if (session === undefined) return
-    const token = ++navigation.current
-    await run(async () => {
-      const value = await props.list(session, directory)
-      if (token === navigation.current && live.current) { setEntries(value); setFolder(directory) }
-    })
-  }
   async function open(entry: ScriptEntry) {
-    if (entry.directory) return browse(entry.path)
     /* v8 ignore next -- this handler is attached only to controls rendered for the selected project or document. */
     if (session === undefined) return
     const token = ++navigation.current
@@ -148,22 +145,17 @@ function ScriptEditor(props: WorkbenchProps & { session: SessionId | undefined }
   }
   if (session === undefined) return <p className={css.empty}>{t('selectSession')}</p>
   return <div className={css.script}>
-    <nav className={css.files} aria-label={t('files')}>
+    <nav className={css.files} aria-label={t('files')} hidden={entries.length === 1}>
       <strong>{t('files')}</strong>
-      <form onSubmit={(event) => { event.preventDefault(); void browse(folder) }}>
-        <input aria-label={t('folder')} value={folder} onChange={(event) =>{  setFolder(event.target.value) }} />
-        <button type="submit" disabled={busy}>{t('browse')}</button>
-      </form>
-      <button type="button" disabled={busy} onClick={() => { void browse('') }}>{t('root')}</button>
       {entries.map(entry => <button type="button" key={entry.path} title={entry.path} aria-current={entry.path === path ? 'page' : undefined}
-        disabled={busy} onClick={() => { void open(entry) }}>{entry.directory ? '▸ ' : ''}{entry.name}</button>)}
+        disabled={busy} onClick={() => { void open(entry) }}>{entry.name.replace(/\.(md|txt|fountain)$/i, '')}</button>)}
       {entries.length === 0 && <p>{t('empty')}</p>}
     </nav>
     <main className={css.document}>
       {error !== undefined && <p className={css.notice} role="alert">{t('failed')}: {error}</p>}
       {draft === undefined ? <p className={css.empty}>{t('selectFile')}</p> : <>
         <header className={css.toolbar}>
-          <strong title={draft.base.path}>{draft.base.path.split(/[\\/]/).at(-1)}</strong>
+          <strong title={draft.base.path}>{draft.base.path.split(/[\\/]/).at(-1)?.replace(/\.(md|txt|fountain)$/i, '')}</strong>
           <span>{t(dirty ? 'dirty' : 'saved')}</span>
           <button type="button" aria-pressed={reading} onClick={() =>{  setReading(true) }}>{t('reading')}</button>
           <button type="button" aria-pressed={!reading} onClick={() =>{  setReading(false) }}>{t('source')}</button>

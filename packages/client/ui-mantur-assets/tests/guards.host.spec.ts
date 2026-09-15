@@ -409,3 +409,31 @@ it('discovers standard outputs in the workspace and immediate project folders wi
   await mkdir(join(reportDir, 'clip-seedance-report.json'))
   await expect(ctx.manturAssets.projects(agent)).rejects.toThrow('not a file')
 })
+
+it('rejects corrupt manifested images before exposing a preview', async () => {
+  await writeFile(join(root, 'broken.png'), 'not an image')
+  await writeFile(join(root, 'images.json'), JSON.stringify([{ asset_id: 'CHAR-1', file: 'broken.png', sha256: fingerprint('not an image') }]))
+  await expect(ctx.manturAssets.load(agent, 'assets.json', undefined, 'images.json')).rejects.toThrow('Invalid local image')
+})
+it('rejects a storyboard changed between its fingerprint and content reads', async () => {
+  const clips = JSON.stringify({ schema_version: 'drama-storyboard-seedance-v2', Clip总表: [], 'Seedance2.0请求体': [] })
+  await writeFile(join(root, 'clips.json'), clips)
+  const read = ctx.fs.readBytes.bind(ctx.fs)
+  let reads = 0
+  vi.spyOn(ctx.fs, 'readBytes').mockImplementation(async (...args) => {
+    const result = await read(...args)
+    if (args[0].displayPath.endsWith('clips.json') && ++reads === 2) return Buffer.from(clips + ' ')
+    return result
+  })
+  await expect(ctx.manturAssets.load(agent, 'assets.json', 'clips.json')).rejects.toThrow('Storyboard changed while reading')
+})
+
+it('loads Clip rows without interpreting their video as an image reference', async () => {
+  await writeFile(join(root, 'clips.json'), JSON.stringify({ schema_version: 'drama-storyboard-seedance-v2', Clip总表: [{ 'Clip ID': 'CLIP-1', 最终提示词: 'clip' }], 'Seedance2.0请求体': [{ 'Clip ID': 'CLIP-1', 最终提示词: 'clip' }] }))
+  expect((await ctx.manturAssets.load(agent, 'clips.json')).rows[0]?.kind).toBe('video')
+})
+
+it('leaves assets without an exact storyboard identity unbound', async () => {
+  await writeFile(join(root, 'clips.json'), JSON.stringify({ schema_version: 'drama-storyboard-seedance-v2', Clip总表: [], 'Seedance2.0请求体': [] }))
+  expect((await ctx.manturAssets.load(agent, 'assets.json', 'clips.json')).rows[0]?.media).toBe('')
+})

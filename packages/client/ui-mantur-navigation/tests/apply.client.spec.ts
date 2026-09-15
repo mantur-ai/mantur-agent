@@ -184,6 +184,7 @@ describe('ui-mantur-navigation apply', () => {
     await fiber.await()
     expect(subject.slots.entries('sidebar.navigation')[0]?.component).toBe(MarketplaceNavigation)
     expect(subject.slots.entries('conversation.composer.dock')[0]?.options).toMatchObject({ id: 'stats', priority: -1 })
+    expect((subject.slots.entries('conversation.composer.dock')[0]!.component as () => null)()).toBeNull()
     expect(subject.slots.entries('sidebar.workspaces.heading')[0]?.component).toBe(ProjectsHeading)
     const mainPage = subject.slots.entries('main.page')[0]
     expect(mainPage?.component).toBe(MarketplacePage)
