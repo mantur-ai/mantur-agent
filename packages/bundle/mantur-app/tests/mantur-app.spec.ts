@@ -77,6 +77,8 @@ describe('dsh-mantur-app bundle', () => {
     })
     expect(row('ui-agent-preset')?.disabled).toBe(true)
     expect(row('ui-plan')?.disabled).toBe(true)
+    expect(row('ui-trajectory')?.disabled).toBe(true)
+    expect(row('session-log-download')?.disabled).toBe(true)
     expect(row('ui-model-selection')?.disabled).not.toBe(true)
     expect(row('ui-permission')?.disabled).not.toBe(true)
     expect(row('ui-settings-models')?.disabled).not.toBe(true)

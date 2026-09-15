@@ -15,7 +15,7 @@ import { en, zh, type ScriptKey } from './locales.ts'
 
 /** File commands capture the initiating Session rather than resolving the current selection later. */
 export interface ScriptCommands {
-  /** @param session - Owning conversation. @param directory - Selected project folder. @returns Script entries. */
+  /** @param session - Owning conversation. @param directory - Reserved directory argument. @returns Discovered project script files. */
   list: (session: SessionId, directory: string) => Promise<ScriptEntry[]>
   /** @param session - Owning conversation. @param path - File. @returns Observed document. */
   read: (session: SessionId, path: string) => Promise<ScriptDocument>
@@ -63,7 +63,7 @@ export async function apply(ctx: Context): Promise<void> {
         'main.workbench.editing.content': { kind: 'single', scope: 'root' },
       },
       inject: (): ScriptCommands => ({
-        list: async (session, path) => unwrap(await ctx.remote.manturScript.list(session, path)),
+        list: async session => unwrap(await ctx.remote.manturScript.catalog(session)),
         read: async (session, path) => unwrap(await ctx.remote.manturScript.read(session, path)),
         save: async (session, document, text) => unwrap(await ctx.remote.manturScript.save(session, {
           path: document.path, version: document.version, content: text,

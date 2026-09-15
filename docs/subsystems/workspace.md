@@ -203,10 +203,17 @@ Host service. Each write is source-CAS guarded and journals recovery before repl
 @Remote('list') async list(agent: Agent, directory: string): Promise<AssetEntry[]>
 
 /**
+ * Discover standard operator outputs in the workspace and its direct project folders.
+ * @param agent - Owning Session.
+ * @returns Projects with an asset or storyboard report; local manifests remain explicit files.
+ */
+@Remote('projects') async projects(agent: Agent): Promise<AssetProject[]>
+
+/**
  * Discover previewable media candidates in one project-local folder.
  * @param agent - Owning Session with a loaded report.
  * @param directory - Project-local candidate folder.
- * @returns Direct child media files whose bytes match a supported media signature.
+ * @returns Direct child media files; unsupported and oversized files carry an issue and cannot be previewed.
  */
 @Remote('candidates') async candidates(agent: Agent, directory: string): Promise<AssetCandidate[]>
 
@@ -214,11 +221,11 @@ Host service. Each write is source-CAS guarded and journals recovery before repl
  * Load one pipeline report and optional explicit media manifest.
  * @param agent - Owning Session.
  * @param assetsPath - Project-local report path.
- * @param _clipsPath - Reserved clip-report path kept for Remote compatibility.
+ * @param clipsPath - Optional storyboard report whose image references explicitly identify assets.
  * @param mediaManifest - Optional project-local manifest with SHA-256 pinned files.
  * @returns Current report rows plus journal state.
  */
-@Remote('load') async load(agent: Agent, assetsPath: string, _clipsPath?: string, mediaManifest?: string): Promise<AssetSnapshot>
+@Remote('load') async load(agent: Agent, assetsPath: string, clipsPath?: string, mediaManifest?: string): Promise<AssetSnapshot>
 
 /**
  * Persist selected prompt edits without modifying the source report.
@@ -358,6 +365,13 @@ Remote operations never resolve paths against another Session or process cwd.
  * @returns Direct script files and folders.
  */
 @Remote('list') async list(agent: Agent, directory: string): Promise<ScriptEntry[]>
+
+/**
+ * Discover documents in the workspace root and standard project script folders.
+ * @param agent - Owning Session.
+ * @returns Script files from the root, its 剧本 folder, and direct child projects' 剧本 folders.
+ */
+@Remote('catalog') async catalog(agent: Agent): Promise<ScriptEntry[]>
 
 /**
  * Read a bounded UTF-8 document from one observed file generation.

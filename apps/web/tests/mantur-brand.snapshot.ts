@@ -19,6 +19,7 @@ import {
   type WebScaffold,
 } from './scaffold.ts'
 import { newEnglishPage, saveFailureShot, ZH_BROWSER_LOCALE } from './support.ts'
+import { readClientBuildRecord } from '../../../scripts/client-build-environment.ts'
 
 const OVERLAY = fileURLToPath(new URL('../../../packages/bundle/mantur-app/cordis.patch.yml', import.meta.url))
 const INSTALL_ANCHOR = fileURLToPath(new URL('../../../packages/bundle/mantur-app/package.json', import.meta.url))
@@ -32,6 +33,7 @@ const TOOL_SCHEMAS_EXPECTED = fileURLToPath(
 const MARKETPLACE_EXPECTED = join(SNAPSHOT_DIR, 'marketplace.expected.md')
 const ACCOUNT_SETTINGS_EXPECTED = join(SNAPSHOT_DIR, 'account-settings.expected.md')
 const MODE = webSnapshotMode()
+const CLIENT_PROFILE = readClientBuildRecord(fileURLToPath(new URL('../../..', import.meta.url))).environment.DSH_CLIENT_BUILD_PROFILE
 
 /** Choose a Workspace from Mantur's resident root composer and await the real Session selection. */
 async function connectManturWorkspace(page: Page, root: string, locale: 'zh' | 'en'): Promise<void> {
@@ -251,7 +253,7 @@ describe.skipIf(MODE === 'record')('web snapshot: Mantur product identity', () =
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
-  it('offers model credential setup without requiring a Mantur account choice', async () => {
+  it('keeps model settings accessible through the built profile’s first-run flow', async () => {
     const firstRun = await launchWebScaffold({
       extraOverlayPath: OVERLAY,
       extraInstallAnchors: [INSTALL_ANCHOR],
@@ -264,9 +266,20 @@ describe.skipIf(MODE === 'record')('web snapshot: Mantur product identity', () =
     try {
       await firstRunPage.goto(firstRun.authenticatedUrl, { waitUntil: 'load' })
       await firstRunPage.waitForSelector('[class*="frame"]', { timeout: 30_000 })
-      await firstRunPage.getByRole('heading', { name: '添加一个 API Key 开始使用' })
-        .waitFor({ timeout: 10_000 })
+      if (CLIENT_PROFILE === 'mantur') {
+        await firstRunPage.getByText('故事起于一念，余下交给漫途', { exact: true }).waitFor()
+        expect(await firstRunPage.getByRole('heading', { name: '添加一个 API Key 开始使用' }).count()).toBe(0)
+      } else {
+        await firstRunPage.getByRole('heading', { name: '添加一个 API Key 开始使用' }).waitFor()
+        await firstRunPage.getByRole('button', { name: '稍后配置', exact: true }).click()
+      }
       expect(await firstRunPage.getByRole('heading', { name: '登录漫途账号' }).count()).toBe(0)
+      await firstRunPage.getByRole('button', { name: '设置', exact: true }).click()
+      const settings = firstRunPage.getByRole('dialog', { name: '设置' })
+      await settings.getByRole('button', { name: '模型', exact: true }).click()
+      await settings.getByRole('heading', { name: '模型', exact: true }).waitFor()
+      await settings.getByRole('button', { name: '添加提供方', exact: true }).click()
+      await settings.getByRole('combobox', { name: '提供方', exact: true }).waitFor()
     } finally {
       await firstRunPage.close()
       await firstRun.close()
@@ -374,6 +387,11 @@ describe.skipIf(MODE === 'record')('web snapshot: Mantur product identity', () =
       await recipePage.getByRole('button', { name: '交给 Agent 复刻' }).click()
       const recipeSessionId = await settled
       expect(initialIds.has(recipeSessionId)).toBe(false)
+      await recipePage.getByRole('navigation', { name: '会话层级' }).waitFor()
+      expect(await recipePage.getByRole('tab', { name: '轨迹', exact: true }).count()).toBe(0)
+      expect(await recipePage.getByRole('button', { name: 'Session 日志', exact: true }).count()).toBe(0)
+      expect(await recipePage.getByRole('tab', { name: '对话', exact: true }).count()).toBe(0)
+      expect(await recipePage.getByText(/\d+ 轮 · \d+ 步/).count()).toBe(0)
       const persistedEvents = await readPersistedEvents(recipeScaffold, recipeSessionId)
       const firstUserMessage = persistedEvents.find(event => event.type === 'user/message'
         && event.data.source.kind === 'user')

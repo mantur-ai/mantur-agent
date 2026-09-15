@@ -20,12 +20,18 @@ export interface AssetRow extends PromptText {
   fingerprint: string
   kind: 'image' | 'video'
   media: string
+  /** Source columns retained for read-only inspection. */
+  details: { name: string; value: string }[]
+  /** Exact local file binding supplied by the selected media manifest. */
+  localMedia: string
   template: string
   actualRequest: string
   actualPrompt: string
 }
 /** A project-local media file discovered for explicit user review. */
 export interface AssetCandidate {
+  /** Unpreviewable files remain visible with the reason for rejection. */
+  issue?: 'unsupported' | 'too-large'
   /** Exact asset identity when the filename matches one loaded report row. */
   assetId: string | null
   /** Canonical project-local file path. */
@@ -79,3 +85,13 @@ export interface AssetCommand { source: SourcePin; stateVersion: AssetVersion | 
 export interface AssetEntry { path: string; name: string; directory: boolean }
 /** Explicitly selected local media, optionally bound by a verified manifest. */
 export interface AssetMedia { id: string | null; name: string; url: string; kind: 'image' | 'video' }
+
+/** Operator output locations discovered within the Session workspace. */
+export interface AssetProject {
+  name: string
+  directory: string
+  assets: string | null
+  clips: string | null
+  imagesManifest: string | null
+  clipsManifest: string | null
+}

@@ -31,6 +31,8 @@ The Connection owns request correlation, the `/api` carrier, trust checks, exact
 
 The internal `$events` logical stream is the Connection generation source. Its opening `ready` frame carries the Host home used for path display and establishes the generation after Host listeners are attached, before any controller begins a baseline read. `ctx.remote.$on()` delivers allowlisted ordinary events to the root Client Context and scoped waterfall events to the resolved Session Context; a waterfall listener returns a result, calls `next()`, or rejects.
 
+The [Mantur asset plugin](../../packages/client/ui-mantur-assets/README.md) owns report browsing in `main.workbench.assets.content`. Its `AssetSnapshot` includes source columns and explicit local media bindings; the browser separates report fields, prompt drafts and submitted requests. All generated `load` argument positions are supplied even when optional paths are absent.
+
 ## Client models
 
 Each API controller package owns a paired Host and Client face. The Host side owns authoritative mutation and stream production. The Client side owns an identity-stable, React-free model over the same generated wire types and exposes observable snapshots plus commands. UI packages consume these Client services and do not reproduce transport state in component stores.

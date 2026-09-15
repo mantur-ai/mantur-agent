@@ -43,7 +43,6 @@ function setup(dictionary = zh, overrides: Partial<Props> = {}) {
 }
 async function open(dictionary = zh) {
   const view = setup(dictionary)
-  fireEvent.click(await view.findByRole('button', { name: '01.md' }))
   await view.findByRole('heading', { name: '第一集' })
   return view
 }
@@ -147,16 +146,15 @@ it('shows initial listing errors and ignores a listing completed after unmount',
   await act(async () => { pending.reject(new Error('late listing')) })
 })
 
-it('navigates folders and returns to the project root', async () => {
-  const listing = vi.fn(async (_session: SessionId, path: string) => path === ''
-    ? [{ path: '/project/episodes', name: 'episodes', directory: true }]
-    : [{ path: first.path, name: '01.md', directory: false }])
-  const view = setup(zh, { list: listing })
-  fireEvent.click(await view.findByRole('button', { name: /episodes/ }))
-  await view.findByRole('button', { name: '01.md' })
-  fireEvent.click(view.getByRole('button', { name: zh.root }))
-  await view.findByRole('button', { name: /episodes/ })
-  expect(listing).toHaveBeenLastCalledWith(session, '')
+it('lists multiple scripts by title without path controls', async () => {
+  const view = setup(zh, { list: async () => [
+    { path: first.path, name: '01.md', directory: false },
+    { path: '/project/02.md', name: '02.md', directory: false },
+  ] })
+  fireEvent.click(await view.findByRole('button', { name: '01' }))
+  await view.findByRole('heading', { name: '第一集' })
+  expect(view.queryByRole('textbox', { name: zh.folder })).toBeNull()
+  expect(view.queryByRole('button', { name: zh.root })).toBeNull()
 })
 
 it('rechecks disk after a running turn becomes idle and reports a failed observation', async () => {
@@ -230,15 +228,12 @@ it('keeps project-free tab choices explicit and shows missing optional panels', 
   expect(view.getByText(zh.selectSession)).toBeTruthy()
 })
 
-it('accepts an explicit folder form and reads plain-text documents without Markdown parsing', async () => {
+it('opens a single plain-text script automatically without Markdown parsing', async () => {
   const text = { ...first, path: '/project/02.txt', content: '# Literal text' }
   const view = setup(zh, { read: async () => text })
-  fireEvent.change(view.getByRole('textbox', { name: zh.folder }), { target: { value: 'episodes' } })
-  fireEvent.click(view.getByRole('button', { name: zh.browse }))
-  await waitFor(() => { expect(view.props.list).toHaveBeenCalledWith(session, 'episodes') })
-  fireEvent.click(await view.findByRole('button', { name: '01.md' }))
   expect(await view.findByText('# Literal text')).toBeTruthy()
   expect(view.queryByRole('heading', { name: 'Literal text' })).toBeNull()
+  expect(view.queryByRole('navigation')).toBeNull()
 })
 
 it('refuses direct form submission while the selected draft is unsaved', async () => {
@@ -257,23 +252,18 @@ it('refuses direct form submission while the selected draft is unsaved', async (
 it.each([true, false])('ignores file-open completion after unmount, rejected=%s', async (rejected) => {
   const pending = Promise.withResolvers<ScriptDocument>()
   const view = setup(zh, { read: () => pending.promise })
-  fireEvent.click(await view.findByRole('button', { name: '01.md' }))
+  await act(async () => { await Promise.resolve() })
   view.unmount()
   await act(async () => { if (rejected) pending.reject(new Error('late read')); else pending.resolve(first) })
   expect(view.instance.getSnapshot().drafts).toEqual({})
 })
 
-it('ignores a completed folder navigation and initial listing after unmount', async () => {
+it('ignores an initial catalog completed after unmount', async () => {
   const pending = Promise.withResolvers<import('../src/types.ts').ScriptEntry[]>()
   const initial = setup(zh, { list: () => pending.promise })
   initial.unmount()
   await act(async () => { pending.resolve([]) })
-  const view = await open()
-  const next = Promise.withResolvers<import('../src/types.ts').ScriptEntry[]>()
-  view.props.list.mockReturnValueOnce(next.promise)
-  fireEvent.click(view.getByRole('button', { name: zh.root }))
-  view.unmount()
-  await act(async () => { next.resolve([]) })
+  expect(initial.props.read).not.toHaveBeenCalled()
 })
 
 it.each([true, false])('ignores an idle observation after unmount, rejected=%s', async (rejected) => {
@@ -325,4 +315,15 @@ it.each(['save', 'send'] as const)('settles an already admitted %s without updat
     await act(async () => { pending.resolve(undefined) })
   }
   expect(view.container.textContent).toBe('')
+})
+
+it.each([true, false])('ignores manual-open completion after disposal, success=%s', async (success) => {
+  let resolve!: (value: ScriptDocument) => void
+  let reject!: (cause: unknown) => void
+  const view = setup(zh, { list: async () => [{ path: first.path, name: '01.md', directory: false }, { path: '/project/02.md', name: '02.md', directory: false }],
+    read: () => new Promise((yes, no) => { resolve = yes; reject = no }) })
+  fireEvent.click(await view.findByRole('button', { name: '01' }))
+  view.unmount()
+  await act(async () => { if (success) resolve(first); else reject(new Error('late failure')) })
+  expect(view.instance.getSnapshot().drafts[session]).toBeUndefined()
 })

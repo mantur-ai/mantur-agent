@@ -25,6 +25,8 @@ kind: "package-bundle"
 
 通过 `dsh --profile mantur` 启动完整产品；桌面载体会自动选择该 profile。有序 bundle 栈为 `dsh-base`、`dsh-web-app` 与本层。`web` profile 保持不变。
 
+对话页头不提供“轨迹”视图和“Session 日志”下载。仅注册对话视图时不显示标签栏。本层禁用 `ui-trajectory` 和 `session-log-download`，包括浏览器 `/export` 命令；会话持久化记录和对话历史保持启用。
+
 已安装的桌面客户端将 `DSH_MANTUR_EDITOR_ROOT` 和 `DSH_MANTUR_EDITOR_NODE` 指向包内资源与 Electron 可执行文件。本层以打包模式启用[剪辑运行服务](../../client/ui-mantur-editing/README.zh.md)，并显式设置启动、退出和工具调用预算。缺少包资源会校验失败，不会静默禁用剪辑。未提供资源环境时，该配置行保持禁用，直到开发 profile 显式启用。
 
 新对话保持未关联状态，直到用户选择项目或提交首条草稿。本层挂载[自动项目准备](../../workspace/mantur-projects/README.zh.md)，通过 `DSH_MANTUR_PROJECTS_ROOT` 提供桌面解析的根目录。首次发送要求已持久保存的原生草稿标识；打开首页不创建项目。用户可以在输入框页脚查看或更改根目录。

@@ -10,6 +10,8 @@ Create-attempt retries accept the server's remaining lifetime from zero to 600 s
 
 Before exchanging a new Host launch token, Main removes only root-scoped `dsh-auth-` connection cookies for `127.0.0.1` from the desktop window's cookie store. Cookies are shared across ports; retaining cookies from random-port restarts can exceed HTTP request-header limits and block plugin loading with 431. This cleanup preserves account credentials, sessions, browser preferences and unrelated cookies. Removal must finish before navigation; failures stop startup.
 
+Electron keeps `漫途Agent` as its application storage name while windows, menus and the About panel display `ManTur Agent`. On macOS, `safeStorage` derives its Keychain service from the storage name; changing that name prevents existing encrypted account credentials from being read.
+
 On macOS, the native About panel reads its icon from the application bundle. The unpackaged development executable therefore retains Electron’s About icon; its Dock icon uses the product PNG.
 
 ## Develop without packaging
@@ -71,7 +73,7 @@ The smoke also checks the embedded CLI's pinned source manifest, package version
 
 Packaging copies the CLI source record and its `node_modules` directory as separate resource inputs. Electron Builder excludes a top-level `node_modules` child when copying a directory; selecting the module directory itself preserves the embedded CLI and its dependency.
 
-## Publish a signed macOS release
+## Publish a signed desktop release
 
 The manual `Desktop release` workflow defaults to `architectures=both` or explicitly selects `arm64` on native macOS runners. All selected jobs first exercise bounded signing discovery under a 64-descriptor process limit, then sign the application with a Developer ID Application identity, submit it to Apple's notarization service, validate the signature, Gatekeeper assessment, and stapled ticket, and run the packaged smoke before their artifacts can be assembled.
 
@@ -85,6 +87,8 @@ Before public distribution, enable Release Immutability in the repository settin
 | Secret | `MACOS_CERTIFICATE_PASSWORD` | Password used to export the `.p12` |
 | Secret | `APPLE_ID` | Apple ID used for notarization |
 | Secret | `APPLE_APP_SPECIFIC_PASSWORD` | App-specific password for that Apple ID |
+
+Set `windows=true` to include Windows x64 in the same release. Configure `WINDOWS_CERTIFICATE` (Base64-encoded signing `.pfx` with its private key) and `WINDOWS_CERTIFICATE_PASSWORD` as encrypted secrets in the protected `windows-release` environment. The native Windows job requires both secrets and a valid Authenticode signature on the application and installer before upload. Missing credentials, invalid signatures, or a failed selected platform prevent assembly and publication; Windows is excluded only when explicitly left unselected. The assembled Windows files include the EXE, its blockmap, and `latest.yml` for automatic updates.
 
 The workflow combines the selected native `latest-mac.yml` files into one architecture-aware update channel and retains the complete candidate plus `SHA256SUMS` for seven days. Run it from the exact `v<apps/desktop version>` tag; this semver-compatible tag lets electron-updater select prereleases from the GitHub feed. `publish=false` stops after assembling the candidate. `publish=true` additionally requires the approval variable to name the SHA-256 digest of the complete pinned source configuration before it creates a GitHub release with the DMGs, update ZIPs, blockmaps, update metadata, and hashes. The workflow refuses a tag that already owns a release instead of replacing published files; repository-level Release Immutability then prevents later tag or asset changes.
 

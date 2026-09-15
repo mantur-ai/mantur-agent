@@ -1,0 +1,44 @@
+- region "资产工作台":
+  - heading "资产工作台" [level=2]
+  - paragraph: 查看流水线产出的资产与分镜，预览图片和成片。
+  - group:
+    - tablist "报告类型":
+      - tab "资产列表" [selected]
+      - tab "分镜 / Clip 列表"
+    - button "刷新"
+  - textbox "搜索 ID、名称或提示词"
+  - combobox "资产分类":
+    - option "全部分类" [selected]
+    - option "角色资产"
+    - option "场景资产"
+  - text: 2 / 2
+  - navigation "报告条目":
+    - button "CHAR-001 测试角色" [pressed]:
+      - img "测试角色"
+      - strong: 测试角色
+      - text: CHAR-001 角色资产
+    - checkbox "选择 CHAR-001" [checked]
+    - text: 选择
+    - button "SCENE-001 庭院":
+      - text: 尚未绑定图片
+      - strong: 庭院
+      - text: SCENE-001 场景资产
+    - checkbox "选择 SCENE-001"
+    - text: 选择
+  - article:
+    - button "收起详情"
+    - text: CHAR-001
+    - heading "测试角色" [level=3]
+    - img "测试角色"
+    - group:
+      - text: 提示词
+      - textbox "提示词": 用户保存的草稿
+      - group: 负面提示词
+      - paragraph: 已选条目 · 1
+      - text: CHAR-001
+      - button "保存草稿"
+      - text: 发送提案请求
+      - textbox "发送提案请求"
+      - button "发送提案请求" [disabled]
+    - group: 全部原始字段
+  - group: 候选资产

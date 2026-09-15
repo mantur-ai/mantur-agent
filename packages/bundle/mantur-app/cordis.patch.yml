@@ -23,6 +23,12 @@
 - id: ui-plan
   disabled: true
 
+- id: ui-trajectory
+  disabled: true
+
+- id: session-log-download
+  disabled: true
+
 - id: ui-workspace
   config:
     newSessionWorkspace: explicit

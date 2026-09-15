@@ -28,6 +28,8 @@ import { buildApplicationMenu } from './update-menu.ts'
 import { startAutoUpdates, type DesktopUpdateController, type DesktopUpdateState } from './updater.ts'
 
 const APP_NAME = 'ManTur Agent'
+// Electron derives the macOS Keychain service from this name; display branding must not change it.
+const APP_STORAGE_NAME = '漫途Agent'
 const APP_ICON = fileURLToPath(new URL('../resources/mantur-app-icon.png', import.meta.url))
 const STARTUP_PAGE = fileURLToPath(new URL('../resources/startup.html', import.meta.url))
 
@@ -41,7 +43,7 @@ let preparingUpdate = false
 let accountHost: NativeAccountHost | undefined
 let nativeAccount: NativeAccountController | undefined
 
-app.setName(APP_NAME)
+app.setName(APP_STORAGE_NAME)
 const paths = initializeDesktopPaths(app, app.commandLine.hasSwitch('user-data-dir')
   ? app.commandLine.getSwitchValue('user-data-dir')
   : undefined)

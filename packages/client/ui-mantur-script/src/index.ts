@@ -98,6 +98,26 @@ export class ManturScript extends TypertRemoteService {
   }
 
   /**
+   * Discover documents in the workspace root and standard project script folders.
+   * @param agent - Owning Session.
+   * @returns Script files from the root, its 剧本 folder, and direct child projects' 剧本 folders.
+   */
+  @Remote('catalog')
+  async catalog(agent: Agent): Promise<ScriptEntry[]> {
+    const root = await this.list(agent, '')
+    const files = root.filter(entry => !entry.directory)
+    for (const directory of root.filter(entry => entry.directory)) {
+      const children = await this.list(agent, directory.path)
+      if (directory.name === '剧本') files.push(...children.filter(entry => !entry.directory))
+      else for (const scripts of children.filter(entry => entry.directory && entry.name === '剧本')) {
+        files.push(...(await this.list(agent, scripts.path)).filter(entry => !entry.directory))
+      }
+      if (files.length > this.config.maxEntries) throw new Error('The workspace exceeds the script entry limit. Select a single project.')
+    }
+    return files.sort((a, b) => a.path.localeCompare(b.path))
+  }
+
+  /**
    * Read a bounded UTF-8 document from one observed file generation.
    * @param agent - Owning Session.
    * @param path - Script file within its project.

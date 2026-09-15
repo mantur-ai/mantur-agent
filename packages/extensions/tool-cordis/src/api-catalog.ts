@@ -1365,15 +1365,21 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'Direct visible child entries.',
       },
       {
+        signature: '@Remote(\'projects\') async projects(agent: Agent): Promise<AssetProject[]>',
+        description: 'Discover standard operator outputs in the workspace and its direct project folders.',
+        parameters: [{ name: 'agent', description: 'Owning Session.' }],
+        returns: 'Projects with an asset or storyboard report; local manifests remain explicit files.',
+      },
+      {
         signature: '@Remote(\'candidates\') async candidates(agent: Agent, directory: string): Promise<AssetCandidate[]>',
         description: 'Discover previewable media candidates in one project-local folder.',
         parameters: [{ name: 'agent', description: 'Owning Session with a loaded report.' }, { name: 'directory', description: 'Project-local candidate folder.' }],
-        returns: 'Direct child media files whose bytes match a supported media signature.',
+        returns: 'Direct child media files; unsupported and oversized files carry an issue and cannot be previewed.',
       },
       {
-        signature: '@Remote(\'load\') async load(agent: Agent, assetsPath: string, _clipsPath?: string, mediaManifest?: string): Promise<AssetSnapshot>',
+        signature: '@Remote(\'load\') async load(agent: Agent, assetsPath: string, clipsPath?: string, mediaManifest?: string): Promise<AssetSnapshot>',
         description: 'Load one pipeline report and optional explicit media manifest.',
-        parameters: [{ name: 'agent', description: 'Owning Session.' }, { name: 'assetsPath', description: 'Project-local report path.' }, { name: '_clipsPath', description: 'Reserved clip-report path kept for Remote compatibility.' }, { name: 'mediaManifest', description: 'Optional project-local manifest with SHA-256 pinned files.' }],
+        parameters: [{ name: 'agent', description: 'Owning Session.' }, { name: 'assetsPath', description: 'Project-local report path.' }, { name: 'clipsPath', description: 'Optional storyboard report whose image references explicitly identify assets.' }, { name: 'mediaManifest', description: 'Optional project-local manifest with SHA-256 pinned files.' }],
         returns: 'Current report rows plus journal state.',
       },
       {
@@ -1523,6 +1529,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'List the selected project folder without recursive discovery.',
         parameters: [{ name: 'agent', description: 'Owning Session.' }, { name: 'directory', description: 'Project-relative or absolute folder.' }],
         returns: 'Direct script files and folders.',
+      },
+      {
+        signature: '@Remote(\'catalog\') async catalog(agent: Agent): Promise<ScriptEntry[]>',
+        description: 'Discover documents in the workspace root and standard project script folders.',
+        parameters: [{ name: 'agent', description: 'Owning Session.' }],
+        returns: 'Script files from the root, its 剧本 folder, and direct child projects\' 剧本 folders.',
       },
       {
         signature: '@Remote(\'read\') async read(agent: Agent, path: string): Promise<ScriptDocument>',
@@ -3876,7 +3888,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'AssetCandidate',
-    declaration: 'export interface AssetCandidate {\n    assetId: string | null;\n    path: string;\n    name: string;\n    kind: \'image\' | \'video\';\n    size: number;\n}',
+    declaration: 'export interface AssetCandidate {\n    issue?: \'unsupported\' | \'too-large\';\n    assetId: string | null;\n    path: string;\n    name: string;\n    kind: \'image\' | \'video\';\n    size: number;\n}',
   },
   {
     name: 'AssetCommand',
@@ -3903,12 +3915,16 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface AssetPending {\n    proposal: ProposalId;\n    source: SourcePin;\n    afterText: string;\n    afterSha: string;\n}',
   },
   {
+    name: 'AssetProject',
+    declaration: 'export interface AssetProject {\n    name: string;\n    directory: string;\n    assets: string | null;\n    clips: string | null;\n    imagesManifest: string | null;\n    clipsManifest: string | null;\n}',
+  },
+  {
     name: 'AssetProposal',
     declaration: 'export interface AssetProposal {\n    id: ProposalId;\n    session: string;\n    source: SourcePin;\n    draftRevision: number;\n    instruction: string;\n    before: PromptEdit[];\n    edits: PromptEdit[];\n    status: \'requested\' | \'proposed\' | \'applied\';\n}',
   },
   {
     name: 'AssetRow',
-    declaration: 'export interface AssetRow extends PromptText {\n    key: AssetKey;\n    id: string;\n    name: string;\n    table: string;\n    fingerprint: string;\n    kind: \'image\' | \'video\';\n    media: string;\n    template: string;\n    actualRequest: string;\n    actualPrompt: string;\n}',
+    declaration: 'export interface AssetRow extends PromptText {\n    key: AssetKey;\n    id: string;\n    name: string;\n    table: string;\n    fingerprint: string;\n    kind: \'image\' | \'video\';\n    media: string;\n    details: {\n        name: string;\n        value: string;\n    }[];\n    localMedia: string;\n    template: string;\n    actualRequest: string;\n    actualPrompt: string;\n}',
   },
   {
     name: 'AssetSnapshot',

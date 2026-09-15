@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { readFileSync, realpathSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
 import * as yaml from 'js-yaml'
@@ -526,18 +526,50 @@ describe('Desktop release workflow', () => {
     const dispatch = workflowEvent(workflow, 'workflow_dispatch')
     const validate = workflowJob(workflow, 'validate')
     const macos = workflowJob(workflow, 'macos')
+    const windows = workflowJob(workflow, 'windows')
     const assemble = workflowJob(workflow, 'assemble')
     const publish = workflowJob(workflow, 'publish')
     if (!isRecord(dispatch.inputs)
       || !isRecord(dispatch.inputs.publish)
       || !Array.isArray(validate.steps)
       || !Array.isArray(macos.steps)
+      || !Array.isArray(windows.steps)
       || !Array.isArray(assemble.steps)
       || !Array.isArray(publish.steps)) {
       throw new TypeError('Desktop release workflow must define publish input and release steps')
     }
 
     expect(dispatch.inputs.publish).toMatchObject({ type: 'boolean', default: false })
+    expect(dispatch.inputs.windows).toMatchObject({ type: 'boolean', default: false })
+    expect(windows).toMatchObject({
+      if: 'inputs.windows',
+      needs: 'validate',
+      'runs-on': 'windows-2025',
+      environment: 'windows-release',
+      defaults: { run: { shell: 'pwsh' } },
+      env: {
+        CSC_LINK: '${{ secrets.WINDOWS_CERTIFICATE }}',
+        CSC_KEY_PASSWORD: '${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}',
+        CSC_IDENTITY_AUTO_DISCOVERY: 'false',
+      },
+    })
+    const windowsSteps = windows.steps.filter(isRecord)
+    const requireWindowsCredentials = windowsSteps.find(step => step.name === 'Require Windows signing credentials')
+    expect(requireWindowsCredentials?.run).toContain("foreach ($name in 'CSC_LINK', 'CSC_KEY_PASSWORD')")
+    expect(requireWindowsCredentials?.run).toContain('throw "$name is not configured')
+    const verifyWindows = windowsSteps.find(step => step.name === 'Verify Authenticode signatures')
+    expect(verifyWindows?.run).toContain('Get-AuthenticodeSignature -LiteralPath $path -ErrorAction Stop')
+    expect(verifyWindows?.run).toContain("$signature.Status -ne 'Valid'")
+    expect(verifyWindows?.run).toContain('throw "Invalid Authenticode signature')
+    expect(verifyWindows?.run).toContain('apps/desktop/dist/Mantur-Agent-Windows-x64.exe')
+    expect(verifyWindows?.run).toContain('apps/desktop/dist/win-unpacked/ManTur Agent.exe')
+    expect(windowsSteps.findIndex(step => step.name === 'Verify Authenticode signatures')).toBeLessThan(
+      windowsSteps.findIndex(step => step.uses === 'actions/upload-artifact@v7'),
+    )
+    expect(assemble).toMatchObject({
+      needs: ['validate', 'macos', 'windows'],
+      if: "${{ !cancelled() && needs.validate.result == 'success' && needs.macos.result == 'success' && (!inputs.windows || needs.windows.result == 'success') }}",
+    })
     expect(Object.keys(workflow.on as Record<string, unknown>)).toEqual(['workflow_dispatch'])
     const authorize = validate.steps.filter(isRecord).find(step => step.name === 'Resolve and authorize desktop version')
     expect(authorize).toMatchObject({
@@ -554,7 +586,7 @@ describe('Desktop release workflow', () => {
     const desktopVersion = (JSON.parse(readFileSync(resolve(root, 'apps/desktop/package.json'), 'utf8')) as {
       version: string
     }).version
-    const requireFromUpdater = createRequire(resolve(root, 'apps/desktop/node_modules/electron-updater/package.json'))
+    const requireFromUpdater = createRequire(realpathSync(resolve(root, 'apps/desktop/node_modules/electron-updater/package.json')))
     const updaterSemver = requireFromUpdater('semver') as {
       SemVer: new(version: string) => unknown
       valid: (version: string) => string | null
@@ -647,12 +679,19 @@ releaseDate: '2026-09-03T00:00:00.000Z'
       mergeArtifacts.run.indexOf('for artifact in'),
     )
     for (const architectures of ['arm64', 'both']) {
-      const selected = execFileSync('bash', ['-c', `${artifactLoop}printf '%s\\n' "\${required_artifacts[@]}"`], {
-        env: { ...process.env, ARCHITECTURES: architectures }, encoding: 'utf8',
-      }).trim().split('\n')
-      expect(selected).toEqual((architectures === 'both' ? ['arm64', 'x64'] : ['arm64']).flatMap(arch =>
-        ['dmg', 'dmg.blockmap', 'zip', 'zip.blockmap'].map(extension =>
-          `release-input/desktop-macos-${arch}/Mantur-Agent-macOS-${arch}.${extension}`)))
+      for (const includeWindows of ['false', 'true']) {
+        const selected = execFileSync('bash', ['-c', `${artifactLoop}printf '%s\\n' "\${required_artifacts[@]}"`], {
+          env: { ...process.env, ARCHITECTURES: architectures, WINDOWS: includeWindows }, encoding: 'utf8',
+        }).trim().split('\n')
+        const expected = (architectures === 'both' ? ['arm64', 'x64'] : ['arm64']).flatMap(arch =>
+          ['dmg', 'dmg.blockmap', 'zip', 'zip.blockmap'].map(extension =>
+            `release-input/desktop-macos-${arch}/Mantur-Agent-macOS-${arch}.${extension}`))
+        if (includeWindows === 'true') {
+          expected.push(...['Mantur-Agent-Windows-x64.exe', 'Mantur-Agent-Windows-x64.exe.blockmap', 'latest.yml']
+            .map(filename => `release-input/desktop-windows-x64/${filename}`))
+        }
+        expect(selected).toEqual(expected)
+      }
     }
     expect(mergeArtifacts.run).toContain('[ -f "$artifact" ] || {')
     expect(mergeArtifacts.run).toContain('Required desktop release artifact is missing: $artifact')

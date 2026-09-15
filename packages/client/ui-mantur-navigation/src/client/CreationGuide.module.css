@@ -10,10 +10,12 @@
   width: fit-content;
   max-width: 100%;
   margin: 0 auto;
-  padding: 4px;
-  border: 0.5px solid var(--dsw-alias-border-l1);
+  padding: 5px;
+  border: 0;
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l3);
   border-radius: 24px;
   background: var(--dsw-alias-bg-layer-1);
+  box-shadow: var(--dsw-elevation-prominent);
 }
 
 .modes button {
@@ -36,7 +38,7 @@
 .guide {
   width: 100%;
   min-width: 0;
-  padding: 0 4px 10px;
+  padding: 0 4px 0 calc(var(--dsh-composer-side-clearance) - 4px);
   box-sizing: border-box;
   color: var(--dsw-alias-label-primary);
   font-size: 13px;
@@ -51,9 +53,10 @@
   max-height: min(240px, calc(100dvh - 24px));
   padding: 24px 12px 12px;
   box-sizing: border-box;
-  border: 0.5px solid var(--dsw-alias-border-l1);
+  border: 0;
   border-radius: 14px;
   background: var(--dsw-alias-bg-layer-1);
+  box-shadow: var(--dsw-elevation-soft);
   line-height: 1.6;
   overflow-wrap: anywhere;
 }
@@ -83,19 +86,19 @@
   gap: 12px;
   min-width: 0;
 }
-.shortcutRow[data-hero='true'] { height: 100px; }
+.shortcutRow[data-hero='true'] { height: 110px; }
 
 :global([data-workbench-open]) .shortcutRow[data-hero='true'] {
   position: relative;
-  height: 240px;
+  height: 250px;
 }
 :global([data-workbench-open]) .shortcutRow[data-hero='true'] .skillRail {
-  align-self: start;
+  align-self: end;
   width: 100%;
 }
 :global([data-workbench-open]) .shortcutRow[data-hero='true'] .helper {
   position: absolute;
-  bottom: 0;
+  bottom: 56px;
   right: 0;
 }
 
@@ -110,7 +113,7 @@
   height: 100%;
   box-sizing: border-box;
   overflow-x: auto;
-  padding: 4px 4px 0;
+  padding: 4px;
   scrollbar-width: none;
 }
 .shortcuts::-webkit-scrollbar { display: none; }
@@ -138,10 +141,13 @@
   font: inherit;
   cursor: pointer;
 }
-.shortcuts button { min-height: 40px; padding: 9px 14px; border-width: 1px; border-radius: 12px; white-space: nowrap; }
+.shortcuts button { min-height: 40px; padding: 9px 14px; border-width: 1px; border-color: var(--dsw-alias-border-l3); border-radius: 12px; white-space: nowrap; }
+
+.shortcuts button:hover:not(:disabled) { border-color: var(--dsw-alias-brand-primary); }
 
 .shortcuts button[aria-pressed='true'] {
   border-color: var(--dsw-alias-brand-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
   color: var(--dsw-alias-brand-primary);
 }
 
@@ -161,7 +167,7 @@
   height: 104px;
   margin-right: calc(var(--dsh-composer-side-clearance) + 8px);
   /* The hit target ends at the card; the 16px transparent image foot cannot intercept editor clicks. */
-  transform: translateY(18px);
+  transform: translateY(8px);
 }
 .helper img { display: block; width: 100%; height: auto; object-fit: contain; }
 .helper[data-hero='true'] img { pointer-events: none; }
@@ -199,12 +205,12 @@
 }
 
 @media (max-width: 1023px) {
-  .shortcutRow[data-hero='true'] { height: 120px; }
+  .shortcutRow[data-hero='true'] { height: 130px; }
 }
 
 @media (max-width: 819px) {
   /* Keep a text line below the mode tabs when their right side is too narrow for the bubble. */
-  .shortcutRow[data-hero='true'] { height: 160px; }
+  .shortcutRow[data-hero='true'] { height: 170px; }
 }
 
 @container (max-width: 400px) {

@@ -22,7 +22,7 @@ This Mantur plugin owns the shared workbench shell and edits existing `.md`, `.t
 <a id="use-this-package"></a>
 ## Use this package
 
-The Mantur bundle mounts the plugin with explicit `maxBytes` and `maxEntries` bounds. Open the workbench with the conversation-edge chevron, navigate project folders, and open an episode file. One file is one editable document; the plugin does not infer episodes from headings. Reading and switching modes never write files. Save commits the current draft only against its last observed file generation.
+The Mantur bundle mounts the plugin with explicit `maxBytes` and `maxEntries` bounds. Open the workbench with the conversation-edge chevron. Its catalog lists supported text documents from the workspace root, its `剧本` folder, and direct child projects’ `剧本` folders. A sole document opens automatically; multiple documents appear by title for selection. Directory-path controls are absent, and a sole document uses the full reading width. One file is one editable document; the plugin does not infer episodes from headings. Reading and switching modes never write files. Save commits the current draft only against its last observed file generation.
 
 Save a draft before selecting a passage and entering a rewrite instruction. Send selection submits a JSON user message through the captured Session's existing `conversation.send`, preserving the conversation composer and its attachments. The message includes the path, file generation, UTF-16 start/end offsets, selected text, and instruction. Admission means queued input, not successful rewriting. The Agent uses `replace_script_selection` to check the generation and exact passage before a guarded write. No second Agent, provider, credentials, or login flow is introduced.
 
@@ -56,7 +56,7 @@ Mounting or removing the tool changes the tool-schema request prefix. Explicit s
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- Drafts and previous-version comparisons live for the browser plugin lifetime; reload recovery and a durable multi-version history are not provided. The last observed version is the available restore point. Arbitrary external processes do not participate in the filesystem provider's per-target mutex. The workbench does not create files, split a document into episodes, convert screenplay formats, or select text directly from rendered Markdown. The existing Agent can create project files through its ordinary tools. Directory listing is direct rather than recursive, and exceeding a configured bound reports an error.
+- Drafts and previous-version comparisons live for the browser plugin lifetime; reload recovery and a durable multi-version history are not provided. The last observed version is the available restore point. Arbitrary external processes do not participate in the filesystem provider's per-target mutex. The workbench does not create files, split a document into episodes, convert screenplay formats, or select text directly from rendered Markdown. The existing Agent can create project files through its ordinary tools. Discovery does not descend beyond these standard script folders; per-folder and total document counts respect `maxEntries`, and exceeding a bound reports an error.
 
 <a id="dev-note"></a>
 ### Dev Note

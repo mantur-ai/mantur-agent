@@ -68,6 +68,13 @@ it('keeps offline homepage guidance inside the real conversation column with the
         const tab = page.getByRole('tab', { name, exact: true })
         await tab.click()
         await expect.poll(() => tab.getAttribute('aria-selected')).toBe('true')
+        await expect.poll(() => page.locator('[data-composer-seat]').evaluate((element) => {
+          const card = element.querySelector('[data-composer-card]')!.getBoundingClientRect()
+          const rail = element.querySelector('[data-skill-rail]')!.getBoundingClientRect()
+          const mascot = element.querySelector('[data-hero="true"] button[aria-label="馒头仔"]')!.getBoundingClientRect()
+          return { nearComposer: card.top - rail.bottom >= 0 && card.top - rail.bottom <= 16,
+            mascotAboveSkills: mascot.bottom <= rail.top }
+        })).toEqual({ nearComposer: true, mascotAboveSkills: true })
         await expect.poll(() => page.getByRole('region', { name: '馒头仔' }).evaluate((element) => {
           const panel = element.getBoundingClientRect()
           const seat = element.closest('[data-composer-seat]')!.getBoundingClientRect()
@@ -165,6 +172,9 @@ it('keeps guidance readable at the desktop minimum without moving the composer o
       }))
     const sidebarWidth = () => page.locator('[data-details-collapsed]').evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ')[0])
     const expandedSidebarWidth = await sidebarWidth()
+    const buttonBox = await page.getByRole('button', { name: '剧本改编', exact: true }).boundingBox()
+    const cardBox = await page.locator('[data-composer-card]').boundingBox()
+    expect(buttonBox?.x).toBe(cardBox?.x)
     for (const [width, height] of [[880, 600], [800, 900], [720, 900], [1280, 820]] as const) {
       await page.setViewportSize({ width, height })
       await expect.poll(() => page.locator('[data-sidebar-collapsed]').count()).toBe(width < 1024 ? 1 : 0)

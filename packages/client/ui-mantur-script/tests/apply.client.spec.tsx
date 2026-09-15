@@ -44,7 +44,7 @@ async function setup(assetPlugin?: { inject: string[]; apply: (ctx: Context) => 
   }
   ctx.provide('sessions', sessions as never)
   new UiConversation(ctx, sessions as never)
-  const manturScript = { list: vi.fn().mockResolvedValue({ ok: true, value: [] }),
+  const manturScript = { catalog: vi.fn().mockResolvedValue({ ok: true, value: [] }),
     read: vi.fn(), save: vi.fn() }
   ctx.provide('remote', { $mount: vi.fn(async () => async () => {}), manturScript } as never)
   ctx.provide('remote.manturScript', manturScript as never)
@@ -249,7 +249,7 @@ it('uses the captured Session for file commands and surfaces host rejection', as
   await expect(commands.list(session, 'scripts')).resolves.toEqual([])
   await expect(commands.read(session, document.path)).resolves.toEqual(document)
   await expect(commands.save(session, document, 'after')).resolves.toEqual({ ...document, content: 'after' })
-  expect(manturScript.list).toHaveBeenCalledWith(session, 'scripts')
+  expect(manturScript.catalog).toHaveBeenCalledWith(session)
   expect(manturScript.read).toHaveBeenCalledWith(session, document.path)
   expect(manturScript.save).toHaveBeenCalledWith(session, { ...document, content: 'after' })
   manturScript.read.mockResolvedValueOnce({ ok: false, error: { message: 'file changed' } })

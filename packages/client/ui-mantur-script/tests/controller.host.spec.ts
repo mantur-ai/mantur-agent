@@ -142,3 +142,21 @@ it('requires sandbox authorization when the filesystem advertises a sandbox mode
   try { expect(() => new ManturScript(isolated, { maxBytes: 4096, maxEntries: 20 })).toThrow('sandboxPolicy') }
   finally { await isolated.fiber.dispose() }
 })
+
+it('discovers project scripts without requiring folder navigation', async () => {
+  await mkdir(join(root, 'production/剧本'), { recursive: true })
+  await mkdir(join(root, 'assets'), { recursive: true })
+  await writeFile(join(root, 'production/剧本/02.md'), '# 第二集')
+  await writeFile(join(root, 'assets/readme.md'), 'not a script folder')
+  expect((await ctx.manturScript.catalog(agent)).map(entry => entry.name)).toEqual(['01.md', '02.md'])
+  expect(await readFile(join(root, '01.md'), 'utf8')).toBe(content)
+})
+
+
+it('discovers root script folders and rejects a combined catalog over the configured limit', async () => {
+  await mkdir(join(root, '剧本'))
+  await writeFile(join(root, '剧本/02.md'), '# 第二集')
+  expect((await ctx.manturScript.catalog(agent)).map(entry => entry.name)).toEqual(['01.md', '02.md'])
+  for (let i = 0; i < 19; i++) await writeFile(join(root, `剧本/extra-${i}.md`), '# next')
+  await expect(ctx.manturScript.catalog(agent)).rejects.toThrow('entry limit')
+})

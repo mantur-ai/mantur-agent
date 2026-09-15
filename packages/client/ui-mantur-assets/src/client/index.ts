@@ -33,11 +33,14 @@ function AssetTab(props: PropsRuntime<'main.workbench.assets.tab'> & PropsLocale
 function commands(ctx: Context) {
   const call = <T>(result: { ok: true; value: T } | { ok: false; error: { message: string } }): T => { if (!result.ok) throw new Error(result.error.message); return result.value }
   return {
-    load: async (session: SessionId, path: string) => call(await ctx.remote.manturAssets.load(session, path)),
+    projects: async (session: SessionId) => call(await ctx.remote.manturAssets.projects(session)),
+    load: async (session: SessionId, path: string, manifest?: string, references?: string) => call(await ctx.remote.manturAssets.load(session, path, references, manifest)),
+    list: async (session: SessionId, path: string) => call(await ctx.remote.manturAssets.list(session, path)),
     save: async (session: SessionId, snapshot: AssetSnapshot, edits: PromptEdit[]) => call(await ctx.remote.manturAssets.saveDraft(session, { source: snapshot.source, stateVersion: snapshot.stateVersion, edits })),
-    request: async (session: SessionId, snapshot: AssetSnapshot, edits: PromptEdit[], instruction: string) => { const prepared = call(await ctx.remote.manturAssets.prepare(session, snapshot.source, edits, instruction)); const conversation = ctx.sessions.binding(session)?.ctx.get('conversation'); if (!conversation) throw new Error('The owning conversation is unavailable.'); await conversation.send(JSON.stringify({ task: 'Use propose_asset_prompts for this selected pipeline report. Do not generate media.', requestId: prepared.requestId, source: prepared.source, edits: prepared.edits })); return prepared.requestId },
+    request: async (session: SessionId, snapshot: AssetSnapshot, edits: PromptEdit[], instruction: string) => { const prepared = call(await ctx.remote.manturAssets.prepare(session, snapshot.source, edits, instruction)); const conversation = ctx.sessions.binding(session)?.ctx.get('conversation'); if (!conversation) throw new Error('The owning conversation is unavailable.'); await conversation.send(JSON.stringify({ task: 'Use propose_asset_prompts for this selected pipeline report. Do not generate media.', requestId: prepared.requestId, source: prepared.source, edits: prepared.edits, instruction })); return prepared.requestId },
     apply: async (session: SessionId, requestId: string) => call(await ctx.remote.manturAssets.apply(session, requestId)),
     candidates: async (session: SessionId, directory: string): Promise<AssetCandidate[]> => call(await ctx.remote.manturAssets.candidates(session, directory)),
+    media: async (session: SessionId, id: string): Promise<AssetMedia> => call(await ctx.remote.manturAssets.media(session, id)),
     preview: async (session: SessionId, path: string): Promise<AssetMedia> => call(await ctx.remote.manturAssets.preview(session, path)),
   }
 }

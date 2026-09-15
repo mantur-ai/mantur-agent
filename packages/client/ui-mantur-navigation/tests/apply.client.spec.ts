@@ -70,6 +70,7 @@ async function bench() {
       'conversation.hero.modes': { kind: 'single', scope: 'root' },
       'conversation.composer.guide': { kind: 'single', scope: 'session-maybe' },
       'conversation.composer.layout': { kind: 'single', scope: 'session-maybe' },
+      'conversation.composer.dock': { kind: 'list', scope: 'session' },
       'conversation.composer.bar.accessory': { kind: 'single', scope: 'session-maybe' },
       'settings.general.item': { kind: 'list', scope: 'root' },
     },
@@ -182,6 +183,8 @@ describe('ui-mantur-navigation apply', () => {
     const fiber = subject.ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
     expect(subject.slots.entries('sidebar.navigation')[0]?.component).toBe(MarketplaceNavigation)
+    expect(subject.slots.entries('conversation.composer.dock')[0]?.options).toMatchObject({ id: 'stats', priority: -1 })
+    expect((subject.slots.entries('conversation.composer.dock')[0]!.component as () => null)()).toBeNull()
     expect(subject.slots.entries('sidebar.workspaces.heading')[0]?.component).toBe(ProjectsHeading)
     const mainPage = subject.slots.entries('main.page')[0]
     expect(mainPage?.component).toBe(MarketplacePage)
@@ -216,6 +219,7 @@ describe('ui-mantur-navigation apply', () => {
     expect(subject.slots.entries('conversation.hero.modes')).toEqual([])
     expect(subject.slots.entries('conversation.composer.guide')).toEqual([])
     expect(subject.slots.entries('conversation.composer.layout')).toEqual([])
+    expect(subject.slots.entries('conversation.composer.dock')).toEqual([])
     expect(subject.slots.entries('settings.general.item')).toEqual([])
     expect(subject.slots.spec('conversation.composer.bar.accessory.permissions')).toBeUndefined()
   })

@@ -28,3 +28,11 @@
 .edgeToggle{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;width:24px;min-height:44px;margin:0 4px;border:0.5px solid var(--dsw-alias-border-l3);border-radius:6px;padding:0;background:var(--dsw-alias-button-floating-fill);color:inherit;cursor:pointer}
 .edgeToggle:focus-visible{outline:2px solid currentColor;outline-offset:2px}
 @media(max-width:700px){.files{width:130px;padding:8px}.toolbar{gap:6px;padding:8px}.reading{padding:18px}.compare{grid-template-columns:1fr}}
+
+.files[hidden]{display:none}
+.script{container-type:inline-size}
+.toolbar{padding:12px 18px;gap:8px}
+.toolbar strong{flex:1;min-width:140px;line-height:1.5}
+.reading{font-size:15px;padding:28px clamp(20px,4vw,48px)}
+.reading>div{max-width:760px;margin-inline:auto}
+@container(max-width:540px){.files{width:145px}.toolbar strong{flex-basis:100%}}

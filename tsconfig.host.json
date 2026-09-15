@@ -16,6 +16,7 @@
     "apps/web/tests/desktop-files.e2e.ts",
     "apps/web/tests/desktop-updates.e2e.ts",
     "apps/web/tests/mantur-balance.e2e.ts",
+    "apps/web/tests/mantur-conversation-chrome.e2e.ts",
     "apps/web/tests/default-model.e2e.ts",
     "apps/web/tests/github-ready-review.e2e.ts",
     "apps/web/tests/streaming-fence-highlight.e2e.ts",
