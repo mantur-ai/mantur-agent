@@ -21,6 +21,8 @@ The requested dialog uses `shell.overlay`. Return and Escape dismiss the view wi
 
 The login page presents one browser-login button and the product logo. Waiting, cancellation, exchange retry, expiry, independent device logout and account switching use Main-confirmed state. Opening the browser does not report sign-in.
 
+In the expanded sidebar, the balance icon and number align with the Settings icon and label. The collapsed sidebar retains its stacked icon and compact number.
+
 ## Table of Contents
 
 - [Model Experience](#model-experience)

@@ -10,6 +10,8 @@ Status: implemented
 
 ## Decision
 
+桌面端将 `漫途Agent` 保留为 Electron 存储身份，与界面品牌名称分开。Electron 根据 `app.getName()` 确定 macOS 钥匙串服务；改变该身份会使已有的系统加密 grant 无法读取。Main 在打开账号存储前设置存储名称，无需复制凭据或增加其他解密路径。
+
 [Main](../../../../apps/desktop/src/auth/controller.ts)通过外部浏览器和精确的随机 IPv4 loopback 回调实现 browser-account-v2。交换一次性 code 前校验 state 与 issuer，并使用 PKCE。完整 create 请求及 exchange 身份在发出网络请求前由操作系统加密保存；code 在交换前加密保存。renderer 只接收公开状态和具名操作，不接收包含 state 的 URL、密码或秘密。只有确认的交换元数据才能启用登录并唤回窗口。
 
 后台协议将设备 grant 固定到一个显式选定的默认 policy Key 和授权世代。只有明确的网站同意可以初始化缺失的默认 Key。默认 Key 失效时直接失败，不选择其他 Key。退出登录撤销设备 grant，不撤销共享 policy Key。Main 校验 issuer、环境、设备、世代和原始到期时间；后台仍须逐请求执行权限检查。
@@ -34,4 +36,4 @@ Status: implemented
 
 账号存储版本 2 拒绝其他非空版本，不自动迁移。没有兼容模式打开旧原生表单或发送 v1 凭据。生产默认仍为 `https://hub.mantur.ai`；测试配置显式选择 `https://hub.mantur.cn`，不跨 origin 重试。
 
-本地 HTTP、SQLite、回调、Loader 和 CLI 测试使用受控数据。Electron Node 模式的 CLI 余额验证使用本地夹具响应，不是真实账号或 Java 服务。模拟 preload 浏览器快照只证明呈现与草稿保留。同版本 Java/PostgreSQL 16 联调、真实网站同意、原生 Keychain/DPAPI 与 Windows ACL 执行、打包资源及各平台浏览器返回仍待验收。本地结果不构成远端部署或真实 Key 创建授权。
+本地 HTTP、SQLite、回调、Loader 和 CLI 测试使用受控数据。Electron Node 模式的 CLI 余额验证使用本地夹具响应，不是真实账号或 Java 服务。模拟 preload 浏览器快照只证明呈现与草稿保留。macOS 开发客户端已实测在恢复存储身份后读取已有的钥匙串加密 grant，并取得真实账号余额。同版本 Java/PostgreSQL 16 联调、新的网站同意、Windows DPAPI 与 ACL 执行、打包资源及各平台浏览器返回仍待验收。本地结果不构成远端部署或真实 Key 创建授权。

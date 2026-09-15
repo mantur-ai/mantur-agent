@@ -69,6 +69,9 @@ export const inject = ['slots', 'locale', 'remote', 'sessions', 'workspaces', 'c
 
 /** Fill Mantur navigation, workspace terminology, and the root marketplace page. */
 export async function apply(ctx: Context): Promise<void> {
+  ctx.slots.inject('conversation.composer.dock', () => ctx.slots.register({
+    name: 'conversation.composer.dock', id: 'stats', priority: -1,
+  }, () => null))
   if (typeof window !== 'undefined' && window.manturUpdates !== undefined) {
     const native = new NativeUpdates(window.manturUpdates)
     ctx.effect(() => () => { native.dispose() }, 'ui-mantur-navigation: native updates')

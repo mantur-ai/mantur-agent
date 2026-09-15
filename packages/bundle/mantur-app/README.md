@@ -25,6 +25,8 @@ This bundle is the final layer of the shipped `mantur` profile. It retains the W
 
 Launch the complete product through `dsh --profile mantur`; the desktop carrier selects that profile automatically. The ordered bundle stack is `dsh-base`, `dsh-web-app`, then this layer. The `web` profile remains unchanged.
 
+The conversation header omits the Trajectory view and Session log download. With only the conversation view registered, its tab bar is absent. This layer disables `ui-trajectory` and `session-log-download`, including the browser `/export` command; durable session recording and conversation history remain enabled.
+
 Installed Desktop sets `DSH_MANTUR_EDITOR_ROOT` and `DSH_MANTUR_EDITOR_NODE` to its package resources and Electron executable. This layer enables the [editing runtime](../../client/ui-mantur-editing/README.md) in packaged mode with explicit startup, shutdown and tool budgets. Missing package resources fail validation instead of silently disabling editing. Without the resource environment, the row remains disabled until an explicit development profile enables it.
 
 New conversations remain unassigned until the user selects a project or submits the first draft. The layer mounts [automatic project preparation](../../workspace/mantur-projects/README.md) and supplies the desktop-resolved root through `DSH_MANTUR_PROJECTS_ROOT`. First send requires a durably saved native draft identity; opening the home page creates no project. The user can inspect or change the root in the composer footer.

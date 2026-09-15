@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { readFileSync, realpathSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
 import * as yaml from 'js-yaml'
@@ -554,7 +554,7 @@ describe('Desktop release workflow', () => {
     const desktopVersion = (JSON.parse(readFileSync(resolve(root, 'apps/desktop/package.json'), 'utf8')) as {
       version: string
     }).version
-    const requireFromUpdater = createRequire(resolve(root, 'apps/desktop/node_modules/electron-updater/package.json'))
+    const requireFromUpdater = createRequire(realpathSync(resolve(root, 'apps/desktop/node_modules/electron-updater/package.json')))
     const updaterSemver = requireFromUpdater('semver') as {
       SemVer: new(version: string) => unknown
       valid: (version: string) => string | null

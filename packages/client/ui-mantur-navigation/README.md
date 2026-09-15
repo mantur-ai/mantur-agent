@@ -11,6 +11,8 @@ English | [中文](README.zh.md)
 
 This plugin adds the Mantur sidebar's Skill Marketplace and Recipe Marketplace entries and their independent root pages. The Skill page reads a Host-projected ManturHub catalog, opens details, gates installation on device login, and displays installation and local-conflict states. A Recipe means a proven creative example that can be reproduced with replaced user content; it is not a general workflow template. The package also provides creation-mode recommendations and the 馒头仔 assistant guide, and replaces the grouped workspace heading with Projects. The official Web composition does not load this package and keeps Workspaces unchanged.
 
+The composer omits the aggregate runtime statistics through a higher-priority empty `stats` entry in `conversation.composer.dock`. Unloading this plugin restores the shared entry. Recommended Skill buttons align with the composer's left edge.
+
 ## Table of Contents
 
 - [Use this package](#use-this-package)
@@ -35,7 +37,7 @@ The Recipe page loads the public ManturHub catalog with server-side text and cat
 
 The conversation home offers Script writing, Drama production, and Asset production. Validation explicitly resolves the retired `editing` preference to `production` without changing workbench visibility; unknown values are rejected. The Host-backed `ui-mantur-guide` settings remember the last mode and an explicit guide dismissal; the first mode is `script`. Modes change recommendations and fixed guidance only: workspace, draft, attachments, selected Skills, model, permissions, and Agent identity remain unchanged. The required `recommendations` configuration supplies ordered Skill names matched only against the App's offline catalog. Missing entries are omitted and discovery failures expose Retry. A shortcut inserts a titled, version-and-digest-qualified `mantur-bundled-skill` reference into the current composer without sending, login or installation. Serialization checks the captured identity again; unavailable versions retain the draft as a send failure. The sidebar Skill marketplace provides online browsing and explicit installation; its Use action creates a Session.
 
-Recommendation buttons and their inserted references use the same curated locale-owned label of at most four Chinese characters. Tooltips retain the full catalog title; App reference IDs retain the canonical name, version and digest; short labels never change that identity. Every configured recommendation needs a maintained label mapping; a missing mapping exposes a configuration warning.
+Recommendation buttons sit directly above the composer with visible neutral borders and brand-colored hover and selected borders. The buttons and their inserted references use the same curated locale-owned label of at most four Chinese characters. Tooltips retain the full catalog title; App reference IDs retain the canonical name, version and digest; short labels never change that identity. Every configured recommendation needs a maintained label mapping; a missing mapping exposes a configuration warning.
 
 The home workspace picker remains in a left-aligned footer below the input card. The permission selector sits above the editor inside that card, through the composer's accessory child slot. Conversation owns permission state and commands. DOM order matches keyboard order; the resident editor, workspace control, draft transfer, and official composition retain their existing behavior.
 

@@ -10,6 +10,8 @@ Create-attempt retries accept the server's remaining lifetime from zero to 600 s
 
 Before exchanging a new Host launch token, Main removes only root-scoped `dsh-auth-` connection cookies for `127.0.0.1` from the desktop window's cookie store. Cookies are shared across ports; retaining cookies from random-port restarts can exceed HTTP request-header limits and block plugin loading with 431. This cleanup preserves account credentials, sessions, browser preferences and unrelated cookies. Removal must finish before navigation; failures stop startup.
 
+Electron keeps `漫途Agent` as its application storage name while windows, menus and the About panel display `ManTur Agent`. On macOS, `safeStorage` derives its Keychain service from the storage name; changing that name prevents existing encrypted account credentials from being read.
+
 On macOS, the native About panel reads its icon from the application bundle. The unpackaged development executable therefore retains Electron’s About icon; its Dock icon uses the product PNG.
 
 ## Develop without packaging

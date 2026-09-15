@@ -197,6 +197,13 @@ describe('desktop directory picker wiring', () => {
 })
 
 describe('native account upgrade in Main startup', () => {
+  it('retains the account Keychain identity before opening storage while displaying the current brand', async () => {
+    await startup()
+    expect(native.app.setName).toHaveBeenCalledExactlyOnceWith('漫途Agent')
+    expect(native.app.setName.mock.invocationCallOrder[0]).toBeLessThan(native.upgrade.mock.invocationCallOrder[0]!)
+    expect(native.app.setAboutPanelOptions).toHaveBeenCalledWith(expect.objectContaining({ applicationName: 'ManTur Agent' }))
+  })
+
   it('parents consent to the native window and defaults to leaving old storage unchanged', async () => {
     native.upgrade.mockImplementation(async (_root, _cipher, confirm) => confirm())
     native.dialog.showMessageBox.mockResolvedValueOnce({ response: 1 })

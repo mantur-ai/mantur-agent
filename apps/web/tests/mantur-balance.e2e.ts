@@ -69,6 +69,12 @@ it('shows server Mantou credits at the sidebar foot and clears stale balances on
     if (box === null || settingsBox === null) throw new Error('Sidebar footer is hidden')
     expect(box.x).toBeLessThan(300)
     expect(box.y + box.height).toBeLessThanOrEqual(settingsBox.y)
+    const balanceIcon = await panel.locator('svg').boundingBox()
+    const settingsIcon = await settings.locator('svg').boundingBox()
+    const balanceValue = await panel.getByRole('status').boundingBox()
+    const settingsLabel = await settings.getByText('设置', { exact: true }).boundingBox()
+    expect(balanceIcon?.x).toBe(settingsIcon?.x)
+    expect(balanceValue?.x).toBe(settingsLabel?.x)
     const captures = [`## Available\n\n${await panel.ariaSnapshot()}`]
     await mkdir(artifacts, { recursive: true })
     await page.screenshot({ animations: 'disabled', path: `${artifacts}/expanded.png` })
