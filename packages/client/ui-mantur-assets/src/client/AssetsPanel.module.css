@@ -19,7 +19,7 @@
 .root button, .root input, .root select, .root textarea {
   font: inherit;
   color: inherit;
-  border: 1px solid var(--dsw-alias-border-l2);
+  border: 0.5px solid var(--dsw-alias-border-l2);
   border-radius: 8px;
   background: var(--dsw-alias-bg-base);
 }
@@ -32,12 +32,12 @@
 .root textarea { width: 100%; min-height: 150px; padding: 10px; resize: vertical; line-height: 1.7; }
 .root fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
 .controls { display: flex; flex-direction: column; gap: 12px; }
-.tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--dsw-alias-border-l2); padding-bottom: 10px; }
+.tabs { display: flex; gap: 6px; border-bottom: 0.5px solid var(--dsw-alias-border-l2); padding-bottom: 10px; }
 .tabs button[aria-selected='true'] { background: var(--dsw-alias-brand-primary); border-color: var(--dsw-alias-brand-primary); color: white; }
 .source { display: flex; align-items: end; gap: 8px; }
 .source label { flex: 1; }
 .source button { flex-shrink: 0; }
-.files { padding: 10px 12px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; }
+.files { padding: 10px 12px; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 8px; }
 .root summary { cursor: pointer; color: var(--dsw-alias-label-secondary); line-height: 1.6; }
 .root details[open] > summary { margin-bottom: 12px; }
 .fileList { display: flex; flex-wrap: wrap; gap: 6px; margin-block: 10px; }
@@ -47,7 +47,7 @@
 .filters span { color: var(--dsw-alias-label-secondary); font-variant-numeric: tabular-nums; }
 .content { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(240px, 1fr); align-items: start; gap: 16px; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); align-content: start; gap: 10px; }
-.root .card { position: relative; border: 1px solid var(--dsw-alias-border-l2); display: flex; flex-direction: column; text-align: left; overflow: hidden; padding: 0; border-radius: 10px; }
+.root .card { position: relative; border: 0.5px solid var(--dsw-alias-border-l2); display: flex; flex-direction: column; text-align: left; overflow: hidden; padding: 0; border-radius: 10px; }
 .root .card[data-active='true'] { border-color: var(--dsw-alias-brand-primary); box-shadow: 0 0 0 1px var(--dsw-alias-brand-primary); }
 .cardText { display: flex; flex-direction: column; gap: 5px; padding: 10px; width: 100%; }
 .cardText strong, .cardText small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -56,13 +56,13 @@
 .media[data-thumbnail='true'] { border-radius: 0; pointer-events: none; aspect-ratio: 4 / 3; }
 .media img, .media video { display: block; width: 100%; height: 100%; object-fit: contain; }
 .media span { padding: 16px; text-align: center; font-size: 12px; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
-.detail { display: flex; flex-direction: column; gap: 14px; min-width: 0; border-left: 1px solid var(--dsw-alias-border-l2); padding-left: 16px; }
+.detail { display: flex; flex-direction: column; gap: 14px; min-width: 0; border-left: 0.5px solid var(--dsw-alias-border-l2); padding-left: 16px; }
 .detail header small { color: var(--dsw-alias-label-secondary); }
 .detail header h3 { margin-top: 4px; overflow-wrap: anywhere; }
 .editor { display: flex; flex-direction: column; gap: 10px; }
 .detail pre, .detail dd, .text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; line-height: 1.7; }
 .detail dl { margin: 0; }
-.detail dl > div { padding-block: 8px; border-bottom: 1px solid var(--dsw-alias-border-l1); }
+.detail dl > div { padding-block: 8px; border-bottom: 0.5px solid var(--dsw-alias-border-l1); }
 .detail dt { color: var(--dsw-alias-label-secondary); font-size: 12px; }
 .detail dd { margin: 4px 0 0; }
 .empty, .detailEmpty { padding: 40px 20px; text-align: center; color: var(--dsw-alias-label-secondary); line-height: 1.8; }
@@ -72,7 +72,7 @@
 .error { color: var(--dsw-alias-mantur-account-error); border: 1px solid currentColor; }
 @container (max-width: 540px) {
   .content { grid-template-columns: minmax(0, 1fr); }
-  .detail { border-left: 0; border-top: 1px solid var(--dsw-alias-border-l2); padding: 16px 0 0; }
+  .detail { border-left: 0; border-top: 0.5px solid var(--dsw-alias-border-l2); padding: 16px 0 0; }
   .source { flex-wrap: wrap; }
   .grid { grid-template-columns: repeat(auto-fill, minmax(125px, 1fr)); }
 }
