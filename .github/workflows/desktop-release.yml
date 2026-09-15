@@ -11,8 +11,13 @@ on:
         options:
           - both
           - arm64
+      windows:
+        description: Include a signed Windows x64 installer and its automatic update metadata
+        required: true
+        type: boolean
+        default: false
       publish:
-        description: Publish the signed and notarized macOS build to GitHub Releases. Must run from the matching v* tag.
+        description: Publish all selected signed platform builds to GitHub Releases. Must run from the matching v* tag.
         required: true
         type: boolean
         default: false
@@ -154,9 +159,85 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  windows:
+    name: Signed Windows / x64
+    if: inputs.windows
+    needs: validate
+    runs-on: windows-2025
+    timeout-minutes: 90
+    environment: windows-release
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      CSC_LINK: ${{ secrets.WINDOWS_CERTIFICATE }}
+      CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      DSH_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Require Windows signing credentials
+        run: |
+          foreach ($name in 'CSC_LINK', 'CSC_KEY_PASSWORD') {
+            if (-not [Environment]::GetEnvironmentVariable($name)) {
+              throw "$name is not configured in the windows-release environment."
+            }
+          }
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install immutable dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Mantur client and desktop carrier
+        run: pnpm run build:mantur
+
+      - name: Test desktop launch contract
+        run: pnpm exec vitest run apps/desktop/tests/runtime.spec.ts apps/desktop/tests/github-release-check.spec.ts apps/desktop/tests/updater.spec.ts scripts/client-build-environment.client.spec.ts scripts/desktop-signing-scan.spec.ts
+
+      - name: Restore pinned Mantur Cut source cache
+        uses: actions/cache@v5
+        with:
+          path: .cache/mantur-cut
+          key: mantur-cut-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('apps/desktop/mantur-cut/source.json', 'packages/client/ui-mantur-editing/adapters/mantur-cut.patch', 'packages/client/ui-mantur-editing/adapters/mantur-cut-packaged.patch') }}
+
+      - name: Build and sign Windows installer
+        run: pnpm run desktop:dist:win:x64
+
+      - name: Verify Authenticode signatures
+        run: |
+          foreach ($path in 'apps/desktop/dist/Mantur-Agent-Windows-x64.exe', 'apps/desktop/dist/win-unpacked/ManTur Agent.exe') {
+            $signature = Get-AuthenticodeSignature -LiteralPath $path -ErrorAction Stop
+            if ($signature.Status -ne 'Valid') {
+              throw "Invalid Authenticode signature for ${path}: $($signature.Status)"
+            }
+          }
+
+      - name: Smoke packaged dependency closure
+        run: pnpm run desktop:smoke
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: desktop-windows-x64
+          path: |
+            apps/desktop/dist/Mantur-Agent-Windows-x64.exe
+            apps/desktop/dist/Mantur-Agent-Windows-x64.exe.blockmap
+            apps/desktop/dist/latest.yml
+          if-no-files-found: error
+          retention-days: 7
+
   assemble:
-    name: Assemble macOS release
-    needs: [validate, macos]
+    name: Assemble signed desktop release
+    if: ${{ !cancelled() && needs.validate.result == 'success' && needs.macos.result == 'success' && (!inputs.windows || needs.windows.result == 'success') }}
+    needs: [validate, macos, windows]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -187,9 +268,17 @@ jobs:
           name: desktop-macos-x64
           path: release-input/desktop-macos-x64
 
+      - name: Download Windows artifacts
+        if: inputs.windows
+        uses: actions/download-artifact@v8
+        with:
+          name: desktop-windows-x64
+          path: release-input/desktop-windows-x64
+
       - name: Merge native artifacts and update metadata
         env:
           ARCHITECTURES: ${{ inputs.architectures }}
+          WINDOWS: ${{ inputs.windows }}
         run: |
           set -euo pipefail
           mkdir release
@@ -201,6 +290,11 @@ jobs:
               required_artifacts+=("release-input/desktop-macos-$arch/Mantur-Agent-macOS-$arch.$extension")
             done
           done
+          if [ "$WINDOWS" = true ]; then
+            for filename in Mantur-Agent-Windows-x64.exe Mantur-Agent-Windows-x64.exe.blockmap latest.yml; do
+              required_artifacts+=("release-input/desktop-windows-x64/$filename")
+            done
+          fi
           for artifact in "${required_artifacts[@]}"; do
             [ -f "$artifact" ] || {
               echo "::error::Required desktop release artifact is missing: $artifact"

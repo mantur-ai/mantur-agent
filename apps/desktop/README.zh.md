@@ -73,7 +73,7 @@ smoke 还会检查内置 CLI 的固定来源记录、包版本、许可证和依
 
 打包时将 CLI 来源记录和 `node_modules` 目录分别作为资源输入。Electron Builder 在复制目录时排除其顶层 `node_modules` 子目录；直接选择模块目录本身，才能保留内置 CLI 及其依赖。
 
-## 发布已签名的 macOS release
+## 发布已签名的桌面 release
 
 手动触发的 `Desktop release` 工作流默认选择 `architectures=both`，也可明确选择 `arm64`，在对应原生 macOS runner 上构建。每个选中任务都会先在进程文件描述符上限为 64 时验证有界签名扫描，再使用 Developer ID Application 身份签名应用、提交 Apple notarization，并验证签名、Gatekeeper 评估与 stapled ticket；它们还会在产物进入组装步骤前运行 packaged smoke。
 
@@ -87,6 +87,8 @@ smoke 还会检查内置 CLI 的固定来源记录、包版本、许可证和依
 | Secret | `MACOS_CERTIFICATE_PASSWORD` | 导出 `.p12` 时使用的密码 |
 | Secret | `APPLE_ID` | 用于 notarization 的 Apple ID |
 | Secret | `APPLE_APP_SPECIFIC_PASSWORD` | 该 Apple ID 的 App 专用密码 |
+
+设置 `windows=true` 可在同一 release 中包含 Windows x64。请在受保护的 `windows-release` 环境中配置加密 secret：`WINDOWS_CERTIFICATE`（包含私钥的签名 `.pfx` 文件的 Base64 内容）和 `WINDOWS_CERTIFICATE_PASSWORD`。原生 Windows 任务要求这两个 secret 均已配置，且应用程序和安装包的 Authenticode 签名有效，才能上传产物。缺少凭证、签名无效或选中的任一平台失败，都会阻止组装和发布；只有明确未选中 Windows 时才会排除它。组装的 Windows 文件包含 EXE、对应 blockmap 及用于自动更新的 `latest.yml`。
 
 工作流会把选中的原生 `latest-mac.yml` 合并为一份可区分架构的更新通道，并把完整候选产物与 `SHA256SUMS` 保留七天。必须从精确匹配 `v<apps/desktop 版本>` 的 tag 运行；electron-updater 可以从 GitHub feed 中选择这种兼容 semver 的预发布 tag。`publish=false` 会在组装候选产物后停止。`publish=true` 还要求审批变量指向完整固定源码配置的 SHA-256 摘要，之后才会创建 GitHub release，并同时上传 DMG、更新 ZIP、blockmap、更新元数据与哈希。工作流会拒绝使用已有 release 的 tag，不会替换已发布文件；仓库级 Release Immutability 则会继续阻止之后修改 tag 或产物。
 
