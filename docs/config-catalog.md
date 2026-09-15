@@ -426,7 +426,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/client/ui-mantur-assets/src/index.ts:15`](../packages/client/ui-mantur-assets/src/index.ts)
+Source: [`packages/client/ui-mantur-assets/src/index.ts:16`](../packages/client/ui-mantur-assets/src/index.ts)
 
 <a id="deepseek-aidsh-client-ui-mantur-editing"></a>
 

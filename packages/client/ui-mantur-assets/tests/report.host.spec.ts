@@ -1,6 +1,6 @@
 /** Pipeline field preservation and rejection of ambiguous asset identities. */
 import { describe, expect, it } from 'vitest'
-import { report } from '../src/report.ts'
+import { report, imageReferences } from '../src/report.ts'
 import type { AssetRow, PromptEdit } from '../src/types.ts'
 
 function assets(row: Record<string, unknown> = {}) {
@@ -63,4 +63,13 @@ describe('pipeline reports', () => {
     const video = report(JSON.stringify(clips()))
     expect(() => video.replace([{ ...edit(video.rows[0]!), negative: 'unrequested field' }])).toThrow('no editable negative')
   })
+})
+
+it('joins compiler image references by exact identity and rejects conflicting or invalid links', () => {
+  const source = clips({}, { 图片引用: [{ asset_id: 'CHAR-1', url: 'https://example.com/one.png' }] })
+  expect([...imageReferences(JSON.stringify(source))]).toEqual([['CHAR-1', 'https://example.com/one.png']])
+  expect(() => imageReferences(JSON.stringify(assets()))).toThrow('storyboard report')
+  for (const references of [null, [{ asset_id: 'CHAR-1', url: 'javascript:alert(1)' }], [
+    { asset_id: 'CHAR-1', url: 'https://example.com/one.png' }, { asset_id: 'CHAR-1', url: 'https://example.com/two.png' },
+  ]]) expect(() => imageReferences(JSON.stringify(clips({}, { 图片引用: references })))).toThrow()
 })

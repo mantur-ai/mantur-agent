@@ -74,14 +74,14 @@ it.each([
   expect(new Uint8Array(await response.arrayBuffer())).toEqual(Uint8Array.from(bytes))
 })
 
-it('rejects fake media and missing files while omitting over-limit candidate files', async () => {
+it('rejects fake media and missing files while listing invalid and oversized candidates', async () => {
   await ctx.manturAssets.load(agent, 'assets.json')
   await writeFile(join(root, 'fake.png'), 'not an image')
   await writeFile(join(root, 'large.png'), Buffer.alloc(65))
   await mkdir(join(root, 'nested'))
   await expect(ctx.manturAssets.preview(agent, 'fake.png')).rejects.toThrow('unsupported file format')
   await expect(ctx.manturAssets.preview(agent, 'missing.png')).rejects.toThrow('not a file')
-  expect(await ctx.manturAssets.candidates(agent, '')).toEqual([])
+  expect((await ctx.manturAssets.candidates(agent, '')).map(item => [item.name, item.issue])).toEqual([['fake.png', 'unsupported'], ['large.png', 'too-large']])
   const real = ctx.fs.readBytes.bind(ctx.fs)
   const read = vi.spyOn(ctx.fs, 'readBytes')
   read.mockImplementation((target, ...args) => target.displayPath.endsWith('fake.png')
@@ -349,4 +349,63 @@ it('refuses a file target whose provider display path retains a directory separa
     return args[0] === 'assets.json' ? { ...target, displayPath: target.displayPath + '/' } : target
   })
   await expect(ctx.manturAssets.load(agent, 'assets.json')).rejects.toThrow('must be a file')
+})
+
+it('resolves nested manifest files locally and refuses paths outside the project', async () => {
+  await mkdir(join(root, 'exports'))
+  const bytes = Buffer.from('manifest video')
+  await writeFile(join(root, 'exports/video.mp4'), bytes)
+  const manifestPath = join(root, 'exports/manifest.json')
+  await writeFile(manifestPath, JSON.stringify([{ clip_id: 'CLIP-1', file: 'video.mp4', sha256: fingerprint(bytes) }]))
+  await ctx.manturAssets.load(agent, 'assets.json', undefined, 'exports/manifest.json')
+  const media = await ctx.manturAssets.media(agent, 'CLIP-1')
+  expect((await route(new Request(new URL(media.url, 'http://127.0.0.1')))).status).toBe(200)
+  await writeFile(manifestPath, JSON.stringify([{ clip_id: 'CLIP-1', file: '../../outside.mp4', sha256: fingerprint(bytes) }]))
+  await expect(ctx.manturAssets.load(agent, 'assets.json', undefined, 'exports/manifest.json'))
+    .rejects.toMatchObject({ code: 'FS_PERMISSION_DENIED' })
+})
+
+it('associates explicit storyboard images without rewriting assets and rejects stale references', async () => {
+  const clips = { schema_version: 'drama-storyboard-seedance-v2', Clip总表: [{ 'Clip ID': 'CLIP-1', 最终提示词: 'clip' }],
+    'Seedance2.0请求体': [{ 'Clip ID': 'CLIP-1', 最终提示词: 'clip', 图片引用: [{ asset_id: 'CHAR-1', url: 'https://example.com/image.png' }] }] }
+  await writeFile(join(root, 'clips.json'), JSON.stringify(clips))
+  const snapshot = await ctx.manturAssets.load(agent, 'assets.json', 'clips.json')
+  expect(snapshot.rows[0]?.media).toBe('https://example.com/image.png')
+  expect(snapshot.rows[0]?.details).toContainEqual({ name: '图片引用', value: JSON.stringify({ asset_id: 'CHAR-1', url: 'https://example.com/image.png', source: join(root, 'clips.json') }) })
+  expect(await readFile(join(root, 'assets.json'), 'utf8')).toBe(source)
+  await writeFile(join(root, 'clips.json'), JSON.stringify(clips) + '\n')
+  await expect(ctx.manturAssets.saveDraft(agent, { source: snapshot.source, stateVersion: snapshot.stateVersion, edits: [] }))
+    .rejects.toMatchObject({ code: 'FS_STALE_VERSION' })
+  await writeFile(join(root, 'assets.json'), source.replace('"负面提示词":""', '"负面提示词":"","图片URL":"https://example.com/different.png"'))
+  await expect(ctx.manturAssets.load(agent, 'assets.json', 'clips.json')).rejects.toThrow('disagree')
+})
+
+it('serves explicitly manifested local images and refuses a changed digest', async () => {
+  const bytes = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])
+  await writeFile(join(root, 'image.png'), bytes)
+  const manifest = [{ asset_id: 'CHAR-1', file: 'image.png', sha256: fingerprint(bytes) }]
+  await writeFile(join(root, 'images.json'), JSON.stringify(manifest))
+  const snapshot = await ctx.manturAssets.load(agent, 'assets.json', undefined, 'images.json')
+  expect(snapshot.rows[0]?.localMedia).toBe(join(root, 'image.png'))
+  expect(snapshot.rows[0]?.media).toBe('')
+  const preview = await ctx.manturAssets.media(agent, 'CHAR-1')
+  expect(preview.kind).toBe('image')
+  expect((await route(new Request(new URL(preview.url, 'http://127.0.0.1')))).headers.get('content-type')).toBe('image/png')
+  expect(await readFile(join(root, 'assets.json'), 'utf8')).toBe(source)
+  await writeFile(join(root, 'images.json'), JSON.stringify([{ ...manifest[0], sha256: '0'.repeat(64) }]))
+  await expect(ctx.manturAssets.load(agent, 'assets.json', undefined, 'images.json')).rejects.toThrow('fingerprint changed')
+  await writeFile(join(root, 'images.json'), JSON.stringify([...manifest, ...manifest]))
+  await expect(ctx.manturAssets.load(agent, 'assets.json', undefined, 'images.json')).rejects.toThrow('Duplicate')
+})
+
+it('discovers standard outputs in the workspace and immediate project folders without inventing missing sources', async () => {
+  const reportDir = join(root, 'episode/资产/资产提取结果')
+  await mkdir(reportDir, { recursive: true })
+  await writeFile(join(reportDir, 'assets-report.json'), source)
+  await writeFile(join(reportDir, 'local-images.manifest.json'), '[]')
+  expect(await ctx.manturAssets.projects(agent)).toEqual([{ name: 'episode', directory: join(root, 'episode'),
+    assets: join(reportDir, 'assets-report.json'), clips: null,
+    imagesManifest: join(reportDir, 'local-images.manifest.json'), clipsManifest: null }])
+  await mkdir(join(reportDir, 'clip-seedance-report.json'))
+  await expect(ctx.manturAssets.projects(agent)).rejects.toThrow('not a file')
 })

@@ -6,9 +6,10 @@ import { FsError } from '@deepseek-ai/dsh-fs'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { TypertRemoteService, Remote } from '@deepseek-ai/dsh-typert-protocol'
 import { randomUUID } from 'node:crypto'
+import { basename, dirname, join } from 'node:path'
 import Schema from '@deepseek-ai/schemastery'
-import type { AssetCandidate, AssetCommand, AssetEntry, AssetMedia, AssetProposal, ProposalId, AssetSnapshot, AssetState, AssetVersion, PromptEdit, SourcePin } from './types.ts'
-import { fingerprint, report } from './report.ts'
+import type { AssetProject, AssetCandidate, AssetCommand, AssetEntry, AssetMedia, AssetProposal, ProposalId, AssetSnapshot, AssetState, AssetVersion, PromptEdit, SourcePin } from './types.ts'
+import { fingerprint, report, imageReferences } from './report.ts'
 import { parsePromptEdits } from './prompt-edits.ts'
 
 /** Size and listing limits for report, journal, and media reads. */
@@ -43,7 +44,7 @@ function mediaType(bytes: Uint8Array, name: string): { kind: 'image' | 'video'; 
 export class ManturAssets extends TypertRemoteService {
   static inject = ['typert', 'fs', 'tools', 'connection']
   static Config = Config
-  private readonly sessions = new WeakMap<object, { source: SourcePin; stateFile: string; media: Map<string, { path: string; sha: string; type: string }>; tokens: Map<string, string> }>()
+  private readonly sessions = new WeakMap<object, { source: SourcePin; stateFile: string; references: { source: SourcePin; images: Map<string, string> } | null; media: Map<string, { path: string; sha: string; type: string }>; tokens: Map<string, string> }>()
   private readonly mediaTokens = new Map<string, { session: object; path: string; sha: string; type: string }>()
   private readonly disposedSessions = new WeakSet<object>()
   private closed = false
@@ -72,10 +73,37 @@ export class ManturAssets extends TypertRemoteService {
     return entries.filter(item => !item.name.startsWith('.') && (item.type === 'directory' || /\.(json|png|jpe?g|webp|mp4|webm)$/i.test(item.name))).map(item => ({ path: item.target.displayPath, name: item.name, directory: item.type === 'directory' }))
   }
   /**
+   * Discover standard operator outputs in the workspace and its direct project folders.
+   * @param agent - Owning Session.
+   * @returns Projects with an asset or storyboard report; local manifests remain explicit files.
+   */
+  @Remote('projects') async projects(agent: Agent): Promise<AssetProject[]> {
+    const root = await this.target(agent, '.', false)
+    const children = await this.list(agent, '.')
+    const directories = [root.displayPath, ...children.filter(entry => entry.directory).map(entry => entry.path)]
+    const projects: AssetProject[] = []
+    for (const directory of directories) {
+      const reportDirectory = join(directory, '资产/资产提取结果')
+      const file = async (name: string): Promise<string | null> => {
+        const target = await this.target(agent, join(reportDirectory, name), true)
+        const stat = await this.ctx.fs.stat(target)
+        if (stat === undefined) return null
+        if (stat.type !== 'file') throw new Error(`Asset output is not a file: ${target.displayPath}`)
+        return target.displayPath
+      }
+      const assets = await file('assets-report.json')
+      const clips = await file('clip-seedance-report.json')
+      if (assets === null && clips === null) continue
+      projects.push({ name: basename(directory), directory, assets, clips,
+        imagesManifest: await file('local-images.manifest.json'), clipsManifest: await file('clips.manifest.json') })
+    }
+    return projects
+  }
+  /**
    * Discover previewable media candidates in one project-local folder.
    * @param agent - Owning Session with a loaded report.
    * @param directory - Project-local candidate folder.
-   * @returns Direct child media files whose bytes match a supported media signature.
+   * @returns Direct child media files; unsupported and oversized files carry an issue and cannot be previewed.
    */
   @Remote('candidates') async candidates(agent: Agent, directory: string): Promise<AssetCandidate[]> {
     const info = await this.session(agent); const source = await this.require(agent, info.source)
@@ -85,16 +113,21 @@ export class ManturAssets extends TypertRemoteService {
     if (entries.length > this.config.maxEntries) throw new Error('Folder exceeds asset entry limit')
     const candidates: AssetCandidate[] = []
     for (const item of entries.filter(value => value.type === 'file' && !value.name.startsWith('.') && mediaKind(value.name) !== undefined)) {
+      const kind = mediaKind(item.name)
+      if (kind === undefined) continue
+      let issue: AssetCandidate['issue']
       let detected: { kind: 'image' | 'video'; type: string } | undefined
       try {
         detected = mediaType(await this.ctx.fs.readBytes(item.target, undefined, this.config.maxMediaBytes), item.name)
       } catch (error) {
         if (!(error instanceof FsError) || error.code !== 'FS_TOO_LARGE') throw error
+        issue = 'too-large'
       }
-      if (detected === undefined) continue
+      if (detected === undefined && issue === undefined) issue = 'unsupported'
       candidates.push({
         assetId: knownIds.filter(id => item.name === id || item.name.startsWith(`${id}-`)).sort((a, b) => b.length - a.length)[0] ?? null,
-        path: item.target.displayPath, name: item.name, kind: detected.kind, size: item.size ?? 0,
+        path: item.target.displayPath, name: item.name, kind, size: item.size ?? 0,
+        ...issue === undefined ? {} : { issue },
       })
     }
     return candidates
@@ -103,23 +136,54 @@ export class ManturAssets extends TypertRemoteService {
    * Load one pipeline report and optional explicit media manifest.
    * @param agent - Owning Session.
    * @param assetsPath - Project-local report path.
-   * @param _clipsPath - Reserved clip-report path kept for Remote compatibility.
+   * @param clipsPath - Optional storyboard report whose image references explicitly identify assets.
    * @param mediaManifest - Optional project-local manifest with SHA-256 pinned files.
    * @returns Current report rows plus journal state.
    */
-  @Remote('load') async load(agent: Agent, assetsPath: string, _clipsPath?: string, mediaManifest?: string): Promise<AssetSnapshot> {
+  @Remote('load') async load(agent: Agent, assetsPath: string, clipsPath?: string, mediaManifest?: string): Promise<AssetSnapshot> {
     this.assertLive(agent.session)
     this.invalidateMedia(agent.session)
     const source = await this.pin(agent, assetsPath); const sourceText = await this.read(source.path, this.config.maxBytes)
     report(sourceText); const root = await this.ctx.fs.resolve(this.cwd(agent)); const stateFile = `${root.displayPath}/.mantur-assets-${fingerprint(source.path).slice(0, 16)}.json`
     const media = new Map<string, { path: string; sha: string; type: string }>()
+    let references: { source: SourcePin; images: Map<string, string> } | null = null
+    if (clipsPath !== undefined) {
+      const referenceSource = await this.pin(agent, clipsPath)
+      const referenceText = await this.read(referenceSource.path, this.config.maxBytes)
+      if (fingerprint(referenceText) !== referenceSource.sha256) throw new FsError('Storyboard changed while reading.', 'FS_STALE_VERSION')
+      references = { source: referenceSource, images: imageReferences(referenceText) }
+    }
     if (mediaManifest !== undefined) {
-      const manifest = JSON.parse(await this.read((await this.pin(agent, mediaManifest)).path, this.config.maxBytes)) as unknown
+      const manifestPath = (await this.pin(agent, mediaManifest)).path
+      const manifest = JSON.parse(await this.read(manifestPath, this.config.maxBytes)) as unknown
       if (!Array.isArray(manifest)) throw new Error('Media manifest must be an array')
-      for (const item of manifest) { if (!item || typeof item !== 'object') throw new Error('Invalid media manifest row'); const row = item as Record<string, unknown>; if (typeof row.clip_id !== 'string' || typeof row.file !== 'string') throw new Error('Media manifest requires clip_id and file'); if (typeof row.sha256 !== 'string' || !/^[a-fA-F0-9]{64}$/.test(row.sha256)) throw new Error('Media manifest requires a SHA-256 digest'); const target = await this.target(agent, row.file, true); const stat = await this.ctx.fs.stat(target); if (stat?.type !== 'file') throw new Error('Media file missing'); media.set(row.clip_id, { path: target.displayPath, sha: row.sha256.toLowerCase(), type: 'video/mp4' }) }
+      for (const item of manifest) {
+        if (!item || typeof item !== 'object') throw new Error('Invalid media manifest row')
+        const row = item as Record<string, unknown>
+        const image = row.asset_id !== undefined
+        const id = image ? row.asset_id : row.clip_id
+        if (typeof id !== 'string' || !id || typeof row.file !== 'string' || (image && row.clip_id !== undefined)) {
+          throw new Error('Media manifest requires one asset_id or clip_id and file')
+        }
+        if (media.has(id)) throw new Error(`Duplicate media manifest identity: ${id}`)
+        if (typeof row.sha256 !== 'string' || !/^[a-fA-F0-9]{64}$/.test(row.sha256)) throw new Error('Media manifest requires a SHA-256 digest')
+        const resolved = await this.ctx.fs.resolve(row.file, { cwd: dirname(manifestPath) })
+        const target = await this.target(agent, resolved.displayPath, true)
+        const stat = await this.ctx.fs.stat(target)
+        if (stat?.type !== 'file') throw new Error(`Media file missing: ${target.displayPath}`)
+        let type = 'video/mp4'
+        if (image) {
+          const bytes = await this.ctx.fs.readBytes(target, undefined, this.config.maxMediaBytes)
+          const detected = mediaType(bytes, target.displayPath)
+          if (detected?.kind !== 'image') throw new Error(`Invalid local image: ${id}`)
+          if (fingerprint(bytes) !== row.sha256.toLowerCase()) throw new Error(`Local image fingerprint changed: ${id}`)
+          type = detected.type
+        }
+        media.set(id, { path: target.displayPath, sha: row.sha256.toLowerCase(), type })
+      }
     }
     this.assertLive(agent.session)
-    this.sessions.set(agent.session, { source, stateFile, media, tokens: new Map() })
+    this.sessions.set(agent.session, { source, stateFile, references, media, tokens: new Map() })
     return this.snapshot(agent, source)
   }
   /**
@@ -269,7 +333,7 @@ export class ManturAssets extends TypertRemoteService {
     const token = info.tokens.get(id) ?? randomUUID()
     info.tokens.set(id, token)
     this.mediaTokens.set(token, { session: agent.session, ...row })
-    return { id, name: row.path.slice(row.path.lastIndexOf('/') + 1), url: `/api/mantur-assets.media?token=${encodeURIComponent(token)}`, kind: 'video' }
+    return { id, name: row.path.slice(row.path.lastIndexOf('/') + 1), url: `/api/mantur-assets.media?token=${encodeURIComponent(token)}`, kind: row.type.startsWith('image/') ? 'image' : 'video' }
   }
   /**
    * Resolve one discovered candidate path into a validated preview URL.
@@ -355,11 +419,18 @@ export class ManturAssets extends TypertRemoteService {
     const current = await this.pin(agent, source.path)
     const text = await this.read(current.path, this.config.maxBytes)
     if (fingerprint(text) !== current.sha256) throw new FsError('Source changed while reading.', 'FS_STALE_VERSION')
-    const stateFile = (await this.session(agent)).stateFile
+    const info = await this.session(agent)
+    if (info.references !== null) await this.require(agent, info.references.source)
+    const stateFile = info.stateFile
     const version = await this.stateVersion(agent)
     const state = await this.readState(stateFile, current.path)
     if (await this.stateVersion(agent) !== version) throw new FsError('Journal changed while reading.', 'FS_STALE_VERSION')
-    return { source: current, stateVersion: version, state, rows: report(text).rows, projectState: null }
+    return { source: current, stateVersion: version, state, rows: report(text).rows.map((row) => {
+      const image = row.kind === 'image' ? info.references?.images.get(row.id) : undefined
+      if (image && row.media && image !== row.media) throw new Error(`Report and storyboard image disagree: ${row.id}`)
+      return { ...row, media: image ?? row.media, localMedia: info.media.get(row.id)?.path ?? '',
+        details: image === undefined ? row.details : [...row.details, { name: '图片引用', value: JSON.stringify({ asset_id: row.id, url: image, source: info.references?.source.path }) }] }
+    }), projectState: null }
   }
   private async stateVersion(agent: Agent) {
     return (await this.ctx.fs.stat(await this.target(agent, (await this.session(agent)).stateFile, true)))?.version ?? null

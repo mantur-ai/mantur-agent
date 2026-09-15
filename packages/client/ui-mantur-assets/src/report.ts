@@ -41,6 +41,9 @@ export function report(text: string): { rows: AssetRow[]; replace: (edits: Promp
       negative: negative === undefined ? '' : required(row, negative),
       fingerprint: fingerprint(JSON.stringify({ row, mirror })),
       media: optional(mirror ?? row, kind === 'video' ? '成片URL' : '图片URL'),
+      details: Object.entries({ ...row, ...mirror }).filter(([field]) => field !== prompt && field !== negative)
+        .map(([name, value]) => ({ name, value: display(value) })),
+      localMedia: '',
       template: display(mirror?.['请求体模板JSON']), actualRequest: display(mirror?.['实际请求体JSON']),
       actualPrompt: mirror === undefined ? '' : optional(mirror, '实际提示词'),
     } }
@@ -74,4 +77,30 @@ export function report(text: string): { rows: AssetRow[]; replace: (edits: Promp
     }
     return JSON.stringify(doc, null, 2) + '\n'
   } }
+}
+
+/**
+ * Read exact asset identities and image URLs from a selected storyboard report.
+ * @param text - Complete Seedance compiler report.
+ * @returns Unique image bindings; conflicting references reject the association.
+ */
+export function imageReferences(text: string): Map<string, string> {
+  const doc = record(JSON.parse(text))
+  if (doc['schema_version'] !== 'drama-storyboard-seedance-v2') throw new Error('Image references require a Seedance storyboard report')
+  report(text)
+  const bindings = new Map<string, string>()
+  for (const request of doc['Seedance2.0请求体'] as Row[]) {
+    if (request['图片引用'] === undefined) continue
+    if (!Array.isArray(request['图片引用'])) throw new Error('Clip image references must be an array')
+    for (const value of request['图片引用']) {
+      const reference = record(value)
+      const id = reference['asset_id']; const url = reference['url']
+      if (typeof id !== 'string' || !id || typeof url !== 'string' || !/^https?:\/\//i.test(url)) {
+        throw new Error('Clip image references require asset_id and an HTTP(S) image URL')
+      }
+      if (bindings.has(id) && bindings.get(id) !== url) throw new Error(`Conflicting image references for asset: ${id}`)
+      bindings.set(id, url)
+    }
+  }
+  return bindings
 }

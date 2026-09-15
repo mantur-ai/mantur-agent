@@ -46,6 +46,7 @@ it('loads asset slots before their shell, resolves Chinese copy, mounts on click
       $mount: vi.fn(async () => disposeRemote),
       manturScript: { list: async () => ({ ok: true, value: [] }) },
       manturAssets: {
+        projects: vi.fn(async () => ({ ok: true, value: [{ name: 'project', directory: '/project', assets: '资产/资产提取结果/assets-report.json', clips: null, imagesManifest: null, clipsManifest: null }] })),
         load: vi.fn(async (): Promise<{ ok: true; value: AssetSnapshot } | { ok: false; error: { message: string } }> => { throw new Error('controlled provider error') }),
         saveDraft: vi.fn(async () => ({ ok: true, value: snapshot })),
         prepare: vi.fn(async () => ({ ok: true, value: { requestId: 'proposal-1', source: snapshot.source, edits: [] } })),
@@ -106,10 +107,9 @@ it('loads asset slots before their shell, resolves Chinese copy, mounts on click
     } as unknown as ShellProps
     const view = render(<Workbench {...props} />)
     fireEvent.click(view.getByRole('button', { name: '资产' }))
-    expect(view.getByLabelText('流水线报告')).toBeTruthy()
-    fireEvent.click(view.getByRole('button', { name: '读取' }))
+    expect(view.queryByLabelText('流水线报告')).toBeNull()
     expect((await view.findByRole('alert')).textContent).toBe('controlled provider error')
-    expect(remote.manturAssets.load).toHaveBeenCalledWith(session, '资产/资产提取结果/assets-report.json')
+    expect(remote.manturAssets.load).toHaveBeenCalledWith(session, '资产/资产提取结果/assets-report.json', undefined, undefined)
     const commands = (slots.entries('main.workbench.assets.content')[0]!.inject as unknown as () => AssetCommands)()
     remote.manturAssets.load.mockResolvedValueOnce({ ok: false, error: { message: 'asset report changed' } })
     await expect(commands.load(session, 'assets.json')).rejects.toThrow('asset report changed')
@@ -121,7 +121,7 @@ it('loads asset slots before their shell, resolves Chinese copy, mounts on click
     await expect(commands.candidates(session, 'images')).resolves.toEqual([])
     await expect(commands.preview(session, 'image.png')).resolves.toMatchObject({ name: 'image.png', url: '/preview' })
     await expect(commands.request(session, snapshot, [], 'rewrite')).resolves.toBe('proposal-1')
-    expect(JSON.parse(send.mock.calls[0]![0])).toMatchObject({ requestId: 'proposal-1', source: snapshot.source })
+    expect(JSON.parse(send.mock.calls[0]![0])).toMatchObject({ requestId: 'proposal-1', source: snapshot.source, instruction: 'rewrite' })
     bound = false
     await expect(commands.request(session, snapshot, [], 'rewrite')).rejects.toThrow('owning conversation')
     expect(send).toHaveBeenCalledOnce()
