@@ -85,7 +85,7 @@ it('restores saved drafts only when the row fingerprint still matches and expose
     edits: [{ key: snapshot.rows[0]!.key, fingerprint: 'f', prompt: '已保存', negative: '' }] }], proposals: [{ id: 'p1', status: 'proposed', instruction: 'rewrite', edits: [] }] } } as unknown as AssetSnapshot
   const view = panel(value); await load()
   fireEvent.click(screen.getByRole('button', { name: 'CHAR-001-V01 林夏' }))
-  expect((screen.getByLabelText('提示词')).value).toBe('已保存')
+  expect(screen.getByLabelText<HTMLTextAreaElement>('提示词').value).toBe('已保存')
   fireEvent.click(screen.getByText('提案待审核 p1'))
   fireEvent.click(screen.getByRole('button', { name: '应用提案' }))
   await waitFor(() =>{  expect(view.commands.apply).toHaveBeenCalledWith('session-1', 'p1') })
@@ -102,7 +102,7 @@ it('keeps unsaved edits when switching or refreshing is attempted', async () => 
   fireEvent.click(screen.getByRole('button', { name: 'CHAR-001-V01 林夏' }))
   fireEvent.change(screen.getByLabelText('提示词'), { target: { value: '尚未保存' } })
   fireEvent.click(screen.getByRole('tab', { name: '分镜 / Clip 列表' }))
-  expect((screen.getByLabelText('提示词')).value).toBe('尚未保存')
+  expect(screen.getByLabelText<HTMLTextAreaElement>('提示词').value).toBe('尚未保存')
   expect(screen.getByRole('alert').textContent).toContain('请先保存')
   fireEvent.click(screen.getByRole('button', { name: '刷新' }))
   await waitFor(() =>{  expect(screen.getByRole('region').getAttribute('aria-busy')).toBe('false') })
