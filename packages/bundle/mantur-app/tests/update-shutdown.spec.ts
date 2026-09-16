@@ -432,7 +432,7 @@ it('saves authoritative events before a failing telemetry upload and retains ord
   }
 })
 
-it.each(['dynamicCordisRunner'])('freezes a never-started %s and rechecks its history after every receipt', async (name) => {
+it.each(['codeRuntime', 'dynamicCordisRunner'])('freezes a never-started %s and rechecks its history after every receipt', async (name) => {
   const test = await fixture()
   const owner = { hasStartedPrograms: false, stopForShutdown: vi.fn(async () => {}) }
   test.ctx.provide(name, owner)
@@ -447,7 +447,7 @@ it.each(['dynamicCordisRunner'])('freezes a never-started %s and rechecks its hi
   } finally { await test.close() }
 })
 
-it.each(['dynamicCordisRunner'])('rejects %s execution admitted during shutdown before issuing a receipt', async (name) => {
+it.each(['codeRuntime', 'dynamicCordisRunner'])('rejects %s execution admitted during shutdown before issuing a receipt', async (name) => {
   const test = await fixture()
   const owner = { hasStartedPrograms: false, async stopForShutdown() { this.hasStartedPrograms = true } }
   test.ctx.provide(name, owner)
@@ -455,14 +455,14 @@ it.each(['dynamicCordisRunner'])('rejects %s execution admitted during shutdown 
   finally { await test.close() }
 })
 
-it('keeps the unused worker provider blocked without freezing normal agent admission', async () => {
+it('drains the unused worker provider and closes normal agent admission', async () => {
   const test = await fixture()
   await test.ctx.plugin(WorkerThreadCodeRuntime, {})
   try {
     expect((test.ctx.codeRuntime as WorkerThreadCodeRuntime).hasStartedPrograms).toBe(false)
-    await expect(createHostUpdateShutdown(test.ctx).prepare()).rejects.toThrow('codeRuntime')
-    const handle = await test.ctx.agents.create({ sessionId: SessionId('unused-does-not-freeze') })
-    await handle.dispose()
+    await expect(createHostUpdateShutdown(test.ctx).prepare()).resolves.toEqual([{ sessionId: 'held-write', nextSeq: 0 }])
+    await expect(test.ctx.agents.create({ sessionId: SessionId('late-worker-session') })).rejects.toThrow()
+    await expect(test.ctx.codeRuntime.run({ program: 'return 1', bindings: [] })).rejects.toThrow('after disposal')
   } finally { await test.close() }
 })
 
@@ -489,7 +489,7 @@ it.each(['worker', 'dynamic'])('rejects %s history even if its provider was remo
   } finally { await test.close() }
 })
 
-it('keeps the shipped dynamic runner module blocked even when no activation occurred', async () => {
+it('drains the shipped dynamic runner module when no activation occurred', async () => {
   const test = await fixture()
   const internal = test.ctx.loader.internal as { import(name: string, parent: string, attributes: object): Promise<unknown> } | undefined
   if (!internal) throw new Error('loader internals are unavailable')
@@ -497,7 +497,9 @@ it('keeps the shipped dynamic runner module blocked even when no activation occu
   try {
     await test.ctx.loader.create({ name: '@deepseek-ai/dsh-cordis-host-runner' })
     expect(test.ctx.dynamicCordisRunner.hasStartedPrograms).toBe(false)
-    await expect(createHostUpdateShutdown(test.ctx).prepare()).rejects.toThrow('@deepseek-ai/dsh-cordis-host-runner')
+    await expect(createHostUpdateShutdown(test.ctx).prepare()).resolves.toEqual([{ sessionId: 'held-write', nextSeq: 0 }])
+    expect(() => test.ctx.dynamicCordisRunner.define({ sessionId: test.agent.id, plugin: { kind: 'new', idPrefix: 'late' },
+      name: 'late', purpose: 'late', code: { host: 'return { apply() {} }' } })).toThrow('stopping for shutdown')
   } finally {
     importModule.mockRestore()
     await test.close()

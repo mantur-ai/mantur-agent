@@ -10,6 +10,8 @@ An empty worker or dynamic-plugin registry does not prove that arbitrary program
 
 ## Decision
 
+The module-level exclusions below are amended by the [packaged module review](../bug-fix/2026-09-16-packaged-update-module-review.md). Root-wide execution history and ordered, failure-retaining shutdown remain required.
+
 The worker provider records every attempted worker start. The dynamic runner records every admitted activation, including Client-only activation. Each module retains a monotonic WeakSet keyed by the Host root; exported queries remain available after all provider instances are removed. Scoped and replacement instances share that history. Another Host root has independent history. Syntax failures, pre-aborted worker requests, definitions and unanswered approvals do not record execution.
 
 The dynamic runner closes definition, activation, Client-source and handler-call admission synchronously. Its shutdown cancels unanswered approvals, waits for admitted activations and handler invocations, then joins normal plugin retraction. Retraction failures remain recorded for every shutdown request. The worker provider retains its existing worker, pipe and admitted-binding drain. Neither operation certifies arbitrary background work or operating-system descendants.

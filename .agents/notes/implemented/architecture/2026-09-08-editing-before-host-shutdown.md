@@ -10,6 +10,8 @@ AgentLoop quiesce aborts admitted tool signals. Gateway and HTTP shutdown reject
 
 ## Decision
 
+The module-level exclusions below are amended by the [packaged module review](../bug-fix/2026-09-16-packaged-update-module-review.md). Root-wide execution history and ordered, failure-retaining shutdown remain required.
+
 The Mantur coordinator first awaits each retained `manturEditing.stopForShutdown()` in an otherwise approved composition. The editing owner owns its phased cutoff: reject new Host open/execute requests; finish admitted MCP execution and attachment writes; close editor job admission and include UI work accepted before that actual cutoff; drain jobs and exports; finish browser and server saves; close its transport/server and observe its child close. The coordinator does not claim simultaneous Host and editor cutoff.
 
 Until this phase succeeds, the coordinator preserves Agent/inbox admission, live signals, HTTP/Gateway callbacks, writers and other producers. It then starts its existing quiesce, network shutdown and producer drain before sealing authoritative writers. Editing failure is cached and prevents those later operations. Owners created during the editing drain are collected and drained too; owners appearing during later producer or settings cleanup prevent writer sealing. Subsequent receipt verification also rejects an undrained editing owner.

@@ -9,6 +9,7 @@ import { applyEntryPatches, entryListSchema, type PatchOptions } from '@deepseek
 import { interpolate } from '@deepseek-ai/cordis-plugin-loader'
 import SystemPrompt, { renderPrompt, type PromptAssembly } from '@deepseek-ai/dsh-system-prompt'
 import * as ManturApp from '../src/index.ts'
+import { supportedUpdateModules } from '../src/update-policy.ts'
 
 const root = fileURLToPath(new URL('../../..', import.meta.url))
 
@@ -28,6 +29,19 @@ function composedRows() {
 }
 
 describe('dsh-mantur-app bundle', () => {
+  it.each(['darwin', 'win32'])('reviews every enabled packaged %s module for update shutdown', (platform) => {
+    const context = { process: { platform, env: {
+      DSH_MANTUR_NATIVE_ACCOUNT: '1',
+      DSH_MANTUR_EDITOR_ROOT: '/packaged/mantur-cut',
+      DSH_MANTUR_EDITOR_NODE: '/packaged/electron',
+    } } }
+    const unsupported = composedRows()
+      .filter(row => !interpolate(context, row.disabled) && !row.group)
+      .map(row => row.name)
+      .filter(name => !supportedUpdateModules.has(name))
+    expect(unsupported).toEqual([])
+  })
+
   it('selects installed editing resources without enabling a development checkout', () => {
     const row = composedRows().find(entry => entry.id === 'ui-mantur-editing')
     if (!row) throw new Error('Mantur composition is missing its editing entry')

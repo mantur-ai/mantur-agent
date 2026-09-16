@@ -10,6 +10,8 @@ AgentLoop quiesce 会取消已接纳工具的信号。Gateway 与 HTTP 关闭会
 
 ## Decision
 
+下述模块级排除由[安装版模块审核](../bug-fix/2026-09-16-packaged-update-module-review.zh.md)修订。根级执行历史与有序、保留失败的关闭仍是必要条件。
+
 Mantur 协调器在其他条件已获准的组合中，首先等待每个保留的 `manturEditing.stopForShutdown()`。剪辑所有者负责自己的分阶段截止：拒绝新的 Host open/execute 请求；完成已接纳的 MCP 执行与附件写入；关闭 editor job 准入并包含该实际截止前接纳的 UI 工作；排空 job 和 export；完成浏览器与服务端保存；关闭自身 transport/server 并观察其 child close。协调器不宣称 Host 与 editor 同时截止。
 
 该阶段成功前，协调器保留 Agent/inbox 准入、有效信号、HTTP/Gateway 回调、writer 和其他生产方。随后启动既有 quiesce、网络关闭及生产方排空，再封存权威 writer。剪辑失败被缓存，并阻止这些后续操作。剪辑排空中创建的所有者也会被收集并排空；在后续生产方或设置清理期间出现的所有者会阻止 writer 封存。后续回执校验也会拒绝未排空的剪辑所有者。
