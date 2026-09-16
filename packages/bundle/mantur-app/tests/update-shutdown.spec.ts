@@ -489,7 +489,7 @@ it.each(['worker', 'dynamic'])('rejects %s history even if its provider was remo
   } finally { await test.close() }
 })
 
-it('keeps the shipped dynamic runner module blocked even when no activation occurred', async () => {
+it('drains the shipped dynamic runner module when no activation occurred', async () => {
   const test = await fixture()
   const internal = test.ctx.loader.internal as { import(name: string, parent: string, attributes: object): Promise<unknown> } | undefined
   if (!internal) throw new Error('loader internals are unavailable')
@@ -497,7 +497,9 @@ it('keeps the shipped dynamic runner module blocked even when no activation occu
   try {
     await test.ctx.loader.create({ name: '@deepseek-ai/dsh-cordis-host-runner' })
     expect(test.ctx.dynamicCordisRunner.hasStartedPrograms).toBe(false)
-    await expect(createHostUpdateShutdown(test.ctx).prepare()).rejects.toThrow('@deepseek-ai/dsh-cordis-host-runner')
+    await expect(createHostUpdateShutdown(test.ctx).prepare()).resolves.toEqual([{ sessionId: 'held-write', nextSeq: 0 }])
+    expect(() => test.ctx.dynamicCordisRunner.define({ sessionId: test.agent.id, plugin: { kind: 'new', idPrefix: 'late' },
+      name: 'late', purpose: 'late', code: { host: 'return { apply() {} }' } })).toThrow('stopping for shutdown')
   } finally {
     importModule.mockRestore()
     await test.close()
