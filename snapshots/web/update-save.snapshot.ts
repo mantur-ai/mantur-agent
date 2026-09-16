@@ -58,20 +58,13 @@ it.each([false, true])('preserves the recorded session through dsh update IPC wi
   try {
     const ready: unknown = (await once(child, 'message', { signal: AbortSignal.timeout(10_000) }).catch((error: unknown) => { throw new Error(output || 'Host sent no startup output', { cause: error }) }))[0]
     expect(ready, output).toEqual({ type: 'mantur:update:ready' })
-    const checkpoints = worker ? [] : await requestUpdateSave({ child, timeoutMs: 10_000 })
+    const checkpoints = await requestUpdateSave({ child, timeoutMs: 10_000 })
     // An admitted restore can finish or roll back before publication; both must preserve this log.
     expect(checkpoints.every(checkpoint => checkpoint.sessionId === sessionId && checkpoint.nextSeq === events.length), output).toBe(true)
     expect(child.exitCode).toBeNull()
-    if (worker) {
-      await expect(requestUpdateSave({ child, timeoutMs: 10_000 })).rejects.toThrow('codeRuntime')
-      // Refused installation leaves the Host alive; the fixture requests ordinary application shutdown.
-      child.kill('SIGTERM')
-      await closed
-    } else {
-      const exited = once(child, 'close', { signal: AbortSignal.timeout(5_000) })
-      child.send({ type: 'mantur:update:exit' })
-      expect(await exited, output).toEqual([0, null])
-    }
+    const exited = once(child, 'close', { signal: AbortSignal.timeout(5_000) })
+    child.send({ type: 'mantur:update:exit' })
+    expect(await exited, output).toEqual([0, null])
     const verify = new Context()
     await verify.plugin(Persistence, { root: sessions, compression: 'none' })
     try {
