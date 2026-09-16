@@ -34,7 +34,7 @@ function assertProgramHistory(ctx: Context, services: readonly OwnedService[]): 
     throw new Error('Update cannot verify shutdown of: previously executed programs: unmanaged operating-system descendants')
   }
   for (const owner of services) {
-    if (owner.name === 'codeRuntime' || owner.name === 'dynamicCordisRunner'
+    if ((owner.name === 'codeRuntime' || owner.name === 'dynamicCordisRunner')
       && (owner.value as Partial<ProgramOwner>).hasStartedPrograms !== false) {
       throw new Error(`Update cannot verify shutdown of: ${owner.name}: unmanaged operating-system descendants`)
     }

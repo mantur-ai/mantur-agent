@@ -10,7 +10,7 @@ The desktop restart-to-update path rejects the shipped Mantur composition before
 
 ## Decision
 
-The update policy includes those five shipped modules. Script and asset mutations remain owned by Gateway requests and AgentLoop tool execution. Editing retains its existing ordered shutdown owner. The native picker UI has no Host work; native dialogs retain their existing cancellation owner. An unused Host runner closes admission and drains managed calls, while root-wide activation history still rejects any previously activated dynamic program.
+The update policy includes those five shipped modules. Script and asset mutations remain owned by Gateway requests and AgentLoop tool execution. Editing retains its existing ordered shutdown owner. The native picker UI has no Host work; native dialogs retain their existing cancellation owner. Unused worker runtimes and Host runners close admission and drain managed calls, while root-wide execution history still rejects any previously started worker or activated dynamic program.
 
 This amends the module-level exclusions in the [program history decision](../architecture/2026-09-07-update-program-history.md) and [editing shutdown decision](../architecture/2026-09-08-editing-before-host-shutdown.md); history checks, unmanaged execution refusal and failed-shutdown retention remain intact. The change belongs to the Mantur bundle and does not modify the upstream loop.
 

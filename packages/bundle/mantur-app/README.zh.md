@@ -49,7 +49,7 @@ kind: "package-bundle"
 
 只有更新策略中已审核的模块可以参与。具有未管理 OS 后代的代码执行、模块 HMR、任意 Host 插件，以及缺少停机所有者的剪辑/MCP 组合都会阻止安装。失败或 Main 等待到期不会授权安装；已开始的 Host 清理继续进行，已停止的工作不会自动重启。普通应用关闭使用独立路径。OTLP 遥测是本地会话日志的非权威副本，不参与保存回执；应用树仍执行其既有限时关闭，并保留关闭失败告警。
 
-协调器为每次回执检查整个根的 worker 和动态激活历史，即使所有提供方实例已经消失。缺少历史仍会拒绝。保留 codeRuntime 存在检查。内置 Host runner 仅在没有发生动态激活时参与更新准备，准备过程中关闭其准入。剧本和资产写入通过 Gateway 与 AgentLoop 排空，剪辑通过保留的所有者排空，原生选择器 UI 委托给选择器所有者。默认 profile 安装及真实浏览器中的剪辑完成仍未验证。[所有者组合回归](tests/editing-combined.spec.ts) 使用夹具 editor，覆盖真实 AgentLoop/MCP 信号、图片持久化和会话日志；浏览器 job 与 lease 需要独立证据。
+协调器为每次回执检查整个根的 worker 和动态激活历史，即使所有提供方实例已经消失。缺少历史仍会拒绝。内置 worker runtime 与 Host runner 仅在没有启动程序或发生动态激活时参与更新准备，准备过程中关闭其准入。剧本和资产写入通过 Gateway 与 AgentLoop 排空，剪辑通过保留的所有者排空，原生选择器 UI 委托给选择器所有者。默认 profile 安装及真实浏览器中的剪辑完成仍未验证。[所有者组合回归](tests/editing-combined.spec.ts) 使用夹具 editor，覆盖真实 AgentLoop/MCP 信号、图片持久化和会话日志；浏览器 job 与 lease 需要独立证据。
 
 <a id="model-experience"></a>
 ## 模型体验

@@ -5,6 +5,8 @@ import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { startDesktopService } from '../src/runtime.ts'
+import { requestUpdateSave } from '../src/update-save.ts'
+import { NativeAccountHost } from '../src/auth/host.ts'
 import { parseProgramManifest, verifyProgramManifest } from '../../../scripts/mantur-cut-distribution.ts'
 import { smokeEmbeddedCli } from '../../../scripts/desktop-embedded-cli-smoke.ts'
 
@@ -90,10 +92,23 @@ const service = startDesktopService({
     ...process.env,
     DSH_HOME: dshHome,
     DSH_TELEMETRY_DISABLED: '1',
-    DSH_MANTUR_NATIVE_ACCOUNT: '0',
-    DSH_MANTUR_UPDATE_IPC: '0',
+    DSH_MANTUR_NATIVE_ACCOUNT: '1',
+    DSH_MANTUR_UPDATE_IPC: '1',
+    DSH_MANTUR_EDITOR_ROOT: manturCutRoot,
+    DSH_MANTUR_EDITOR_NODE: packaged.electronExecutable,
     NODE_PATH: '',
   },
+})
+// The empty smoke profile never authorizes an account or encrypts credentials.
+const account = new NativeAccountHost({
+  child: service.child, userData: dshHome, deviceName: 'packaged-smoke', platform: process.platform,
+  cipher: {
+    isAsyncEncryptionAvailable: async () => false,
+    encryptStringAsync: async () => { throw new Error('Packaged smoke must not encrypt credentials') },
+    decryptStringAsync: async () => { throw new Error('Packaged smoke must not decrypt credentials') },
+  },
+  openBrowser: async () => { throw new Error('Packaged smoke must not open an authorization page') },
+  onController: () => {}, onSnapshot: () => {},
 })
 try {
   const url = await service.ready
@@ -110,11 +125,18 @@ try {
   if (!html.includes('__DSH_BOOT__')) throw new Error('packaged dsh Web did not return its boot payload')
   if (!html.includes('<title>ManTur Agent</title>')) throw new Error('packaged Web title is not ManTur Agent')
   console.log(`desktop packaged smoke: ${String(response.status)} ${new URL(url).origin}`)
+  const checkpoints = await requestUpdateSave({ child: service.child, timeoutMs: 60000 })
+  if (checkpoints.length !== 0) throw new Error('Fresh packaged Host returned unexpected session checkpoints')
+  await account.close()
+  await service.stopAndVerifyExit()
+  console.log('desktop packaged update shutdown: verified save receipt and normal Host exit')
 } finally {
-  service.stop()
-  await service.closed
-  if (!readFileSync(logPath, 'utf8').includes('dsh web: http://127.0.0.1:')) {
-    throw new Error('packaged Harness output was not persisted to the desktop log')
+  try { await account.close() } finally {
+    service.stop()
+    await service.closed
+    if (!readFileSync(logPath, 'utf8').includes('dsh web: http://127.0.0.1:')) {
+      throw new Error('packaged Harness output was not persisted to the desktop log')
+    }
+    rmSync(dshHome, { recursive: true, force: true })
   }
-  rmSync(dshHome, { recursive: true, force: true })
 }

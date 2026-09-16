@@ -10,7 +10,7 @@ Status: implemented
 
 ## Decision
 
-更新策略包含这五个内置模块。剧本和资产变更仍由 Gateway 请求与 AgentLoop 工具执行持有。剪辑保留现有有序关闭所有者。原生选择器 UI 没有 Host 工作，原生对话框保留现有取消所有者。未使用的 Host runner 关闭准入并排空受管调用；根级激活历史仍拒绝任何曾激活的动态程序。
+更新策略包含这五个内置模块。剧本和资产变更仍由 Gateway 请求与 AgentLoop 工具执行持有。剪辑保留现有有序关闭所有者。原生选择器 UI 没有 Host 工作，原生对话框保留现有取消所有者。未使用的 worker runtime 与 Host runner 关闭准入并排空受管调用；根级执行历史仍拒绝任何曾启动的 worker 或曾激活的动态程序。
 
 这修订了[程序历史决策](../architecture/2026-09-07-update-program-history.zh.md)与[剪辑关闭决策](../architecture/2026-09-08-editing-before-host-shutdown.zh.md)中的模块级排除；历史检查、未管理执行拒绝和关闭失败保留规则不变。修改属于漫途 bundle，不改动上游循环。
 

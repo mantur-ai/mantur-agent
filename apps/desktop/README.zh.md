@@ -67,7 +67,7 @@ macOS x64 命令必须在 Intel Mac 上运行，Windows 命令必须在 x64 Wind
 | macOS x64 | `pnpm run desktop:dist:mac:x64` | `Mantur-Agent-macOS-x64.dmg`、`Mantur-Agent-macOS-x64.zip` |
 | Windows x64 | `pnpm run desktop:dist:win:x64` | `Mantur-Agent-Windows-x64.exe` |
 
-smoke 会从解包应用自己的依赖目录启动 `dsh`，把打印出的进程 token 换成会话 cookie，并要求带品牌标题的 Web 页面返回 HTTP 200。它还会校验 Mantur Cut manifest 中的每条路径，以 `--help` 启动包内 Whisper CLI 与 server，要求源码、许可证、构建及安全记录齐全，并检查 updater 依赖与 GitHub release 配置。它使用空的临时 Harness home，避免开发者数据影响包检查结果。
+smoke 会从解包应用自己的依赖目录启动 `dsh`，把打印出的进程 token 换成会话 cookie，并要求带品牌标题的 Web 页面返回 HTTP 200。它还会校验 Mantur Cut manifest 中的每条路径，以 `--help` 启动包内 Whisper CLI 与 server，要求源码、许可证、构建及安全记录齐全，并检查 updater 依赖与 GitHub release 配置。它使用空的临时 Harness home，避免开发者数据影响包检查结果。启用安装包内剪辑资源和更新 IPC 后，它要求真实保存回执及 Host 正常退出；拒绝关闭会使打包检查失败。
 
 smoke 还会检查内置 CLI 的固定来源记录、包版本、许可证和依赖入口，创建真实的配置目录内启动脚本，并要求 `manturhub --version` 使用包内 Electron 可执行文件返回 `0.11.0`。启动脚本关闭 CLI 和技能更新检查。缺少资源直接失败，不搜索全局 CLI。该检查不会创建账号授权尝试，也不验证浏览器授权、Main 的操作系统存储，或以 macOS 结果证明 Windows 行为。
 
