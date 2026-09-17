@@ -74,7 +74,7 @@ try {
     executable: packaged.electronExecutable,
     platform: process.platform === 'darwin' ? 'darwin' : 'win32',
   })
-  console.log('desktop packaged CLI smoke: 0.11.0 through the profile-local launcher')
+  console.log('desktop packaged CLI smoke: 1.1.4 through the profile-local launcher')
 } catch (error) {
   rmSync(dshHome, { recursive: true, force: true })
   throw error

@@ -3,7 +3,8 @@ import type { BrowserWindow, IpcMain, IpcMainInvokeEvent } from 'electron'
 import { z } from 'zod'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import type { NativeAccountAction, NativeAccountReply } from '@deepseek-ai/dsh-authorization-manturhub/types'
-import { NativeAccountController, NativeAccountFailure } from './controller.ts'
+import { NativeAccountFailure } from './controller.ts'
+import type { AccountController } from './client-session-controller.ts'
 import { NativeHttpFailure } from './http.ts'
 
 const action = z.strictObject({
@@ -15,7 +16,7 @@ export interface NativeAccountBridgeOptions {
   readonly ipc: IpcMain
   readonly window: () => BrowserWindow | undefined
   readonly origin: () => string | undefined
-  readonly controller: () => NativeAccountController | undefined
+  readonly controller: () => AccountController | undefined
 }
 
 /**

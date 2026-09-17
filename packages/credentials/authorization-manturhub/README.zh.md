@@ -11,7 +11,7 @@ kind: "package-reference"
 
 这个 Host 包把 ManturHub 请求路由到已选的线上或测试部署。`standalone` 身份拥有逐 origin 的凭据记录与设备码 flow；`desktop-managed` 身份委托 Electron Main，绝不读取这些记录。生成的 Remote 暴露身份模式与脱敏账号状态，不返回 API Key 或环境配置。
 
-不含凭据的 `balance()` Remote 从所选环境的 `/api/v1/me` 读取并仅返回数值形式的馒头余额。桌面托管请求通过 Main 现有的凭据作用域 broker。未登录状态没有余额数值；HTTP 失败或响应字段无效会明确失败，不返回缓存数值或凭据详情。
+不含秘密的 `balance()` Remote 对桌面托管账号读取 `/api/openapi/v1/credits/balance`，对独立账号读取 `/api/v1/me`，仅返回数字馒头余额。桌面托管请求使用 Main 的凭证作用域 broker。未登录没有数字余额；HTTP 失败或响应字段无效会明确报错，不使用缓存余额或暴露凭证详情。
 
 ## 目录
 

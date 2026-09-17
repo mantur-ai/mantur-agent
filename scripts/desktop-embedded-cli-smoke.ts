@@ -12,7 +12,7 @@ import { embeddedCliEnvironment, prepareEmbeddedCli, type EmbeddedCliOptions } f
  */
 export async function smokeEmbeddedCli(options: EmbeddedCliOptions): Promise<void> {
   for (const [name, version, license, entry] of [
-    ['@manturhub/cli', '0.11.0', 'MIT', 'bin/cli.js'],
+    ['@manturhub/cli', '1.1.4', 'MIT', 'bin/cli.js'],
     ['@vercel/detect-agent', '1.2.1', 'Apache-2.0', 'dist/index.js'],
   ] as const) {
     const directory = join(options.resourceRoot, 'node_modules', name)
@@ -34,7 +34,7 @@ export async function smokeEmbeddedCli(options: EmbeddedCliOptions): Promise<voi
     env: embeddedCliEnvironment(bin, { SystemRoot: process.env.SystemRoot }),
   })
   if (result.error !== undefined) throw result.error
-  if (result.status !== 0 || result.stdout.trim() !== '0.11.0') {
+  if (result.status !== 0 || result.stdout.trim() !== '1.1.4') {
     throw new Error(`packaged CLI launcher failed: exit ${String(result.status)}, stdout ${JSON.stringify(result.stdout)}, stderr ${JSON.stringify(result.stderr)}`)
   }
 }

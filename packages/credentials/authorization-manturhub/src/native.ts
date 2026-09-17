@@ -120,7 +120,7 @@ export class NativeAccountConnection {
    * @returns a streaming response, or undefined for an explicitly signed-out identity.
    */
   async requestApi(path: string, headers: HeadersInit | undefined, signal: AbortSignal): Promise<Response | undefined> {
-    if (!path.startsWith('/api/v1/') || /[\\#\u0000-\u0020\u007f]/u.test(path)
+    if ((!path.startsWith('/api/v1/') && !path.startsWith('/api/openapi/v1/')) || /[\\#\u0000-\u0020\u007f]/u.test(path)
       || /%(?:2f|5c|25)/iu.test(path) || path.split(/[/?]/u).some(part => /^(?:\.|%2e){1,2}$/iu.test(part))) {
       throw new TypeError('Native account request requires a versioned API path')
     }

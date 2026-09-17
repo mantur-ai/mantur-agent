@@ -69,7 +69,7 @@ macOS x64 命令必须在 Intel Mac 上运行，Windows 命令必须在 x64 Wind
 
 smoke 会从解包应用自己的依赖目录启动 `dsh`，把打印出的进程 token 换成会话 cookie，并要求带品牌标题的 Web 页面返回 HTTP 200。它还会校验 Mantur Cut manifest 中的每条路径，以 `--help` 启动包内 Whisper CLI 与 server，要求源码、许可证、构建及安全记录齐全，并检查 updater 依赖与 GitHub release 配置。它使用空的临时 Harness home，避免开发者数据影响包检查结果。启用安装包内剪辑资源和更新 IPC 后，它要求真实保存回执及 Host 正常退出；拒绝关闭会使打包检查失败。
 
-smoke 还会检查内置 CLI 的固定来源记录、包版本、许可证和依赖入口，创建真实的配置目录内启动脚本，并要求 `manturhub --version` 使用包内 Electron 可执行文件返回 `0.11.0`。启动脚本关闭 CLI 和技能更新检查。缺少资源直接失败，不搜索全局 CLI。该检查不会创建账号授权尝试，也不验证浏览器授权、Main 的操作系统存储，或以 macOS 结果证明 Windows 行为。
+smoke 还会检查内置 CLI 的固定来源记录、包版本、许可证和依赖入口，创建真实的配置目录内启动脚本，并要求 `manturhub --version` 使用包内 Electron 可执行文件返回 `1.1.4`。启动脚本关闭 CLI 和技能更新检查。缺少资源直接失败，不搜索全局 CLI。该检查不会创建账号授权尝试，也不验证浏览器授权、Main 的操作系统存储，或以 macOS 结果证明 Windows 行为。
 
 打包时将 CLI 来源记录和 `node_modules` 目录分别作为资源输入。Electron Builder 在复制目录时排除其顶层 `node_modules` 子目录；直接选择模块目录本身，才能保留内置 CLI 及其依赖。
 
@@ -104,11 +104,11 @@ smoke 还会检查内置 CLI 的固定来源记录、包版本、许可证和依
 
 打包后的 Main 将 `resources/mantur-cut` 和自身可执行文件提供给漫途剪辑 profile。首次打开工作台才以 Electron 的 Node 模式启动编辑器，不创建第二个 Electron 窗口。安装包必须包含清单声明的生产服务、静态前端与目标平台渲染二进制；不完整的编辑器包会明确报错。开发模式不继承这一打包选择。会话可写目录和待完成的分发检查见[剪辑运行服务](../../packages/client/ui-mantur-editing/README.zh.md)。
 
-Main 持有 browser-account-v2 授权及操作系统加密的 profile 存储。登录按钮打开所配置 issuer 的普通网站登录与同意页。Main 注册精确的 `127.0.0.1` 回调，校验 state 与 issuer，加密保存一次性 code，再使用 PKCE 和设备证明交换授权。只有确认的 grant 元数据才能启用登录及唤回窗口。renderer 不接收包含 state 的 URL 或凭据。
+Main 管理客户端会话浏览器登录、刷新和系统加密账号存储。正式环境默认为 `https://hub.mantur.ai`。[账号模块](src/auth/README.zh.md)规定取消、退出和重新授权行为。
 
-交换恢复在 attempt 到期前复用原始加密请求。进程重启后尚未收到 code 的 attempt 会取消，不注册新端口。退出登录立即阻止本地调用，并保留加密的取消或撤销资料，直到服务端 HTTP 204 或 grant 绝对期限结束；结果未知的交换保留九十天上界。浏览器账号存储使用版本 2。在 macOS 上启动 Host 前，Main 会为版本 1 数据库提供明确的重新授权选项。确认后，在账号目录旁保留仅当前用户可访问的备份，并仅将账号数据库原子替换为空的版本 2 存储；取消不修改数据库。替换失败会保留原数据库或其私有备份，以固定错误提示停止启动。此操作不会解密、复用或远端撤销旧凭据；项目、草稿和模型凭据不变。其他非空格式仍被拒绝。Windows 版本 1 恢复尚未实现原生持久化发布，会明确失败且不替换数据。参见[账号升级决策](../../.agents/notes/implemented/architecture/2026-09-09-native-account-reauthorization.zh.md)。
+客户端会话 token 不能与旧设备授权记录混用。升级需要重新进行浏览器授权；现有对话、技能和模型凭证保持不变。
 
-[内置 CLI 输入](cli-runtime/README.zh.md)由审核过的归档和独立 npm 锁文件组成。开发与打包都会准备 `mantur-cli` 资源。Main 创建 profile 本地启动器，将它置于受监督 Host 的 PATH 首位，并使用自身 Electron 可执行文件的 Node 模式。缺少资源时启动失败。命令使用 broker-v2 描述文件；只有 Main 向上游附加设备 bearer。运行时不会安装或寻找全局 CLI。
+[内置 CLI 输入](cli-runtime/README.zh.md)由审核过的归档和独立 npm 锁文件组成。开发与打包都会准备 `mantur-cli` 资源。Main 创建 profile 本地启动器，将它置于受监督 Host 的 PATH 首位，并使用自身 Electron 可执行文件的 Node 模式。缺少资源时启动失败。命令使用 broker-v2 描述文件；只有 Main 向上游附加专用 API Key。运行时不会安装或寻找全局 CLI。
 
 永久应用标识为 `ai.mantur.agent`。Electron 就绪前，载体会在操作系统的应用数据根目录下设置稳定的 `mantur-agent` 用户数据目录。其 `harness` 子目录是已安装应用使用的唯一 `DSH_HOME`，因此 `~/.dsh` 中的 CLI 或开发数据不会影响桌面启动。子进程从应用自有的中性目录启动，并把 stdout、stderr、恢复与 updater 诊断追加到同一用户数据根下的 `logs/harness.log`。
 

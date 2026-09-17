@@ -12,6 +12,7 @@ export class NativeBrowserCallbackFailure extends Error {
 
 /** Main-owned values for one attempt; the signal also covers expiry and application shutdown. */
 export interface NativeBrowserCallbackOptions {
+  readonly protocol?: 'client-session'
   readonly state: string
   readonly issuer: string
   readonly signal: AbortSignal
@@ -35,19 +36,20 @@ export class NativeBrowserCallback {
       if (this.accepted || options.signal.aborted || this.closed !== undefined) { reject(410); return }
       if (request.method !== 'GET' || request.headers.host !== new URL(this.redirect).host
         || request.socket.remoteAddress !== '127.0.0.1') { reject(400); return }
+      const callbackPath = options.protocol === 'client-session' ? '/callback' : '/oauth/mantur/callback'
       const raw = request.url
-      if (raw === undefined || !raw.startsWith('/oauth/mantur/callback?') || raw.length > 2_048) { reject(400); return }
+      if (raw === undefined || !raw.startsWith(callbackPath + '?') || raw.length > 2_048) { reject(400); return }
       let url: URL
       try { url = new URL(raw, this.redirect) } catch { reject(400); return }
       const values = url.searchParams
       const state = values.get('state')
       const code = values.get('code')
       const denied = values.get('error') === 'access_denied'
-      const keys = denied ? ['error', 'state', 'iss'] : ['code', 'state', 'iss']
+      const keys = [...(denied ? ['error', 'state'] : ['code', 'state']), ...(options.protocol === 'client-session' ? [] : ['iss'])]
       const origin = request.headers.origin
-      if (url.pathname !== '/oauth/mantur/callback' || url.hash !== '' || values.size !== keys.length
+      if (url.pathname !== callbackPath || url.hash !== '' || values.size !== keys.length
         || keys.some(key => values.getAll(key).length !== 1)
-        || values.get('iss') !== options.issuer
+        || (options.protocol !== 'client-session' && values.get('iss') !== options.issuer)
         || (origin !== undefined && origin !== options.issuer)
         || state === null || Buffer.byteLength(state) !== Buffer.byteLength(options.state)
         || !timingSafeEqual(Buffer.from(state), Buffer.from(options.state))) {
@@ -56,7 +58,7 @@ export class NativeBrowserCallback {
       }
       if (denied) this.outcome.reject(new NativeBrowserCallbackFailure('denied'))
       else {
-        if (code === null || !/^[A-Za-z0-9_-]{43}$/u.test(code)) { reject(400); return }
+        if (code === null || !(options.protocol === 'client-session' ? /^[A-Za-z0-9._~-]{1,512}$/u : /^[A-Za-z0-9_-]{43}$/u).test(code)) { reject(400); return }
         this.outcome.resolve(code)
       }
       this.accepted = true
@@ -93,7 +95,7 @@ export class NativeBrowserCallback {
           callback.server.removeListener('error', failed)
           const address = callback.server.address()
           if (address === null || typeof address === 'string') { failed(); return }
-          callback.redirect = 'http://127.0.0.1:' + String(address.port) + '/oauth/mantur/callback'
+          callback.redirect = 'http://127.0.0.1:' + String(address.port) + (options.protocol === 'client-session' ? '/callback' : '/oauth/mantur/callback')
           resolve()
         })
       })

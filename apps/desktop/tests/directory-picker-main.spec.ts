@@ -196,56 +196,19 @@ describe('desktop directory picker wiring', () => {
   })
 })
 
-describe('native account upgrade in Main startup', () => {
-  it('retains the account Keychain identity before opening storage while displaying the current brand', async () => {
+describe('client-session startup', () => {
+  it('retains the Keychain identity while displaying the current brand', async () => {
     await startup()
     expect(native.app.setName).toHaveBeenCalledExactlyOnceWith('漫途Agent')
-    expect(native.app.setName.mock.invocationCallOrder[0]).toBeLessThan(native.upgrade.mock.invocationCallOrder[0]!)
     expect(native.app.setAboutPanelOptions).toHaveBeenCalledWith(expect.objectContaining({ applicationName: 'ManTur Agent' }))
   })
 
-  it('parents consent to the native window and defaults to leaving old storage unchanged', async () => {
-    native.upgrade.mockImplementation(async (_root, _cipher, confirm) => confirm())
-    native.dialog.showMessageBox.mockResolvedValueOnce({ response: 1 })
-    await import('../src/main.ts')
-    await vi.waitFor(() => { expect(native.app.quit).toHaveBeenCalledOnce() })
-    expect(native.dialog.showMessageBox).toHaveBeenCalledExactlyOnceWith(native.window, {
-      type: 'question', title: desktopCopy('en').accountUpgradeTitle,
-      message: desktopCopy('en').accountUpgradeMessage, detail: desktopCopy('en').accountUpgradeDetail,
-      buttons: [desktopCopy('en').accountUpgradeButton, desktopCopy('en').quitButton],
-      defaultId: 1, cancelId: 1, noLink: true,
-    })
-    expect(native.startAutoUpdates).not.toHaveBeenCalled()
-    expect(native.window.loadURL).not.toHaveBeenCalled()
-    expect(native.drafts.prepare).not.toHaveBeenCalled()
-  })
-
-  it('continues to the account UI only after confirmed recovery finishes', async () => {
-    const completed = Promise.withResolvers<boolean>()
-    native.upgrade.mockImplementation(async (_root, _cipher, confirm) => {
-      expect(await confirm()).toBe(true)
-      return completed.promise
-    })
-    await import('../src/main.ts')
-    await vi.waitFor(() => { expect(native.dialog.showMessageBox).toHaveBeenCalledOnce() })
-    expect(native.window.loadURL).not.toHaveBeenCalled()
-    completed.resolve(true)
-    await vi.waitFor(() => { expect(native.window.loadURL).toHaveBeenCalledOnce() })
+  it('opens the Host without migrating or prompting to replace retired device-grant storage', async () => {
+    await startup()
+    expect(native.upgrade).not.toHaveBeenCalled()
+    expect(native.dialog.showMessageBox).not.toHaveBeenCalled()
+    expect(native.window.loadURL).toHaveBeenCalledExactlyOnceWith('http://127.0.0.1:40001/')
     expect(native.app.quit).not.toHaveBeenCalled()
-  })
-
-  it('shows fixed recovery failure copy without logging database errors or starting the Host', async () => {
-    native.upgrade.mockRejectedValueOnce(new Error('isolated-sensitive-error'))
-    await import('../src/main.ts')
-    await vi.waitFor(() => { expect(native.app.quit).toHaveBeenCalledOnce() })
-    expect(native.dialog.showMessageBox).toHaveBeenCalledExactlyOnceWith(native.window, {
-      type: 'error', title: desktopCopy('en').accountUpgradeTitle,
-      message: desktopCopy('en').accountUpgradeFailed, detail: desktopCopy('en').accountUpgradeFailedDetail,
-      buttons: [desktopCopy('en').quitButton], defaultId: 0, cancelId: 0, noLink: true,
-    })
-    expect(native.appendFile).not.toHaveBeenCalled()
-    expect(native.window.loadURL).not.toHaveBeenCalled()
-    expect(native.startAutoUpdates).not.toHaveBeenCalled()
   })
 })
 

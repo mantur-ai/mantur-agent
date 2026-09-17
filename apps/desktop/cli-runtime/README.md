@@ -2,7 +2,7 @@
 
 English | [中文](README.zh.md)
 
-This directory pins the MIT-licensed `@manturhub/cli` 0.11.0 delivery from source commit `c43f29eba2f6e63ac37f64a6a51a70b76a533d2d`. The archive is 37,891 bytes with SHA-256 `44e93ee513e9cad0805679209e27298b85dfdd9d7a1537d535c660206bd14013`; its 22 entries include the upstream license and unmodified CLI source.
+This directory pins the MIT-licensed `@manturhub/cli` 1.1.4 delivery from source commit `1caaf98213982c5f811c62967ef6c757b9649062`. The archive is 46,050 bytes with SHA-256 `2d27ab31ce1de4dbd1032f82f63a983539300fbb9598ca6cb78a79233af2473c`; its 24 entries include the upstream license and unmodified CLI source.
 
 [prepare-cli.ts](../scripts/prepare-cli.ts) verifies the archive, installs only its locked production dependencies with `npm ci`, and prepares desktop resources with retained license files. The independent lock pins `@vercel/detect-agent` 1.2.1 under Apache-2.0. It does not change the root pnpm graph or install a global command.
 

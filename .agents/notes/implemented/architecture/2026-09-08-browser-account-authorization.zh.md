@@ -4,6 +4,8 @@ Status: implemented
 
 [English](2026-09-08-browser-account-authorization.md) | 中文
 
+[客户端会话迁移](2026-09-17-client-session-migration.zh.md)替换冻结账号协议；Main 所有权与 broker 隔离仍然适用。
+
 ## Problem
 
 桌面账号与内置 CLI 需要共用一个可撤销的设备身份。独立密码表单重复网站登录，共享网站 Cookie 或平台 Key 会暴露可复用的账号权限。丢失的响应和旧授权 attempt 不能恢复或撤销较新的登录。

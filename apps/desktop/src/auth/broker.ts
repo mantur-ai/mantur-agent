@@ -4,7 +4,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { Readable } from 'node:stream'
 import { finished, pipeline } from 'node:stream/promises'
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web'
-import type { NativeAccountController } from './controller.ts'
+
 import { nativeAccountOrigin } from './http.ts'
 import type { NativeSecrets } from './protocol.ts'
 
@@ -21,6 +21,7 @@ export interface NativeBrokerDescriptor {
 
 /** Profile-selected origin and explicit network/command lifetime budgets. */
 export interface NativeBrokerOptions {
+  readonly protocol?: 'client-session'
   readonly origin: string
   readonly environment: NativeSecrets['environment']
   readonly environmentLabel: string
@@ -33,13 +34,13 @@ type BrokerCode = 'UNAVAILABLE' | 'SIGNED_OUT' | 'SESSION_EXPIRED' | 'REQUEST_IN
   | 'ENVIRONMENT_MISMATCH' | 'UPSTREAM_UNAVAILABLE'
 
 interface CommandScope {
-  readonly secrets: NativeSecrets
+  readonly secrets: { readonly credential: string; readonly origin: string; readonly environment: 'production' | 'test' }
   readonly expiresAt: number
   readonly signal: AbortSignal
   readonly pending: Set<Promise<void>>
 }
 
-const requestHeaders = ['accept', 'content-type', 'range', 'if-range', 'if-none-match', 'if-modified-since'] as const
+const requestHeaders = ['accept', 'content-type', 'range', 'if-range', 'if-none-match', 'if-modified-since', 'idempotency-key'] as const
 const responseHeaders = ['content-type', 'content-disposition', 'content-range', 'accept-ranges',
   'cache-control', 'last-modified', 'retry-after', 'x-request-id'] as const
 
@@ -50,14 +51,14 @@ function reject(response: ServerResponse, code: BrokerCode, status: number): voi
   response.end(JSON.stringify({ error: `MANTUR_BROKER_${code}`, message: `Native command broker: ${code}` }))
 }
 
-function targetPath(raw: string | undefined): string | undefined {
+function targetPath(raw: string | undefined, protocol?: 'client-session'): string | undefined {
   if (raw === undefined || !raw.startsWith('/') || raw.startsWith('//') || raw.includes('#')) return undefined
   const path = raw.split('?', 1)[0]
   if (path === undefined || /[\\\u0000-\u0020\u007f]|%(?:25|2f|5c)/iu.test(path)) return undefined
   let decoded: string
   try { decoded = decodeURIComponent(path) } catch { return undefined }
   if (decoded.split('/').some(part => part === '.' || part === '..') || /[\\\u0000-\u001f\u007f]/u.test(decoded)) return undefined
-  if (path !== '/api/v1' && !path.startsWith('/api/v1/')) return undefined
+  if (protocol === 'client-session' ? !path.startsWith('/api/openapi/v1/') && !path.startsWith('/api/public/agent/v1/') : path !== '/api/v1' && !path.startsWith('/api/v1/')) return undefined
   return raw
 }
 
@@ -76,7 +77,7 @@ export class NativeCommandBroker {
    * @param options - profile configuration, including absolute lease and complete-request budgets.
    * @param transport - native fetch, or an isolated streaming transport in tests.
    */
-  constructor(private readonly account: Pick<NativeAccountController, 'withCredential'>,
+  constructor(private readonly account: { withCredential(signal: AbortSignal, consume: (secrets: { credential: string; origin: string; environment: 'production' | 'test' }, lifetime: AbortSignal, expiresAt: number) => Promise<void>): Promise<void> },
     private readonly options: NativeBrokerOptions, private readonly transport: typeof fetch) {
     this.origin = nativeAccountOrigin(options)
     if (options.environmentLabel.trim() === '' || options.environmentLabel.length > 80
@@ -172,7 +173,7 @@ export class NativeCommandBroker {
     if (scope === undefined) { reject(response, 'SIGNED_OUT', 401); return }
     if (scope.expiresAt <= this.options.now()) { reject(response, 'SESSION_EXPIRED', 401); return }
     if (scope.signal.aborted) { reject(response, 'SIGNED_OUT', 401); return }
-    const path = targetPath(request.url)
+    const path = targetPath(request.url, this.options.protocol)
     if (path === undefined || request.method === undefined || !['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)) {
       reject(response, 'REQUEST_INVALID', 400); return
     }
@@ -195,7 +196,7 @@ export class NativeCommandBroker {
     const signal = AbortSignal.any([scope.signal, disconnected.signal, AbortSignal.timeout(this.options.requestTimeoutMs)])
     try {
       signal.throwIfAborted()
-      const headers = new Headers({ Authorization: `Bearer ${scope.secrets.credential}`, 'X-Mantur-Client': 'cli', 'Accept-Encoding': 'identity' })
+      const headers = new Headers({ ...(this.options.protocol === 'client-session' ? { 'X-API-Key': scope.secrets.credential } : { Authorization: `Bearer ${scope.secrets.credential}` }), 'X-Mantur-Client': 'cli', 'Accept-Encoding': 'identity' })
       for (const name of requestHeaders) {
         const value = request.headers[name]
         if (typeof value === 'string') headers.set(name, value)

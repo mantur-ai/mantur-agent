@@ -3,10 +3,11 @@ import type { ChildProcess } from 'node:child_process'
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import { z } from 'zod'
 import { NativeCommandBroker } from './broker.ts'
-import { NativeAccountController } from './controller.ts'
+import { ClientSessionController, type AccountController } from './client-session-controller.ts'
+import { ClientSessionStore } from './client-session-store.ts'
 import { withNativeBrokerDescriptor } from './descriptor.ts'
-import { NativeHttpClient } from './http.ts'
-import { NativeAccountStore, type NativeCipher } from './store.ts'
+import { nativeAccountOrigin } from './http.ts'
+import { type NativeCipher } from './store.ts'
 import type { NativeSecrets } from './protocol.ts'
 
 type MessageId = Branded<'NativeHostMessageId'>
@@ -34,7 +35,7 @@ export interface NativeAccountHostOptions {
   readonly platform: NativeSecrets['platform']
   readonly openBrowser: (url: string) => Promise<void>
   readonly onAuthorized?: () => void
-  readonly onController: (controller: NativeAccountController | undefined) => void
+  readonly onController: (controller: AccountController | undefined) => void
   readonly onSnapshot: () => void
 }
 
@@ -46,7 +47,7 @@ interface Scope {
 
 /** Owns one configured deployment for one supervised dsh child; a deployment change requires an explicit application restart. */
 export class NativeAccountHost {
-  private controller: NativeAccountController | undefined
+  private controller: AccountController | undefined
   private broker: NativeCommandBroker | undefined
   private configured: z.infer<typeof configSchema> | undefined
   private readonly scopes = new Map<ScopeId, Scope>()
@@ -139,17 +140,17 @@ export class NativeAccountHost {
       if (JSON.stringify(this.configured) !== JSON.stringify(config)) throw new Error('Changing native account deployment requires restart')
       return
     }
-    const http = new NativeHttpClient({ origin: config.origin, environment: config.environment,
-      timeoutMs: config.requestTimeoutMs, maxResponseBytes: config.maxResponseBytes }, fetch)
-    const store = new NativeAccountStore(this.options.userData, this.options.cipher)
-    const controller = new NativeAccountController(store, http, {
+    const origin = nativeAccountOrigin(config)
+    const store = new ClientSessionStore(this.options.userData, origin, this.options.cipher)
+    const controller = new ClientSessionController(store, { origin, environment: config.environment,
+      timeoutMs: config.requestTimeoutMs, maxResponseBytes: config.maxResponseBytes }, {
       environment: config.environment, deviceName: this.options.deviceName, platform: this.options.platform,
       now: Date.now, openBrowser: this.options.openBrowser, requestTimeoutMs: config.requestTimeoutMs,
       ...(this.options.onAuthorized === undefined ? {} : { onAuthorized: this.options.onAuthorized }),
     })
     this.controller = controller
-    this.broker = new NativeCommandBroker(controller, { ...config, origin: http.origin, now: Date.now }, fetch)
-    this.configured = { ...config, origin: http.origin }
+    this.broker = new NativeCommandBroker(controller, { ...config, protocol: 'client-session', origin: origin, now: Date.now }, fetch)
+    this.configured = { ...config, origin: origin }
     this.unsubscribe = controller.subscribe(() => {
       this.options.onSnapshot()
       if (this.options.child.connected) this.options.child.send({ type: 'mantur:account:changed', snapshot: controller.getSnapshot() }, () => {})

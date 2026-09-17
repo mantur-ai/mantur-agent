@@ -19,7 +19,7 @@ import { nativeTestCipher } from './native-account-test-support.ts'
  * @returns owners and observed wire facts, cleaned up by the current test.
  */
 export async function nativeBrokerBench(api: (request: IncomingMessage, response: ServerResponse) => void,
-  leaseMs = 60_000) {
+  leaseMs = 60_000, protocol?: 'client-session') {
   const root = await mkdtemp(join(tmpdir(), 'mantur-native-broker-'))
   onTestFinished(() => rm(root, { recursive: true, force: true }))
   const store = new NativeAccountStore(root, nativeTestCipher())
@@ -109,7 +109,7 @@ export async function nativeBrokerBench(api: (request: IncomingMessage, response
     } else {
       observed.push({ path: request.url ?? '', authorization: request.headers.authorization,
         apiKey: request.headers['x-api-key'], client: request.headers['x-mantur-client'] })
-      if (revoked || request.headers.authorization !== `Bearer ${String(bearer)}`) { send({ error: 'CREDENTIAL_INVALID' }, 401); return }
+      if (revoked || (protocol === 'client-session' ? request.headers['x-api-key'] !== bearer : request.headers.authorization !== `Bearer ${String(bearer)}`)) { send({ error: 'CREDENTIAL_INVALID' }, 401); return }
       api(request, response)
     }
   })
@@ -128,7 +128,7 @@ export async function nativeBrokerBench(api: (request: IncomingMessage, response
   const controller = new NativeAccountController(store, http, { environment: 'test', deviceName: 'Isolated broker test',
     platform: 'macos', now: () => now.value, openBrowser, requestTimeoutMs: 10_000 })
   onTestFinished(() => controller.close())
-  const broker = new NativeCommandBroker(controller, { origin, environment: 'test', environmentLabel: 'Isolated broker test',
+  const broker = new NativeCommandBroker(controller, { ...(protocol ? { protocol } : {}), origin, environment: 'test', environmentLabel: 'Isolated broker test',
     requestTimeoutMs: 10_000, leaseMs, now: () => now.value }, fetch)
   onTestFinished(() => broker.close())
   await controller.startBrowser()

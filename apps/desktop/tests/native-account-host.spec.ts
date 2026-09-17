@@ -3,7 +3,7 @@ import { access, readdir, rename } from 'node:fs/promises'
 import { join } from 'node:path'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { z } from 'zod'
-import { NativeAccountStore } from '../src/auth/store.ts'
+import { ClientSessionStore } from '../src/auth/client-session-store.ts'
 import { hostFixture } from './native-account-host-support.ts'
 
 vi.mock('node:child_process', async (importOriginal) => {
@@ -26,13 +26,13 @@ describe('native account Main and dsh IPC', () => {
   it('reports blocked authority to the dsh child when saving logout fails', async () => {
     const b = await hostFixture((_request, response) => { response.end('unexpected') })
     await b.login()
-    const write = vi.spyOn(NativeAccountStore.prototype, 'disable').mockImplementationOnce(() => { throw new Error('Isolated write failure') })
+    const write = vi.spyOn(ClientSessionStore.prototype, 'save').mockRejectedValueOnce(new Error('Isolated write failure'))
     onTestFinished(() => { write.mockRestore() })
-    expect(() => b.controller.signOut()).toThrow('logout-storage')
+    await expect(b.controller.signOut()).rejects.toThrow('logout-storage')
     expect(await b.send('status').result).toMatchObject({
       ok: true, result: { authenticated: false, phase: 'failed', failure: { kind: 'logout-storage' } },
     })
-    expect(await b.send('read', { path: '/api/v1/me' }).result).toMatchObject({ ok: true, result: { signedOut: true } })
+    expect(await b.send('read', { path: '/api/openapi/v1/me' }).result).toMatchObject({ ok: true, result: { signedOut: true } })
     expect(b.backend.observed).toEqual([])
   })
 
@@ -41,8 +41,8 @@ describe('native account Main and dsh IPC', () => {
     await b.controller.skip()
     const command = b.send('prepare')
     expect(await command.result).toMatchObject({ ok: true, result: { environment: { MANTURHUB_IDENTITY_MODE: 'desktop-managed' } } })
-    expect(await readdir(b.root)).toEqual(['native-account'])
-    expect(await b.send('read', { path: '/api/v1/me' }).result).toMatchObject({ ok: true, result: { signedOut: true } })
+    expect(await readdir(b.root)).toEqual(['client-session'])
+    expect(await b.send('read', { path: '/api/openapi/v1/me' }).result).toMatchObject({ ok: true, result: { signedOut: true } })
     await b.release(command.id)
     expect(b.backend.observed).toEqual([])
   })
@@ -73,15 +73,15 @@ describe('native account Main and dsh IPC', () => {
     await expect(access(descriptor)).rejects.toMatchObject({ code: 'ENOENT' })
   })
 
-  it('retains Main-only bearer authentication through a complete response and removes the per-request descriptor', async () => {
+  it('retains Main-only API Key authentication through a complete response and removes the per-request descriptor', async () => {
     const b = await hostFixture((_request, response) => { response.end('authenticated body') })
     await b.login()
-    expect(await b.send('read', { path: '/api/v1/me' }).result).toMatchObject({
+    expect(await b.send('read', { path: '/api/openapi/v1/me' }).result).toMatchObject({
       ok: true, result: { status: 200, body: 'authenticated body' },
     })
-    expect(b.backend.observed).toEqual([{ path: '/api/v1/me', authorization: `Bearer ${String(b.backend.bearer())}`,
-      apiKey: undefined, client: 'cli' }])
-    expect(await readdir(b.root)).toEqual(['native-account'])
+    expect(b.backend.observed).toEqual([{ path: '/api/openapi/v1/me', authorization: undefined,
+      apiKey: b.backend.bearer(), client: 'cli' }])
+    expect(await readdir(b.root)).toEqual(['client-session'])
   })
 
   it('closes an unread stream on logout and still waits for a separate command cleanup receipt', async () => {
@@ -94,7 +94,7 @@ describe('native account Main and dsh IPC', () => {
     await b.login()
     const command = b.send('prepare')
     expect((await command.result).ok).toBe(true)
-    expect(await b.send('stream', { path: '/api/v1/download' }).result).toMatchObject({ ok: true, result: { body: 'first chunk' } })
+    expect(await b.send('stream', { path: '/api/openapi/v1/download' }).result).toMatchObject({ ok: true, result: { body: 'first chunk' } })
     let done = false
     const logout = b.controller.signOut().then(() => { done = true })
     await command.stopped
@@ -102,18 +102,18 @@ describe('native account Main and dsh IPC', () => {
     expect(done).toBe(false)
     await b.release(command.id)
     await logout
-    expect(await readdir(b.root)).toEqual(['native-account'])
+    expect(await readdir(b.root)).toEqual(['client-session'])
     expect((await b.send('status').result).ok).toBe(true)
   })
 
   it('rejects off-origin and encoded traversal paths before a broker scope or upstream request exists', async () => {
     const b = await hostFixture((_request, response) => { response.end('unexpected') })
     await b.login()
-    for (const path of ['https://other.invalid/api/v1/me', '//other.invalid/api/v1/me', '/api/v1/../me', '/api/v1/%2e%2e/me', '/api/v1/x%2fy']) {
+    for (const path of ['https://other.invalid/api/openapi/v1/me', '//other.invalid/api/openapi/v1/me', '/api/openapi/v1/../me', '/api/openapi/v1/%2e%2e/me', '/api/openapi/v1/x%2fy']) {
       expect(await b.send('read', { path }).result).toMatchObject({ ok: false })
     }
     expect(b.backend.observed).toEqual([])
-    expect(await readdir(b.root)).toEqual(['native-account'])
+    expect(await readdir(b.root)).toEqual(['client-session'])
   })
 
   it('retains failed descriptor cleanup as failure across repeated receipts and Main shutdown', async () => {

@@ -4,6 +4,8 @@ Status: implemented
 
 English | [中文](2026-09-08-browser-account-authorization.zh.md)
 
+The [client-session migration](2026-09-17-client-session-migration.md) replaces the frozen account protocol; Main ownership and broker isolation remain applicable.
+
 ## Problem
 
 A desktop account and its embedded CLI need one revocable device identity. A separate password form duplicates website login, while sharing a website Cookie or platform Key exposes reusable account authority. Lost responses and old authorization attempts must not revive or revoke a newer login.

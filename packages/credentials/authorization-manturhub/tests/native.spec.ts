@@ -597,3 +597,16 @@ it('joins native API body cancellation through the explicit provider shutdown co
   expect(body.locked).toBe(false)
   expect(ipc.frames.filter(frame => frame.type.endsWith('close-scope'))).toHaveLength(1)
 })
+
+it('reads the native OpenAPI balance and rejects missing balance fields', async () => {
+  const ipc = transport()
+  ipc.handle((frame) => { ipc.reply(frame, frame.type.endsWith('open-scope') ? authorized() : undefined) })
+  const { account } = await bootNative()
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+    expect(input).toBe('http://127.0.0.1:12345/api/openapi/v1/credits/balance')
+    return Response.json({ code: 0, data: { totalBalance: 3448 } })
+  })
+  expect(await account.balance()).toEqual({ status: 'available', balance: 3448 })
+  vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({ code: 0, data: {} }))
+  await expect(account.balance()).rejects.toThrow('balance could not be read')
+})

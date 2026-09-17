@@ -434,10 +434,13 @@ export class ManturHubAuthorization extends TypertRemoteService {
   @Remote
   async balance(): Promise<ManturBalanceStatus> {
     try {
-      const response = await this.request('/api/v1/me', { authenticated: true })
+      const native = this.config.native !== undefined
+      const response = await this.request(native ? '/api/openapi/v1/credits/balance' : '/api/v1/me', { authenticated: true })
       if (response === undefined) return { status: 'signed-out' }
-      const account = z.object({ balance: z.number() }).parse(await requireJson(response))
-      return { status: 'available', balance: account.balance }
+      const body: unknown = await requireJson(response)
+      const balance = native ? z.object({ code: z.literal(0), data: z.object({ totalBalance: z.number() }) }).parse(body).data.totalBalance
+        : z.object({ balance: z.number() }).parse(body).balance
+      return { status: 'available', balance }
     } catch (error) {
       throw new RemoteError('gateway/internal', 'ManturHub balance could not be read', {}, { cause: error })
     }

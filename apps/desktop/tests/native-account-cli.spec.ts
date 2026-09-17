@@ -9,12 +9,14 @@ import { promisify } from 'node:util'
 import { beforeAll, describe, expect, it, onTestFinished } from 'vitest'
 import type { NativeBrokerDescriptor } from '../src/auth/broker.ts'
 import { withNativeBrokerDescriptor } from '../src/auth/descriptor.ts'
-import { nativeBrokerBench, nativeBrokerHeaders, nativeBrokerScope } from './native-account-broker-support.ts'
+import { nativeBrokerBench as legacyBench, nativeBrokerHeaders, nativeBrokerScope } from './native-account-broker-support.ts'
+
+const nativeBrokerBench: typeof legacyBench = (api, leaseMs) => legacyBench(api, leaseMs, 'client-session')
 
 const cliPackage = process.env.DSH_NATIVE_CLI_PACKAGE
 const cliTarball = process.env.DSH_NATIVE_CLI_TARBALL
 const execFileAsync = promisify(execFile)
-const packageHash = '44e93ee513e9cad0805679209e27298b85dfdd9d7a1537d535c660206bd14013'
+const packageHash = '2d27ab31ce1de4dbd1032f82f63a983539300fbb9598ca6cb78a79233af2473c'
 
 function location(path: string): string {
   if (cliPackage === undefined) throw new Error('DSH_NATIVE_CLI_PACKAGE must name the fixed unpacked CLI')
@@ -64,13 +66,13 @@ function script(source: string): string[] {
 }
 
 // The unpublished release artifact is explicit input; ordinary CI does not claim this joint acceptance.
-describe.skipIf(cliPackage === undefined && cliTarball === undefined || process.platform === 'win32')('fixed CLI 0.11.0 and Main broker joint transport (POSIX descriptor fixture)', () => {
+describe.skipIf(cliPackage === undefined && cliTarball === undefined || process.platform === 'win32')('fixed CLI 1.1.4 and Main broker joint transport (POSIX descriptor fixture)', () => {
   beforeAll(async () => {
     if (cliPackage === undefined || cliTarball === undefined) throw new Error('Both fixed CLI package and tarball paths are required')
     expect(createHash('sha256').update(await readFile(cliTarball)).digest('hex')).toBe(packageHash)
     const listed = await execFileAsync('tar', ['-tzf', cliTarball], { encoding: 'utf8' })
     const files = listed.stdout.trim().split('\n').filter(path => !path.endsWith('/'))
-    expect(files).toHaveLength(22)
+    expect(files).toHaveLength(24)
     for (const path of files) {
       expect(path.startsWith('package/')).toBe(true)
       const packed = await execFileAsync('tar', ['-xOf', cliTarball, path], { encoding: 'buffer' })
@@ -81,7 +83,7 @@ describe.skipIf(cliPackage === undefined && cliTarball === undefined || process.
   it('runs the real balance command after browser code exchange, without a CLI login or ambient API key', async () => {
     const b = await nativeBrokerBench((_request, response) => {
       response.setHeader('Content-Type', 'application/json')
-      response.end(JSON.stringify({ email: 'broker@example.com', balance: 9 }))
+      response.end(JSON.stringify({ code: 0, data: { totalBalance: 9 } }))
     })
     await b.broker.run(new AbortController().signal, async (descriptor, signal) => {
       let saved: string | undefined
@@ -93,19 +95,19 @@ describe.skipIf(cliPackage === undefined && cliTarball === undefined || process.
         expect(result.timedOut).toBe(false)
         expect(result.signal).toBeNull()
         expect(result.code, result.stderr).toBe(0)
-        expect(JSON.parse(result.stdout)).toMatchObject({ email: 'broker@example.com', balance: 9 })
+        expect(JSON.parse(result.stdout)).toMatchObject({ totalBalance: 9 })
         expect(result.stdout + result.stderr).not.toContain(b.bearer())
         expect(result.stdout + result.stderr).not.toContain(b.password)
       })
       if (saved === undefined) throw new Error('Expected published descriptor')
       await expect(readFile(saved)).rejects.toMatchObject({ code: 'ENOENT' })
     })
-    expect(b.observed).toEqual([{ path: '/api/v1/me', authorization: `Bearer ${String(b.bearer())}`, apiKey: undefined, client: 'cli' }])
+    expect(b.observed).toEqual([{ path: '/api/openapi/v1/credits/balance', authorization: undefined, apiKey: b.bearer(), client: 'cli' }])
   })
 
   it('keeps optional 401 authenticated and streams downloads through the real packaged CLI transport', async () => {
     const b = await nativeBrokerBench((request, response) => {
-      if (request.url === '/api/v1/operators') {
+      if (request.url === '/api/openapi/v1/operators') {
         response.writeHead(401, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: 'CREDENTIAL_REVOKED' }))
       } else {
         response.writeHead(200, { 'Content-Type': 'application/zip', 'Set-Cookie': 'not-for-cli' })
@@ -115,11 +117,11 @@ describe.skipIf(cliPackage === undefined && cliTarball === undefined || process.
     })
     const scope = await nativeBrokerScope(b.broker)
     const path = await saveDescriptor(b.root, scope.descriptor)
-    const result = await command(path, script("const denied=await apiFetch('/api/v1/operators',{auth:'optional'}); const download=await apiRequest('/api/v1/skills/test/download'); console.log(JSON.stringify({status:denied.status,body:await download.text(),cookie:download.headers.get('set-cookie')}));"))
+    const result = await command(path, script("const denied=await apiFetch('/api/openapi/v1/operators',{auth:'optional'}); const download=await apiRequest('/api/openapi/v1/skills/test/download'); console.log(JSON.stringify({status:denied.status,body:await download.text(),cookie:download.headers.get('set-cookie')}));"))
     expect(result).toMatchObject({ code: 0, signal: null, timedOut: false })
     expect(JSON.parse(result.stdout)).toEqual({ status: 401, body: 'stream-body', cookie: null })
-    expect(b.observed.map(value => value.path)).toEqual(['/api/v1/operators', '/api/v1/skills/test/download'])
-    expect(b.observed.every(value => value.authorization === `Bearer ${String(b.bearer())}` && value.apiKey === undefined)).toBe(true)
+    expect(b.observed.map(value => value.path)).toEqual(['/api/openapi/v1/operators', '/api/openapi/v1/skills/test/download'])
+    expect(b.observed.every(value => value.authorization === undefined && value.apiKey === b.bearer())).toBe(true)
   })
 
   it('runs the real upload command with brokered presign and a single direct credential-free PUT', async () => {
@@ -145,19 +147,19 @@ describe.skipIf(cliPackage === undefined && cliTarball === undefined || process.
       request.resume()
       request.on('end', () => {
         response.setHeader('Content-Type', 'application/json')
-        response.end(JSON.stringify({ put_url: signed, access_url: 'https://assets.example/public/file.txt' }))
+        response.end(JSON.stringify({ code: 0, data: { files: [{ uploadUrl: signed, downloadUrl: 'https://assets.example/public/file.txt' }] } }))
       })
     })
     const scope = await nativeBrokerScope(b.broker)
     const path = await saveDescriptor(b.root, scope.descriptor)
-    const file = join(b.root, 'upload.txt')
+    const file = join(b.root, 'upload.wav')
     await writeFile(file, 'direct body')
     const result = await command(path, [location('bin/cli.js'), 'upload', file])
     expect(result).toMatchObject({ code: 0, signal: null, timedOut: false })
     expect(result.stdout.trim()).toBe('https://assets.example/public/file.txt')
     expect(result.stdout + result.stderr).not.toContain(signed)
     expect(uploads).toEqual([{ method: 'PUT', authorization: undefined, body: 'direct body' }])
-    expect(b.observed.map(value => value.path)).toEqual(['/api/v1/uploads/presign'])
+    expect(b.observed.map(value => value.path)).toEqual(['/api/openapi/v1/files/upload'])
   })
 
   it('fails a managed command with a missing descriptor instead of using its ambient key', async () => {
@@ -185,7 +187,7 @@ describe.skipIf(cliPackage === undefined && cliTarball === undefined || process.
       await withNativeBrokerDescriptor(b.root, value, signal, async (environment) => {
         const path = environment.MANTURHUB_AGENT_AUTH
         if (path === undefined) throw new Error('Expected managed descriptor path')
-        result = await command(path, script("const response=await apiRequest('/api/v1/slow'); await response.text();"), signal)
+        result = await command(path, script("const response=await apiRequest('/api/openapi/v1/slow'); await response.text();"), signal)
       })
     })
     const rejected = expect(running).rejects.toMatchObject({ name: 'AbortError' })
@@ -197,7 +199,7 @@ describe.skipIf(cliPackage === undefined && cliTarball === undefined || process.
     expect(result?.code === 0 && result.signal === null).toBe(false)
     expect(descriptor).toBeDefined()
     if (descriptor === undefined) throw new Error('Expected admitted command descriptor')
-    const stale = await fetch(`${descriptor.proxy_origin}/api/v1/late`, { headers: nativeBrokerHeaders(descriptor) })
+    const stale = await fetch(`${descriptor.proxy_origin}/api/openapi/v1/late`, { headers: nativeBrokerHeaders(descriptor) })
     expect(stale.status).toBe(401)
     await stale.body?.cancel()
     expect(b.observed).toHaveLength(1)

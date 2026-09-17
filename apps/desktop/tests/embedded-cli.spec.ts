@@ -80,7 +80,7 @@ describe.skipIf(process.env.DSH_TEST_EMBEDDED_CLI !== '1')('prepared embedded CL
     const environment = embeddedCliEnvironment(bin, { PATH: '/usr/bin:/bin', SystemRoot: process.env.SystemRoot })
     const b = await hostFixture((_request, response) => {
       response.setHeader('Content-Type', 'application/json')
-      response.end(JSON.stringify({ email: 'fixture@example.com', balance: 9 }))
+      response.end(JSON.stringify({ code: 0, data: { totalBalance: 9 } }))
     }, false, true, environment)
     await b.login()
     const reply = await b.send('command', { command: 'manturhub balance --json', env: {

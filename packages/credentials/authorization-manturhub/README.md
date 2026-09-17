@@ -11,7 +11,7 @@ English | [中文](README.zh.md)
 
 This Host package routes ManturHub requests to the selected production or test deployment. `standalone` identity owns per-origin credential records and device-code flows; `desktop-managed` identity delegates to Electron Main and never reads those records. The generated Remote exposes the identity mode and sanitized account status, never an API key or environment configuration.
 
-The secret-free `balance()` Remote reads `/api/v1/me` on the selected deployment and returns only the numeric Mantou balance. Desktop-managed requests use Main’s existing credential-scoped broker. Signed-out identities have no numeric balance; HTTP failures and invalid response fields fail explicitly without cached values or credential details.
+The secret-free `balance()` Remote reads `/api/openapi/v1/credits/balance` for desktop-managed accounts and `/api/v1/me` for standalone accounts, returning only the numeric Mantou balance. Desktop-managed requests use Main’s existing credential-scoped broker. Signed-out identities have no numeric balance; HTTP failures and invalid response fields fail explicitly without cached values or credential details.
 
 ## Table of Contents
 

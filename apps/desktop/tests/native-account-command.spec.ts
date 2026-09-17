@@ -24,7 +24,7 @@ describe.skipIf(process.platform === 'win32')('native identity through real comm
       env: { MANTURHUB_AGENT_AUTH: '/isolated/stale-descriptor.json', MANTURHUB_IDENTITY_MODE: 'standalone' } }).result
     expect(resultSchema.parse(reply).result).toMatchObject({ exitCode: 0, stdout: { text: 'desktop-managed:' } })
     expect(b.backend.observed).toEqual([])
-    expect(await readdir(b.root)).toEqual(['native-account'])
+    expect(await readdir(b.root)).toEqual(['client-session'])
   })
 
   it('releases the Main descriptor after the real Bash process and scope finish', async () => {
@@ -59,15 +59,15 @@ describe.skipIf(process.platform === 'win32')('native identity through real comm
   })
 })
 
-describe.skipIf(process.platform === 'win32' || cliPackage === undefined && cliTarball === undefined)('native command consumer with frozen CLI 0.11.0', () => {
+describe.skipIf(process.platform === 'win32' || cliPackage === undefined && cliTarball === undefined)('native command consumer with frozen CLI 1.1.4', () => {
   beforeAll(async () => {
     if (cliPackage === undefined || cliTarball === undefined) throw new Error('Both frozen CLI inputs are required')
     expect(createHash('sha256').update(await readFile(cliTarball)).digest('hex'))
-      .toBe('44e93ee513e9cad0805679209e27298b85dfdd9d7a1537d535c660206bd14013')
+      .toBe('2d27ab31ce1de4dbd1032f82f63a983539300fbb9598ca6cb78a79233af2473c')
     const exec = promisify(execFile)
     const listing = await exec('tar', ['-tzf', cliTarball])
     const files = listing.stdout.trim().split('\n').filter(path => !path.endsWith('/'))
-    expect(files).toHaveLength(22)
+    expect(files).toHaveLength(24)
     for (const path of files) {
       expect(path.startsWith('package/')).toBe(true)
       const packed = await exec('tar', ['-xOf', cliTarball, path], { encoding: 'buffer' })
@@ -79,7 +79,7 @@ describe.skipIf(process.platform === 'win32' || cliPackage === undefined && cliT
     if (cliPackage === undefined) throw new Error('Frozen CLI directory is required')
     const b = await hostFixture((_request, response) => {
       response.setHeader('Content-Type', 'application/json')
-      response.end(JSON.stringify({ email: 'broker@example.com', balance: 9 }))
+      response.end(JSON.stringify({ code: 0, data: { totalBalance: 9 } }))
     }, false, true)
     await b.login()
     const reply = await b.send('command', { command: `${quote(process.execPath)} ${quote(join(cliPackage, 'bin/cli.js'))} balance --json`,
@@ -87,11 +87,11 @@ describe.skipIf(process.platform === 'win32' || cliPackage === undefined && cliT
         MANTURHUB_DISABLE_UPDATE_CHECK: '1', MANTURHUB_DISABLE_SKILL_UPDATE_CHECK: '1' } }).result
     const result = resultSchema.parse(reply).result
     expect(result, result.stderr.text).toMatchObject({ exitCode: 0, signal: null, timedOut: false, aborted: false })
-    expect(JSON.parse(result.stdout.text)).toEqual({ email: 'broker@example.com', balance: 9, balance_usd: 0.09 })
+    expect(JSON.parse(result.stdout.text)).toEqual({ totalBalance: 9, balance_usd: 0.09 })
     expect(result.stdout.text + result.stderr.text).not.toContain(b.backend.bearer())
     expect(result.stdout.text + result.stderr.text).not.toContain(b.backend.password)
-    expect(b.backend.observed).toEqual([{ path: '/api/v1/me', authorization: `Bearer ${String(b.backend.bearer())}`, apiKey: undefined, client: 'cli' }])
-    expect(await readdir(b.root)).toEqual(['native-account'])
+    expect(b.backend.observed).toEqual([{ path: '/api/openapi/v1/credits/balance', authorization: undefined, apiKey: b.backend.bearer(), client: 'cli' }])
+    expect(await readdir(b.root)).toEqual(['client-session'])
   })
 
   it.each(['logout', 'composition disposal'] as const)('joins %s through a streaming real CLI descendant', async (operation) => {
@@ -104,7 +104,7 @@ describe.skipIf(process.platform === 'win32' || cliPackage === undefined && cliT
     }, false, true)
     await b.login()
     const api = pathToFileURL(join(cliPackage, 'lib/api.js')).href
-    const source = `import {apiRequest} from ${JSON.stringify(api)}; console.log(JSON.stringify({pid:process.pid,descriptor:process.env.MANTURHUB_AGENT_AUTH})); const response=await apiRequest('/api/v1/stream'); await response.text()`
+    const source = `import {apiRequest} from ${JSON.stringify(api)}; console.log(JSON.stringify({pid:process.pid,descriptor:process.env.MANTURHUB_AGENT_AUTH})); const response=await apiRequest('/api/openapi/v1/stream'); await response.text()`
     const command = b.send('command', { command: `${quote(process.execPath)} --input-type=module --eval ${quote(source)}`,
       env: { MANTURHUB_DISABLE_UPDATE_CHECK: '1', MANTURHUB_DISABLE_SKILL_UPDATE_CHECK: '1' } })
     await requested.promise

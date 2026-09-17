@@ -12,8 +12,7 @@ import { installUpdateBridge } from './update-bridge.ts'
 import { installFileImportBridge } from './file-import-bridge.ts'
 import { installDirectoryPickerBridge } from './directory-picker-bridge.ts'
 import { NativeAccountHost } from './auth/host.ts'
-import { prepareNativeAccountUpgrade } from './auth/upgrade.ts'
-import type { NativeAccountController } from './auth/controller.ts'
+import type { AccountController } from './auth/client-session-controller.ts'
 import { installNativeAccountBridge } from './auth/ipc.ts'
 import { embeddedCliEnvironment, prepareEmbeddedCli } from './embedded-cli.ts'
 import {
@@ -41,7 +40,7 @@ let updates: DesktopUpdateController | undefined
 let updateState: DesktopUpdateState = { kind: 'idle' }
 let preparingUpdate = false
 let accountHost: NativeAccountHost | undefined
-let nativeAccount: NativeAccountController | undefined
+let nativeAccount: AccountController | undefined
 
 app.setName(APP_STORAGE_NAME)
 const paths = initializeDesktopPaths(app, app.commandLine.hasSwitch('user-data-dir')
@@ -180,25 +179,6 @@ async function launch(): Promise<void> {
   const window = createWindow()
   await prepareDesktopPaths(paths)
   if (process.platform !== 'darwin' && process.platform !== 'win32') throw new Error('Native account requires macOS or Windows')
-  const copy = desktopCopy(app.getLocale())
-  try {
-    const ready = await prepareNativeAccountUpgrade(paths.userData, safeStorage, async () => {
-      const { response } = await dialog.showMessageBox(window, {
-        type: 'question', title: copy.accountUpgradeTitle, message: copy.accountUpgradeMessage,
-        detail: copy.accountUpgradeDetail, buttons: [copy.accountUpgradeButton, copy.quitButton],
-        defaultId: 1, cancelId: 1, noLink: true,
-      })
-      return response === 0 && !isQuitting()
-    })
-    if (!ready) { app.quit(); return }
-  } catch {
-    await dialog.showMessageBox(window, {
-      type: 'error', title: copy.accountUpgradeTitle, message: copy.accountUpgradeFailed,
-      detail: copy.accountUpgradeFailedDetail, buttons: [copy.quitButton], defaultId: 0, cancelId: 0, noLink: true,
-    })
-    app.quit()
-    return
-  }
   const cliBin = await prepareEmbeddedCli({
     resourceRoot: app.isPackaged ? join(process.resourcesPath, 'mantur-cli')
       : fileURLToPath(new URL('../.generated/mantur-cli', import.meta.url)),

@@ -10,8 +10,8 @@ import { expect, onTestFinished } from 'vitest'
 import { z } from 'zod'
 import { resolveExampleLaunch } from '@deepseek-ai/dsh-loader-smoke'
 import { NativeAccountHost } from '../src/auth/host.ts'
-import type { NativeAccountController } from '../src/auth/controller.ts'
-import { nativeBrokerBench } from './native-account-broker-support.ts'
+import type { AccountController } from '../src/auth/client-session-controller.ts'
+import { clientSessionHostBackend } from './client-session-host-support.ts'
 import { nativeTestCipher } from './native-account-test-support.ts'
 
 const replySchema = z.strictObject({ type: z.literal('fixture:reply'), id: z.string(), ok: z.boolean(), result: z.unknown().optional(),
@@ -22,7 +22,7 @@ export async function hostFixture(
   api: (request: IncomingMessage, response: ServerResponse) => void, expectCleanupFailure = false, commands = false,
   environment: NodeJS.ProcessEnv = {},
 ) {
-  const backend = await nativeBrokerBench(api)
+  const backend = await clientSessionHostBackend(api)
   const root = await mkdtemp(join(tmpdir(), 'mantur-native-host-'))
   onTestFinished(() => rm(root, { recursive: true, force: true }))
   const entry = fileURLToPath(new URL('./fixtures/native-account-command-child.ts', import.meta.url))
@@ -67,7 +67,7 @@ export async function hostFixture(
     ready.reject(error)
     for (const request of requests.values()) request.reject(error)
   })
-  const configured = Promise.withResolvers<NativeAccountController>()
+  const configured = Promise.withResolvers<AccountController>()
   const host = new NativeAccountHost({ child, userData: root, cipher: nativeTestCipher(), deviceName: 'Isolated native Host',
     platform: process.platform === 'win32' ? 'windows' : 'macos', openBrowser: backend.openBrowser,
     onController: (controller) => { if (controller !== undefined) configured.resolve(controller) }, onSnapshot: () => {} })
