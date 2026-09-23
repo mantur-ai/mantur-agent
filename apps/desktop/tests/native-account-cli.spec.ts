@@ -16,7 +16,7 @@ const nativeBrokerBench: typeof legacyBench = (api, leaseMs) => legacyBench(api,
 const cliPackage = process.env.DSH_NATIVE_CLI_PACKAGE
 const cliTarball = process.env.DSH_NATIVE_CLI_TARBALL
 const execFileAsync = promisify(execFile)
-const packageHash = '2d27ab31ce1de4dbd1032f82f63a983539300fbb9598ca6cb78a79233af2473c'
+const packageHash = 'fcf0caad18ddd7e872bfd7833bc44cbd0e0222cfc805d896e2cacdb47bb42a66'
 
 function location(path: string): string {
   if (cliPackage === undefined) throw new Error('DSH_NATIVE_CLI_PACKAGE must name the fixed unpacked CLI')
@@ -65,14 +65,14 @@ function script(source: string): string[] {
   return ['--input-type=module', '--eval', `import {apiFetch,apiRequest} from ${JSON.stringify(pathToFileURL(location('lib/api.js')).href)}; ${source}`]
 }
 
-// The unpublished release artifact is explicit input; ordinary CI does not claim this joint acceptance.
-describe.skipIf(cliPackage === undefined && cliTarball === undefined || process.platform === 'win32')('fixed CLI 1.1.4 and Main broker joint transport (POSIX descriptor fixture)', () => {
+// The pinned release artifact is explicit input; ordinary CI does not claim this joint acceptance.
+describe.skipIf(cliPackage === undefined && cliTarball === undefined || process.platform === 'win32')('fixed CLI 1.2.5 and Main broker joint transport (POSIX descriptor fixture)', () => {
   beforeAll(async () => {
     if (cliPackage === undefined || cliTarball === undefined) throw new Error('Both fixed CLI package and tarball paths are required')
     expect(createHash('sha256').update(await readFile(cliTarball)).digest('hex')).toBe(packageHash)
     const listed = await execFileAsync('tar', ['-tzf', cliTarball], { encoding: 'utf8' })
     const files = listed.stdout.trim().split('\n').filter(path => !path.endsWith('/'))
-    expect(files).toHaveLength(24)
+    expect(files).toHaveLength(30)
     for (const path of files) {
       expect(path.startsWith('package/')).toBe(true)
       const packed = await execFileAsync('tar', ['-xOf', cliTarball, path], { encoding: 'buffer' })
@@ -118,7 +118,7 @@ describe.skipIf(cliPackage === undefined && cliTarball === undefined || process.
     const scope = await nativeBrokerScope(b.broker)
     const path = await saveDescriptor(b.root, scope.descriptor)
     const result = await command(path, script("const denied=await apiFetch('/api/openapi/v1/operators',{auth:'optional'}); const download=await apiRequest('/api/openapi/v1/skills/test/download'); console.log(JSON.stringify({status:denied.status,body:await download.text(),cookie:download.headers.get('set-cookie')}));"))
-    expect(result).toMatchObject({ code: 0, signal: null, timedOut: false })
+    expect(result, result.stderr).toMatchObject({ code: 0, signal: null, timedOut: false })
     expect(JSON.parse(result.stdout)).toEqual({ status: 401, body: 'stream-body', cookie: null })
     expect(b.observed.map(value => value.path)).toEqual(['/api/openapi/v1/operators', '/api/openapi/v1/skills/test/download'])
     expect(b.observed.every(value => value.authorization === undefined && value.apiKey === b.bearer())).toBe(true)
@@ -147,7 +147,9 @@ describe.skipIf(cliPackage === undefined && cliTarball === undefined || process.
       request.resume()
       request.on('end', () => {
         response.setHeader('Content-Type', 'application/json')
-        response.end(JSON.stringify({ code: 0, data: { files: [{ uploadUrl: signed, downloadUrl: 'https://assets.example/public/file.txt' }] } }))
+        response.end(JSON.stringify({ code: 0, data: request.url === '/api/openapi/v1/files/fixture-upload/confirm'
+          ? { fileId: 'fixture-file', status: 'AVAILABLE' }
+          : { files: [{ uploadId: 'fixture-upload', uploadUrl: signed, downloadUrl: 'https://assets.example/public/file.txt' }] } }))
       })
     })
     const scope = await nativeBrokerScope(b.broker)
@@ -155,11 +157,11 @@ describe.skipIf(cliPackage === undefined && cliTarball === undefined || process.
     const file = join(b.root, 'upload.wav')
     await writeFile(file, 'direct body')
     const result = await command(path, [location('bin/cli.js'), 'upload', file])
-    expect(result).toMatchObject({ code: 0, signal: null, timedOut: false })
+    expect(result, result.stderr).toMatchObject({ code: 0, signal: null, timedOut: false })
     expect(result.stdout.trim()).toBe('https://assets.example/public/file.txt')
     expect(result.stdout + result.stderr).not.toContain(signed)
     expect(uploads).toEqual([{ method: 'PUT', authorization: undefined, body: 'direct body' }])
-    expect(b.observed.map(value => value.path)).toEqual(['/api/openapi/v1/files/upload'])
+    expect(b.observed.map(value => value.path)).toEqual(['/api/openapi/v1/files/upload', '/api/openapi/v1/files/fixture-upload/confirm'])
   })
 
   it('fails a managed command with a missing descriptor instead of using its ambient key', async () => {

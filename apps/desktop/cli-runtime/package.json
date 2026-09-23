@@ -5,7 +5,7 @@
   "type": "module",
   "license": "MIT",
   "dependencies": {
-    "@manturhub/cli": "file:manturhub-cli-1.1.4.tgz"
+    "@manturhub/cli": "file:manturhub-cli-1.2.5.tgz"
   },
   "overrides": {
     "@vercel/detect-agent": "1.2.1"
