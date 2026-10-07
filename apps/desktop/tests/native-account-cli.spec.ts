@@ -16,7 +16,7 @@ const nativeBrokerBench: typeof legacyBench = (api, leaseMs) => legacyBench(api,
 const cliPackage = process.env.DSH_NATIVE_CLI_PACKAGE
 const cliTarball = process.env.DSH_NATIVE_CLI_TARBALL
 const execFileAsync = promisify(execFile)
-const packageHash = 'fcf0caad18ddd7e872bfd7833bc44cbd0e0222cfc805d896e2cacdb47bb42a66'
+const packageHash = '98d2eefe59566b220950ac201f7ad133c47e469e3e0dfcad180027d6a623f86d'
 
 function location(path: string): string {
   if (cliPackage === undefined) throw new Error('DSH_NATIVE_CLI_PACKAGE must name the fixed unpacked CLI')
@@ -66,7 +66,7 @@ function script(source: string): string[] {
 }
 
 // The pinned release artifact is explicit input; ordinary CI does not claim this joint acceptance.
-describe.skipIf(cliPackage === undefined && cliTarball === undefined || process.platform === 'win32')('fixed CLI 1.2.5 and Main broker joint transport (POSIX descriptor fixture)', () => {
+describe.skipIf(cliPackage === undefined && cliTarball === undefined || process.platform === 'win32')('fixed CLI 1.2.6 and Main broker joint transport (POSIX descriptor fixture)', () => {
   beforeAll(async () => {
     if (cliPackage === undefined || cliTarball === undefined) throw new Error('Both fixed CLI package and tarball paths are required')
     expect(createHash('sha256').update(await readFile(cliTarball)).digest('hex')).toBe(packageHash)

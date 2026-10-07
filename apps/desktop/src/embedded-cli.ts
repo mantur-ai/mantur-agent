@@ -23,9 +23,9 @@ export async function prepareEmbeddedCli(options: EmbeddedCliOptions): Promise<s
     throw new Error('Embedded CLI requires absolute application paths')
   }
   const manifest = JSON.parse(await readFile(join(options.resourceRoot, 'source.json'), 'utf8')) as unknown
-  z.strictObject({ formatVersion: z.literal(1), package: z.literal('@manturhub/cli'), version: z.literal('1.2.5'),
-    sourceCommit: z.literal('fbb6e4c3929098b886c70b1e2223122ce2148e2d'),
-    archiveSha256: z.literal('fcf0caad18ddd7e872bfd7833bc44cbd0e0222cfc805d896e2cacdb47bb42a66'),
+  z.strictObject({ formatVersion: z.literal(1), package: z.literal('@manturhub/cli'), version: z.literal('1.2.6'),
+    sourceCommit: z.literal('c9b569d198f1b65690a28b5b1f2584b9c2e76f82'),
+    archiveSha256: z.literal('98d2eefe59566b220950ac201f7ad133c47e469e3e0dfcad180027d6a623f86d'),
   }).parse(manifest)
   const entry = join(options.resourceRoot, 'node_modules/@manturhub/cli/bin/cli.js')
   await readFile(entry)

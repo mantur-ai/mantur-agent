@@ -59,11 +59,11 @@ describe.skipIf(process.platform === 'win32')('native identity through real comm
   })
 })
 
-describe.skipIf(process.platform === 'win32' || cliPackage === undefined && cliTarball === undefined)('native command consumer with frozen CLI 1.2.5', () => {
+describe.skipIf(process.platform === 'win32' || cliPackage === undefined && cliTarball === undefined)('native command consumer with frozen CLI 1.2.6', () => {
   beforeAll(async () => {
     if (cliPackage === undefined || cliTarball === undefined) throw new Error('Both frozen CLI inputs are required')
     expect(createHash('sha256').update(await readFile(cliTarball)).digest('hex'))
-      .toBe('fcf0caad18ddd7e872bfd7833bc44cbd0e0222cfc805d896e2cacdb47bb42a66')
+      .toBe('98d2eefe59566b220950ac201f7ad133c47e469e3e0dfcad180027d6a623f86d')
     const exec = promisify(execFile)
     const listing = await exec('tar', ['-tzf', cliTarball])
     const files = listing.stdout.trim().split('\n').filter(path => !path.endsWith('/'))
