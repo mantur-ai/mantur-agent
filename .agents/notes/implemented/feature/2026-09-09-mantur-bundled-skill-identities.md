@@ -16,6 +16,8 @@ The homepage inserts a `mantur-bundled-skill` reference. Its serializer verifies
 
 Ordinary `/name`, installed Skills and model-selected Skills keep the [Skill registry's resolution](2026-07-05-skill-system.md). The filesystem parser accepts already-read Markdown so bundle loading parses the exact verified bytes. Homepage selection neither overwrites user content nor submits the draft. Online discovery remains an explicit More skills action.
 
+The production preset pins the public `mantur-drama-visual-studio` 0.0.13 archive from `https://hub.mantur.ai`, titled 全自动漫剧生产线（可视化）. Its archive SHA256 is `e4cd32f8239fe3810562bfc34d8851f4a1d93a6462cca16a12fdcdc769eac5db`, matching the public catalog digest. The complete runtime, schemas, UI and license files remain in the archive. Selecting this bundle replaces the production recommendation, not user-installed copies; online updates require a new audited resource pin.
+
 ## Alternatives considered
 
 **Give bundled roots global precedence.** That would override deliberate user and project customizations outside homepage presets.

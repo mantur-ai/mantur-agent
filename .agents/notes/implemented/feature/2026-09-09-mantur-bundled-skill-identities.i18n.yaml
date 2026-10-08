@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-09-mantur-bundled-skill-identities.md
-2026-09-09-mantur-bundled-skill-identities.md: d464a581509233e076f21d510611b2388523d4f0
-2026-09-09-mantur-bundled-skill-identities.zh.md: 1fcfa6bc1cf91c414f4e85739dbc6b31ad34defb
+2026-09-09-mantur-bundled-skill-identities.md: 25b72e50ccb3897b676f7bca82e28b050ceac6e2
+2026-09-09-mantur-bundled-skill-identities.zh.md: 94465c78732dd339c8231663735fcbbeb3d50ad9

@@ -13,20 +13,20 @@ afterEach(async () => {
   await Promise.all(temporary.splice(0).map(path => rm(path, { recursive: true, force: true })))
 })
 
-it('stages all 49 pinned files without account credentials or online discovery', async () => {
+it('stages all 169 pinned files without account credentials or online discovery', async () => {
   const root = await mkdtemp(join(tmpdir(), 'mantur-bundled-skills-'))
   temporary.push(root)
   const destination = join(root, 'resources')
   const manifest = await prepareBundledSkills(sourceFile, destination)
   expect(manifest.skills.map(skill => [skill.name, skill.version])).toEqual([
     ['short-drama', '1.0.0'],
-    ['drama-asset-seedance-pipeline', '1.11.0'],
+    ['mantur-drama-visual-studio', '0.0.13'],
     ['mantur-copyhit', '1.0.5'],
     ['mantur-smartclip', '1.0.1'],
   ])
-  expect(manifest.skills.reduce((total, skill) => total + skill.files.length, 0)).toBe(49)
+  expect(manifest.skills.reduce((total, skill) => total + skill.files.length, 0)).toBe(169)
   expect(JSON.parse(await readFile(join(destination, 'manifest.json'), 'utf8'))).toEqual(manifest)
-  const limits = { maxMetadataBytes: 1024 * 1024, maxFiles: 100, maxUnpackedBytes: 10 * 1024 * 1024 }
+  const limits = { maxMetadataBytes: 1024 * 1024, maxFiles: 200, maxUnpackedBytes: 10 * 1024 * 1024 }
   expect(await readBundledCatalog(destination, limits)).toEqual(manifest.skills)
   for (const identity of manifest.skills) {
     const loaded = await loadBundledSkill(destination, identity, limits)

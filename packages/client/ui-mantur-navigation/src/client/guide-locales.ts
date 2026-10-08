@@ -22,7 +22,7 @@ export const zh = {
   'previousSkills': '向左查看技能',
   'nextSkills': '向右查看技能',
   'alias.short-drama': '剧本改编',
-  'alias.drama-asset-seedance-pipeline': '漫剧生产',
+  'alias.mantur-drama-visual-studio': '漫剧生产',
   'alias.mantur-copyhit': '短片复刻',
   'alias.mantur-smartclip': '高光智剪',
   'aliasMissing': '部分推荐技能缺少展示短名，请维护推荐配置。',
@@ -59,7 +59,7 @@ export const en = {
   'previousSkills': 'View previous skills',
   'nextSkills': 'View more skills',
   'alias.short-drama': 'Adapt scripts',
-  'alias.drama-asset-seedance-pipeline': 'Make drama',
+  'alias.mantur-drama-visual-studio': 'Make drama',
   'alias.mantur-copyhit': 'Recreate shorts',
   'alias.mantur-smartclip': 'Cut highlights',
   'aliasMissing': 'Some recommended skills need a display label. Update the recommendation configuration.',
@@ -74,7 +74,7 @@ export const en = {
 /** Curated shortcut labels; IDs and full catalog titles remain unchanged. */
 export const GUIDE_SKILL_LABELS: ReadonlyMap<string, GuideKey> = new Map([
   ['short-drama', 'alias.short-drama'],
-  ['drama-asset-seedance-pipeline', 'alias.drama-asset-seedance-pipeline'],
+  ['mantur-drama-visual-studio', 'alias.mantur-drama-visual-studio'],
   ['mantur-copyhit', 'alias.mantur-copyhit'],
   ['mantur-smartclip', 'alias.mantur-smartclip'],
 ])

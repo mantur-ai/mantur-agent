@@ -114,6 +114,12 @@ it('keeps offline homepage guidance inside the real conversation column with the
     await page.locator('[data-composer-chip="mantur-bundled-skill"]').waitFor()
     expect(await editor.innerText()).toContain('离线双栏验收草稿')
     expect(await editor.innerText()).toContain('剧本改编')
+    await page.getByRole('tab', { name: '漫剧制作', exact: true }).click()
+    const productionSkill = page.getByRole('button', { name: '漫剧生产', exact: true })
+    expect(await productionSkill.getAttribute('title')).toContain('全自动漫剧生产线（可视化）')
+    await productionSkill.click()
+    expect(await editor.innerText()).toContain('漫剧生产')
+    expect(await page.locator('[data-composer-chip="mantur-bundled-skill"]').count()).toBe(2)
     expect(requests).toBe(0)
     expect(console.pageErrors).toEqual([])
   } finally {
@@ -144,7 +150,7 @@ it('does not display Mantur artwork or mode controls without the Mantur plugin',
 
 it('keeps guidance readable at the desktop minimum without moving the composer or covering controls', async () => {
   const skills = [skill, ...[
-    'drama-asset-seedance-pipeline', 'mantur-copyhit', 'mantur-smartclip',
+    'mantur-drama-visual-studio', 'mantur-copyhit', 'mantur-smartclip',
   ].map(slug => ({ ...skill, slug }))]
   const server = createServer((_request, response) => {
     response.writeHead(200, { 'content-type': 'application/json' })
