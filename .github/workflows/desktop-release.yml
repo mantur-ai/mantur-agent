@@ -91,10 +91,6 @@ jobs:
       CSC_LINK: ${{ secrets.MACOS_CERTIFICATE }}
       DSH_TELEMETRY_DISABLED: '1'
     steps:
-      - uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-
       - name: Require signing and notarization credentials
         run: |
           set -euo pipefail
@@ -119,7 +115,7 @@ jobs:
         run: pnpm run build:mantur
 
       - name: Test desktop launch contract
-        run: pnpm exec vitest run apps/desktop/tests/runtime.spec.ts apps/desktop/tests/github-release-check.spec.ts apps/desktop/tests/updater.spec.ts scripts/client-build-environment.client.spec.ts scripts/desktop-signing-scan.spec.ts
+        run: pnpm exec vitest run apps/desktop/tests/runtime.spec.ts apps/desktop/tests/github-release-check.spec.ts apps/desktop/tests/tos-release-check.spec.ts apps/desktop/tests/updater.spec.ts scripts/client-build-environment.client.spec.ts scripts/desktop-signing-scan.spec.ts
 
       - name: Restore pinned Mantur Cut source cache
         uses: actions/cache@v5
@@ -175,10 +171,6 @@ jobs:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       DSH_TELEMETRY_DISABLED: '1'
     steps:
-      - uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-
       - name: Require Windows signing credentials
         run: |
           foreach ($name in 'CSC_LINK', 'CSC_KEY_PASSWORD') {
@@ -201,7 +193,7 @@ jobs:
         run: pnpm run build:mantur
 
       - name: Test desktop launch contract
-        run: pnpm exec vitest run apps/desktop/tests/runtime.spec.ts apps/desktop/tests/github-release-check.spec.ts apps/desktop/tests/updater.spec.ts scripts/client-build-environment.client.spec.ts scripts/desktop-signing-scan.spec.ts
+        run: pnpm exec vitest run apps/desktop/tests/runtime.spec.ts apps/desktop/tests/github-release-check.spec.ts apps/desktop/tests/tos-release-check.spec.ts apps/desktop/tests/updater.spec.ts scripts/client-build-environment.client.spec.ts scripts/desktop-signing-scan.spec.ts
 
       - name: Verify Windows sandbox startup without a parent console
         if: runner.os == 'Windows'
@@ -243,12 +235,8 @@ jobs:
     if: ${{ !cancelled() && needs.validate.result == 'success' && needs.macos.result == 'success' && (!inputs.windows || needs.windows.result == 'success') }}
     needs: [validate, macos, windows]
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-
       - uses: pnpm/action-setup@v4
 
       - uses: actions/setup-node@v6
@@ -329,10 +317,10 @@ jobs:
 
   publish:
     name: Publish GitHub release
-    if: inputs.publish
+    if: ${{ !cancelled() && inputs.publish && needs.validate.result == 'success' && needs.assemble.result == 'success' }}
     needs: [validate, assemble]
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     environment: macos-release
     permissions:
       contents: write
@@ -375,6 +363,27 @@ jobs:
           gh release create "$TAG" release/* \
             --repo "$GITHUB_REPOSITORY" \
             --verify-tag \
-            --title "ManTur Agent $VERSION" \
+            --title "ManTur Agent" \
             --generate-notes \
             "${prerelease[@]}"
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install TOS publisher dependencies
+        run: |
+          python -m pip install boto3==1.42.97 PyYAML==6.0.3
+          python -m unittest discover -s scripts -p test_desktop_publish_tos.py
+
+      - name: Publish installers and update channel to TOS
+        env:
+          TOS_ACCESS_KEY: ${{ secrets.TOS_ACCESS_KEY }}
+          TOS_SECRET_KEY: ${{ secrets.TOS_SECRET_KEY }}
+          TOS_REGION: ap-southeast-1
+          TOS_ENDPOINT: https://tos-s3-ap-southeast-1.volces.com
+          TOS_BUCKET: mantur-pro
+          TOS_PREFIX: mantur-agent
+          TOS_PUBLIC_URL: https://resource.mantur.ai/mantur-agent
+          RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+        run: python scripts/desktop-publish-tos.py release "$RELEASE_VERSION"

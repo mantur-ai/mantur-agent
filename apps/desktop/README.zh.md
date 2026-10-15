@@ -67,7 +67,7 @@ macOS x64 命令必须在 Intel Mac 上运行，Windows 命令必须在 x64 Wind
 | macOS x64 | `pnpm run desktop:dist:mac:x64` | `Mantur-Agent-macOS-x64.dmg`、`Mantur-Agent-macOS-x64.zip` |
 | Windows x64 | `pnpm run desktop:dist:win:x64` | `Mantur-Agent-Windows-x64.exe` |
 
-smoke 会从解包应用自己的依赖目录启动 `dsh`，把打印出的进程 token 换成会话 cookie，并要求带品牌标题的 Web 页面返回 HTTP 200。它还会校验 Mantur Cut manifest 中的每条路径，以 `--help` 启动包内 Whisper CLI 与 server，要求源码、许可证、构建及安全记录齐全，并检查 updater 依赖与 GitHub release 配置。它使用空的临时 Harness home，避免开发者数据影响包检查结果。启用安装包内剪辑资源和更新 IPC 后，它要求真实保存回执及 Host 正常退出；拒绝关闭会使打包检查失败。
+smoke 会从解包应用自己的依赖目录启动 `dsh`，把打印出的进程 token 换成会话 cookie，并要求带品牌标题的 Web 页面返回 HTTP 200。它还会校验 Mantur Cut manifest 中的每条路径，以 `--help` 启动包内 Whisper CLI 与 server，要求源码、许可证、构建及安全记录齐全，并检查 updater 依赖与 TOS 通用更新源配置。它使用空的临时 Harness home，避免开发者数据影响包检查结果。启用安装包内剪辑资源和更新 IPC 后，它要求真实保存回执及 Host 正常退出；拒绝关闭会使打包检查失败。
 
 smoke 还会检查内置 CLI 的固定来源记录、包版本、许可证和依赖入口，创建真实的配置目录内启动脚本，并要求 `manturhub --version` 使用包内 Electron 可执行文件返回 `1.2.6`。启动脚本关闭 CLI 和技能更新检查。缺少资源直接失败，不搜索全局 CLI。该检查不会创建账号授权尝试，也不验证浏览器授权、Main 的操作系统存储，或以 macOS 结果证明 Windows 行为。
 
@@ -90,7 +90,9 @@ smoke 还会检查内置 CLI 的固定来源记录、包版本、许可证和依
 
 设置 `windows=true` 可在同一 release 中包含 Windows x64。请在受保护的 `windows-release` 环境中配置加密 secret：`WINDOWS_CERTIFICATE`（包含私钥的签名 `.pfx` 文件的 Base64 内容）和 `WINDOWS_CERTIFICATE_PASSWORD`。原生 Windows 任务要求这两个 secret 均已配置，且应用程序和安装包的 Authenticode 签名有效，才能上传产物。缺少凭证、签名无效或选中的任一平台失败，都会阻止组装和发布；只有明确未选中 Windows 时才会排除它。组装的 Windows 文件包含 EXE、对应 blockmap 及用于自动更新的 `latest.yml`。
 
-工作流会把选中的原生 `latest-mac.yml` 合并为一份可区分架构的更新通道，并把完整候选产物与 `SHA256SUMS` 保留七天。必须从精确匹配 `v<apps/desktop 版本>` 的 tag 运行；electron-updater 可以从 GitHub feed 中选择这种兼容 semver 的预发布 tag。`publish=false` 会在组装候选产物后停止。`publish=true` 还要求审批变量指向完整固定源码配置的 SHA-256 摘要，之后才会创建 GitHub release，并同时上传 DMG、更新 ZIP、blockmap、更新元数据与哈希。工作流会拒绝使用已有 release 的 tag，不会替换已发布文件；仓库级 Release Immutability 则会继续阻止之后修改 tag 或产物。
+工作流会把选中的原生 `latest-mac.yml` 合并为一份可区分架构的更新通道，并把完整候选产物与 `SHA256SUMS` 保留七天。必须从精确匹配 `v<apps/desktop 版本>` 的 tag 运行；tag 必须匹配打包版本。`publish=false` 会在组装候选产物后停止。`publish=true` 还要求审批变量指向完整固定源码配置的 SHA-256 摘要，之后才会创建 GitHub release，并同时上传 DMG、更新 ZIP、blockmap、更新元数据与哈希。工作流会拒绝使用已有 release 的 tag，不会替换已发布文件；仓库级 Release Immutability 则会继续阻止之后修改 tag 或产物。
+
+客户端通过 `https://resource.mantur.ai/mantur-agent/stable/` 通用 HTTPS 更新源检查版本。发布任务将文件保存到 TOS 的 `mantur-agent/releases/<version>/`，匿名分段下载验证通过后才更新 `stable/latest-mac.yml`。发布脚本校验 SHA-256 清单及更新文件的 SHA-512、大小，拒绝覆盖不同内容或降级更新源；仅安装包对象设为公开读。`macos-release` 受保护环境保存 `TOS_ACCESS_KEY` 和 `TOS_SECRET_KEY`，凭据不进入客户端。`Sync desktop release to TOS` 工作流可同步已公开的稳定版及手动附加的 Windows 安装包；未签名 Windows 不提供 `latest.yml`。0.1.18 及更早版本在 GitHub 不可达时需手动安装一次新版。现有资源域名连接新加坡桶，国内各地域的网络性能仍需验收。
 
 每次交付安装包或更新发布状态，都必须在[飞书产品与安装使用指南](https://guiyi2023.feishu.cn/docx/Iq3id4fr8o2uo9xKfpEcIck9nRf)中追加带日期和版本号的用户更新日志，并保留历史记录与附件。日志说明用户可见的改进、问题修复、更新步骤、支持平台、已知限制，以及经过验证的安装包下载和自动更新状态；仅上传安装包不代表自动更新通道已经可用。最新记录排在最前，同时更新受影响的安装与使用说明。
 
@@ -114,7 +116,7 @@ Main 管理客户端会话浏览器登录、刷新和系统加密账号存储。
 
 如果启动错误只识别到过期的 `session_projcache` schema，载体会先关闭失败的子进程并完成日志写入，再由本地化原生对话框在用户明确同意后删除这份可丢弃的投影缓存并重试。它不会删除会话日志、设置、凭据、profile 或 workspace。其他启动错误只提供查看日志与退出，不猜测修复方式。
 
-GitHub 检查先比较已选发行标签，再请求更新文件。相同或更旧的发行显示暂无可用更新。不完整的更高发行和网络故障显示简短本地化反馈；原始诊断保留在日志中。参见[版本检查决策](../../.agents/notes/implemented/bug-fix/2026-09-12-github-update-version-check.zh.md)。
+客户端使用 TOS 通用 HTTPS 更新源；GitHub 更新源测试保留旧版客户端验证。旧版 GitHub 检查先比较已选发行标签，再请求更新文件。相同或更旧的发行显示暂无可用更新。不完整的更高发行和网络故障显示简短本地化反馈；原始诊断保留在日志中。参见[版本检查决策](../../.agents/notes/implemented/bug-fix/2026-09-12-github-update-version-check.zh.md)。
 
 已打包应用会在 macOS 的原生应用菜单和 Windows 的帮助菜单中显示当前版本与**检查更新…**。菜单会显示检查中、下载进度、可安装、已是最新版与失败状态；手动检查还会打开本地化的结果或错误对话框。应用启动后会开始检查，并每六小时重复。stable 构建只接收 stable release，版本号含 `alpha`、`beta` 或 `rc` 的构建可以接收预发布版本。后台发现新版本时保持安静。通用设置提供已安装版本、手动检查与重试操作。漫途侧栏仅在发现新版、下载中或已有待安装版本时显示入口，展开与收起状态均支持。只有用户点击下载才开始传输，显示实际字节数，仅在已知时显示百分比。下载并校验完成后，准备重启前会请求确认。确认安装后，Main 保存原生草稿，通过所属 IPC 通道请求 Host 停机回执，再关闭账号通道并请求 Host 正常退出。Main 等待进程真正退出和诊断日志关闭后才调用安装器。不支持的 Host 组合、保存失败、取消、异常退出和超时都会阻止安装；检查和下载不会冻结工作。等待失败后 Host 清理可能继续，工作不会自动恢复。参见 [Host 更新策略](../../packages/bundle/mantur-app/README.zh.md#use-this-package)。选择稍后会保留重启安装入口，不重复弹窗。侧栏和原生菜单共用主进程确认；保存失败会保留已校验的下载并报告错误。关闭 updater 会抑制后续安装。
 
