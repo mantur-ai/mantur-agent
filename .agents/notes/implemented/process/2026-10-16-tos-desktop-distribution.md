@@ -10,7 +10,7 @@ Users cannot reliably download installers or update metadata from GitHub on some
 
 ## Decision
 
-Desktop 0.1.19 uses the existing HTTPS resource domain and a generic update provider. Release automation uploads hash-verified files to immutable version directories in the existing Singapore TOS bucket, validates anonymous range access, then writes no-cache stable metadata with versioned artifact URLs. Only release objects receive public-read ACLs. The protected release environment stores credentials. A manual sync workflow supports retrying publication and adding manually released Windows installers. A cancelled or failed upstream build cannot publish; skipped optional Windows signing does not suppress Mac publication.
+Desktop 0.1.20 uses the existing HTTPS resource domain and a generic update provider. Release automation uploads hash-verified files to immutable version directories in the existing Singapore TOS bucket, validates anonymous range access, then writes no-cache stable metadata with versioned artifact URLs. Only release objects receive public-read ACLs. The protected release environment stores credentials. A manual sync workflow supports retrying publication and adding manually released Windows installers. A cancelled or failed upstream build cannot publish; skipped optional Windows signing does not suppress Mac publication.
 
 ## Alternatives considered
 

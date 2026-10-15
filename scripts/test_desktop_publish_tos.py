@@ -27,6 +27,12 @@ class ReleaseTests(unittest.TestCase):
         meta.write_text(yaml.safe_dump(self.info))
         (self.root / 'SHA256SUMS').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest() + '  ' + p.name + '\n' for p in [self.zip, meta]))
 
+    def test_release_jobs_checkout_before_build_or_publish(self):
+        workflow = yaml.safe_load((Path(__file__).parent.parent / '.github/workflows/desktop-release.yml').read_text())
+        for name, job in workflow['jobs'].items():
+            self.assertEqual(job['steps'][0].get('uses'), 'actions/checkout@v6', name)
+        self.assertIn('!cancelled()', workflow['jobs']['publish']['if'])
+
     def test_versioned_channel(self):
         files, channels = publisher.prepare(self.root, '0.1.19', 'https://resource.mantur.ai/mantur-agent')
         data = yaml.safe_load(channels['latest-mac.yml'])
