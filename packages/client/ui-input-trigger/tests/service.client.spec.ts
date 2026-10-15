@@ -381,7 +381,7 @@ describe('track', () => {
 })
 
 describe('programmatic source launcher', () => {
-  it('opens only the requested source and reuses its ordinary pick span', async () => {
+  it('opens requested groups in roster order and reuses the skill pick span', async () => {
     const command = readySource('/', 'command', [{ name: 'goal' }])
     const skill = readySource('/', 'skill', [{ name: 'review' }])
     const { controller } = controllerBench([command.source, skill.source])
@@ -393,18 +393,18 @@ describe('programmatic source launcher', () => {
       span: { start: 2, end: 5, draftRev: 7 },
     }
 
-    controller.toggleSource('command', hit)
+    controller.toggleSource('command', hit, ['skill'])
     await tick()
 
     expect(controller.launcher.getSnapshot()).toBe('command')
     expect(controller.menu.getSnapshot()).toMatchObject({
       open: true,
       hit,
-      groups: [{ source: 'command', status: 'ready', items: [{ name: 'goal' }] }],
+      groups: [{ source: 'command', status: 'ready', items: [{ name: 'goal' }] }, { source: 'skill', status: 'ready', items: [{ name: 'review' }] }],
     })
-    controller.pick('command', 0)
-    expect(command.picks[0]).toMatchObject({ via: 'menu', span: hit.span })
-    expect(skill.picks).toHaveLength(0)
+    controller.pick('skill', 0)
+    expect(skill.picks[0]).toMatchObject({ via: 'menu', span: hit.span })
+    expect(command.picks).toHaveLength(0)
     expect(controller.launcher.getSnapshot()).toBeNull()
   })
 

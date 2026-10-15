@@ -7,9 +7,13 @@ kind: "package-reference"
 
 English | [中文](README.zh.md)
 
+Installed-skill switches are stored in `manturhub-marketplace/skill-preferences.json` under the active Harness home. A disabled name is blocked in registry loading and exact bundled-reference loading, across versions. The installed list reads local discovery and packaged manifests without network access; toggling does not delete resources or change historical messages.
+
 ## Summary
 
-This Host plugin exposes browser-safe ManturHub Skill and Recipe catalog and detail Remotes plus Skill installation. Public metadata is validated before projection. Recipe media and non-empty source paths resolve against the configured Hub response origin; empty source fields are omitted from the browser result. Installation keeps the API key on the authenticated first hop, downloads an approved redirect without credentials, verifies archive limits and root metadata, and atomically commits the Skill directory with installer state.
+This Host plugin exposes browser-safe ManturHub Skill and Recipe catalog and detail Remotes plus Skill installation. Public metadata is validated before projection. Recipe media and non-empty source paths resolve against the configured Hub response origin; empty source fields are omitted from the browser result. Installation downloads public bundles and approved redirects without credentials, verifies archive limits and root metadata, and atomically commits the Skill directory with installer state.
+
+Recipe detail preserves the published input schema and ordered operator steps, including null step notes.
 
 ## Table of Contents
 
@@ -25,18 +29,20 @@ This Host plugin exposes browser-safe ManturHub Skill and Recipe catalog and det
 <a id="use-this-package"></a>
 ## Use this package
 
-Compose this package through [`dsh-mantur-app`](../../bundle/mantur-app/README.md). It requires `manturAccount`, so public Skill and Recipe catalog reads, details, and authenticated downloads always use the account service's active production or test origin. It installs Skills into `<DSH_HOME>/skills/<slug>`. Recipe list reads are fixed at the Hub-supported 15 entries per page and accept page, category, tag, and text filters. Configuration bounds metadata bytes, compressed bytes, archive entries, uncompressed bytes, and both request stages. The defaults match the official ManturHub CLI policy.
+Compose this package through [`dsh-mantur-app`](../../bundle/mantur-app/README.md). It requires `manturAccount`, so public Skill and Recipe catalog reads, details, and public downloads always use the account service's active production or test origin. It installs Skills into `<DSH_HOME>/skills/<slug>`. Recipe list reads are fixed at the Hub-supported 15 entries per page and accept page, category, tag, and text filters. Configuration bounds metadata bytes, compressed bytes, archive entries, uncompressed bytes, and both request stages. The defaults match the official ManturHub CLI policy.
 
-The list endpoint accepts the deployed `{ skills }` envelope and the CLI-compatible raw array. Detail accepts a direct Skill or `{ skill }`. Entries with `kind: suite` are excluded; a missing `kind` means `skill`.
+Public discovery uses `/api/public/agent/v1/skills` and `/api/public/agent/v1/recipes` with the gateway `code: 0` and `data` envelope. Skill pagination must be complete and contain unique codes; incomplete pages and unsuccessful gateway responses fail visibly. Recipe requests use `pageNum`, `pageSize`, `category`, `tag`, and `keyword`. Gateway timestamps may omit a timezone and are retained without inventing one. Missing prices, author and copy counts remain null; absent production instructions disable recipe launch in the client.
 
-The offline `bundledSkillDir` catalog reads only the App resource manifest. Exact name, version and content digest identify a bundle independently of user or project copies. Missing identities, changed files, invalid instructions and read-limit violations reject loading without online substitution. The Host verifies a draft reference before serialization and verifies the resource again before instruction injection; neither operation requests account state or writes user Skill directories.
+The `bundledSkillDir` manifest defines the recommended Skill allowlist. `updateBundled` checks the active deployment and downloads releases into `<DSH_HOME>/manturhub-marketplace/bundled-updates/<name>@<version>`, outside user Skill directories. Archive SHA-256, extraction limits, file inventory and instructions must pass verification before atomic publication. Network failures, modified files and changed archives published under an existing version reject updating; old releases are not reported as current. Cached releases remain available for exact references and are not automatically removed.
+
+Name, version and content digest identify a selected bundle. Draft serialization and instruction injection verify that exact identity offline against application resources or the update store; neither operation replaces a captured reference with a newer release.
 
 -----
 
 <a id="understand-installation-safety"></a>
 ## Understand installation safety
 
-The first download request uses `manturAccount` with authentication and manual redirects. A redirect must include `Location`; its second request allows HTTPS, plus loopback HTTP for integration tests, and never receives the authorization header. The installer streams into a private temporary file and rejects compressed-size overflow before extraction.
+The first download request uses the public Skill `/bundle` endpoint through `manturAccount` without authentication and with manual redirects. A redirect must include `Location`; its second request allows HTTPS, plus loopback HTTP for integration tests, and never receives the authorization header. The installer streams into a private temporary file and rejects compressed-size overflow before extraction.
 
 The ZIP reader validates every central-directory entry before it writes that entry. It rejects unsafe or imprecise sizes, absolute and traversal paths, control characters, Windows-reserved names and characters, trailing dots or spaces, case-insensitive duplicate paths, links, special nodes, excessive entries, and excessive declared expansion. Regular files are decompressed directly into private staging files while the installer enforces the actual cumulative byte limit. A second filesystem walk rechecks links, special nodes, and actual expansion. Root `SKILL.md` must declare the requested slug and catalog version.
 
@@ -77,7 +83,7 @@ The verified body is appended as durable instructions. Earlier history remains i
 - There is no forced overwrite, uninstall, or local-conflict merge operation.
 - Environment switching isolates remote catalog data, downloads, and grants. The live local Skill directory and installer state remain shared, so an installed Skill stays available after a switch and normal version/conflict checks still apply.
 - Skill bundles must use ZIP. Extraction is implemented in-process and does not depend on platform archive commands.
-- Recipe handoff, operator execution, quote confirmation, and payment are outside this Host package; it returns the published `agent_payload` unchanged to its browser consumer.
+- Recipe handoff, operator execution, quote confirmation, and payment are outside this Host package; it returns published `usage` as the reproduction instructions and leaves missing instructions empty.
 
 <a id="dev-note"></a>
 ### Dev Note

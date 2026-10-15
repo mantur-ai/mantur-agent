@@ -1,0 +1,13 @@
+- main "已安装技能 (1)":
+  - button "技能广场":
+    - img
+    - text: 技能广场
+  - heading "已安装技能 (1)" [level=1]
+  - paragraph: 关闭后，此技能不会出现在引用菜单中，也不能被新的调用加载。重新开启即可恢复使用。
+  - img
+  - textbox "搜索已安装技能"
+  - heading "本地安装 (1)" [level=2]
+  - article:
+    - strong: 开关测试技能
+    - text: 用于验证本地技能开关。
+    - switch "启用技能：开关测试技能"

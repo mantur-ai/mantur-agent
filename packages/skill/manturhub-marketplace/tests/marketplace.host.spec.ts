@@ -32,45 +32,35 @@ interface HubOptions {
 }
 
 const skill = {
-  slug: 'story-director',
+  code: 'story-director',
   name: '故事导演',
   description: '把故事变成分镜',
   category: '剧本创作',
-  version: '1.2.3',
+  skillVersion: '1.2.3',
   triggers: ['写分镜'],
-  uses_operators: ['op.text.generate'],
-  intro_md: '先理解故事，再生成镜头。',
-  assets: null,
-  kind: 'skill',
+  dependencies: ['op.text.generate'],
+  readme: '先理解故事，再生成镜头。',
+  coverUrl: null,
 }
 
 const recipe = {
-  slug: 'rcp.video.story-vlog',
-  title: '电影感旅行 Vlog',
+  code: 'rcp.video.story-vlog',
+  name: '电影感旅行 Vlog',
   summary: '把普通旅行素材变成有叙事节奏的短片。',
-  cat: 'video',
+  category: 'video',
   tags: ['旅行', '电影感'],
-  cover_url: '/assets/recipe-cover.jpg',
-  sample_url: '/assets/recipe-sample.mp4',
-  sample_kind: 'video',
-  operator_id: 'op.video.generate',
-  cost_estimate: '约 0.16 元',
-  price_dumplings: 0,
-  author: '漫途创作实验室',
-  copies: 128,
-  published_at: '2026-08-25T03:51:03.407+00:00',
+  coverUrl: '/assets/recipe-cover.jpg',
+  sampleUrl: '/assets/recipe-sample.mp4',
+  sampleKind: 'VIDEO',
+  targetOperatorCode: 'op.video.generate',
+  publishedAt: '2026-08-25T03:51:03.407+00:00',
 }
-
 const recipeDetail = {
   ...recipe,
-  sample_text: '自然光、手持镜头和克制转场。',
-  prompt_template: '将 {地点} 与 {人物} 替换成你的内容。',
-  params_json: { user_inputs: { 地点: '海边', 人物: '旅行者' } },
-  source_url: '/recipes/rcp.video.story-vlog',
-  source_name: 'ManturHub',
-  source_avatar_url: '/assets/avatar.png',
-  models: ['seedance-1.0-pro'],
-  agent_payload: '请先读取最新配方，再替换占位符并报价。',
+  description: recipe.summary,
+  usage: '请先读取最新配方，再替换占位符并报价。',
+  inputSchema: { type: 'object', properties: { prompt: { type: 'string', description: '画面描述' } }, required: ['prompt'] },
+  steps: [{ operatorCode: 'op.video.generate', note: '生成视频后验收。' }, { operatorCode: 'op.video.compose', note: null }],
 }
 
 function bundle(files: Record<string, string> = {
@@ -104,27 +94,27 @@ async function fakeHub(options: HubOptions = {}): Promise<{
   let origin = ''
   const server: Server = createServer((request, response) => {
     requests.push(`${request.url} ${request.headers['x-api-key'] ?? ''} ${request.headers['x-manturhub-client'] ?? ''}`)
-    if (request.url === '/api/v1/skills') {
-      sendJson(response, options.catalog ?? { skills: [skill, { ...skill, slug: 'team-suite', kind: 'suite' }] })
+    if (request.url === '/api/public/agent/v1/skills?pageNum=1&pageSize=100') {
+      sendJson(response, options.catalog ?? { code: 0, data: { records: [skill], total: 1, pageNum: 1, pages: 1 } })
       return
     }
-    if (request.url?.startsWith('/api/v1/recipes?')) {
-      sendJson(response, options.recipeCatalog ?? {
-        recipes: [recipe], total: 1, page: 1, page_size: 15, total_pages: 1,
+    if (request.url?.startsWith('/api/public/agent/v1/recipes?')) {
+      sendJson(response, { code: 0, data: options.recipeCatalog ?? {
+        records: [recipe], total: 1, pageNum: 1, pageSize: 15, pages: 1,
         available_tags: recipe.tags,
-      })
+      } })
       return
     }
-    if (request.url === `/api/v1/recipes/${recipe.slug}`) {
-      sendJson(response, options.recipeDetail ?? recipeDetail)
+    if (request.url === `/api/public/agent/v1/recipes/${recipe.code}`) {
+      sendJson(response, { code: 0, data: options.recipeDetail ?? recipeDetail })
       return
     }
-    if (request.url === `/api/v1/skills/${skill.slug}`) {
-      sendJson(response, options.detail ?? skill)
+    if (request.url === `/api/public/agent/v1/skills/${skill.code}`) {
+      sendJson(response, options.detail ?? { code: 0, data: skill })
       return
     }
-    if (request.url === `/api/v1/skills/${skill.slug}/download`) {
-      if (request.headers['x-api-key'] !== 'fixture-key') {
+    if (request.url === `/api/public/agent/v1/skills/${skill.code}/bundle`) {
+      if (request.headers['x-api-key'] !== undefined) {
         response.statusCode = 401
         response.end()
         return
@@ -204,28 +194,35 @@ describe('ManturHub marketplace Host', () => {
       page: 1,
       pageSize: 15,
       recipes: [{
-        slug: recipe.slug,
+        slug: recipe.code,
         category: 'video',
-        publishedAt: recipe.published_at,
+        publishedAt: recipe.publishedAt,
       }],
     })
     expect(catalog.recipes[0]?.coverUrl).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/assets\/recipe-cover\.jpg$/)
-    expect(subject.requests).toContain('/api/v1/recipes?page=1&pageSize=15&compact=true&cat=video&tag=%E7%94%B5%E5%BD%B1%E6%84%9F&q=%E6%97%85%E8%A1%8C  mantur-agent')
+    expect(subject.requests).toContain('/api/public/agent/v1/recipes?pageNum=1&pageSize=15&category=video&tag=%E7%94%B5%E5%BD%B1%E6%84%9F&keyword=%E6%97%85%E8%A1%8C  mantur-agent')
   })
 
   it('loads public Recipe detail with the authoritative Agent payload', async () => {
     const subject = await boot({ signedIn: false })
 
-    const detail = await subject.service.recipeDetail(recipe.slug)
+    const detail = await subject.service.recipeDetail(recipe.code)
     expect(detail).toMatchObject({
-      slug: recipe.slug,
-      sampleText: recipeDetail.sample_text,
-      parameters: recipeDetail.params_json,
-      models: recipeDetail.models,
-      agentPayload: recipeDetail.agent_payload,
-      publishedAt: recipeDetail.published_at,
+      slug: recipe.code,
+      sampleText: '',
+      parameters: null,
+      inputSchema: recipeDetail.inputSchema,
+      steps: recipeDetail.steps,
+      models: [],
+      agentPayload: recipeDetail.usage,
+      publishedAt: recipeDetail.publishedAt,
     })
-    expect(detail.sourceUrl).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/recipes\/rcp\.video\.story-vlog$/)
+    expect(detail.sourceUrl).toBeUndefined()
+  })
+
+  it.each([{ steps: [{ operatorCode: 42, note: null }] }, { inputSchema: [] }])('rejects malformed published Recipe details: %j', async (invalid) => {
+    const subject = await boot({ recipeDetail: { ...recipeDetail, ...invalid } })
+    await expect(subject.service.recipeDetail(recipe.code)).rejects.toMatchObject({ code: 'gateway/internal' })
   })
 
   it('omits empty Recipe source metadata returned by production', async () => {
@@ -233,23 +230,24 @@ describe('ManturHub marketplace Host', () => {
       signedIn: false,
       recipeDetail: {
         ...recipeDetail,
-        source_url: '',
-        source_name: '',
-        source_avatar_url: '',
+        usage: null,
       },
     })
 
-    const detail = await subject.service.recipeDetail(recipe.slug)
+    const detail = await subject.service.recipeDetail(recipe.code)
+    expect(detail.agentPayload).toBe('')
+    expect(detail.copies).toBeNull()
+    expect(detail.priceDumplings).toBeNull()
     expect(detail).not.toHaveProperty('sourceUrl')
     expect(detail).not.toHaveProperty('sourceName')
     expect(detail).not.toHaveProperty('sourceAvatarUrl')
   })
 
-  it('accepts UTC Z Recipe timestamps and rejects timestamps without a timezone', async () => {
+  it('accepts gateway UTC and timezone-free Recipe timestamps', async () => {
     const utc = await boot({
       recipeCatalog: {
-        recipes: [{ ...recipe, published_at: '2026-09-01T08:00:00.000Z' }],
-        total: 1, page: 1, page_size: 15, total_pages: 1, available_tags: [],
+        records: [{ ...recipe, publishedAt: '2026-09-01T08:00:00.000Z' }],
+        total: 1, pageNum: 1, pageSize: 15, pages: 1, available_tags: [],
       },
     })
     await expect(utc.service.listRecipes({})).resolves.toMatchObject({
@@ -258,11 +256,11 @@ describe('ManturHub marketplace Host', () => {
 
     const local = await boot({
       recipeCatalog: {
-        recipes: [{ ...recipe, published_at: '2026-09-01T08:00:00.000' }],
-        total: 1, page: 1, page_size: 15, total_pages: 1, available_tags: [],
+        records: [{ ...recipe, publishedAt: '2026-09-01T08:00:00.000' }],
+        total: 1, pageNum: 1, pageSize: 15, pages: 1, available_tags: [],
       },
     })
-    await expect(local.service.listRecipes({})).rejects.toThrow('could not be loaded')
+    await expect(local.service.listRecipes({})).resolves.toMatchObject({ recipes: [{ publishedAt: '2026-09-01T08:00:00.000' }] })
   })
 
   it('rejects malformed Recipe requests before contacting ManturHub', async () => {
@@ -288,7 +286,7 @@ describe('ManturHub marketplace Host', () => {
     ['HTTP failure', new Response('', { status: 503 })],
   ])('maps a Recipe detail %s to a gateway failure', async (_label, response) => {
     const subject = await boot({ accountRequest: () => Promise.resolve(response) })
-    await expect(subject.service.recipeDetail(recipe.slug)).rejects.toMatchObject({ code: 'gateway/internal' })
+    await expect(subject.service.recipeDetail(recipe.code)).rejects.toMatchObject({ code: 'gateway/internal' })
   })
 
   it('preserves Recipe RemoteErrors raised by the account request', async () => {
@@ -296,71 +294,74 @@ describe('ManturHub marketplace Host', () => {
     const subject = await boot({ accountRequest: () => Promise.reject(failure) })
 
     await expect(subject.service.listRecipes({})).rejects.toBe(failure)
-    await expect(subject.service.recipeDetail(recipe.slug)).rejects.toBe(failure)
+    await expect(subject.service.recipeDetail(recipe.code)).rejects.toBe(failure)
   })
 
   it('rejects Recipe detail metadata for a different slug', async () => {
-    const subject = await boot({ recipeDetail: { ...recipeDetail, slug: 'rcp.video.other' } })
-    await expect(subject.service.recipeDetail(recipe.slug)).rejects.toMatchObject({ code: 'gateway/internal' })
+    const subject = await boot({ recipeDetail: { ...recipeDetail, code: 'rcp.video.other' } })
+    await expect(subject.service.recipeDetail(recipe.code)).rejects.toMatchObject({ code: 'gateway/internal' })
   })
 
   it('rejects unsafe public URLs returned in Recipe metadata', async () => {
     const subject = await boot({
       recipeCatalog: {
-        recipes: [{ ...recipe, cover_url: 'javascript:alert(1)' }],
-        total: 1, page: 1, page_size: 15, total_pages: 1, available_tags: [],
+        records: [{ ...recipe, coverUrl: 'javascript:alert(1)' }],
+        total: 1, pageNum: 1, pageSize: 15, pages: 1, available_tags: [],
       },
     })
     await expect(subject.service.listRecipes({})).rejects.toThrow('could not be loaded')
   })
 
-  it('accepts the deployed catalog envelope and excludes suites', async () => {
+  it('accepts the public Skill catalog envelope', async () => {
     const subject = await boot()
 
     await expect(subject.service.list()).resolves.toEqual({
       signedIn: true,
       installedCount: 0,
       skills: [{
-        slug: skill.slug,
+        slug: skill.code,
         name: skill.name,
         description: skill.description,
         category: skill.category,
-        version: skill.version,
+        version: skill.skillVersion,
         triggers: skill.triggers,
         installed: false,
       }],
     })
   })
 
-  it('accepts the CLI catalog array, wrapped detail, and a missing ordinary Skill kind', async () => {
+  it('accepts public gateway catalog and detail envelopes', async () => {
     const ordinary = { ...skill }
     Reflect.deleteProperty(ordinary, 'kind')
-    const subject = await boot({ catalog: [ordinary], detail: { skill: ordinary } })
+    const subject = await boot({
+      catalog: { code: 0, data: { records: [ordinary], total: 1, pageNum: 1, pages: 1 } },
+      detail: { code: 0, data: ordinary },
+    })
 
     await expect(subject.service.list()).resolves.toMatchObject({
-      skills: [{ slug: skill.slug }],
+      skills: [{ slug: skill.code }],
     })
-    await expect(subject.service.detail(skill.slug)).resolves.toMatchObject({
-      slug: skill.slug,
-      usesOperators: skill.uses_operators,
+    await expect(subject.service.detail(skill.code)).resolves.toMatchObject({
+      slug: skill.code,
+      usesOperators: skill.dependencies,
     })
   })
 
-  it('downloads with Host credentials and atomically installs into this DSH_HOME', async () => {
+  it('downloads without credentials and atomically installs into this DSH_HOME', async () => {
     const subject = await boot()
 
-    await expect(subject.service.installSkill(skill.slug)).resolves.toEqual({
-      slug: skill.slug, version: skill.version, installed: true,
+    await expect(subject.service.installSkill(skill.code)).resolves.toEqual({
+      slug: skill.code, version: skill.skillVersion, installed: true,
     })
-    await expect(readFile(join(subject.home, 'skills', skill.slug, 'SKILL.md'), 'utf8'))
+    await expect(readFile(join(subject.home, 'skills', skill.code, 'SKILL.md'), 'utf8'))
       .resolves.toContain('name: story-director')
-    expect(subject.requests).toContain(`/api/v1/skills/${skill.slug}/download fixture-key mantur-agent`)
+    expect(subject.requests).toContain(`/api/public/agent/v1/skills/${skill.code}/bundle  mantur-agent`)
 
     const state = JSON.parse(await readFile(
       join(subject.home, 'manturhub-marketplace', 'installed-skills.json'),
       'utf8',
     )) as { skills: Record<string, { contentSha256: string }> }
-    expect(state.skills[skill.slug]?.contentSha256).toMatch(/^[a-f0-9]{64}$/)
+    expect(state.skills[skill.code]?.contentSha256).toMatch(/^[a-f0-9]{64}$/)
     await expect(subject.service.list()).resolves.toMatchObject({ installedCount: 1 })
   })
 
@@ -378,37 +379,34 @@ describe('ManturHub marketplace Host', () => {
     let changes = 0
     subject.ctx.on('skills/change', () => { changes += 1 })
 
-    await subject.service.installSkill(skill.slug)
+    await subject.service.installSkill(skill.code)
     for (let index = 0; index < 200; index += 1) {
-      if ((await subject.ctx.skills.list()).some(entry => entry.name === skill.slug)) break
+      if ((await subject.ctx.skills.list()).some(entry => entry.name === skill.code)) break
       await new Promise<void>(resolve => setTimeout(resolve, 10))
     }
 
-    expect((await subject.ctx.skills.list()).map(entry => entry.name)).toContain(skill.slug)
+    expect((await subject.ctx.skills.list()).map(entry => entry.name)).toContain(skill.code)
     expect(changes).toBeGreaterThan(0)
   })
 
-  it('requires login and never starts an authenticated request while signed out', async () => {
+  it('installs public bundles while signed out without sending credentials', async () => {
     const subject = await boot({ signedIn: false })
-
-    await expect(subject.service.installSkill(skill.slug)).rejects.toMatchObject({
-      code: 'mantur-marketplace/auth-required',
-    })
-    expect(subject.requests.some(request => request.includes('/download'))).toBe(false)
+    await expect(subject.service.installSkill(skill.code)).resolves.toMatchObject({ installed: true })
+    expect(subject.requests).toContain(`/api/public/agent/v1/skills/${skill.code}/bundle  mantur-agent`)
   })
 
   it('refuses to overwrite a tracked Skill after local modification', async () => {
     const subject = await boot()
-    await subject.service.installSkill(skill.slug)
-    const installed = join(subject.home, 'skills', skill.slug, 'SKILL.md')
+    await subject.service.installSkill(skill.code)
+    const installed = join(subject.home, 'skills', skill.code, 'SKILL.md')
     await writeFile(installed, `${await readFile(installed, 'utf8')}\nlocal change\n`)
-    const downloads = subject.requests.filter(request => request.includes('/download')).length
+    const downloads = subject.requests.filter(request => request.includes('/bundle')).length
 
-    await expect(subject.service.installSkill(skill.slug)).rejects.toMatchObject({
+    await expect(subject.service.installSkill(skill.code)).rejects.toMatchObject({
       code: 'mantur-marketplace/local-conflict',
-      details: { slug: skill.slug },
+      details: { slug: skill.code },
     })
-    expect(subject.requests.filter(request => request.includes('/download'))).toHaveLength(downloads)
+    expect(subject.requests.filter(request => request.includes('/bundle'))).toHaveLength(downloads)
     await expect(readFile(installed, 'utf8')).resolves.toContain('local change')
   })
 
@@ -418,17 +416,17 @@ describe('ManturHub marketplace Host', () => {
       'SKILL.md': '---\nname: story-director\nversion: 1.2.3\n---\n',
     }) })
 
-    await expect(subject.service.installSkill(skill.slug)).rejects.toThrow('could not be installed')
+    await expect(subject.service.installSkill(skill.code)).rejects.toThrow('could not be installed')
     await expect(readFile(join(subject.home, 'escaped.txt'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
-    await expect(readFile(join(subject.home, 'skills', skill.slug, 'SKILL.md'), 'utf8'))
+    await expect(readFile(join(subject.home, 'skills', skill.code, 'SKILL.md'), 'utf8'))
       .rejects.toMatchObject({ code: 'ENOENT' })
   })
 
   it('rejects an insecure redirect without forwarding the account key', async () => {
-    const subject = await boot({ redirect: 'http://downloads.example/skill.zip' })
+    const subject = await boot({ redirect: 'http://bundles.example/skill.zip' })
 
-    await expect(subject.service.installSkill(skill.slug)).rejects.toThrow('could not be installed')
-    expect(subject.requests).toContain(`/api/v1/skills/${skill.slug}/download fixture-key mantur-agent`)
+    await expect(subject.service.installSkill(skill.code)).rejects.toThrow('could not be installed')
+    expect(subject.requests).toContain(`/api/public/agent/v1/skills/${skill.code}/bundle  mantur-agent`)
   })
 
   it('follows a secure loopback redirect without forwarding the account key', async () => {
@@ -447,14 +445,14 @@ describe('ManturHub marketplace Host', () => {
     if (address === null || typeof address === 'string') throw new Error('redirect server did not bind')
     const subject = await boot({ redirect: `http://127.0.0.1:${address.port}/bundle.zip` })
 
-    await expect(subject.service.installSkill(skill.slug)).resolves.toMatchObject({ installed: true })
+    await expect(subject.service.installSkill(skill.code)).resolves.toMatchObject({ installed: true })
     expect(received).toEqual([''])
   })
 
   it('rejects a redirect without Location', async () => {
     const subject = await boot({ redirect: null })
 
-    await expect(subject.service.installSkill(skill.slug)).rejects.toThrow('could not be installed')
+    await expect(subject.service.installSkill(skill.code)).rejects.toThrow('could not be installed')
   })
 
   it.each([
@@ -463,21 +461,21 @@ describe('ManturHub marketplace Host', () => {
   ])('rejects a bundle whose %s differs from catalog metadata', async (_field, archive) => {
     const subject = await boot({ archive })
 
-    await expect(subject.service.installSkill(skill.slug)).rejects.toThrow('could not be installed')
-    await expect(readFile(join(subject.home, 'skills', skill.slug, 'SKILL.md'), 'utf8'))
+    await expect(subject.service.installSkill(skill.code)).rejects.toThrow('could not be installed')
+    await expect(readFile(join(subject.home, 'skills', skill.code, 'SKILL.md'), 'utf8'))
       .rejects.toMatchObject({ code: 'ENOENT' })
   })
 
   it('refuses an existing untracked directory before downloading', async () => {
     const subject = await boot()
-    const existing = join(subject.home, 'skills', skill.slug)
+    const existing = join(subject.home, 'skills', skill.code)
     await mkdir(existing, { recursive: true })
     await writeFile(join(existing, 'SKILL.md'), 'user-owned\n')
 
-    await expect(subject.service.installSkill(skill.slug)).rejects.toMatchObject({
+    await expect(subject.service.installSkill(skill.code)).rejects.toMatchObject({
       code: 'mantur-marketplace/local-conflict',
     })
-    expect(subject.requests.some(request => request.includes('/download'))).toBe(false)
+    expect(subject.requests.some(request => request.includes('/bundle'))).toBe(false)
     await expect(readFile(join(existing, 'SKILL.md'), 'utf8')).resolves.toBe('user-owned\n')
   })
 
@@ -488,8 +486,8 @@ describe('ManturHub marketplace Host', () => {
   ] as const)('enforces the configured %s limit', async (_label, config) => {
     const subject = await boot({ config })
 
-    await expect(subject.service.installSkill(skill.slug)).rejects.toThrow('could not be installed')
-    await expect(readFile(join(subject.home, 'skills', skill.slug, 'SKILL.md'), 'utf8'))
+    await expect(subject.service.installSkill(skill.code)).rejects.toThrow('could not be installed')
+    await expect(readFile(join(subject.home, 'skills', skill.code, 'SKILL.md'), 'utf8'))
       .rejects.toMatchObject({ code: 'ENOENT' })
   })
 
@@ -500,7 +498,7 @@ describe('ManturHub marketplace Host', () => {
     })
     const subject = await boot({ archive })
 
-    await expect(subject.service.installSkill(skill.slug)).rejects.toThrow('could not be installed')
+    await expect(subject.service.installSkill(skill.code)).rejects.toThrow('could not be installed')
   })
 
   it.skipIf(process.platform === 'win32')('restores the previous Skill when a POSIX permission blocks the state commit', async () => {
@@ -508,15 +506,15 @@ describe('ManturHub marketplace Host', () => {
       'SKILL.md': '---\nname: story-director\nversion: 1.2.3\n---\n\nold body\n',
     })
     const subject = await boot({ archive: () => archive })
-    await subject.service.installSkill(skill.slug)
-    const installed = join(subject.home, 'skills', skill.slug, 'SKILL.md')
+    await subject.service.installSkill(skill.code)
+    const installed = join(subject.home, 'skills', skill.code, 'SKILL.md')
     archive = bundle({
       'SKILL.md': '---\nname: story-director\nversion: 1.2.3\n---\n\nnew body\n',
     })
     const stateDirectory = join(subject.home, 'manturhub-marketplace')
     await chmod(stateDirectory, 0o500)
     try {
-      await expect(subject.service.installSkill(skill.slug)).rejects.toThrow('could not be installed')
+      await expect(subject.service.installSkill(skill.code)).rejects.toThrow('could not be installed')
     } finally {
       await chmod(stateDirectory, 0o700)
     }
@@ -530,35 +528,35 @@ describe('ManturHub marketplace Host', () => {
     await mkdir(stateDirectory, { recursive: true })
     await writeFile(join(stateDirectory, 'installed-skills.json'), '{broken')
 
-    await expect(subject.service.installSkill(skill.slug)).rejects.toThrow('could not be installed')
-    expect(subject.requests.some(request => request.includes('/download'))).toBe(false)
+    await expect(subject.service.installSkill(skill.code)).rejects.toThrow('could not be installed')
+    expect(subject.requests.some(request => request.includes('/bundle'))).toBe(false)
   })
 
   it('refuses a tracked tree containing a symbolic link', async () => {
     const subject = await boot()
-    await subject.service.installSkill(skill.slug)
-    await symlink('SKILL.md', join(subject.home, 'skills', skill.slug, 'local-link'))
+    await subject.service.installSkill(skill.code)
+    await symlink('SKILL.md', join(subject.home, 'skills', skill.code, 'local-link'))
 
-    await expect(subject.service.installSkill(skill.slug)).rejects.toThrow('could not be installed')
+    await expect(subject.service.installSkill(skill.code)).rejects.toThrow('could not be installed')
   })
 
   it.skipIf(process.platform === 'win32')('refuses a tracked tree containing a POSIX special file', async () => {
     const subject = await boot()
-    await subject.service.installSkill(skill.slug)
+    await subject.service.installSkill(skill.code)
     const { execFile } = await import('node:child_process')
     await new Promise<void>((resolve, reject) => {
-      execFile('mkfifo', [join(subject.home, 'skills', skill.slug, 'local-pipe')], (error) => {
+      execFile('mkfifo', [join(subject.home, 'skills', skill.code, 'local-pipe')], (error) => {
         if (error === null) resolve()
         else reject(new Error('mkfifo failed', { cause: error }))
       })
     })
 
-    await expect(subject.service.installSkill(skill.slug)).rejects.toThrow('could not be installed')
+    await expect(subject.service.installSkill(skill.code)).rejects.toThrow('could not be installed')
   })
 
   it('rejects a bundle without root frontmatter', async () => {
     const subject = await boot({ archive: bundle({ 'SKILL.md': '# Missing metadata\n' }) })
-    await expect(subject.service.installSkill(skill.slug)).rejects.toThrow('could not be installed')
+    await expect(subject.service.installSkill(skill.code)).rejects.toThrow('could not be installed')
   })
 
   it.each([
@@ -568,36 +566,36 @@ describe('ManturHub marketplace Host', () => {
   ])('rejects a download %s', async (_label, response) => {
     const subject = await boot({
       accountRequest: (pathname, requestOptions, origin) => {
-        if (pathname.endsWith('/download')) return Promise.resolve(response())
+        if (pathname.endsWith('/bundle')) return Promise.resolve(response())
         return forwardRequest(pathname, requestOptions, origin)
       },
     })
-    await expect(subject.service.installSkill(skill.slug)).rejects.toThrow()
+    await expect(subject.service.installSkill(skill.code)).rejects.toThrow()
   })
 
   it('enforces streamed bytes when Content-Length is absent', async () => {
     const subject = await boot({
       config: { maxBundleBytes: 16 },
       accountRequest: (pathname, requestOptions, origin) => {
-        if (!pathname.endsWith('/download')) {
+        if (!pathname.endsWith('/bundle')) {
           return forwardRequest(pathname, requestOptions, origin)
         }
         return Promise.resolve(new Response(new Uint8Array(17)))
       },
     })
-    await expect(subject.service.installSkill(skill.slug)).rejects.toThrow('could not be installed')
+    await expect(subject.service.installSkill(skill.code)).rejects.toThrow('could not be installed')
   })
 
   it('rejects malformed Content-Length before writing the bundle', async () => {
     const subject = await boot({
       accountRequest: (pathname, requestOptions, origin) => {
-        if (!pathname.endsWith('/download')) {
+        if (!pathname.endsWith('/bundle')) {
           return forwardRequest(pathname, requestOptions, origin)
         }
         return Promise.resolve(new Response(responseBytes(bundle()), { headers: { 'content-length': 'invalid' } }))
       },
     })
-    await expect(subject.service.installSkill(skill.slug)).rejects.toThrow('could not be installed')
+    await expect(subject.service.installSkill(skill.code)).rejects.toThrow('could not be installed')
   })
 
   it('removes a partial bundle when the response stream fails', async () => {
@@ -607,11 +605,11 @@ describe('ManturHub marketplace Host', () => {
       },
     })
     const subject = await boot({
-      accountRequest: (pathname, requestOptions, origin) => pathname.endsWith('/download')
+      accountRequest: (pathname, requestOptions, origin) => pathname.endsWith('/bundle')
         ? Promise.resolve(new Response(stream))
         : forwardRequest(pathname, requestOptions, origin),
     })
-    await expect(subject.service.installSkill(skill.slug)).rejects.toThrow('could not be installed')
+    await expect(subject.service.installSkill(skill.code)).rejects.toThrow('could not be installed')
   })
 
   it('accepts an HTTPS redirect without forwarding authorization', async () => {
@@ -619,15 +617,15 @@ describe('ManturHub marketplace Host', () => {
     const originalFetch = globalThis.fetch
     globalThis.fetch = (input: string | URL | Request, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
-      if (url === 'https://downloads.example/story.zip') {
+      if (url === 'https://bundles.example/story.zip') {
         expect(new Headers(init?.headers).has('x-api-key')).toBe(false)
         return Promise.resolve(new Response(responseBytes(archive)))
       }
       return originalFetch(input, init)
     }
     try {
-      const subject = await boot({ redirect: 'https://downloads.example/story.zip' })
-      await expect(subject.service.installSkill(skill.slug)).resolves.toMatchObject({ installed: true })
+      const subject = await boot({ redirect: 'https://bundles.example/story.zip' })
+      await expect(subject.service.installSkill(skill.code)).resolves.toMatchObject({ installed: true })
     } finally {
       globalThis.fetch = originalFetch
     }
@@ -635,14 +633,14 @@ describe('ManturHub marketplace Host', () => {
 
   it('rejects a malformed redirect URL', async () => {
     const subject = await boot({ redirect: 'not a URL' })
-    await expect(subject.service.installSkill(skill.slug)).rejects.toThrow('could not be installed')
+    await expect(subject.service.installSkill(skill.code)).rejects.toThrow('could not be installed')
   })
 
   it('refuses a destination that is a file before downloading', async () => {
     const subject = await boot()
     await mkdir(join(subject.home, 'skills'), { recursive: true })
-    await writeFile(join(subject.home, 'skills', skill.slug), 'user-owned')
-    await expect(subject.service.installSkill(skill.slug)).rejects.toMatchObject({
+    await writeFile(join(subject.home, 'skills', skill.code), 'user-owned')
+    await expect(subject.service.installSkill(skill.code)).rejects.toMatchObject({
       code: 'mantur-marketplace/local-conflict',
     })
   })
@@ -652,7 +650,7 @@ describe('ManturHub marketplace Host', () => {
     const actual = join(subject.home, 'actual-skills')
     await mkdir(actual)
     await symlink(actual, join(subject.home, 'skills'))
-    await expect(subject.service.installSkill(skill.slug)).rejects.toThrow('could not be installed')
+    await expect(subject.service.installSkill(skill.code)).rejects.toThrow('could not be installed')
   })
 
   it('serializes concurrent installs that target the live Skill directory', async () => {
@@ -661,7 +659,7 @@ describe('ManturHub marketplace Host', () => {
     const archive = responseBytes(bundle())
     const subject = await boot({
       accountRequest: async (pathname, requestOptions, origin) => {
-        if (!pathname.endsWith('/download')) return await forwardRequest(pathname, requestOptions, origin)
+        if (!pathname.endsWith('/bundle')) return await forwardRequest(pathname, requestOptions, origin)
         activeDownloads += 1
         peakDownloads = Math.max(peakDownloads, activeDownloads)
         await new Promise<void>(resolve => setTimeout(resolve, 10))
@@ -671,8 +669,8 @@ describe('ManturHub marketplace Host', () => {
     })
 
     await expect(Promise.all([
-      subject.service.installSkill(skill.slug),
-      subject.service.installSkill(skill.slug),
+      subject.service.installSkill(skill.code),
+      subject.service.installSkill(skill.code),
     ])).resolves.toHaveLength(2)
     expect(peakDownloads).toBe(1)
   })

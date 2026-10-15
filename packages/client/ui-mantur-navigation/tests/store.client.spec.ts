@@ -42,7 +42,7 @@ const recipeDetail = {
   sourceName: 'ManturHub',
   sourceAvatarUrl: 'https://hub.mantur.cn/assets/avatar.png',
   models: ['seedance-1.0-pro'],
-  agentPayload: '请先获取最新配方，再替换占位符。',
+  inputSchema: {}, steps: [], agentPayload: '请先获取最新配方，再替换占位符。',
 }
 
 const zhLaunchCopy = {
@@ -986,4 +986,12 @@ describe('Mantur marketplace store', () => {
     await expect(failedLaunch).resolves.toBe(false)
     expect(failed.store.recipes.getSnapshot()).toEqual({ phase: 'failed', query: {} })
   })
+})
+
+
+it('refuses a recipe launch without published instructions before creating a session', async () => {
+  const store = subject({})
+  store.recipes.set({ phase: 'ready', query: {}, detail: { ...recipeDetail, inputSchema: {}, steps: [], agentPayload: '' },
+    catalog: { recipes: [recipe], total: 1, page: 1, pageSize: 15, totalPages: 1, availableTags: [] } })
+  await expect(store.startRecipe(zhLaunchCopy)).resolves.toBe(false)
 })

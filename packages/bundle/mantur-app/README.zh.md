@@ -94,3 +94,5 @@ kind: "package-bundle"
 </details>
 
 **运行时不变式：**不发布 companion。组装测试按生产顺序应用 base、Web 与漫途 patch，并在目标条目缺失时失败。
+
+Mantur 配置启用名为 `mantur-global-skills` 的 Host 文件系统提供方，让管理页在会话预设尚未挂载时也能发现用户已安装技能。预设提供方继续负责各自作用域的发现。

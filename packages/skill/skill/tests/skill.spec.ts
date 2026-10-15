@@ -1278,3 +1278,22 @@ describe('SkillRegistry scoped layers', () => {
     await preset.dispose()
   })
 })
+
+
+it('rechecks the invocation switch after an in-flight body load and releases policy on disposal', async () => {
+  const ctx = new Context()
+  await ctx.plugin(SkillRegistry)
+  let enabled = true
+  const remove = ctx.on('skills/enabled', async (_name, next) => await next() && enabled)
+  ctx.skills.registerProvider(() => ({
+    name: 'memory',
+    list: async () => [memorySkill('example', 'Example', 1)],
+    get: async (candidate) => { enabled = false; return { ...candidate, content: 'Body' } },
+  }))
+  try {
+    expect(await ctx.skills.get('example')).toBeUndefined()
+    expect(await ctx.skills.list()).toMatchObject([{ invocation: { userInvocable: false, modelInvocable: false } }])
+    remove()
+    expect(await ctx.skills.get('example')).toMatchObject({ content: 'Body' })
+  } finally { await ctx.fiber.dispose() }
+})

@@ -94,3 +94,5 @@ The layer restates the complete `system-prompt` and `web-runtime` configs becaus
 </details>
 
 **Runtime invariant:** No companion is published. Composition tests apply the base, Web, and Mantur patches in production order and reject a missing target row.
+
+The Mantur profile enables a host filesystem provider named `mantur-global-skills` so installed user skills are available to the management page before any conversation preset is mounted. Preset providers retain their own scoped discovery.

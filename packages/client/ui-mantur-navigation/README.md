@@ -7,11 +7,19 @@ kind: "package-reference"
 
 English | [中文](README.zh.md)
 
+Skill cards display the published logo URL; the name initial is used only when the catalog provides no logo.
+
+The Skill marketplace links to Installed skills, where users search local and bundled skills and persist individual switches. The UI updates a switch only after Host persistence succeeds and reports read or save failures. Disabled skills disappear from refreshed invocation catalogs and homepage recommendations.
+
 ## Summary
 
 This plugin adds the Mantur sidebar's Skill Marketplace and Recipe Marketplace entries and their independent root pages. The Skill page reads a Host-projected ManturHub catalog, opens details, gates installation on device login, and displays installation and local-conflict states. A Recipe means a proven creative example that can be reproduced with replaced user content; it is not a general workflow template. The package also provides creation-mode recommendations and the 馒头仔 assistant guide, and replaces the grouped workspace heading with Projects. The official Web composition does not load this package and keeps Workspaces unchanged.
 
 The composer omits the aggregate runtime statistics through a higher-priority empty `stats` entry in `conversation.composer.dock`. Unloading this plugin restores the shared entry. Recommended Skill buttons align with the composer's left edge.
+
+Recipes without published production instructions remain previewable, but both the launch button and the store reject starting a Session. Missing author, copy count and price data are not presented as real values.
+
+Recipe details display published input descriptions, required fields, choices, defaults and ordered production steps. Steps alone do not authorize launching a recipe without reproduction instructions.
 
 ## Table of Contents
 
@@ -33,11 +41,11 @@ Signed-out Skill details in the marketplace and creation guide select login thro
 
 When login ends, the requesting detail restores keyboard focus to its current enabled primary action. A changed detail or Session, a hidden or removed source, and another active modal prevent restoration. Focusing never activates the button.
 
-The Recipe page loads the public ManturHub catalog with server-side text and category filters, renders result samples and pagination, and opens an inline detail with replaceable inputs, prompt template, models, operators, and the authoritative reproduction guide. The Recipe itself is free; operator execution uses a real-time quote confirmed before work starts. “Recreate with Agent” creates a new Session in the current Project and submits the Hub-provided `agent_payload` with the Recipe slug and ManturHub marker as its first user message. The message includes the source URL only when ManturHub publishes one. Both marketplaces use the deployment selected by the Host's machine-local configuration.
+The Recipe page loads the public ManturHub catalog with server-side text and category filters, renders result samples and pagination, and opens an inline detail with replaceable inputs, prompt template, models, operators, and the authoritative reproduction guide. The Recipe itself is free; operator execution uses a real-time quote confirmed before work starts. “Recreate with Agent” creates a new Session in the current Project and submits the Hub-provided `usage` with the Recipe slug and ManturHub marker as its first user message. The message includes the source URL only when ManturHub publishes one. Both marketplaces use the deployment selected by the Host's machine-local configuration.
 
-The conversation home offers Script writing, Drama production, and Asset production in a tab group with a visible neutral border and subtle shadow. Validation explicitly resolves the retired `editing` preference to `production` without changing workbench visibility; unknown values are rejected. The Host-backed `ui-mantur-guide` settings remember the last mode and an explicit guide dismissal; the first mode is `script`. Modes change recommendations and fixed guidance only: workspace, draft, attachments, selected Skills, model, permissions, and Agent identity remain unchanged. The required `recommendations` configuration supplies ordered Skill names matched only against the App's offline catalog. Missing entries are omitted and discovery failures expose Retry. A shortcut inserts a titled, version-and-digest-qualified `mantur-bundled-skill` reference into the current composer without sending, login or installation. Serialization checks the captured identity again; unavailable versions retain the draft as a send failure. The sidebar Skill marketplace provides online browsing and explicit installation; its Use action creates a Session.
+The conversation home offers Script writing, Drama production, and Asset production in a tab group with a visible neutral border and subtle shadow. Validation explicitly resolves the retired `editing` preference to `production` without changing workbench visibility; unknown values are rejected. The Host-backed `ui-mantur-guide` settings remember the last mode and an explicit guide dismissal; the first mode is `script`. Modes change recommendations and fixed guidance only: workspace, draft, attachments, selected Skills, model, permissions, and Agent identity remain unchanged. The required `recommendations` configuration supplies ordered Skill names matched against the App's verified recommended releases. Missing entries are omitted and discovery failures expose Retry. A shortcut inserts a titled, version-and-digest-qualified `mantur-bundled-skill` reference into the current composer without sending or login. Serialization checks the captured identity again; unavailable versions retain the draft as a send failure. The sidebar Skill marketplace provides online browsing and explicit installation; its Use action creates a Session.
 
-The Drama production shortcut selects the packaged `mantur-drama-visual-studio` Skill, shown as 漫剧生产 in Chinese with the full online title in its tooltip. Bundled versions change with application resources; the online catalog does not automatically replace a homepage selection.
+Startup and homepage Session changes check and download the latest recommended releases through the Host. Loading and update failures are visible, with Retry on failure. The Drama production shortcut selects `mantur-drama-visual-studio`, shown as 漫剧生产 in Chinese with the full catalog title in its tooltip. New selections capture the verified release; existing draft references retain their version. User-installed Skills are not overwritten.
 
 Recommendation buttons sit directly above the composer with visible neutral borders and brand-colored hover and selected borders. The buttons and their inserted references use the same curated locale-owned label of at most four Chinese characters. Tooltips retain the full catalog title; App reference IDs retain the canonical name, version and digest; short labels never change that identity. Every configured recommendation needs a maintained label mapping; a missing mapping exposes a configuration warning.
 
@@ -83,7 +91,7 @@ These pages own the shared extension points and the Mantur composition.
 <a id="model-experience"></a>
 ## Model Experience
 
-None, as this package contributes no hidden model context. A selected Skill remains an unsent slash-command draft until the user submits it. A selected Recipe instead becomes an ordinary durable first user message. Its trace lines use the active UI language and contain the title, slug, ManturHub marker, and any source URL published by ManturHub; the following `agent_payload` remains exactly as published.
+None, as this package contributes no hidden model context. A selected Skill remains an unsent slash-command draft until the user submits it. A selected Recipe instead becomes an ordinary durable first user message. Its trace lines use the active UI language and contain the title, slug, ManturHub marker, and any source URL published by ManturHub; the following `usage` remains exactly as published.
 
 #### KV Cache effect
 
@@ -108,3 +116,7 @@ None.
 </details>
 
 **Runtime invariant:** No companion is published. Component and store tests cover catalog loading, empty and failed responses, detail selection, signed-in installation, device login, conflicts, and disposal-owned polling; Host integration tests own filesystem and credential safety.
+
+Skill cards reserve a wider, padded image area for marketplace artwork, preserving its aspect ratio without cropping; narrow screens reduce the image width.
+
+Skill details decode the API’s HTML entities and remove only the paired `MANTUR_AGENT_PLATFORM_ACCESS_START` / `MANTUR_AGENT_PLATFORM_ACCESS_END` injected section from the displayed copy. The shared untrusted-Markdown renderer handles the remaining README in a wide, scrollable dialog; installed Skill instructions are unchanged.

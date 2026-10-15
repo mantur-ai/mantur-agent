@@ -58,7 +58,7 @@ export function CreationModes({ usePreferences, saveMode, t }: CreationModesProp
 export interface CreationGuideInjected extends GuidePreferencesInjected {
   appendReference: (reference: ReferenceInsert) => boolean
   loadBundled: () => Promise<void>
-  marketplaceText: (key: 'skills.loading' | 'skills.failed' | 'skills.retry') => string
+  marketplaceText: (key: 'skills.updating' | 'skills.updateFailed' | 'skills.retry') => string
   hooks: GuidePreferencesInjected['hooks'] & {
     bundledSkills: SnapshotStore<BundledSkillsState>
     guideInput: ObservableSnapshot<InputState | undefined>
@@ -80,6 +80,7 @@ export function CreationGuide(props: CreationGuideProps) {
 function ReadyGuide({ disabled, sessionId, preferences, useGuideInput, useBundledSkills,
   useGuideNavigation, appendReference, saveClosed, loadBundled, marketplaceText: mt, t,
 }: Omit<CreationGuideProps, 'hero'> & { preferences: GuideSettings }) {
+  useEffect(() => { void loadBundled() }, [sessionId, loadBundled])
   const bundled = useBundledSkills(snapshot => snapshot)
   const input = useGuideInput(snapshot => snapshot)
   const navigation = useGuideNavigation(snapshot => snapshot)
@@ -154,8 +155,8 @@ function ReadyGuide({ disabled, sessionId, preferences, useGuideInput, useBundle
     </section>}
     <div className={css.shortcutRow} data-hero={true}>
       <GuideSkillRail empty={recommended.length === 0} t={t}>
-        {bundled.phase === 'idle' || bundled.phase === 'loading' ? <span role="status">{mt('skills.loading')}</span>
-          : bundled.phase === 'failed' ? <><span role="alert">{mt('skills.failed')}</span><button type="button" onClick={() => { void loadBundled() }}>{mt('skills.retry')}</button></>
+        {bundled.phase === 'idle' || bundled.phase === 'loading' ? <span role="status">{mt('skills.updating')}</span>
+          : bundled.phase === 'failed' ? <><span role="alert">{mt('skills.updateFailed')}</span><button type="button" onClick={() => { void loadBundled() }}>{mt('skills.retry')}</button></>
             : recommended.length === 0 ? <span className={css.empty}>{t('empty')}</span>
               : recommended.map((skill) => {
                 const label = GUIDE_SKILL_LABELS.get(skill.name)

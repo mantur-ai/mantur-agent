@@ -265,12 +265,32 @@ Host service for catalog reads and local Skill installation.
 @Remote async bundled(signal: AbortSignal): Promise<ManturBundledSkill[]>
 
 /**
+ * Check and install published versions of the App's recommended Skills.
+ * @param signal - Cancellation supplied by the homepage.
+ * @returns Verified latest identities; failed checks reject without substituting older versions.
+ */
+@Remote async updateBundled(signal: AbortSignal): Promise<ManturBundledSkill[]>
+
+/**
  * Verify that a draft still refers to the exact App resource the user selected.
  * @param reference - captured name, version and digest, never a user-directory locator.
  * @param signal - cancellation supplied by the sending draft.
  * @returns the verified App identity; no installed or online substitute is selected.
  */
 @Remote async resolveBundled(reference: string, signal: AbortSignal): Promise<ManturBundledSkill>
+
+/**
+ * List locally discovered and App-bundled skills, including disabled entries.
+ * @returns Local identities and switches without requiring the marketplace network.
+ */
+@Remote async installedSkills(): Promise<ManturInstalledSkill[]>
+
+/**
+ * Persist an installed skill's switch for this client, then invalidate discovery.
+ * @param name - Installed skill identifier; applies to every version of this name.
+ * @param enabled - Whether future references and body loads are permitted.
+ */
+@Remote async setSkillEnabled(name: string, enabled: boolean): Promise<void>
 
 /**
  * Load the complete public Skill catalog and current local install flags.
@@ -411,6 +431,25 @@ A skill provider, runtime contribution, or provider-backed catalog may have chan
  * @mode emit
  */
 'skills/change'(): void
+```
+
+Source: [`packages/skill/skill/src/types.ts`](../../packages/skill/skill/src/types.ts)
+
+<a id="skillsenabled--waterfall"></a>
+
+#### `skills/enabled` — waterfall
+
+Restrict subsequent catalog advertisement and body loading by skill name. Listeners delegate before combining their decision; false denies access.
+
+```ts cordis-catalog
+/**
+ * Restrict subsequent catalog advertisement and body loading by skill name.
+ * Listeners delegate before combining their decision; false denies access.
+ * @mode waterfall
+ * @param name - Validated skill identifier.
+ * @param next - Remaining policy listeners, permitting access when none remain.
+ */
+'skills/enabled'(name: string, next: () => Promise<boolean>): Promise<boolean>
 ```
 
 Source: [`packages/skill/skill/src/types.ts`](../../packages/skill/skill/src/types.ts)

@@ -74,6 +74,19 @@ describe.skipIf(!isWin32 || !pwshAvailable())('windows-acl runner', () => {
     if (publicProbeDir !== undefined) rmSync(publicProbeDir, { recursive: true, force: true })
   })
 
+  it('starts PowerShell without a parent console and retains write restrictions', () => {
+    const entry = fileURLToPath(new URL('./fixtures/consoleless-runner.ts', import.meta.url))
+    const command = `Write-Output 'CONSOLELESS-OK'; try { Set-Content -LiteralPath '${escapeFile}' -Value escaped -ErrorAction Stop; exit 9 } catch { Write-Output 'DENIED' }`
+    const result = spawnSync(process.execPath, ['--import', 'tsx/esm', entry,
+      '--workspace', writableDir, '--temp', isolatedTemp, '--mode', 'workspace-write', '--',
+      resolvePwshPath(), '-NoLogo', '-NoProfile', '-NonInteractive', '-Command', command,
+    ], { encoding: 'utf8', timeout: 30_000 })
+    expect(result.status, result.stderr).toBe(0)
+    expect(result.stdout).toContain('CONSOLELESS-OK')
+    expect(result.stdout).toContain('DENIED')
+    expect(existsSync(escapeFile)).toBe(false)
+  })
+
   it('workspace-write: the confined child writes granted directories only', () => {
     const probe = [
       "$ErrorActionPreference='SilentlyContinue';",

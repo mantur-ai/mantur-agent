@@ -18,7 +18,7 @@ export interface InstallerConfig extends ArchiveLimits {
   readonly skillsRoot: string
   /** Maximum compressed download size. */
   readonly maxBundleBytes: number
-  /** Timeout for authenticated metadata and redirect requests. */
+  /** Timeout for public metadata and redirect requests. */
   readonly metadataTimeoutMs: number
   /** Timeout for the unauthenticated bundle download. */
   readonly downloadTimeoutMs: number
@@ -186,13 +186,23 @@ async function downloadResponse(response: Response, target: string, maxBytes: nu
   return digest.digest('hex')
 }
 
-/** Download the authenticated first hop without forwarding the grant off-origin. */
-async function downloadBundle(ctx: Context, slug: string, target: string, config: InstallerConfig): Promise<string> {
-  const response = await ctx.manturAccount.request(`/api/v1/skills/${encodeURIComponent(slug)}/download`, {
-    authenticated: true,
+/**
+ * Download a bounded public bundle without sending credentials on either hop.
+ * @param ctx - Account service selecting the deployment.
+ * @param slug - Validated catalog name.
+ * @param target - New archive file owned by the caller.
+ * @param config - Download and archive limits.
+ * @param signal - Optional caller cancellation.
+ * @returns SHA256 of the downloaded archive.
+ */
+export async function downloadBundle(
+  ctx: Context, slug: string, target: string, config: InstallerConfig, signal?: AbortSignal,
+): Promise<string> {
+  const response = await ctx.manturAccount.request(`/api/public/agent/v1/skills/${encodeURIComponent(slug)}/bundle`, {
+    authenticated: false,
     headers: { Accept: 'application/zip', 'X-ManturHub-Client': 'mantur-agent' },
     redirect: 'manual',
-    signal: AbortSignal.timeout(config.metadataTimeoutMs),
+    signal: AbortSignal.any([AbortSignal.timeout(config.metadataTimeoutMs), ...(signal === undefined ? [] : [signal])]),
   })
   if (response === undefined) throw new Error('AUTH_REQUIRED')
   if (response.status === 401) throw new Error('AUTH_REQUIRED')
@@ -202,7 +212,7 @@ async function downloadBundle(ctx: Context, slug: string, target: string, config
     if (location === null) throw new Error('Skill download redirect omitted Location')
     bundle = await fetch(secureDownloadUrl(location), {
       redirect: 'error',
-      signal: AbortSignal.timeout(config.downloadTimeoutMs),
+      signal: AbortSignal.any([AbortSignal.timeout(config.downloadTimeoutMs), ...(signal === undefined ? [] : [signal])]),
     })
   }
   return await downloadResponse(bundle, target, config.maxBundleBytes)

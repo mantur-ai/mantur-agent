@@ -377,7 +377,7 @@ export function apply(ctx: Context): void {
               quoted: false,
               position: snapshot.draft.slice(0, selection.start).trim() === '' ? 'leading' : 'inline',
               span: { ...selection, draftRev: snapshot.draftRev },
-            })
+            }, ['skill'])
           },
         stop: sessionId === undefined ? undefined : () => {
           scopedConversation(sessions, sessionId).cancel().catch(() => {

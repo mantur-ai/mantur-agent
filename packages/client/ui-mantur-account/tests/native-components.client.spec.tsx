@@ -160,15 +160,16 @@ describe('native account controls', () => {
   })
 
   it.each([
-    [{ online: true, snapshot: { ...signedOut, skipped: true } }, true],
+    [{ online: true, snapshot: { ...signedOut, skipped: true } }, false],
+    [{ online: true, snapshot: { ...signedOut, authenticated: true, phase: 'signed-in' } }, true],
     [{ online: true, snapshot: { ...signedOut, skipped: true }, operation: 'skip' }, false],
     [{ online: true, snapshot: { ...signedOut, skipped: true }, failure: { kind: 'logout-storage' } }, false],
-  ] as const)('completes onboarding only after confirmed Skip with no pending failure %#', (state, expected) => {
-    const complete = vi.fn()
-    const props = { complete, run: vi.fn(), t: (key: keyof typeof zh) => zh[key], formatExpiry: String,
+  ] as const)('requires authentication at startup even when the profile previously skipped %#', (state, expected) => {
+    const props = { run: vi.fn(), t: (key: keyof typeof zh) => zh[key], formatExpiry: String,
       useNativeAccount: (select: (value: NativeAccountViewState) => NativeAccountViewState) => select(state),
     } as unknown as NativeAccountOnboardingProps
-    render(<NativeAccountOnboarding {...props} />)
-    expect(complete).toHaveBeenCalledTimes(expected ? 1 : 0)
+    const view = render(<NativeAccountOnboarding {...props} />)
+    expect(view.queryByRole('heading') === null).toBe(expected)
+    expect(view.queryByRole('button', { name: '暂时跳过' })).toBeNull()
   })
 })

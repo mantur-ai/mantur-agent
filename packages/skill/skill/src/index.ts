@@ -476,10 +476,14 @@ export class SkillRegistry extends Service {
    */
   async snapshot(options: SkillViewOptions = {}): Promise<SkillCatalogSnapshot> {
     const collected = await this.collect(options)
+    const skills = await Promise.all([...collected.entries.values()].map(async (entry) => {
+      const summary = toSummary(entry.candidate)
+      return await this.ctx.waterfall('skills/enabled', summary.name, () => Promise.resolve(true))
+        ? summary
+        : { ...summary, invocation: { modelInvocable: false, userInvocable: false } }
+    }))
     return {
-      skills: [...collected.entries.values()]
-        .map(entry => toSummary(entry.candidate))
-        .sort(compareSkillSummary),
+      skills: skills.sort(compareSkillSummary),
       complete: collected.cacheable,
     }
   }
@@ -495,6 +499,7 @@ export class SkillRegistry extends Service {
    */
   async get(name: string, options: SkillViewOptions = {}): Promise<SkillDefinition | undefined> {
     if (!isSkillName(name)) return undefined
+    if (!await this.ctx.waterfall('skills/enabled', name, () => Promise.resolve(true))) return undefined
     const collected = await this.collect(options)
     throwIfAborted(options.signal)
     const match = collected.entries.get(name)
@@ -509,6 +514,7 @@ export class SkillRegistry extends Service {
       this.invalidateEntry(match)
       return undefined
     }
+    if (!await this.ctx.waterfall('skills/enabled', name, () => Promise.resolve(true))) return undefined
     return definition
   }
 

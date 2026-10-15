@@ -16,5 +16,13 @@ declare module '@deepseek-ai/cordis' {
      * @mode emit
      */
     'skills/change'(): void
+    /**
+     * Restrict subsequent catalog advertisement and body loading by skill name.
+     * Listeners delegate before combining their decision; false denies access.
+     * @mode waterfall
+     * @param name - Validated skill identifier.
+     * @param next - Remaining policy listeners, permitting access when none remain.
+     */
+    'skills/enabled'(name: string, next: () => Promise<boolean>): Promise<boolean>
   }
 }

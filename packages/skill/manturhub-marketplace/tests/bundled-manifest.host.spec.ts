@@ -163,6 +163,10 @@ it('serves local identities without calling account methods or reading same-name
         { messages: [restrictedUser], turn: 1, step: 1, signal },
         () => Promise.resolve({ kind: 'enter' as const, messages: [restrictedUser] }))).rejects.toThrow('not user-invocable')
     } finally { await restrictedContext.fiber.dispose() }
+    const undoSwitch = ctx.on('skills/enabled', async (_name, next) => { await next(); return false })
+    await expect(invoke([user])).rejects.toThrow('Skill is disabled')
+    undoSwitch()
+    await expect(invoke([user])).resolves.toMatchObject({ kind: 'enter' })
     const unconfigured = new ManturHubMarketplace(unconfiguredContext, { dshHome: root })
     await expect(unconfigured.bundled(signal)).rejects.toThrow('not configured')
   } finally {

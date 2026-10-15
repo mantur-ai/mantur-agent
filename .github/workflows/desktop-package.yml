@@ -64,6 +64,10 @@ jobs:
       - name: Test desktop launch contract
         run: pnpm exec vitest run apps/desktop/tests/runtime.spec.ts scripts/client-build-environment.client.spec.ts
 
+      - name: Verify Windows sandbox startup without a parent console
+        if: runner.os == 'Windows'
+        run: pnpm exec vitest run packages/sandbox/sandbox-windows-acl/tests/runner.spec.ts packages/sandbox/sandbox-windows-acl/tests/console.spec.ts
+
       - name: Restore pinned Mantur Cut source cache
         uses: actions/cache@v5
         with:

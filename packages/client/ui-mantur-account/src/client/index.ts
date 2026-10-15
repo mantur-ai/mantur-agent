@@ -1,4 +1,4 @@
-/** Optional Mantur account Settings and explicitly requested dialogs. */
+/** Mantur startup sign-in, account Settings and explicitly requested dialogs. */
 
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
@@ -12,7 +12,7 @@ import { AccountBalance } from './AccountBalance.tsx'
 import { AccountSection, type AccountSectionInjected } from './AccountSection.tsx'
 import { ManturAccountStore } from './store.ts'
 import { NativeAccountClient } from './native-account.ts'
-import { NativeAccountSection, type NativeAccountInjected } from './NativeAccountSurfaces.tsx'
+import { NativeAccountOnboarding, NativeAccountSection, type NativeAccountInjected } from './NativeAccountSurfaces.tsx'
 import { NativeAccountDialog, type NativeAccountDialogInjected } from './NativeAccountDialog.tsx'
 import { createNativeAccountDialogStore, NativeAccountDialogController, type NativeAccountDialogOutcome } from './native-dialog.ts'
 import { en, zh, type ManturAccountKey } from './locales.ts'
@@ -43,7 +43,7 @@ export const NS = 'settings.manturAccount'
 /** Services required by the account surfaces. */
 export const inject = ['slots', 'locale', 'remote']
 
-/** Register optional account Settings and dialogs without blocking session creation on account state. */
+/** Register native startup sign-in and account Settings using the shared identity observer. */
 export async function apply(ctx: Context): Promise<void> {
   const disposeRemote = await ctx.remote.$mount(manturAccountRemote)
   ctx.effect(() => disposeRemote, 'ui-mantur-account: Remote contribution')
@@ -72,6 +72,9 @@ export async function apply(ctx: Context): Promise<void> {
           dateStyle: 'medium', timeStyle: 'short',
         }).format(time),
       })
+      scope.slots.inject('shell.overlay', () => scope.slots.register({
+        name: 'shell.overlay', id: 'mantur-account-startup', order: -200, locale: NS, inject: injected,
+      }, NativeAccountOnboarding))
       scope.slots.inject('settings.section', () => scope.slots.register({
         name: 'settings.section', id: 'mantur-account', order: 5,
         label: () => t('nav'), locale: NS, inject: injected,

@@ -225,7 +225,7 @@ describe('MenuView', () => {
   it('caps the list height at the design maximum when the composer sits low enough', () => {
     vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({ bottom: 800 } as DOMRect)
     mount(openState())
-    expect(menuShell().style.maxHeight).toBe('320px')
+    expect(menuShell().style.maxHeight).toBe('440px')
   })
 
   it('clamps the list height to the space above the composer minus the safe margin', () => {
@@ -238,7 +238,7 @@ describe('MenuView', () => {
     const rect = vi.spyOn(Element.prototype, 'getBoundingClientRect')
     rect.mockReturnValue({ bottom: 800 } as DOMRect)
     mount(openState())
-    expect(menuShell().style.maxHeight).toBe('320px')
+    expect(menuShell().style.maxHeight).toBe('440px')
     rect.mockReturnValue({ bottom: 100 } as DOMRect)
     act(() => { window.dispatchEvent(new Event('resize')) })
     expect(menuShell().style.maxHeight).toBe('88px')

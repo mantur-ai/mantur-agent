@@ -3052,6 +3052,9 @@ importers:
       clsx:
         specifier: ^2.0.0
         version: 2.1.1
+      entities:
+        specifier: ^7.0.1
+        version: 7.0.1
     devDependencies:
       '@deepseek-ai/cordis':
         specifier: workspace:^

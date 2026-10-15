@@ -110,7 +110,9 @@ function fuzzyCandidates(candidates: readonly InputTriggerCandidate[], rawQuery:
   if (query === '') return candidates
   const ranked: RankedCandidate[] = []
   candidates.forEach((candidate, index) => {
-    const name = candidate.name.toLowerCase()
+    const display = candidate.name.toLowerCase()
+    const canonical = (candidate.value ?? candidate.name).toLowerCase()
+    const name = fuzzyScore(display, query) === undefined ? canonical : display
     const score = fuzzyScore(name, query)
     if (score !== undefined) ranked.push({ candidate, index, prefix: name.startsWith(query), score })
   })
@@ -263,14 +265,20 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
       rows.push({ name: contribution.name, description: contribution.description })
     }
     return fuzzyCandidates(
-      rows.filter(c => req.position === 'leading' || c.hint === undefined),
+      rows.filter(c => req.position === 'leading' || c.hint === undefined).map((candidate) => {
+        const name = candidate.name
+        if (name !== 'compact' && name !== 'feedback' && name !== 'goal'
+          && name !== 'permission' && name !== 'plan' && name !== 'model') return candidate
+        return { ...candidate, value: name, name: this.t(`command.${name}.name`),
+          description: this.t(`command.${name}.description`) }
+      }),
       req.query,
     )
   }
 
   /** Decision table, menu column: contribution/decorated-host → popup; host input → claim; host bare → detached execute. */
   private dispatch(pick: InputTriggerPick): PickOutcome {
-    const name = pick.candidate.name
+    const name = pick.candidate.value ?? pick.candidate.name
     const contribution = this.live.contributions.get(name)
     if (contribution !== undefined && contribution.available(pick.session)) {
       this.openPopup(name, contribution.ui, pick.session, { via: 'menu', span: pick.span })

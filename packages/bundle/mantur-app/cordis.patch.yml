@@ -33,6 +33,12 @@
   config:
     newSessionWorkspace: explicit
 
+# Global user skills remain discoverable before a conversation preset is mounted.
+- id: skill-filesystem
+  disabled: false
+  config:
+    providerName: mantur-global-skills
+
 - id: command-scopes
   config:
     identity: !!js >-

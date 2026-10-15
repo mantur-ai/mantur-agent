@@ -7,6 +7,8 @@ kind: "package-reference"
 
 [English](README.md) | 中文
 
+菜单用分组标题和分隔线区分指令与技能，高度上限为 440 像素，并受输入框上方可用空间限制。
+
 ## 概述
 
 本包为 Web GUI 提供输入触发流水线：检测光标处键入的 `/` 与 `@`，显示分组候选菜单，并把 pick 路由到已注册 source。source 经 `ctx.inputTriggers` 注册——`/` 命令 source（ui-commands）、`@` 文件与会话引用 source（ui-reference），以及任何业务包——对话接线层按会话驱动这条流水线。键入触发器会 seed 为该触发器注册的所有 source；chrome launcher 也可以在当前选区上只打开一个 source。流水线仅做呈现：pick 产出命令声明或引用插入，其后果属于消费它们的宿主与输入包。
@@ -88,3 +90,5 @@ kind: "package-reference"
 </details>
 
 **运行时不变式：** 不发布伴生入口。trigger pipeline 是浏览器侧纯逻辑加一个 registry，HMR 测试覆盖释放；它不发出 Cordis 事件，也不持有跨插件可变状态。
+
+输入框的指令按钮在指令下方包含技能组。`toggleSource` 接受显式指定的额外分组，保留注册顺序及原有引用选择行为。这里修改 `ui-conversation` 的按钮接线，是因为原先的单来源调用排除了已安装技能；入口回归验证从组合菜单中选择技能。

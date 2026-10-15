@@ -12,11 +12,14 @@ import type {
   ManturMarketplaceCatalog, ManturMarketplaceInstallResult, ManturMarketplaceSkill,
   ManturMarketplaceRecipe, ManturMarketplaceRecipeCatalog, ManturMarketplaceRecipeDetail,
   ManturMarketplaceRecipeQuery, ManturMarketplaceSkillDetail,
-  ManturBundledSkill,
+  ManturBundledSkill, ManturInstalledSkill,
 } from './types.ts'
 import { installSkill, type InstallerConfig } from './installer.ts'
 import { loadBundledSkill, readBundledCatalog } from './bundled-catalog.ts'
 import { bundledSkillReference, parseBundledSkillReference } from './bundled-manifest.ts'
+import { updateBundledSkills } from './bundled-updates.ts'
+import { SkillPreferences } from './skill-preferences.ts'
+import type {} from '@deepseek-ai/dsh-skill'
 import { registerBundledInvocations } from './bundled-invocation.ts'
 
 export type * from './types.ts'
@@ -27,7 +30,7 @@ export interface Config {
   readonly bundledSkillDir?: string
   /** Harness home containing the live user Skill directory. */
   readonly dshHome?: string
-  /** Maximum JSON bytes accepted from one ManturHub metadata response. */
+  /** Maximum JSON bytes accepted per response and retained across Skill catalog pages. */
   readonly maxMetadataBytes?: number
   /** Maximum compressed bytes accepted for one Skill bundle. */
   readonly maxBundleBytes?: number
@@ -35,7 +38,7 @@ export interface Config {
   readonly maxFiles?: number
   /** Maximum total uncompressed bytes accepted from one Skill archive. */
   readonly maxUnpackedBytes?: number
-  /** Timeout for catalog, detail, and authenticated download requests. */
+  /** Timeout for catalog, detail, and public download requests. */
   readonly metadataTimeoutMs?: number
   /** Timeout for an approved off-origin package download. */
   readonly downloadTimeoutMs?: number
@@ -57,61 +60,50 @@ const recipeSlugPattern = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/
 const recipePageSize = 15
 
 const skillSchema = z.object({
-  slug: z.string().regex(slugPattern),
+  code: z.string().regex(slugPattern),
   name: z.string().min(1),
   description: z.string().min(1),
   category: z.string().min(1),
-  version: z.string().min(1),
-  triggers: z.array(z.string()).default([]),
-  uses_operators: z.array(z.string()).default([]),
-  intro_md: z.string().optional().nullable(),
-  assets: z.object({
-    logo_url: z.url().optional().nullable(),
-  }).optional().nullable(),
-  kind: z.enum(['skill', 'suite']).default('skill'),
+  skillVersion: z.string().min(1),
+  triggers: z.array(z.string()),
+  coverUrl: z.url().optional().nullable(),
 })
-
-const skillListSchema = z.array(skillSchema)
-const catalogSchema = z.union([skillListSchema, z.object({ skills: skillListSchema })])
-  .transform(value => Array.isArray(value) ? value : value.skills)
-const detailSchema = z.union([skillSchema, z.object({ skill: skillSchema })])
-  .transform(value => 'skill' in value ? value.skill : value)
+const detailSchema = skillSchema.extend({
+  dependencies: z.array(z.string()),
+  readme: z.string().optional().nullable(),
+})
+const catalogSchema = z.object({
+  records: z.array(skillSchema),
+  total: z.number().int().nonnegative(),
+  pageNum: z.number().int().positive(),
+  pages: z.number().int().nonnegative(),
+})
+const gatewaySchema = z.object({ code: z.literal(0), success: z.literal(true).optional(), data: z.unknown() })
 
 const recipeSchema = z.object({
-  slug: z.string().regex(recipeSlugPattern),
-  title: z.string().min(1),
+  code: z.string().regex(recipeSlugPattern),
+  name: z.string().min(1),
   summary: z.string(),
-  cat: z.enum(['video', 'image', 'script']),
+  category: z.enum(['video', 'image', 'script']),
   tags: z.array(z.string()),
-  cover_url: z.string().min(1),
-  sample_url: z.string().min(1),
-  sample_kind: z.enum(['video', 'image']),
-  operator_id: z.string().min(1),
-  cost_estimate: z.string(),
-  price_dumplings: z.number().nonnegative(),
-  author: z.string(),
-  copies: z.number().int().nonnegative(),
-  published_at: z.iso.datetime({ offset: true }),
+  coverUrl: z.string().min(1),
+  sampleUrl: z.string().min(1),
+  sampleKind: z.enum(['VIDEO', 'IMAGE', 'video', 'image']).transform(value => value.toLowerCase() as 'video' | 'image'),
+  targetOperatorCode: z.string().min(1).nullable(),
+  publishedAt: z.iso.datetime({ offset: true, local: true }),
 })
-
 const recipeCatalogSchema = z.object({
-  recipes: z.array(recipeSchema),
+  records: z.array(recipeSchema),
   total: z.number().int().nonnegative(),
-  page: z.number().int().positive(),
-  page_size: z.number().int().positive(),
-  total_pages: z.number().int().nonnegative(),
-  available_tags: z.array(z.string()),
+  pageNum: z.number().int().positive(),
+  pageSize: z.number().int().positive(),
+  pages: z.number().int().nonnegative(),
 })
-
-const recipeDetailSchema = recipeSchema.extend({
-  sample_text: z.string(),
-  prompt_template: z.string(),
-  params_json: z.json(),
-  source_url: z.string(),
-  source_name: z.string(),
-  source_avatar_url: z.string(),
-  models: z.array(z.string()),
-  agent_payload: z.string().min(1),
+const recipeDetailSchema = recipeSchema.omit({ summary: true }).extend({
+  description: z.string(),
+  usage: z.string().nullable(),
+  inputSchema: z.record(z.string(), z.json()),
+  steps: z.array(z.object({ operatorCode: z.string().min(1), note: z.string().nullable() })),
 })
 
 declare module '@deepseek-ai/cordis' {
@@ -138,15 +130,15 @@ async function projectSkill(
   skillsRoot: string,
 ): Promise<ManturMarketplaceSkill> {
   return {
-    slug: value.slug,
+    slug: value.code,
     name: value.name,
     description: value.description,
     category: value.category,
-    version: value.version,
+    version: value.skillVersion,
     triggers: value.triggers,
-    ...(value.assets?.logo_url === undefined || value.assets.logo_url === null
-      ? {} : { logoUrl: value.assets.logo_url }),
-    installed: await isInstalled(skillsRoot, value.slug),
+    ...(value.coverUrl === undefined || value.coverUrl === null
+      ? {} : { logoUrl: value.coverUrl }),
+    installed: await isInstalled(skillsRoot, value.code),
   }
 }
 
@@ -162,20 +154,20 @@ function publicUrl(value: string, responseUrl: string): string {
 /** Project a published Recipe into browser-owned field names and absolute media URLs. */
 function projectRecipe(value: z.infer<typeof recipeSchema>, responseUrl: string): ManturMarketplaceRecipe {
   return {
-    slug: value.slug,
-    title: value.title,
+    slug: value.code,
+    title: value.name,
     summary: value.summary,
-    category: value.cat,
+    category: value.category,
     tags: value.tags,
-    coverUrl: publicUrl(value.cover_url, responseUrl),
-    sampleUrl: publicUrl(value.sample_url, responseUrl),
-    sampleKind: value.sample_kind,
-    operatorId: value.operator_id,
-    costEstimate: value.cost_estimate,
-    priceDumplings: value.price_dumplings,
-    author: value.author,
-    copies: value.copies,
-    publishedAt: value.published_at,
+    coverUrl: publicUrl(value.coverUrl, responseUrl),
+    sampleUrl: publicUrl(value.sampleUrl, responseUrl),
+    sampleKind: value.sampleKind,
+    operatorId: value.targetOperatorCode,
+    costEstimate: null,
+    priceDumplings: null,
+    author: null,
+    copies: null,
+    publishedAt: value.publishedAt,
   }
 }
 
@@ -194,7 +186,10 @@ export class ManturHubMarketplace extends TypertRemoteService {
     downloadTimeoutMs: s.number().step(1).min(1).default(defaultDownloadTimeoutMs),
   })
 
+  private readonly preferences: SkillPreferences
   private readonly config: ResolvedConfig
+  private readonly updateAbort = new AbortController()
+  private readonly bundledUpdatesRoot: string
   private installTail: Promise<void> = Promise.resolve()
 
   /**
@@ -215,7 +210,17 @@ export class ManturHubMarketplace extends TypertRemoteService {
       metadataTimeoutMs: config.metadataTimeoutMs ?? defaultMetadataTimeoutMs,
       downloadTimeoutMs: config.downloadTimeoutMs ?? defaultDownloadTimeoutMs,
     }
-    registerBundledInvocations(ctx, this.config.bundledSkillDir, this.config)
+    this.preferences = new SkillPreferences(join(dshHome, 'manturhub-marketplace', 'skill-preferences.json'))
+    ctx.on('skills/enabled', async (name, next) => {
+      const allowed = await next()
+      return allowed && await this.preferences.enabled(name)
+    })
+    this.bundledUpdatesRoot = join(dshHome, 'manturhub-marketplace', 'bundled-updates')
+    registerBundledInvocations(ctx, this.config.bundledSkillDir, this.config, this.bundledUpdatesRoot)
+    ctx.effect(() => async () => {
+      this.updateAbort.abort()
+      await this.installTail
+    }, 'manturhub-marketplace: skill updates')
   }
 
   /**
@@ -226,8 +231,29 @@ export class ManturHubMarketplace extends TypertRemoteService {
   @Remote
   async bundled(signal: AbortSignal): Promise<ManturBundledSkill[]> {
     const skills = await readBundledCatalog(this.config.bundledSkillDir, this.config, signal)
-    return skills.map(({ name, title, version, digest }) => ({ name, title, version, digest,
+    const enabled = await this.enabledBundled(skills)
+    return enabled.map(({ name, title, version, digest }) => ({ name, title, version, digest,
       reference: bundledSkillReference({ name, version, digest }), source: 'app-bundled' }))
+  }
+
+  /**
+   * Check and install published versions of the App's recommended Skills.
+   * @param signal - Cancellation supplied by the homepage.
+   * @returns Verified latest identities; failed checks reject without substituting older versions.
+   */
+  @Remote
+  async updateBundled(signal: AbortSignal): Promise<ManturBundledSkill[]> {
+    signal = AbortSignal.any([signal, this.updateAbort.signal])
+    const operation = this.installTail.then(async () => {
+      signal.throwIfAborted()
+      const seeds = await readBundledCatalog(this.config.bundledSkillDir, this.config, signal)
+      const skills = await updateBundledSkills(this.ctx, seeds, this.bundledUpdatesRoot, this.config, signal)
+      const enabled = await this.enabledBundled(skills)
+      return enabled.map(({ name, title, version, digest }) => ({ name, title, version, digest,
+        reference: bundledSkillReference({ name, version, digest }), source: 'app-bundled' as const }))
+    })
+    this.installTail = operation.then(() => {}, () => {})
+    return await operation
   }
 
   /**
@@ -238,9 +264,61 @@ export class ManturHubMarketplace extends TypertRemoteService {
    */
   @Remote
   async resolveBundled(reference: string, signal: AbortSignal): Promise<ManturBundledSkill> {
-    const loaded = await loadBundledSkill(this.config.bundledSkillDir, parseBundledSkillReference(reference), this.config, signal)
+    const loaded = await loadBundledSkill(
+      this.config.bundledSkillDir, parseBundledSkillReference(reference), this.config, signal, this.bundledUpdatesRoot,
+    )
     const { name, title, version, digest } = loaded.identity
+    if (!await this.preferences.enabled(name)) throw new RemoteError('gateway/bad-request', 'Skill is disabled', {})
     return { name, title, version, digest, reference: bundledSkillReference(loaded.identity), source: 'app-bundled' }
+  }
+
+  private async enabledBundled<T extends { name: string }>(skills: T[]): Promise<T[]> {
+    const enabled = await Promise.all(skills.map(skill => this.preferences.enabled(skill.name)))
+    return skills.filter((_, index) => enabled[index])
+  }
+
+  /**
+   * List locally discovered and App-bundled skills, including disabled entries.
+   * @returns Local identities and switches without requiring the marketplace network.
+   */
+  @Remote
+  async installedSkills(): Promise<ManturInstalledSkill[]> {
+    const registry = this.ctx.get('skills')
+    if (registry === undefined) throw new Error('Skill registry unavailable')
+    const skills = await registry.list()
+    const entries = new Map<string, ManturInstalledSkill>()
+    for (const skill of skills) entries.set(skill.name, {
+      name: skill.name, title: skill.title ?? skill.name, description: skill.description,
+      source: skill.source === 'bundled' ? 'bundled' : 'local', enabled: await this.preferences.enabled(skill.name),
+    })
+    if (this.config.bundledSkillDir !== undefined) {
+      const bundled = await readBundledCatalog(this.config.bundledSkillDir, this.config)
+      for (const skill of bundled) {
+        if (entries.has(skill.name)) continue
+        entries.set(skill.name, { name: skill.name, title: skill.title, description: '',
+          source: 'bundled', enabled: await this.preferences.enabled(skill.name) })
+      }
+    }
+    return [...entries.values()].sort((a, b) => a.title.localeCompare(b.title))
+  }
+
+  /**
+   * Persist an installed skill's switch for this client, then invalidate discovery.
+   * @param name - Installed skill identifier; applies to every version of this name.
+   * @param enabled - Whether future references and body loads are permitted.
+   */
+  @Remote
+  async setSkillEnabled(name: string, enabled: boolean): Promise<void> {
+    if (!slugPattern.test(name)) throw new RemoteError('gateway/bad-request', 'Invalid skill name', {})
+    const operation = this.installTail.then(async () => {
+      if (!(await this.installedSkills()).some(skill => skill.name === name)) {
+        throw new RemoteError('gateway/bad-request', 'Skill is not installed', {})
+      }
+      await this.preferences.set(name, enabled)
+      this.ctx.emit('skills/change')
+    })
+    this.installTail = operation.then(() => {}, () => {})
+    await operation
   }
 
   /**
@@ -250,18 +328,34 @@ export class ManturHubMarketplace extends TypertRemoteService {
   @Remote
   async list(): Promise<ManturMarketplaceCatalog> {
     try {
-      const response = await this.ctx.manturAccount.request('/api/v1/skills', {
-        authenticated: false,
-        headers: { 'X-ManturHub-Client': 'mantur-agent' },
-        signal: AbortSignal.timeout(this.config.metadataTimeoutMs),
-      })
-      if (response === undefined || !response.ok) {
-        throw new Error(`ManturHub catalog request failed with HTTP ${response?.status ?? 'unknown'}`)
+      const parsed: z.infer<typeof skillSchema>[] = []
+      const signal = AbortSignal.timeout(this.config.metadataTimeoutMs)
+      let pages = 1
+      let total = 0
+      let remainingBytes = this.config.maxMetadataBytes
+      for (let pageNum = 1; pageNum <= pages; pageNum += 1) {
+        const response = await this.ctx.manturAccount.request(`/api/public/agent/v1/skills?pageNum=${pageNum}&pageSize=100`, {
+          authenticated: false,
+          headers: { 'X-ManturHub-Client': 'mantur-agent' },
+          signal,
+        })
+        if (response === undefined || !response.ok) {
+          throw new Error(`ManturHub catalog request failed with HTTP ${response?.status ?? 'unknown'}`)
+        }
+        const json = await readManturHubJson(response, remainingBytes, 'metadata')
+        remainingBytes -= Buffer.byteLength(JSON.stringify(json))
+        const page = catalogSchema.parse(gatewaySchema.parse(json).data)
+        if (page.pageNum !== pageNum || (pageNum > 1 && (page.pages !== pages || page.total !== total))) {
+          throw new Error('ManturHub Skill pagination changed during loading')
+        }
+        if (pageNum === 1) { pages = page.pages; total = page.total }
+        if (pages > total || (pages > 0 && page.records.length === 0)) throw new Error('Invalid ManturHub Skill pagination')
+        parsed.push(...page.records)
       }
-      const parsed = catalogSchema.parse(await readManturHubJson(response, this.config.maxMetadataBytes, 'metadata'))
-      const skills = await Promise.all(parsed
-        .filter(skill => skill.kind === 'skill')
-        .map(skill => projectSkill(skill, this.config.skillsRoot)))
+      if (parsed.length !== total || new Set(parsed.map(skill => skill.code)).size !== total) {
+        throw new Error('ManturHub Skill catalog is incomplete or contains duplicate codes')
+      }
+      const skills = await Promise.all(parsed.map(skill => projectSkill(skill, this.config.skillsRoot)))
       const account = await this.ctx.manturAccount.status()
       return {
         skills,
@@ -285,7 +379,7 @@ export class ManturHubMarketplace extends TypertRemoteService {
       throw new RemoteError('gateway/bad-request', 'invalid ManturHub Skill slug', {})
     }
     try {
-      const response = await this.ctx.manturAccount.request(`/api/v1/skills/${encodeURIComponent(slug)}`, {
+      const response = await this.ctx.manturAccount.request(`/api/public/agent/v1/skills/${encodeURIComponent(slug)}`, {
         authenticated: false,
         headers: { 'X-ManturHub-Client': 'mantur-agent' },
         signal: AbortSignal.timeout(this.config.metadataTimeoutMs),
@@ -293,12 +387,12 @@ export class ManturHubMarketplace extends TypertRemoteService {
       if (response === undefined || !response.ok) {
         throw new Error(`ManturHub Skill request failed with HTTP ${response?.status ?? 'unknown'}`)
       }
-      const parsed = detailSchema.parse(await readManturHubJson(response, this.config.maxMetadataBytes, 'metadata'))
-      if (parsed.slug !== slug) throw new Error('ManturHub returned a different Skill slug')
+      const parsed = detailSchema.parse(gatewaySchema.parse(await readManturHubJson(response, this.config.maxMetadataBytes, 'metadata')).data)
+      if (parsed.code !== slug) throw new Error('ManturHub returned a different Skill slug')
       return {
         ...await projectSkill(parsed, this.config.skillsRoot),
-        usesOperators: parsed.uses_operators,
-        ...(parsed.intro_md === undefined || parsed.intro_md === null ? {} : { introduction: parsed.intro_md }),
+        usesOperators: parsed.dependencies,
+        ...(parsed.readme === undefined || parsed.readme === null ? {} : { introduction: parsed.readme }),
       }
     } catch (error) {
       if (error instanceof RemoteError) throw error
@@ -319,12 +413,12 @@ export class ManturHubMarketplace extends TypertRemoteService {
       || (query.query !== undefined && query.query.trim() === '')) {
       throw new RemoteError('gateway/bad-request', 'invalid ManturHub Recipe query', {})
     }
-    const params = new URLSearchParams({ page: String(page), pageSize: String(recipePageSize), compact: 'true' })
-    if (query.category !== undefined) params.set('cat', query.category)
+    const params = new URLSearchParams({ pageNum: String(page), pageSize: String(recipePageSize) })
+    if (query.category !== undefined) params.set('category', query.category)
     if (query.tag !== undefined) params.set('tag', query.tag.trim())
-    if (query.query !== undefined) params.set('q', query.query.trim())
+    if (query.query !== undefined) params.set('keyword', query.query.trim())
     try {
-      const response = await this.ctx.manturAccount.request(`/api/v1/recipes?${params.toString()}`, {
+      const response = await this.ctx.manturAccount.request(`/api/public/agent/v1/recipes?${params.toString()}`, {
         authenticated: false,
         headers: { 'X-ManturHub-Client': 'mantur-agent' },
         signal: AbortSignal.timeout(this.config.metadataTimeoutMs),
@@ -332,14 +426,14 @@ export class ManturHubMarketplace extends TypertRemoteService {
       if (response === undefined || !response.ok) {
         throw new Error(`ManturHub Recipe catalog request failed with HTTP ${response?.status ?? 'unknown'}`)
       }
-      const parsed = recipeCatalogSchema.parse(await readManturHubJson(response, this.config.maxMetadataBytes, 'metadata'))
+      const parsed = recipeCatalogSchema.parse(gatewaySchema.parse(await readManturHubJson(response, this.config.maxMetadataBytes, 'metadata')).data)
       return {
-        recipes: parsed.recipes.map(recipe => projectRecipe(recipe, response.url)),
+        recipes: parsed.records.map(recipe => projectRecipe(recipe, response.url)),
         total: parsed.total,
-        page: parsed.page,
-        pageSize: parsed.page_size,
-        totalPages: parsed.total_pages,
-        availableTags: parsed.available_tags,
+        page: parsed.pageNum,
+        pageSize: parsed.pageSize,
+        totalPages: parsed.pages,
+        availableTags: [...new Set(parsed.records.flatMap(recipe => recipe.tags))],
       }
     } catch (error) {
       if (error instanceof RemoteError) throw error
@@ -358,7 +452,7 @@ export class ManturHubMarketplace extends TypertRemoteService {
       throw new RemoteError('gateway/bad-request', 'invalid ManturHub Recipe slug', {})
     }
     try {
-      const response = await this.ctx.manturAccount.request(`/api/v1/recipes/${encodeURIComponent(slug)}`, {
+      const response = await this.ctx.manturAccount.request(`/api/public/agent/v1/recipes/${encodeURIComponent(slug)}`, {
         authenticated: false,
         headers: { 'X-ManturHub-Client': 'mantur-agent' },
         signal: AbortSignal.timeout(this.config.metadataTimeoutMs),
@@ -366,20 +460,17 @@ export class ManturHubMarketplace extends TypertRemoteService {
       if (response === undefined || !response.ok) {
         throw new Error(`ManturHub Recipe request failed with HTTP ${response?.status ?? 'unknown'}`)
       }
-      const parsed = recipeDetailSchema.parse(await readManturHubJson(response, this.config.maxMetadataBytes, 'metadata'))
-      if (parsed.slug !== slug) throw new Error('ManturHub returned a different Recipe slug')
+      const parsed = recipeDetailSchema.parse(gatewaySchema.parse(await readManturHubJson(response, this.config.maxMetadataBytes, 'metadata')).data)
+      if (parsed.code !== slug) throw new Error('ManturHub returned a different Recipe slug')
       return {
-        ...projectRecipe(parsed, response.url),
-        sampleText: parsed.sample_text,
-        promptTemplate: parsed.prompt_template,
-        parameters: parsed.params_json,
-        ...(parsed.source_url === '' ? {} : { sourceUrl: publicUrl(parsed.source_url, response.url) }),
-        ...(parsed.source_name === '' ? {} : { sourceName: parsed.source_name }),
-        ...(parsed.source_avatar_url === ''
-          ? {}
-          : { sourceAvatarUrl: publicUrl(parsed.source_avatar_url, response.url) }),
-        models: parsed.models,
-        agentPayload: parsed.agent_payload,
+        ...projectRecipe({ ...parsed, summary: parsed.description }, response.url),
+        sampleText: '',
+        promptTemplate: '',
+        parameters: null,
+        inputSchema: parsed.inputSchema,
+        steps: parsed.steps,
+        models: [],
+        agentPayload: parsed.usage ?? '',
       }
     } catch (error) {
       if (error instanceof RemoteError) throw error

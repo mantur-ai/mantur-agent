@@ -109,10 +109,11 @@ export async function apply(ctx: Context): Promise<void> {
     }, ProjectPathSettings))
     const controller = new ManturMarketplaceStore(scope)
     const bundled = new BundledSkills(async (signal) => {
-      const result = await scope.remote.manturMarketplace.bundled(signal)
+      const result = await scope.remote.manturMarketplace.updateBundled(signal)
       if (!result.ok) throw new Error(result.error.message)
       return result.value
     })
+    scope.remote.$on('skills/change', () => { void bundled.load() })
     scope.effect(() => () => { bundled.dispose() }, 'ui-mantur-navigation: bundled catalog')
     scope.effect(() => scope.inputTriggers.registerSource({
       trigger: '/', name: 'mantur-bundled-skill',

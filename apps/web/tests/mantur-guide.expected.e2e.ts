@@ -22,14 +22,30 @@ const skill = {
   category: '剧本创作', version: '1.0.0', triggers: ['创作短剧剧本'], uses_operators: [], kind: 'skill', assets: null,
 }
 
-it('keeps offline homepage guidance inside the real conversation column with the editing workbench open', async () => {
+async function releaseServer(onRequest: () => void = () => {}) {
+  const source = JSON.parse(await readFile(bundledSource, 'utf8')) as {
+    skills: { name: string; title: string; version: string; archive: string; archiveSha256: string }[]
+  }
+  const archives = new Map(await Promise.all(source.skills.map(async skill =>
+    [skill.name, await readFile(fileURLToPath(new URL(`../../desktop/mantur-skills/${skill.archive}`, import.meta.url)))] as const)))
+  return createServer((request, response) => {
+    onRequest()
+    const skill = source.skills.find(item => request.url === `/api/public/agent/v1/skills/${item.name}`
+      || request.url === `/api/public/agent/v1/skills/${item.name}/bundle`)
+    if (skill === undefined) { response.writeHead(404); response.end(); return }
+    if (request.url?.endsWith('/bundle')) {
+      response.writeHead(200, { 'content-type': 'application/zip' }); response.end(archives.get(skill.name)); return
+    }
+    response.writeHead(200, { 'content-type': 'application/json' })
+    response.end(JSON.stringify({ code: 0, data: { code: skill.name, name: skill.title,
+      skillVersion: skill.version, bundleDigest: skill.archiveSha256 } }))
+  })
+}
+
+it('updates homepage Skills and keeps guidance inside the real conversation column with the editing workbench open', async () => {
   const root = await mkdtemp(join(tmpdir(), 'mantur-guide-columns-'))
   let requests = 0
-  const server = createServer((_request, response) => {
-    requests++
-    response.writeHead(503)
-    response.end('Online marketplace unavailable in this test')
-  })
+  const server = await releaseServer(() => { requests++ })
   await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve) })
   let scaffold: Awaited<ReturnType<typeof launchWebScaffold>> | undefined
   let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
@@ -120,7 +136,7 @@ it('keeps offline homepage guidance inside the real conversation column with the
     await productionSkill.click()
     expect(await editor.innerText()).toContain('漫剧生产')
     expect(await page.locator('[data-composer-chip="mantur-bundled-skill"]').count()).toBe(2)
-    expect(requests).toBe(0)
+    expect(requests).toBeGreaterThan(0)
     expect(console.pageErrors).toEqual([])
   } finally {
     await browser?.close()
@@ -149,13 +165,7 @@ it('does not display Mantur artwork or mode controls without the Mantur plugin',
 })
 
 it('keeps guidance readable at the desktop minimum without moving the composer or covering controls', async () => {
-  const skills = [skill, ...[
-    'mantur-drama-visual-studio', 'mantur-copyhit', 'mantur-smartclip',
-  ].map(slug => ({ ...skill, slug }))]
-  const server = createServer((_request, response) => {
-    response.writeHead(200, { 'content-type': 'application/json' })
-    response.end(JSON.stringify({ skills }))
-  })
+  const server = await releaseServer()
   await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve) })
   let scaffold: Awaited<ReturnType<typeof launchWebScaffold>> | undefined
   let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
@@ -285,10 +295,7 @@ it('keeps guidance readable at the desktop minimum without moving the composer o
 })
 
 it('preserves a live draft, attachments and controls with desktop checkpoints while changing modes and adding a Skill without sending', async () => {
-  const server = createServer((request, response) => {
-    response.writeHead(200, { 'content-type': 'application/json' })
-    response.end(JSON.stringify(request.url === '/api/v1/skills' ? { skills: [skill] } : { skill }))
-  })
+  const server = await releaseServer()
   await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve) })
   let scaffold: Awaited<ReturnType<typeof launchWebScaffold>> | undefined
   let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
@@ -379,6 +386,7 @@ it('preserves a live draft, attachments and controls with desktop checkpoints wh
       }
       return { shortcuts: rect('[aria-label="推荐技能"]'), card: rect('[data-composer-card]') }
     })
+    await page.getByRole('button', { name: '剧本改编', exact: true }).waitFor()
     const openPositions = await composerPositions()
     await mkdir(images, { recursive: true })
     await page.screenshot({ path: join(images, 'desktop.png') })

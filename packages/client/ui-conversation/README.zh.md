@@ -136,3 +136,5 @@ selector 必须是 owner currency 的纯函数。非 null 返回值作为 `match
 </details>
 
 **运行时不变式：** 不发布伴生入口。Conversation Definition、target builder 与 View 已由其所属注册表和 Slot ledger 校验。
+
+输入框的指令按钮在指令下方包含技能组。`toggleSource` 接受显式指定的额外分组，保留注册顺序及原有引用选择行为。这里修改 `ui-conversation` 的按钮接线，是因为原先的单来源调用排除了已安装技能；入口回归验证从组合菜单中选择技能。

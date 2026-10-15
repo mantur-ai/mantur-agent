@@ -7,6 +7,8 @@ kind: "package-reference"
 
 English | [中文](README.zh.md)
 
+The `skills/enabled` waterfall can deny new invocations by name. Denied summaries retain their identity with both invocation flags false; `get()` returns no body and rechecks after provider loading. Policy owners emit `skills/change` after persisting a change. This does not remove instructions already recorded in conversation history.
+
 ## Summary
 
 Agents and users can access reusable, task-specific instructions through one lookup no matter where the instructions come from: any provider can contribute skills from local directories, embedded plugin data, or a remote service, and every consumer receives one merged catalog with the winning skill for each name and can load any skill's full instructions on demand. Mount this plugin when skills should be loadable from more than one source or from a non-filesystem source, and skip it when a composition loads no skills. It ships no skill content of its own — pair it with at least one provider (the shipped `dsh-skill-filesystem`), and with `dsh-tool-skill` when agents should load skills.

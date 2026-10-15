@@ -220,7 +220,7 @@ describe('Mantur marketplace navigation', () => {
       sourceName: 'ManturHub',
       sourceAvatarUrl: 'https://hub.mantur.cn/assets/avatar.png',
       models: ['seedance-1.0-pro'],
-      agentPayload: '请先获取最新配方，再替换占位符。',
+      inputSchema: {}, steps: [], agentPayload: '请先获取最新配方，再替换占位符。',
     }
     const props = marketplaceProps(emptyReady, {
       phase: 'ready',
@@ -269,7 +269,7 @@ describe('Mantur marketplace navigation', () => {
       sourceName: 'ManturHub',
       sourceAvatarUrl: 'https://hub.mantur.cn/assets/avatar.png',
       models: [],
-      agentPayload: '请按配方执行。',
+      inputSchema: {}, steps: [], agentPayload: '请按配方执行。',
     }
     const catalog = { recipes: [recipe], total: 1, page: 1, pageSize: 15, totalPages: 1, availableTags: [] }
     const props = marketplaceProps(emptyReady, {
@@ -395,6 +395,7 @@ describe('Mantur marketplace navigation', () => {
     const listed = {
       slug: 'story-director',
       name: '故事导演',
+      logoUrl: 'https://example.com/skill-logo.png',
       description: '把故事变成分镜',
       category: '剧本创作',
       version: '1.2.3',
@@ -416,6 +417,7 @@ describe('Mantur marketplace navigation', () => {
         t={t}
       />,
     )
+    expect(view.container.querySelector('img')?.getAttribute('src')).toBe(listed.logoUrl)
     fireEvent.click(screen.getByRole('button', { name: '安装技能' }))
     expect(signedInProps.controllerMocks.install).toHaveBeenCalledWith('story-director')
 
@@ -605,7 +607,7 @@ describe('Mantur marketplace navigation', () => {
 
     const detailProps = marketplaceProps({
       ...base,
-      detail: { ...story, usesOperators: ['op.text'], introduction: '使用说明' },
+      detail: { ...story, usesOperators: ['op.text'], introduction: '&lt;!-- MANTUR_AGENT_PLATFORM_ACCESS_START --&gt;\n内部接入密钥说明\n&lt;!-- MANTUR_AGENT_PLATFORM_ACCESS_END --&gt;\n## 使用说明\n\n**准备剧本**\n\n&gt; 确认后开始\n\n`&lt;input&gt;`\n\n&lt;script&gt;alert(1)&lt;/script&gt;' },
       installError: 'local-conflict',
     })
     view.rerender(
@@ -613,7 +615,11 @@ describe('Mantur marketplace navigation', () => {
         {...globalProps} {...detailProps} activePage={MANTUR_MARKET_PAGES.skills} closePage={vi.fn()} t={t}
       />,
     )
-    expect(screen.getByText('使用说明')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '使用说明' })).toBeTruthy()
+    expect(screen.getByText('准备剧本').tagName).toBe('STRONG')
+    expect(screen.getByText('<input>').tagName).toBe('CODE')
+    expect(screen.queryByText(/内部接入密钥说明/)).toBeNull()
+    expect(document.querySelector('[role=dialog] script')).toBeNull()
     expect(screen.getByText('版本 1.2.3')).toBeTruthy()
     expect(screen.getByText(/本地已有同名技能/)).toBeTruthy()
     const installButtons = screen.getAllByRole('button', { name: '安装技能' })
@@ -846,7 +852,7 @@ describe('Mantur marketplace navigation', () => {
       promptTemplate: '',
       parameters: { user_inputs: 42 },
       models: [],
-      agentPayload: '请按配方执行。',
+      inputSchema: {}, steps: [], agentPayload: '请按配方执行。',
     }
     const props = marketplaceProps(emptyReady, {
       phase: 'ready', catalog, query: {}, detail: imageDetail, launchError: 'no-workspace',
@@ -919,4 +925,41 @@ describe('Mantur marketplace navigation', () => {
     )
     expect(screen.getByText('["海边"]')).toBeTruthy()
   })
+})
+
+
+it('keeps gateway recipes previewable without inventing prices, counts or launch instructions', async () => {
+  const detail = { ...recipe, author: null, copies: null, costEstimate: null, priceDumplings: null,
+    operatorId: null, sampleText: '', promptTemplate: '', parameters: null, models: [], inputSchema: {}, steps: [], agentPayload: '' }
+  const props = marketplaceProps(emptyReady, { phase: 'ready', query: {}, detail,
+    catalog: { recipes: [detail], total: 1, page: 1, pageSize: 15, totalPages: 1, availableTags: [] } })
+  const view = render(<MarketplacePage {...globalProps} {...props}
+    activePage={MANTUR_MARKET_PAGES.recipes} closePage={vi.fn()} t={t} />)
+  const button = screen.getByRole('button', { name: '交给 Agent 复刻' })
+  expect(button.hasAttribute('disabled')).toBe(true)
+  fireEvent.click(button)
+  expect(props.controllerMocks.startRecipe).not.toHaveBeenCalled()
+  expect(view.container.querySelector('video')?.getAttribute('src')).toBe(recipe.sampleUrl)
+  await expect(view.container.textContent).toMatchFileSnapshot('./recipe-preview-only.expected.txt')
+})
+
+
+it('shows published input requirements and ordered steps without enabling a recipe lacking instructions', () => {
+  const detail = { ...recipe, sampleText: '', promptTemplate: '', parameters: null, models: [], agentPayload: '',
+    inputSchema: { type: 'object', required: ['prompt'], properties: {
+      prompt: { title: '画面', description: '描述视频画面', type: 'string' },
+      audio: { description: '是否生成音频', enum: [true, false], default: false },
+    } },
+    steps: [{ operatorCode: 'op.image.generate', note: '先生成参考图' }, { operatorCode: 'op.video.generate', note: null }],
+  }
+  render(<MarketplacePage {...globalProps} {...marketplaceProps(emptyReady, { phase: 'ready', query: {}, detail,
+    catalog: { recipes: [detail], total: 1, page: 1, pageSize: 15, totalPages: 1, availableTags: [] } })}
+  activePage={MANTUR_MARKET_PAGES.recipes} closePage={vi.fn()} t={t} />)
+  expect(screen.getByText('画面 · 必填')).toBeTruthy()
+  expect(screen.getByText('描述视频画面')).toBeTruthy()
+  expect(screen.getByText('默认值: false')).toBeTruthy()
+  expect(screen.getByText('可选值: [true,false]')).toBeTruthy()
+  expect(screen.getByRole('heading', { name: '制作步骤' })).toBeTruthy()
+  expect(screen.getByText('先生成参考图')).toBeTruthy()
+  expect(screen.getByRole('button', { name: '交给 Agent 复刻' }).hasAttribute('disabled')).toBe(true)
 })

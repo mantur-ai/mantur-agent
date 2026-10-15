@@ -59,6 +59,7 @@ export async function readBundledCatalog(
  * @param identity - name, version and digest captured when the user selected the Skill.
  * @param limits - configured manifest and resource limits.
  * @param signal - cancellation of the caller's read.
+ * @param updatesRoot - Optional immutable update store for exact non-packaged identities.
  * @returns verified instructions, identity and their resource directory.
  */
 export async function loadBundledSkill(
@@ -66,12 +67,23 @@ export async function loadBundledSkill(
   identity: Pick<BundledSkillManifest, 'name' | 'version' | 'digest'>,
   limits: BundledReadLimits,
   signal?: AbortSignal,
+  updatesRoot?: string,
 ): Promise<{ skill: ParsedSkill; identity: BundledSkillManifest; directory: string }> {
   if (root === undefined) throw new Error('App-bundled Skill directory is not configured')
   const catalog = await readBundledCatalog(root, limits, signal)
   const selected = catalog.find(skill =>
     skill.name === identity.name && skill.version === identity.version && skill.digest === identity.digest)
-  if (selected === undefined) throw new Error(`App-bundled Skill identity is unavailable: ${identity.name}@${identity.version}`)
+  if (selected === undefined) {
+    if (updatesRoot !== undefined) {
+      try {
+        return await loadBundledSkill(join(updatesRoot, `${identity.name}@${identity.version}`), identity, limits, signal)
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+        throw new Error(`App-bundled Skill identity is unavailable: ${identity.name}@${identity.version}`)
+      }
+    }
+    throw new Error(`App-bundled Skill identity is unavailable: ${identity.name}@${identity.version}`)
+  }
   const directory = join(root, bundledSkillDirectory(selected))
   const raw = await verifyBundledSkill(directory, selected, signal)
   const parsed = parseSkillText(raw, (message) => { throw new Error(`Invalid App-bundled Skill ${selected.name}: ${message}`) })

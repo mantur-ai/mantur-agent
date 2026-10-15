@@ -6,7 +6,7 @@
     - text: 返回对话
   - heading "技能广场" [level=1]
   - paragraph: 发现适合漫剧创作的技能，让重复步骤自动完成。
-  - text: 已安装 0 个
+  - button "已安装技能"
   - img
   - textbox:
     - /placeholder: 搜索技能名称、用途或触发词
@@ -27,7 +27,15 @@
     - img
   - paragraph: 把完整剧本整理成可执行的漫剧制作方案。
   - text: 漫剧创作 版本 1.2.3
-  - paragraph: 从剧本分析开始，自动组织角色、场景和分镜。
+  - heading "使用说明" [level=2]
+  - paragraph:
+    - text: 从剧本分析开始，自动组织
+    - strong: 角色、场景和分镜
+    - text: 。
+  - blockquote:
+    - paragraph: 确认后开始
+  - paragraph:
+    - code: <input>
   - button "登录后安装"
 
 ## Login gate
@@ -38,7 +46,15 @@
     - img
   - paragraph: 把完整剧本整理成可执行的漫剧制作方案。
   - text: 漫剧创作 版本 1.2.3
-  - paragraph: 从剧本分析开始，自动组织角色、场景和分镜。
+  - heading "使用说明" [level=2]
+  - paragraph:
+    - text: 从剧本分析开始，自动组织
+    - strong: 角色、场景和分镜
+    - text: 。
+  - blockquote:
+    - paragraph: 确认后开始
+  - paragraph:
+    - code: <input>
   - text: 在 ManturHub 登录页输入授权码
   - strong: MANTUR-1234
   - link "打开 ManturHub 登录页":
@@ -54,7 +70,15 @@
     - img
   - paragraph: 把完整剧本整理成可执行的漫剧制作方案。
   - text: 漫剧创作 版本 1.2.3
-  - paragraph: 从剧本分析开始，自动组织角色、场景和分镜。
+  - heading "使用说明" [level=2]
+  - paragraph:
+    - text: 从剧本分析开始，自动组织
+    - strong: 角色、场景和分镜
+    - text: 。
+  - blockquote:
+    - paragraph: 确认后开始
+  - paragraph:
+    - code: <input>
   - alert: 技能安装失败，原有文件没有被覆盖。请稍后重试。
   - button "安装技能"
 
@@ -77,8 +101,7 @@
   - article:
     - button "查看配方：宿命感双人电影海报"
     - button "宿命感双人电影海报"
-    - img
-    - text: 268 次复刻 约 0.08 元
+    - text: 运行前实时报价
     - button "复刻同款":
       - text: 复刻同款
       - img
@@ -94,22 +117,18 @@
     - text: 图片 电影感 双人海报
     - heading "宿命感双人电影海报" [level=1]
     - paragraph: 替换两位角色与片名，复刻具有电影质感的双人关系海报。
-    - text: 由 漫途创作实验室 发布 268 次复刻 约 0.08 元
+    - text: 运行前实时报价
     - button "交给 Agent 复刻"
-    - link "查看来源：ManturHub 精选":
-      - /url: {{manturHubUrl}}/recipes/rcp.image.cinematic-poster
-  - heading "成片效果" [level=2]
-  - paragraph: 低饱和电影光影，两位角色以近远景形成关系张力。
-  - heading "你可以替换" [level=2]
-  - term: 角色甲
-  - definition: 上传人物图
-  - term: 角色乙
-  - definition: 上传人物图
-  - term: 片名
-  - definition: 输入文字
-  - heading "提示词模板" [level=2]
-  - text: "以 {角色甲} 与 {角色乙} 为主角，片名为 {片名}。"
+  - heading "输入要求" [level=2]
+  - term: prompt · 必填
+  - definition:
+    - paragraph: 描述想要生成的画面
+  - heading "制作步骤" [level=2]
+  - list:
+    - listitem:
+      - paragraph: 先生成视频，再确认效果。
+      - text: op.video.generate
   - heading "模型与算子" [level=2]
-  - paragraph: Seedream 4.0 · mantur.image.generate
+  - paragraph: mantur.image.generate
   - heading "复刻说明" [level=2]
   - paragraph: 请用 ManturHub 复刻这份配方，并在运行前展示实时报价。

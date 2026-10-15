@@ -129,8 +129,8 @@ export interface InputTriggerController {
     signal: AbortSignal,
     envelope: { readonly images: number },
   ): Promise<PickOutcome>
-  /** @param source - source name. @param hit - synthetic trigger hit. */
-  toggleSource(source: string, hit: InputTriggerHit): void
+  /** @param source - source name. @param hit - synthetic trigger hit. @param include - Additional source groups. */
+  toggleSource(source: string, hit: InputTriggerHit, include?: readonly string[]): void
 }
 
 declare module '@deepseek-ai/cordis' {

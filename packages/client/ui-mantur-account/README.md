@@ -1,5 +1,5 @@
 ---
-description: "Optional Mantur account Settings and dialogs for maintainers composing the Mantur desktop client."
+description: "Mantur startup sign-in, account Settings and dialogs for maintainers composing the Mantur desktop client."
 kind: "package-reference"
 ---
 
@@ -11,7 +11,7 @@ Native login distinguishes a missing create endpoint from network and incompatib
 
 ## Summary
 
-This browser package adds optional Mantur account Settings and requested dialogs. It does not register a session onboarding step, so local session creation does not depend on account status. The Host's explicit identity mode selects desktop browser authorization or standalone device login. The desktop entry opens the system browser, where ordinary Mantur login and device consent take place. Cloud requests still require valid credentials.
+This browser package adds Mantur account Settings and requested dialogs. Native clients show a root login overlay until Main confirms authentication, including when restoring an existing conversation or a profile with a saved Skip choice. Standalone Web account Settings remain optional. The Host's explicit identity mode selects desktop browser authorization or standalone device login. The desktop entry opens the system browser, where ordinary Mantur login and device consent take place. Cloud requests still require valid credentials.
 
 The native preload publishes revisioned account display names, expiry and pending cleanup, never credentials, state-bearing URLs or authorization codes. One subscription serves Settings and requested dialogs. Main owns the callback, expiry and exact exchange recovery across renderer reloads. Older revisions and superseded action replies cannot replace the current account. Missing native capability reports an error without selecting standalone credentials.
 

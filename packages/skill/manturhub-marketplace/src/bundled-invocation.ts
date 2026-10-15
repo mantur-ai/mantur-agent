@@ -11,8 +11,9 @@ import { parseBundledSkillReference } from './bundled-manifest.ts'
  * @param ctx - lifecycle owner for the pre-step listener.
  * @param root - explicitly configured read-only application resource directory.
  * @param limits - configured manifest and resource limits.
+ * @param updatesRoot - Immutable online releases retained for existing references.
  */
-export function registerBundledInvocations(ctx: Context, root: string | undefined, limits: BundledReadLimits): void {
+export function registerBundledInvocations(ctx: Context, root: string | undefined, limits: BundledReadLimits, updatesRoot?: string): void {
   ctx.on('agent/pre-step', async ({ messages, signal }, next): Promise<PreStepDecision> => {
     const decision = await next()
     if (decision.kind === 'reject') return decision
@@ -28,8 +29,11 @@ export function registerBundledInvocations(ctx: Context, root: string | undefine
     }
     const injections = []
     for (const reference of references) {
-      const loaded = await loadBundledSkill(root, parseBundledSkillReference(reference), limits, signal)
+      const loaded = await loadBundledSkill(root, parseBundledSkillReference(reference), limits, signal, updatesRoot)
       if (!isUserInvocable(loaded.skill)) throw new Error(`App-bundled Skill is not user-invocable: ${loaded.skill.name}`)
+      if (!await ctx.waterfall('skills/enabled', loaded.skill.name, () => Promise.resolve(true))) {
+        throw new Error(`Skill is disabled: ${loaded.skill.name}`)
+      }
       signal.throwIfAborted()
       injections.push(createUserMessage({
         content: [{ type: 'text', text: renderSkillContent({ ...loaded.skill, provider: 'app-bundled',

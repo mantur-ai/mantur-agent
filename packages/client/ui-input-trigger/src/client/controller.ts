@@ -135,14 +135,15 @@ export class InputTriggerController {
   }
 
   /**
-   * Toggle a menu containing exactly one registered source. The supplied hit
+   * Toggle a menu containing the launcher source and explicitly included groups. The supplied hit
    * is a synthetic selection span rather than a typed trigger token, but
    * picks deliberately reuse the ordinary source callback and scoped input
    * mutation pipeline.
    * @param source - registered source name under `hit.trigger`.
    * @param hit - synthetic hit carrying position and pick-time draft CAS.
+   * @param include - Additional registered source names to display in roster order.
    */
-  toggleSource(source: string, hit: TriggerHit): void {
+  toggleSource(source: string, hit: TriggerHit, include: readonly string[] = []): void {
     if (this.disposed) return
     if (this.launcher.getSnapshot() === source && this.menu.getSnapshot().open) {
       this.dismiss()
@@ -153,13 +154,14 @@ export class InputTriggerController {
       this.dismiss()
       return
     }
+    const sources = this.deps.roster.sources(hit.trigger).filter(item => item === match || include.includes(item.name))
     this.stopFetch()
     this.hit = hit
     this.launcher.set(source)
-    this.menu.set(seedGroups(this.menu.getSnapshot(), [match]))
+    this.menu.set(seedGroups(this.menu.getSnapshot(), sources))
     this.reduce({ type: 'hit', hit })
-    this.refreshHeaders(hit, [match])
-    this.fetchCandidates(hit, [match])
+    this.refreshHeaders(hit, sources)
+    this.fetchCandidates(hit, sources)
   }
 
   /**

@@ -120,7 +120,7 @@ describe('Mantur creation guide', () => {
     const p = props(settings, { phase: 'failed' })
     const view = render(guide(p))
     fireEvent.click(screen.getByRole('button', { name: marketZh['skills.retry'] }))
-    expect(p.loadBundled).toHaveBeenCalledTimes(1)
+    expect(p.loadBundled).toHaveBeenCalledTimes(2)
     view.rerender(guide(props({ ...settings, mode: 'production' })))
     expect(screen.getByText(zh.empty)).toBeTruthy()
   })
@@ -250,6 +250,6 @@ it('scrolls the guide text with Home and End without hijacking other keys', () =
 it.each(['idle', 'loading'] as const)('shows %s bundled resources without inserting a shortcut', (phase) => {
   const p = { ...props(), useBundledSkills: (select: (value: unknown) => unknown) => select({ phase }) }
   render(guide(p))
-  expect(screen.getByRole('status').textContent).toBe(marketZh['skills.loading'])
+  expect(screen.getByRole('status').textContent).toBe(marketZh['skills.updating'])
   expect(p.appendReference).not.toHaveBeenCalled()
 })

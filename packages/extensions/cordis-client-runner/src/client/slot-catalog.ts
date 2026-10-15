@@ -2305,6 +2305,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     slotInject: '',
     declaredBy: 'an entry in \'root\' (client-ui-layout), so it exists while that entry is mounted',
     occupants: [
+      'client-ui-mantur-account NativeAccountOnboarding id \'mantur-account-startup\'',
       'client-ui-mantur-account NativeAccountDialog id \'mantur-account\'',
     ],
     replaceRisk: 'none',

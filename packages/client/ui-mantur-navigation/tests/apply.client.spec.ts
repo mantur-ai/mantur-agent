@@ -36,7 +36,7 @@ async function bench() {
   })
   const bundled = vi.fn().mockResolvedValue({ ok: true, value: [] })
   const remote = new TestRemote(ctx, {
-    manturMarketplace: { bundled, resolveBundled }, manturAccount: {},
+    manturMarketplace: { updateBundled: bundled, resolveBundled }, manturAccount: {},
     manturProjects: { settings: () => ({ ok: true, value: { source: 'unconfigured' } }) },
   })
   remote.$mount = () => Promise.resolve(() => Promise.resolve())

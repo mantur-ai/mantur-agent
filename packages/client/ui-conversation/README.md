@@ -136,3 +136,5 @@ None.
 </details>
 
 **Runtime invariant:** No companion is published. Conversation Definitions, target builders, and Views are already validated by their owning registries and the Slot ledger.
+
+The composer command launcher includes the skill source beneath commands. `toggleSource` accepts explicit additional groups, retaining their roster order and ordinary reference selection behavior. This changes `ui-conversation` launcher wiring because the previous single-source call excluded installed skills; the source-launcher regression verifies selecting a skill from the combined menu.

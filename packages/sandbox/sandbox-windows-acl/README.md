@@ -189,3 +189,5 @@ The warn-only posture for unusually wide directories and FAT-class volumes is do
 </details>
 
 **Runtime invariant:** No companion is published. This package exposes no independent event sequence or mutable data relation beyond the fail-closed contracts it enforces at each Win32 call boundary.
+
+The CLI runner prepares a hidden console before creating a restricted token when its GUI parent has no console. Existing consoles remain untouched. It restores inherited standard handles after allocation so redirected output reaches the Host; console preparation errors abort execution, and Windows releases the runner-owned console at process exit.

@@ -6,7 +6,7 @@ import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
 import { resolveSlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
 import { AccountSection } from '../src/client/AccountSection.tsx'
-import { NativeAccountSection, type NativeAccountInjected } from '../src/client/NativeAccountSurfaces.tsx'
+import { NativeAccountOnboarding, NativeAccountSection, type NativeAccountInjected } from '../src/client/NativeAccountSurfaces.tsx'
 import { apply, inject } from '../src/client/index.ts'
 import { createNativeAccountDialogStore } from '../src/client/native-dialog.ts'
 import type { NativeAccountDialogInjected } from '../src/client/NativeAccountDialog.tsx'
@@ -72,13 +72,13 @@ describe('ui-mantur-account apply', () => {
     appRoot.id = 'root'
     try {
       await fiber.await()
-      const entry = subject.slots.entries('shell.overlay')[0]!
+      const entry = subject.slots.entries('shell.overlay').find(entry => entry.options.id === 'mantur-account')!
       const view = createNativeAccountDialogStore().create()
       const props = (entry.inject as unknown as (actions: typeof view.actions) => NativeAccountDialogInjected)(view.actions)
       const settings = (subject.slots.entries('settings.section')[0]!.inject as unknown as () => NativeAccountInjected)()
       expect(props.hooks.nativeAccount).toBe(settings.hooks.nativeAccount)
       expect(subject.slots.entries('sidebar.footer.action')).toHaveLength(1)
-      expect(subject.slots.entries('settings.onboarding')).toEqual([])
+      expect(subject.slots.entries('shell.overlay').find(entry => entry.options.id === 'mantur-account-startup')?.component).toBe(NativeAccountOnboarding)
       document.body.append(modal)
       expect(() => subject.ctx.bail('mantur/native-account-open')).toThrow('unavailable')
       modal.remove()
@@ -142,7 +142,7 @@ describe('ui-mantur-account apply', () => {
     try {
       await fiber.await()
       expect(subject.slots.entries('sidebar.footer.action')).toHaveLength(1)
-      expect(subject.slots.entries('settings.onboarding')).toEqual([])
+      expect(subject.slots.entries('shell.overlay').find(entry => entry.options.id === 'mantur-account-startup')?.component).toBe(NativeAccountOnboarding)
       expect(subject.slots.entries('settings.section')[0]!.component).toBe(NativeAccountSection)
       const props = (subject.slots.entries('settings.section')[0]!.inject as unknown as () => NativeAccountInjected)()
       expect(resolveSlotLabel(subject.slots.entries('settings.section')[0]!.options.label)).toBe('漫途账号')
@@ -161,7 +161,7 @@ describe('ui-mantur-account apply', () => {
     try {
       await fiber.await()
       expect(subject.slots.entries('sidebar.footer.action')).toHaveLength(1)
-      expect(subject.slots.entries('settings.onboarding')).toEqual([])
+      expect(subject.slots.entries('shell.overlay').find(entry => entry.options.id === 'mantur-account-startup')?.component).toBe(NativeAccountOnboarding)
       const props = (subject.slots.entries('settings.section')[0]!.inject as unknown as () => NativeAccountInjected)()
       expect(props.hooks.nativeAccount.getSnapshot().failure).toEqual({ kind: 'unavailable' })
     } finally { await fiber.dispose() }

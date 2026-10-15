@@ -1457,10 +1457,27 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'pinned identities and display titles; missing resources reject the request.',
       },
       {
+        signature: '@Remote async updateBundled(signal: AbortSignal): Promise<ManturBundledSkill[]>',
+        description: 'Check and install published versions of the App\'s recommended Skills.',
+        parameters: [{ name: 'signal', description: 'Cancellation supplied by the homepage.' }],
+        returns: 'Verified latest identities; failed checks reject without substituting older versions.',
+      },
+      {
         signature: '@Remote async resolveBundled(reference: string, signal: AbortSignal): Promise<ManturBundledSkill>',
         description: 'Verify that a draft still refers to the exact App resource the user selected.',
         parameters: [{ name: 'reference', description: 'captured name, version and digest, never a user-directory locator.' }, { name: 'signal', description: 'cancellation supplied by the sending draft.' }],
         returns: 'the verified App identity; no installed or online substitute is selected.',
+      },
+      {
+        signature: '@Remote async installedSkills(): Promise<ManturInstalledSkill[]>',
+        description: 'List locally discovered and App-bundled skills, including disabled entries.',
+        parameters: [],
+        returns: 'Local identities and switches without requiring the marketplace network.',
+      },
+      {
+        signature: '@Remote async setSkillEnabled(name: string, enabled: boolean): Promise<void>',
+        description: 'Persist an installed skill\'s switch for this client, then invalidate discovery.',
+        parameters: [{ name: 'name', description: 'Installed skill identifier; applies to every version of this name.' }, { name: 'enabled', description: 'Whether future references and body loads are permitted.' }],
       },
       {
         signature: '@Remote async list(): Promise<ManturMarketplaceCatalog>',
@@ -3587,6 +3604,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [],
   },
   {
+    name: 'skills/enabled',
+    mode: 'waterfall',
+    signature: '\'skills/enabled\'(name: string, next: () => Promise<boolean>): Promise<boolean>',
+    summary: 'Restrict subsequent catalog advertisement and body loading by skill name.',
+    description: 'Restrict subsequent catalog advertisement and body loading by skill name. Listeners delegate before combining their decision; false denies access.',
+    parameters: [{ name: 'name', description: 'Validated skill identifier.' }, { name: 'next', description: 'Remaining policy listeners, permitting access when none remain.' }],
+  },
+  {
     name: 'subagent/end',
     mode: 'emit',
     signature: '\'subagent/end\'(this: Scoped<SubagentRuntime>, info: SubagentRunEndInfo): void',
@@ -4823,6 +4848,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type ManturIdentityMode = \'standalone\' | \'desktop-managed\';',
   },
   {
+    name: 'ManturInstalledSkill',
+    declaration: 'export interface ManturInstalledSkill {\n    readonly name: string;\n    readonly title: string;\n    readonly description: string;\n    readonly source: \'bundled\' | \'local\';\n    readonly enabled: boolean;\n}',
+  },
+  {
     name: 'ManturLoginAttemptId',
     declaration: 'export type ManturLoginAttemptId = Branded<\'ManturLoginAttemptId\'>;',
   },
@@ -4844,7 +4873,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ManturMarketplaceRecipe',
-    declaration: 'export interface ManturMarketplaceRecipe {\n    readonly slug: string;\n    readonly title: string;\n    readonly summary: string;\n    readonly category: ManturRecipeCategory;\n    readonly tags: readonly string[];\n    readonly coverUrl: string;\n    readonly sampleUrl: string;\n    readonly sampleKind: ManturRecipeSampleKind;\n    readonly operatorId: string;\n    readonly costEstimate: string;\n    readonly priceDumplings: number;\n    readonly author: string;\n    readonly copies: number;\n    readonly publishedAt: string;\n}',
+    declaration: 'export interface ManturMarketplaceRecipe {\n    readonly slug: string;\n    readonly title: string;\n    readonly summary: string;\n    readonly category: ManturRecipeCategory;\n    readonly tags: readonly string[];\n    readonly coverUrl: string;\n    readonly sampleUrl: string;\n    readonly sampleKind: ManturRecipeSampleKind;\n    readonly operatorId: string | null;\n    readonly costEstimate: string | null;\n    readonly priceDumplings: number | null;\n    readonly author: string | null;\n    readonly copies: number | null;\n    readonly publishedAt: string;\n}',
   },
   {
     name: 'ManturMarketplaceRecipeCatalog',
@@ -4852,7 +4881,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ManturMarketplaceRecipeDetail',
-    declaration: 'export interface ManturMarketplaceRecipeDetail extends ManturMarketplaceRecipe {\n    readonly sampleText: string;\n    readonly promptTemplate: string;\n    readonly parameters: ManturRecipeJsonValue;\n    readonly sourceUrl?: string;\n    readonly sourceName?: string;\n    readonly sourceAvatarUrl?: string;\n    readonly models: readonly string[];\n    readonly agentPayload: string;\n}',
+    declaration: 'export interface ManturMarketplaceRecipeDetail extends ManturMarketplaceRecipe {\n    readonly sampleText: string;\n    readonly promptTemplate: string;\n    readonly parameters: ManturRecipeJsonValue;\n    readonly sourceUrl?: string;\n    readonly sourceName?: string;\n    readonly sourceAvatarUrl?: string;\n    readonly models: readonly string[];\n    readonly inputSchema: Readonly<Record<string, ManturRecipeJsonValue>>;\n    readonly steps: readonly {\n        readonly operatorCode: string;\n        readonly note: string | null;\n    }[];\n    readonly agentPayload: string;\n}',
   },
   {
     name: 'ManturMarketplaceRecipeQuery',

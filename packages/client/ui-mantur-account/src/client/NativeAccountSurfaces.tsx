@@ -1,5 +1,5 @@
 /** Native onboarding and Settings slots share the same Main subscription and action owner. */
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { OnboardingSurface } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { InjectFace, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
@@ -13,19 +13,20 @@ export interface NativeAccountInjected extends Pick<NativeAccountViewProps, 'run
 }
 
 /** Native first-run surface props. */
-export type NativeAccountOnboardingProps = PropsRuntime<'settings.onboarding'> & InjectFace<NativeAccountInjected>
+export type NativeAccountOnboardingProps = PropsRuntime<'shell.overlay'> & InjectFace<NativeAccountInjected>
 /** Native Settings surface props. */
 export type NativeAccountSectionProps = PropsRuntime<'settings.section'> & InjectFace<NativeAccountInjected>
 
-/** Complete only after a persisted Skip or active grant, never while cancellation or initial checking is pending. */
-export function NativeAccountOnboarding({ useNativeAccount, complete, run, t, formatExpiry }: NativeAccountOnboardingProps) {
+/** Require an active grant at startup, including profiles that previously skipped sign-in. */
+export function NativeAccountOnboarding({ useNativeAccount, run, t, formatExpiry }: NativeAccountOnboardingProps) {
   const state = useNativeAccount(value => value)
+  const [verified, setVerified] = useState(false)
   const completed = state.operation === undefined && state.snapshot?.busy === false
-    && (state.snapshot.authenticated || (state.snapshot.skipped && state.failure === undefined))
-  useEffect(() => { if (completed) complete() }, [completed, complete])
-  if (completed) return null
+    && state.snapshot.authenticated
+  useEffect(() => { if (completed) setVerified(true) }, [completed])
+  if (completed || verified) return null
   return <OnboardingSurface><div className={css.onboarding}>
-    <NativeAccountView state={state} run={run} t={t} formatExpiry={formatExpiry} showSkip />
+    <NativeAccountView state={state} run={run} t={t} formatExpiry={formatExpiry} />
   </div></OnboardingSurface>
 }
 

@@ -18,13 +18,13 @@ const images = fileURLToPath(new URL('../../../.artifacts/mantur-native-account'
 const bundledSource = fileURLToPath(new URL('../../desktop/mantur-skills/source.json', import.meta.url))
 
 it('returns from marketplace authorization with the selected detail and complete unsent draft intact', async () => {
-  const skill = { slug: 'short-drama', name: '爽文短剧剧本创作', description: '从创意到分集剧本。',
-    category: '剧本创作', version: '1.0.0', triggers: ['写剧本'], uses_operators: [], kind: 'skill', assets: null }
+  const skill = { code: 'short-drama', name: '爽文短剧剧本创作', description: '从创意到分集剧本。',
+    category: '剧本创作', skillVersion: '1.0.0', triggers: ['写剧本'], uses_operators: [], kind: 'skill', assets: null }
   const requests: string[] = []
   const catalog = createServer((request, response) => {
     requests.push(`${request.method} ${request.url}`)
     response.writeHead(200, { 'content-type': 'application/json' })
-    response.end(JSON.stringify(request.url === '/api/v1/skills' ? { skills: [skill] } : { skill }))
+    response.end(JSON.stringify(request.url?.startsWith('/api/public/agent/v1/skills?') ? { code: 0, data: { records: [skill], total: 1, pageNum: 1, pageSize: 100, pages: 1 } } : { code: 0, data: { ...skill, dependencies: [], readme: '' } }))
   })
   await new Promise<void>((resolve, reject) => { catalog.once('error', reject); catalog.listen(0, '127.0.0.1', resolve) })
   let scaffold: Awaited<ReturnType<typeof launchWebScaffold>> | undefined
@@ -78,6 +78,13 @@ it('returns from marketplace authorization with the selected detail and complete
       } }
     })
     await page.goto(scaffold.authenticatedUrl)
+    await page.getByRole('heading', { name: '登录漫途账号' }).waitFor()
+    expect(await page.getByRole('button', { name: '暂时跳过' }).count()).toBe(0)
+    snapshot = { ...snapshot, authenticated: true, phase: 'signed-in', account: { displayName: 'Fixture creator', expiresAt: 1_999_999_999_999 } }
+    await page.evaluate(publication => window.dispatchEvent(new CustomEvent('native-fixture-changed', { detail: publication })), { revision: ++revision, snapshot })
+    await page.getByRole('heading', { name: '登录漫途账号' }).waitFor({ state: 'hidden' })
+    snapshot = { ...snapshot, authenticated: false, phase: 'signed-out' }
+    await page.evaluate(publication => window.dispatchEvent(new CustomEvent('native-fixture-changed', { detail: publication })), { revision: ++revision, snapshot })
     const workspaceButton = page.locator('[data-workspace-footer]').getByRole('button', { name: '选择工作区' })
     await workspaceButton.click()
     const directory = page.getByRole('dialog', { name: '选择工作区目录' })
@@ -179,7 +186,7 @@ it('returns from marketplace authorization with the selected detail and complete
     expect(await page.getByRole('button', { name: /访问模式/ }).innerText()).toBe(permission)
     expect(await page.getByRole('button', { name: '更多技能', exact: true }).count()).toBe(0)
     expect(legacy).not.toHaveBeenCalled()
-    expect(requests.every(request => request === 'GET /api/v1/skills' || request === 'GET /api/v1/skills/short-drama')).toBe(true)
+    expect(requests.every(request => request === 'GET /api/public/agent/v1/skills?pageNum=1&pageSize=100' || request === 'GET /api/public/agent/v1/skills/short-drama')).toBe(true)
     expect(prompts).toBe(0)
     expect(operations).toEqual(['refresh', 'browser', 'browser', 'browser', 'browser', 'browser', 'skip', 'browser'])
     expect(console.pageErrors).toEqual([])
@@ -209,7 +216,7 @@ function luminance(rgb: string): number {
     .reduce((sum, channel, index) => sum + channel * [0.2126, 0.7152, 0.0722][index]!, 0)
 }
 
-it('opens optional account Settings and renders browser authorization failure and waiting at minimum size', async () => {
+it('requires startup login and renders authorization failure and waiting at minimum size', async () => {
   const catalog = createServer((_request, response) => {
     response.writeHead(200, { 'content-type': 'application/json' })
     response.end(JSON.stringify({ skills: [], recipes: [] }))
@@ -256,8 +263,6 @@ it('opens optional account Settings and renders browser authorization failure an
       target.manturAccount = { invoke: action => target.invokeNativeAccountFixture(action), subscribe: () => () => {} }
     })
     await page.goto(scaffold.authenticatedUrl)
-    await page.getByRole('button', { name: '设置', exact: true }).click()
-    await page.getByRole('dialog', { name: '设置', exact: true }).getByRole('button', { name: '漫途账号', exact: true }).click()
     await page.getByRole('heading', { name: '登录漫途账号' }).waitFor()
     await mkdir(images, { recursive: true })
     const captures: string[] = []
@@ -307,11 +312,6 @@ it('opens optional account Settings and renders browser authorization failure an
     expect(operations.filter(kind => kind === 'reopen-browser')).toHaveLength(1)
     await page.getByRole('button', { name: '取消登录' }).click()
     await page.reload()
-    await page.getByRole('button', { name: '打开侧边栏', exact: true }).click()
-    await page.getByRole('button', { name: '设置', exact: true }).waitFor()
-    expect(await page.getByRole('heading', { name: '登录漫途账号' }).count()).toBe(0)
-    await page.getByRole('button', { name: '设置', exact: true }).click()
-    await page.getByRole('dialog', { name: '设置', exact: true }).getByRole('button', { name: '漫途账号', exact: true }).click()
     await page.getByRole('heading', { name: '登录漫途账号' }).waitFor()
     expect(await page.getByRole('button', { name: '登录漫途账号', exact: true }).count()).toBe(1)
     expect(console.pageErrors).toEqual([])

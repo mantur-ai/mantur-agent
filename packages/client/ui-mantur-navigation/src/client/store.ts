@@ -6,7 +6,7 @@ import type { ManturLoginAttemptId, ManturLoginStart } from '@deepseek-ai/dsh-au
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {
   ManturMarketplaceCatalog, ManturMarketplaceRecipeCatalog, ManturMarketplaceRecipeDetail,
-  ManturMarketplaceRecipeQuery, ManturMarketplaceSkillDetail,
+  ManturMarketplaceRecipeQuery, ManturMarketplaceSkillDetail, ManturInstalledSkill,
 } from '@deepseek-ai/dsh-manturhub-marketplace/types'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
@@ -84,6 +84,23 @@ export class ManturMarketplaceStore {
 
   /** @param ctx - client context carrying the generated marketplace Remote. */
   constructor(private readonly ctx: Context) {}
+
+  /**
+   * Read the local skill management catalog.
+   * @returns Locally available skills, including disabled entries.
+   */
+  async installedSkills(): Promise<ManturInstalledSkill[]> {
+    return unwrap(await this.ctx.remote.manturMarketplace.installedSkills())
+  }
+
+  /**
+   * Persist a skill switch before refreshing the installed list.
+   * @param name - Installed skill identifier.
+   * @param enabled - Requested availability.
+   */
+  async setSkillEnabled(name: string, enabled: boolean): Promise<void> {
+    unwrap(await this.ctx.remote.manturMarketplace.setSkillEnabled(name, enabled))
+  }
 
   /** Load the public catalog and local installation flags. */
   async load(): Promise<void> {
@@ -172,6 +189,7 @@ export class ManturMarketplaceStore {
     const current = this.recipes.getSnapshot()
     if (current.phase !== 'ready' || current.detail === undefined || current.launching !== undefined) return false
     const detail = current.detail
+    if (detail.agentPayload.trim() === '') return false
     const sessions = this.ctx.get('sessions')
     const workspaces = this.ctx.get('workspaces')
     if (sessions === undefined || workspaces === undefined) throw new Error('Recipe launch services are unavailable')

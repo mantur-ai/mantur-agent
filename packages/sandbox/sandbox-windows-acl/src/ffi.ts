@@ -72,6 +72,11 @@ export interface Win32Bindings extends Win32ProcessBindings {
   ): number
   getTempPathW(length: number, buffer: Buffer): number
   setEnvironmentVariableW(name: string, value: string): number
+  getConsoleCP(): number
+  allocConsole(): number
+  getConsoleWindow(): NativePtr
+  showWindow(window: NativePtr, command: number): number
+  setStdHandle(selector: number, handle: NativePtr): number
   setConsoleCtrlHandler(handler: null, add: number): number
   createFileW(
     fileName: string,
@@ -249,6 +254,11 @@ function bindings(): Win32Bindings {
     ]),
     getTempPathW: bind(kernel32, 'GetTempPathW', 'uint32', ['uint32', PVOID]),
     setEnvironmentVariableW: bind(kernel32, 'SetEnvironmentVariableW', 'int', ['str16', 'str16']),
+    getConsoleCP: bind(kernel32, 'GetConsoleCP', 'uint32', []),
+    allocConsole: bind(kernel32, 'AllocConsole', 'int', []),
+    getConsoleWindow: bind(kernel32, 'GetConsoleWindow', PVOID, []),
+    showWindow: bind(koffi.load('user32.dll'), 'ShowWindow', 'int', [PVOID, 'int']),
+    setStdHandle: bind(kernel32, 'SetStdHandle', 'int', ['uint32', PVOID]),
     setConsoleCtrlHandler: bind(kernel32, 'SetConsoleCtrlHandler', 'int', [PVOID, 'int']),
     createFileW: bind(kernel32, 'CreateFileW', PVOID, [
       'str16', 'uint32', 'uint32', PVOID, 'uint32', 'uint32', PVOID,

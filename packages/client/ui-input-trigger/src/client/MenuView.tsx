@@ -22,7 +22,7 @@ import type { MenuKey } from './locales.ts'
 export type MenuViewProps = MenuViewInjected & PropsLocale<'slash.menu'>
 
 /** Design cap on the list height (figma SLASH 39:26572 MenuDropdown). */
-const MAX_HEIGHT = 320
+const MAX_HEIGHT = 440
 
 /** DOM id of one option row (the aria-activedescendant target). */
 function optionId(source: string, index: number): string {

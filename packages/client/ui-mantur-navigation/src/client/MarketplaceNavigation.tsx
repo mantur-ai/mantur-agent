@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import clsx from 'clsx'
+import { decodeHTML } from 'entities'
 import {
   IconChevronLeftOutline14, IconChevronRightOutline14, IconCopyOutline16,
   IconListPenOutline16, IconPlayOutline16, IconSearchOutline16,
-  IconSkillOutline16, Modal, Tooltip,
+  IconSkillOutline16, MarkdownText, Modal, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { MainPageId } from '@deepseek-ai/dsh-client-ui-layout/client'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
@@ -16,6 +17,7 @@ import type {
   ManturMarketplaceState, ManturMarketplaceStore, ManturRecipeMarketplaceState,
 } from './store.ts'
 import css from './MarketplaceNavigation.module.css'
+import { InstalledSkills } from './InstalledSkills.tsx'
 import { focusDetailAction } from './detail-focus.ts'
 
 /** Mantur root-page identifiers. */
@@ -140,6 +142,7 @@ function SkillMarketplace({ closePage, controller, useMarketplace, t }: {
   const loginSource = useRef<string>()
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('')
+  const [showInstalled, setShowInstalled] = useState(false)
   useEffect(() => {
     void controller.ensureSkillCatalog()
   }, [controller])
@@ -221,6 +224,8 @@ function SkillMarketplace({ closePage, controller, useMarketplace, t }: {
       </p>
     )
 
+  if (showInstalled) return <InstalledSkills controller={controller} close={() => { setShowInstalled(false) }} t={t} />
+
   return (
     <main ref={source} className={css.page} aria-labelledby="mantur-marketplace-title">
       <header className={css.pageHeader}>
@@ -235,9 +240,9 @@ function SkillMarketplace({ closePage, controller, useMarketplace, t }: {
             <h1 id="mantur-marketplace-title">{t('skills.title')}</h1>
             <p>{t('skills.description')}</p>
           </div>
-          {state.phase === 'ready' && (
-            <span className={css.installedCount}>{t('skills.installedCount').replace('{count}', String(state.catalog.installedCount))}</span>
-          )}
+          <button type="button" className={css.installedCount} onClick={() => { setShowInstalled(true) }}>
+            {t('skills.manageInstalled')}
+          </button>
         </div>
 
         {state.phase === 'ready' && (
@@ -269,7 +274,11 @@ function SkillMarketplace({ closePage, controller, useMarketplace, t }: {
                   {visible.map(skill => (
                     <article key={skill.slug} className={css.skillCard}>
                       <button type="button" className={css.cardMain} onClick={() => { void controller.openDetail(skill.slug) }}>
-                        <span className={css.skillIcon} aria-hidden="true">{skill.name.slice(0, 1)}</span>
+                        <span className={skill.logoUrl === undefined ? css.skillIcon : css.skillLogo} aria-hidden="true">
+                          {skill.logoUrl === undefined
+                            ? skill.name.slice(0, 1)
+                            : <img src={skill.logoUrl} alt="" loading="lazy" />}
+                        </span>
                         <span className={css.skillCopy}>
                           <strong>{skill.name}</strong>
                           <span>{skill.description}</span>
@@ -304,6 +313,8 @@ function SkillMarketplace({ closePage, controller, useMarketplace, t }: {
       <Modal
         open={ready?.loginPhase !== 'starting' && (detail !== undefined || ready?.detailLoading !== undefined || detailError !== undefined)}
         onClose={() => { controller.closeDetail() }}
+        className={clsx(css.skillDetailModal)}
+        contentClassName={clsx(css.skillDetailContent)}
         title={detail?.name ?? (detailError === undefined ? t('skills.loadingDetail') : t('skills.detailFailedTitle'))}
         closeLabel={t('close')}
         {...(detail === undefined ? {} : { description: detail.description })}
@@ -319,11 +330,18 @@ function SkillMarketplace({ closePage, controller, useMarketplace, t }: {
         )}
         {detail !== undefined && ready !== undefined && (
           <div className={css.detail}>
-            <div>
+            <div className={css.detailMeta}>
               <span className={css.tag}>{detail.category}</span>
               <span>{t('skills.version').replace('{version}', detail.version)}</span>
             </div>
-            {detail.introduction !== undefined && <p>{detail.introduction}</p>}
+            {detail.introduction !== undefined && (
+              <div className={css.skillReadme}>
+                <MarkdownText
+                  text={decodeHTML(detail.introduction).replace(/<!--\s*MANTUR_AGENT_PLATFORM_ACCESS_START\s*-->[\s\S]*?<!--\s*MANTUR_AGENT_PLATFORM_ACCESS_END\s*-->/g, '').trim()}
+                  labels={{ code: { copyLabel: t('skills.copyCode'), copiedLabel: t('skills.codeCopied') }, footnotes: t('skills.footnotes') }}
+                />
+              </div>
+            )}
             {installErrorNotice}
             {useErrorNotice}
             {ready.loginPhase === 'failed' && <p className={css.installError}>{t('skills.loginFailed')}</p>}
@@ -478,7 +496,7 @@ function RecipeMarketplace({ closePage, controller, useRecipes, t }: {
                                 <div className={css.recipeCardBody}>
                                   <button type="button" className={css.recipeTitle} onClick={() => { void controller.openRecipeDetail(recipe.slug) }}>{recipe.title}</button>
                                   <div className={css.recipeMeta}>
-                                    <span><IconCopyOutline16 size={14} />{t('recipes.copies').replace('{count}', String(recipe.copies))}</span>
+                                    {recipe.copies !== null && <span><IconCopyOutline16 size={14} />{t('recipes.copies').replace('{count}', String(recipe.copies))}</span>}
                                     <span className={css.recipeCost}>{recipe.costEstimate || t('recipes.liveQuote')}</span>
                                     <button type="button" onClick={() => { void controller.openRecipeDetail(recipe.slug) }}>
                                       {t('recipes.recreate')}<IconChevronRightOutline14 />
@@ -537,13 +555,14 @@ function RecipeDetail({ detail, launching, launchError, launch, t }: {
         <h1 id="mantur-recipe-title">{detail.title}</h1>
         <p className={css.recipeLead}>{detail.summary}</p>
         <div className={css.recipeDetailMeta}>
-          <span>{t('recipes.author').replace('{author}', detail.author)}</span>
-          <span>{t('recipes.copies').replace('{count}', String(detail.copies))}</span>
+          {detail.author !== null && <span>{t('recipes.author').replace('{author}', detail.author)}</span>}
+          {detail.copies !== null && <span>{t('recipes.copies').replace('{count}', String(detail.copies))}</span>}
           <span>{detail.costEstimate || t('recipes.liveQuote')}</span>
         </div>
-        <button type="button" className={css.recipeLaunch} disabled={launching} onClick={() => { void launch() }}>
+        <button type="button" className={css.recipeLaunch} disabled={launching || detail.agentPayload.trim() === ''} onClick={() => { void launch() }}>
           {launching ? t('recipes.launching') : t('recipes.launch')}
         </button>
+        {detail.agentPayload.trim() === '' && <p>{t('recipes.instructionsUnavailable')}</p>}
         {launchError !== undefined && <p className={css.recipeLaunchError} role="alert">{launchError === 'no-workspace' ? t('recipes.noWorkspace') : t('recipes.launchFailed')}</p>}
         {detail.sourceUrl !== undefined && (
           <a className={css.recipeSource} href={detail.sourceUrl} target="_blank" rel="noreferrer">
@@ -555,14 +574,46 @@ function RecipeDetail({ detail, launching, launchError, launch, t }: {
         )}
       </article>
       <div className={css.recipeSections}>
+        {Object.keys(detail.inputSchema).length > 0 && <RecipeRequirements schema={detail.inputSchema} t={t} />}
+        {detail.steps.length > 0 && <section className={css.recipeSectionWide}>
+          <h2>{t('recipes.steps')}</h2>
+          <ol>{detail.steps.map((step, index) => <li key={index}>
+            <p>{step.note}</p><small>{step.operatorCode}</small>
+          </li>)}</ol>
+        </section>}
         {detail.sampleText !== '' && <RecipeSection title={t('recipes.outcome')} body={detail.sampleText} />}
         {parameters !== undefined && <RecipeInputs title={t('recipes.inputs')} value={parameters} />}
         {detail.promptTemplate !== '' && <RecipeSection title={t('recipes.prompt')} body={detail.promptTemplate} code wide />}
-        <RecipeSection title={t('recipes.models')} body={[...detail.models, detail.operatorId].join(' · ')} />
-        <RecipeSection title={t('recipes.guide')} body={detail.agentPayload} wide />
+        {(detail.models.length > 0 || detail.operatorId !== null) && <RecipeSection title={t('recipes.models')} body={[...detail.models, ...(detail.operatorId === null ? [] : [detail.operatorId])].join(' · ')} />}
+        {detail.agentPayload !== '' && <RecipeSection title={t('recipes.guide')} body={detail.agentPayload} wide />}
       </div>
     </section>
   )
+}
+
+function RecipeRequirements({ schema, t }: {
+  readonly schema: Readonly<Record<string, ManturRecipeJsonValue>>
+  readonly t: MarketplacePageProps['t']
+}) {
+  const properties = schema.properties
+  if (properties === null || typeof properties !== 'object' || Array.isArray(properties)) {
+    return <RecipeSection title={t('recipes.requirements')} body={JSON.stringify(schema, null, 2)} code wide />
+  }
+  const required = Array.isArray(schema.required) ? schema.required : []
+  return <section className={css.recipeSectionWide}>
+    <h2>{t('recipes.requirements')}</h2>
+    <dl className={css.recipeInputs}>{Object.entries(properties).map(([name, value]) => {
+      const field = value !== null && typeof value === 'object' && !Array.isArray(value) ? value : undefined
+      return <div key={name}>
+        <dt>{typeof field?.title === 'string' ? field.title : name}{required.includes(name) && <> · {t('recipes.required')}</>}</dt>
+        <dd>
+          {typeof field?.description === 'string' && <p>{field.description}</p>}
+          {field?.enum !== undefined && <p>{t('recipes.choices')}: {formatRecipeValue(field.enum)}</p>}
+          {field?.default !== undefined && <p>{t('recipes.default')}: {formatRecipeValue(field.default)}</p>}
+        </dd>
+      </div>
+    })}</dl>
+  </section>
 }
 
 function RecipeInputs({ title, value }: { readonly title: string; readonly value: ManturRecipeJsonValue }) {

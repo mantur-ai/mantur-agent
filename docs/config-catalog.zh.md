@@ -1630,7 +1630,7 @@ export interface Config {
   readonly bundledSkillDir?: string
   /** Harness home containing the live user Skill directory. */
   readonly dshHome?: string
-  /** Maximum JSON bytes accepted from one ManturHub metadata response. */
+  /** Maximum JSON bytes accepted per response and retained across Skill catalog pages. */
   readonly maxMetadataBytes?: number
   /** Maximum compressed bytes accepted for one Skill bundle. */
   readonly maxBundleBytes?: number
@@ -1638,14 +1638,14 @@ export interface Config {
   readonly maxFiles?: number
   /** Maximum total uncompressed bytes accepted from one Skill archive. */
   readonly maxUnpackedBytes?: number
-  /** Timeout for catalog, detail, and authenticated download requests. */
+  /** Timeout for catalog, detail, and public download requests. */
   readonly metadataTimeoutMs?: number
   /** Timeout for an approved off-origin package download. */
   readonly downloadTimeoutMs?: number
 }
 ```
 
-来源：[`packages/skill/manturhub-marketplace/src/index.ts:25`](../packages/skill/manturhub-marketplace/src/index.ts)
+来源：[`packages/skill/manturhub-marketplace/src/index.ts:28`](../packages/skill/manturhub-marketplace/src/index.ts)
 
 <a id="deepseek-aidsh-mcp-client"></a>
 

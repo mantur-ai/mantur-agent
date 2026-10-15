@@ -7,6 +7,8 @@ kind: "package-reference"
 
 English | [中文](README.zh.md)
 
+The menu separates command and skill groups with labeled dividers and caps its height at 440 pixels, further constrained by available space above the composer.
+
 ## Summary
 
 This package powers the input trigger pipeline of the Web GUI: it detects `/` and `@` typed under the caret, shows a grouped candidate menu, and routes a pick to the registered source. Sources register through `ctx.inputTriggers` — the `/` command source (ui-commands), the `@` file and session reference sources (ui-reference), and any business package — and the conversation wiring drives the pipeline per session. Typing a trigger seeds every source registered for it; a chrome launcher can also open exactly one source over the current selection. The pipeline is presentation-only: picks produce command claims or reference inserts whose consequences belong to the consuming host and input packages.
@@ -88,3 +90,5 @@ None.
 </details>
 
 **Runtime invariant:** No companion is published. The trigger pipeline is a browser-side pure core (detect/reduce/match) plus a registry whose disposal is proven by the HMR-safety spec; it emits no cordis events and owns no cross-plugin mutable state.
+
+The composer command launcher includes the skill source beneath commands. `toggleSource` accepts explicit additional groups, retaining their roster order and ordinary reference selection behavior. This changes `ui-conversation` launcher wiring because the previous single-source call excluded installed skills; the source-launcher regression verifies selecting a skill from the combined menu.

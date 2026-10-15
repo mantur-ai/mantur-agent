@@ -1,5 +1,5 @@
 /** Mantur desktop product identity over the real shipped Web composition. */
-import { mkdir, readFile } from 'node:fs/promises'
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { join } from 'node:path'
@@ -54,45 +54,21 @@ async function connectManturWorkspace(page: Page, root: string, locale: 'zh' | '
 }
 
 const marketplaceSkill = {
-  slug: 'story-director',
-  name: '故事导演',
-  description: '把完整剧本整理成可执行的漫剧制作方案。',
-  category: '漫剧创作',
-  version: '1.2.3',
-  triggers: ['做漫剧', '拆分镜'],
-  uses_operators: ['seedance-video'],
-  intro_md: '从剧本分析开始，自动组织角色、场景和分镜。',
-  assets: null,
-  kind: 'skill',
+  code: 'story-director', name: '故事导演', description: '把完整剧本整理成可执行的漫剧制作方案。',
+  category: '漫剧创作', skillVersion: '1.2.3', triggers: ['做漫剧', '拆分镜'],
+  dependencies: ['seedance-video'], readme: '&lt;!-- MANTUR_AGENT_PLATFORM_ACCESS_START --&gt;\n内部接入说明\n&lt;!-- MANTUR_AGENT_PLATFORM_ACCESS_END --&gt;\n## 使用说明\n\n从剧本分析开始，自动组织**角色、场景和分镜**。\n\n&gt; 确认后开始\n\n`&lt;input&gt;`', coverUrl: null,
 }
-
 const marketplaceRecipe = {
-  slug: 'rcp.image.cinematic-poster',
-  title: '宿命感双人电影海报',
-  summary: '替换两位角色与片名，复刻具有电影质感的双人关系海报。',
-  cat: 'image',
-  tags: ['电影感', '双人海报'],
-  cover_url: '/assets/recipe.svg',
-  sample_url: '/assets/recipe.svg',
-  sample_kind: 'image',
-  operator_id: 'mantur.image.generate',
-  cost_estimate: '约 0.08 元',
-  price_dumplings: 0,
-  author: '漫途创作实验室',
-  copies: 268,
-  published_at: '2026-08-25T03:51:03.407+00:00',
+  code: 'rcp.image.cinematic-poster', name: '宿命感双人电影海报',
+  summary: '替换两位角色与片名，复刻具有电影质感的双人关系海报。', category: 'image',
+  tags: ['电影感', '双人海报'], coverUrl: '/assets/recipe.svg', sampleUrl: '/assets/recipe.svg',
+  sampleKind: 'IMAGE', targetOperatorCode: 'mantur.image.generate', publishedAt: '2026-08-25T03:51:03.407+00:00',
 }
-
 const marketplaceRecipeDetail = {
-  ...marketplaceRecipe,
-  sample_text: '低饱和电影光影，两位角色以近远景形成关系张力。',
-  prompt_template: '以 {角色甲} 与 {角色乙} 为主角，片名为 {片名}。',
-  params_json: { user_inputs: { 角色甲: '上传人物图', 角色乙: '上传人物图', 片名: '输入文字' } },
-  source_url: '/recipes/rcp.image.cinematic-poster',
-  source_name: 'ManturHub 精选',
-  source_avatar_url: '/assets/recipe.svg',
-  models: ['Seedream 4.0'],
-  agent_payload: '请用 ManturHub 复刻这份配方，并在运行前展示实时报价。',
+  ...marketplaceRecipe, description: marketplaceRecipe.summary,
+  usage: '请用 ManturHub 复刻这份配方，并在运行前展示实时报价。',
+  inputSchema: { type: 'object', properties: { prompt: { type: 'string', description: '描述想要生成的画面' } }, required: ['prompt'] },
+  steps: [{ operatorCode: 'op.video.generate', note: '先生成视频，再确认效果。' }],
 }
 
 /** Start a local ManturHub protocol fixture used by the real Host and Remote layers. */
@@ -111,23 +87,22 @@ async function startManturHubFixture(): Promise<{
       response.writeHead(status, { 'content-type': 'application/json' })
       response.end(JSON.stringify(value))
     }
-    if (request.method === 'GET' && url.pathname === '/api/v1/skills') {
-      json(200, { skills: [marketplaceSkill] })
+    if (request.method === 'GET' && url.pathname === '/api/public/agent/v1/skills') {
+      json(200, { code: 0, data: { records: [marketplaceSkill], total: 1, pageNum: 1, pages: 1 } })
       return
     }
-    if (request.method === 'GET' && url.pathname === '/api/v1/skills/story-director') {
-      json(200, { skill: marketplaceSkill })
+    if (request.method === 'GET' && url.pathname === '/api/public/agent/v1/skills/story-director') {
+      json(200, { code: 0, data: marketplaceSkill })
       return
     }
-    if (request.method === 'GET' && url.pathname === '/api/v1/recipes') {
+    if (request.method === 'GET' && url.pathname === '/api/public/agent/v1/recipes') {
       json(200, {
-        recipes: [marketplaceRecipe], total: 1, page: 1, page_size: 15, total_pages: 1,
-        available_tags: marketplaceRecipe.tags,
+        code: 0, data: { records: [marketplaceRecipe], total: 1, pageNum: 1, pageSize: 15, pages: 1 },
       })
       return
     }
-    if (request.method === 'GET' && url.pathname === `/api/v1/recipes/${marketplaceRecipe.slug}`) {
-      json(200, marketplaceRecipeDetail)
+    if (request.method === 'GET' && url.pathname === `/api/public/agent/v1/recipes/${marketplaceRecipe.code}`) {
+      json(200, { code: 0, data: marketplaceRecipeDetail })
       return
     }
     if (request.method === 'GET' && url.pathname === '/assets/recipe.svg') {
@@ -158,11 +133,8 @@ async function startManturHubFixture(): Promise<{
       json(200, { email: 'artist@example.com' })
       return
     }
-    if (request.method === 'GET' && url.pathname === '/api/v1/skills/story-director/download') {
-      if (request.headers['x-api-key'] !== 'fixture-grant') {
-        json(401, { error: 'missing fixture grant' })
-        return
-      }
+    if (request.method === 'GET' && url.pathname === '/api/public/agent/v1/skills/story-director/bundle') {
+      expect(request.headers['x-api-key']).toBeUndefined()
       response.writeHead(500, { 'content-type': 'application/zip' })
       response.end('deterministic invalid bundle')
       return
@@ -286,13 +258,52 @@ describe.skipIf(MODE === 'record')('web snapshot: Mantur product identity', () =
     }
   }, 60_000)
 
+  it('manages installed skill switches through the real Remote and excludes disabled body loads', async () => {
+    await mkdir(join(scaffold.workspaceCwd, '.bundled-skills'), { recursive: true })
+    await writeFile(join(scaffold.workspaceCwd, '.bundled-skills/manifest.json'), JSON.stringify({ formatVersion: 1, skills: [] }))
+    const skillDir = join(scaffold.workspaceCwd, '.dsh-home/skills/switch-example')
+    await mkdir(skillDir, { recursive: true })
+    await writeFile(join(skillDir, 'SKILL.md'), '---\nname: switch-example\ntitle: 开关测试技能\ndescription: 用于验证本地技能开关。\n---\nTest instructions.')
+    scaffold.ctx.emit('skills/change')
+    try {
+      await page.getByRole('button', { name: '技能广场', exact: true }).click()
+      await page.getByRole('button', { name: '已安装技能', exact: true }).click()
+      const toggle = page.getByRole('switch', { name: '启用技能：开关测试技能' })
+      await toggle.waitFor({ timeout: 5000 }).catch(async () => {
+        throw new Error(`Installed page: ${await page.getByRole('main').innerText()}; Host: ${JSON.stringify(await scaffold.ctx.manturMarketplace.installedSkills())}; errors: ${tripwire.pageErrors.map(String).join('; ')}`)
+      })
+      expect(await toggle.getAttribute('aria-checked')).toBe('true')
+      await toggle.click()
+      await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('false')
+      expect(await scaffold.ctx.skills.get('switch-example')).toBeUndefined()
+      await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'installed-skills.expected.md'),
+        await captureStableAria(page, 'main', scaffold.workspaceCwd), MODE)
+      await page.getByRole('main').getByRole('button', { name: '技能广场', exact: true }).click()
+      await page.getByRole('button', { name: '已安装技能', exact: true }).click()
+      expect(await toggle.getAttribute('aria-checked')).toBe('false')
+      await toggle.click()
+      await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('true')
+      expect(await scaffold.ctx.skills.get('switch-example')).toMatchObject({ content: 'Test instructions.' })
+      await page.getByRole('main').getByRole('button', { name: '技能广场', exact: true }).click()
+      await page.getByRole('button', { name: '返回对话', exact: true }).click()
+      await page.getByRole('button', { name: '指令', exact: true }).click()
+      const menu = page.getByRole('listbox', { name: '触发候选建议' })
+      await menu.getByText('开关测试技能', { exact: true }).waitFor()
+      expect(await menu.getByText('压缩上下文', { exact: true }).count()).toBe(1)
+      await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'command-skill-menu.expected.md'),
+        await menu.ariaSnapshot(), MODE)
+      await page.keyboard.press('Escape')
+      await page.getByRole('button', { name: '技能广场', exact: true }).click()
+    } finally { await rm(skillDir, { recursive: true, force: true }); scaffold.ctx.emit('skills/change') }
+  })
+
   it('renders the assembled catalog, detail, login gate, and installation failure', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-mantur-market-navigation'))
     await page.getByText('项目', { exact: true }).waitFor({ timeout: 10_000 })
     expect(await page.getByText('工作区', { exact: true }).count()).toBe(0)
     await page.getByRole('navigation', { name: '功能' }).waitFor({ timeout: 10_000 })
 
-    const skills = page.getByRole('button', { name: '技能广场' })
+    const skills = page.getByRole('navigation', { name: '功能' }).getByRole('button', { name: '技能广场' })
     await skills.click()
     await page.getByRole('heading', { name: '技能广场' }).waitFor({ timeout: 10_000 })
     expect(await skills.getAttribute('aria-current')).toBe('page')
@@ -309,6 +320,10 @@ describe.skipIf(MODE === 'record')('web snapshot: Mantur product identity', () =
     await page.getByText('版本 1.2.3', { exact: true }).waitFor({ timeout: 10_000 })
     const detail = await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd)
     expect(detail).toContain('版本 1.2.3')
+    expect(detail).toContain('heading \"使用说明\"')
+    expect(detail).not.toContain('内部接入说明')
+    const dialogWidth = await page.getByRole('dialog', { name: '故事导演' }).evaluate(element => element.getBoundingClientRect().width)
+    expect(dialogWidth).toBeGreaterThan(600)
 
     await page.getByRole('button', { name: '登录后安装' }).click()
     await page.getByText('MANTUR-1234', { exact: true }).waitFor({ timeout: 10_000 }).catch(async () => {
@@ -382,7 +397,7 @@ describe.skipIf(MODE === 'record')('web snapshot: Mantur product identity', () =
       const initialIds = new Set((await recipeScaffold.ctx.sessionPersistence.list()).map(snapshot => snapshot.header.id))
 
       await recipePage.getByRole('button', { name: '配方广场' }).click()
-      await recipePage.getByText(marketplaceRecipe.title, { exact: true }).click()
+      await recipePage.getByText(marketplaceRecipe.name, { exact: true }).click()
       const settled = recipeScaffold.whenTurnSettled()
       await recipePage.getByRole('button', { name: '交给 Agent 复刻' }).click()
       const recipeSessionId = await settled
@@ -400,13 +415,13 @@ describe.skipIf(MODE === 'record')('web snapshot: Mantur product identity', () =
         .filter(block => block.type === 'text')
         .map(block => block.text)
         .join('\n')
-      expect(firstUserText).toContain(`配方标识：${marketplaceRecipe.slug}`)
+      expect(firstUserText).toContain(`配方标识：${marketplaceRecipe.code}`)
       expect(firstUserText).toContain('配方平台：ManturHub')
-      expect(firstUserText).toContain(`来源地址：${fixture.baseUrl}/recipes/${marketplaceRecipe.slug}`)
-      expect(firstUserText).toContain(marketplaceRecipeDetail.agent_payload)
+      expect(firstUserText).not.toContain('来源地址：')
+      expect(firstUserText).toContain(marketplaceRecipeDetail.usage)
 
       await recipePage.getByRole('button', { name: '配方广场' }).click()
-      await recipePage.getByText(marketplaceRecipe.title, { exact: true }).click()
+      await recipePage.getByText(marketplaceRecipe.name, { exact: true }).click()
       const promptRejected = Promise.withResolvers<undefined>()
       await recipePage.route('**/api/session/prompt', async (route) => {
         try {

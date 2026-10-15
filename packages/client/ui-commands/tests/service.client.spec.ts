@@ -16,6 +16,7 @@ import { RemoteError, TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
 import type { ClientSessionContext, ConsumeTokenRequest, InputTriggerPick, InputTriggerSource, SubmitImageAttachment } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 import type { CommandContribution, CommandDecoration, CommandUiSpec, SelectOption } from '../src/client/contract.ts'
 import type { CommandDescriptor } from '../src/client/directory.ts'
+import { zh, type CommandKey } from '../src/client/locales.ts'
 import { CommandUiRuntime } from '../src/client/service.ts'
 
 const sid = (k: string): SessionId => k as SessionId
@@ -98,7 +99,7 @@ async function bench(opts: BenchOptions = {}) {
   // Deterministic key-echo translator: notice assertions read `key{json}`.
   ctx.provide('locale', {
     bind: (ns: string) => (key: string, params?: Record<string, unknown>) =>
-      `${ns}:${key}${params === undefined ? '' : JSON.stringify(params)}`,
+      key.startsWith('command.') ? zh[key as CommandKey] : `${ns}:${key}${params === undefined ? '' : JSON.stringify(params)}`,
   })
   // Real scope tags behind a fake sessions face.
   const scopes = new Map<SessionId, { ctx: Context; fiber: { dispose(): Promise<void> } }>()
@@ -206,7 +207,7 @@ describe('candidates', () => {
     const { source, listCalls } = await bench()
     const list = await source.candidates(proj('s1'), req('g'))
     expect(listCalls).toEqual([{ sessionId: sid('s1') }])
-    expect(list).toEqual([{ name: 'goal', description: 'leadingInput kind', hint: 'goal text' }])
+    expect(list).toEqual([{ name: '任务目标', value: 'goal', description: '设置或查看长期任务目标', hint: 'goal text' }])
   })
 
   it('matches case-insensitive subsequences and ranks prefixes, boundaries, adjacency, gaps, then source order', async () => {
@@ -221,7 +222,7 @@ describe('candidates', () => {
       { name: 'zu12v', description: '' },
     ]
     const { source } = await bench({ commands: () => Promise.resolve({ commands }) })
-    const names = async (query: string) => (await source.candidates(proj('s1'), req(query))).map(c => c.name)
+    const names = async (query: string) => (await source.candidates(proj('s1'), req(query))).map(c => c.value ?? c.name)
     await expect(names('QX')).resolves.toEqual(['qx-long', 'q-xylophone'])
     await expect(names('fb')).resolves.toEqual(['foo-bar', 'fabulous'])
     await expect(names('uv')).resolves.toEqual(['zuv', 'zu1v', 'yu1v', 'zu12v'])
@@ -231,14 +232,14 @@ describe('candidates', () => {
 
   it('catalogs are per session: another session pulls its own key', async () => {
     const { source, listCalls } = await bench()
-    const names = (await source.candidates(proj('s2'), req(''))).map(c => c.name)
+    const names = (await source.candidates(proj('s2'), req(''))).map(c => c.value ?? c.name)
     expect(listCalls).toEqual([{ sessionId: sid('s2') }])
     expect(names).toEqual(['plan', 'goal', 'attach'])
   })
 
   it('hides leadingInput commands at inline position', async () => {
     const { source } = await bench()
-    const names = (await source.candidates(proj('s1'), req('', 'inline'))).map(c => c.name)
+    const names = (await source.candidates(proj('s1'), req('', 'inline'))).map(c => c.value ?? c.name)
     expect(names).toEqual(['plan'])
   })
 
@@ -246,17 +247,17 @@ describe('candidates', () => {
     const { command, source } = await bench()
     const available = vi.fn((session: ClientSessionContext) => session.sessionId === sid('s1'))
     command.register(themeContribution({ available }))
-    const s1Names = (await source.candidates(proj('s1'), req(''))).map(c => c.name)
+    const s1Names = (await source.candidates(proj('s1'), req(''))).map(c => c.value ?? c.name)
     expect(s1Names).toEqual(['plan', 'goal', 'theme'])
     expect(available).toHaveBeenLastCalledWith(proj('s1'))
-    const s2Names = (await source.candidates(proj('s2'), req(''))).map(c => c.name)
+    const s2Names = (await source.candidates(proj('s2'), req(''))).map(c => c.value ?? c.name)
     expect(s2Names).not.toContain('theme')
   })
 
   it('contribution rows ride the same fuzzy query filter', async () => {
     const { command, source } = await bench()
     command.register(themeContribution())
-    const names = (await source.candidates(proj('s1'), req('tm'))).map(c => c.name)
+    const names = (await source.candidates(proj('s1'), req('tm'))).map(c => c.value ?? c.name)
     expect(names).toEqual(['theme'])
   })
 
@@ -279,7 +280,7 @@ describe('decorations (bare-invocation UI on host commands)', () => {
   it('adds no catalog row: the host row stands alone', async () => {
     const { command, source } = await bench()
     command.decorate(goalDecoration())
-    const names = (await source.candidates(proj('s1'), req(''))).map(c => c.name)
+    const names = (await source.candidates(proj('s1'), req(''))).map(c => c.value ?? c.name)
     expect(names).toEqual(['plan', 'goal'])
   })
 
@@ -807,4 +808,16 @@ describe('directory invalidation events', () => {
     await new Promise(resolve => setTimeout(resolve, 0))
     expect(source.matchSpace!(proj('s2'), '/attach')).not.toBeUndefined()
   })
+})
+
+
+it('finds a Chinese command label and dispatches the canonical slash command', async () => {
+  const { source, executeCalls, fiber } = await bench()
+  try {
+    const candidates = await source.candidates(proj('s1'), req('计划'))
+    expect(candidates).toMatchObject([{ name: '计划模式', value: 'plan' }])
+    source.onPick({ candidate: candidates[0]!, session: proj('s1'), position: 'leading',
+      via: 'menu', action: 'pick', span: { start: 0, end: 1, draftRev: 0 } })
+    await vi.waitFor(() => { expect(executeCalls[0]?.line).toBe('/plan') })
+  } finally { await fiber.dispose() }
 })

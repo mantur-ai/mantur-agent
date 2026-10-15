@@ -77,11 +77,11 @@ export interface ManturMarketplaceRecipe {
   readonly coverUrl: string
   readonly sampleUrl: string
   readonly sampleKind: ManturRecipeSampleKind
-  readonly operatorId: string
-  readonly costEstimate: string
-  readonly priceDumplings: number
-  readonly author: string
-  readonly copies: number
+  readonly operatorId: string | null
+  readonly costEstimate: string | null
+  readonly priceDumplings: number | null
+  readonly author: string | null
+  readonly copies: number | null
   readonly publishedAt: string
 }
 
@@ -112,5 +112,18 @@ export interface ManturMarketplaceRecipeDetail extends ManturMarketplaceRecipe {
   readonly sourceName?: string
   readonly sourceAvatarUrl?: string
   readonly models: readonly string[]
+  /** Published input requirements, preserved without inferred values. */
+  readonly inputSchema: Readonly<Record<string, ManturRecipeJsonValue>>
+  /** Ordered production steps; a missing note does not imply execution instructions. */
+  readonly steps: readonly { readonly operatorCode: string; readonly note: string | null }[]
   readonly agentPayload: string
+}
+
+/** A locally available skill and its persistent user-controlled switch. */
+export interface ManturInstalledSkill {
+  readonly name: string
+  readonly title: string
+  readonly description: string
+  readonly source: 'bundled' | 'local'
+  readonly enabled: boolean
 }
