@@ -59,6 +59,34 @@ def prepare(directory, version, public_url):
     return files, channels
 
 
+def publish_installers(client, bucket, prefix, base, files, version):
+    """Advance no-cache manual downloads without changing immutable update artifacts."""
+    installers = [name for name in ('Mantur-Agent-macOS-arm64.dmg', 'Mantur-Agent-Windows-x64.exe') if name in files]
+    for name in installers:
+        try:
+            current = client.head_object(Bucket=bucket, Key=prefix + '/stable/' + name)
+        except ClientError as error:
+            if error.response['ResponseMetadata']['HTTPStatusCode'] != 404:
+                raise
+        else:
+            previous = current['Metadata']['version']
+            if tuple(map(int, previous.split('.'))) > tuple(map(int, version.split('.'))):
+                raise ValueError('Refusing to downgrade a manual installer')
+    for name in installers:
+        sha = digest(files[name], 'sha256').hex()
+        client.copy_object(Bucket=bucket, Key=prefix + '/stable/' + name,
+                           CopySource={'Bucket': bucket, 'Key': prefix + '/releases/' + version + '/' + name},
+                           ACL='public-read', MetadataDirective='REPLACE',
+                           Metadata={'version': version, 'sha256': sha}, ContentType='application/octet-stream',
+                           ContentDisposition='attachment; filename="' + name + '"',
+                           CacheControl='no-cache, max-age=0, must-revalidate')
+        with urlopen(Request(base + '/stable/' + name, headers={'Range': 'bytes=0-0'}), timeout=60) as response:
+            if (response.status != 206 or response.headers.get('Content-Range') != 'bytes 0-0/' + str(files[name].stat().st_size)
+                    or response.headers.get('x-tos-meta-sha256') != sha):
+                raise ValueError('Public manual installer did not refresh: ' + name)
+        print('Published manual installer:', name, flush=True)
+
+
 def publish(directory, version):
     base = os.environ['TOS_PUBLIC_URL'].rstrip('/')
     if not base.startswith('https://'):
@@ -100,6 +128,7 @@ def publish(directory, version):
             if response.status != 206 or response.headers.get('Content-Range') != 'bytes 0-0/' + str(path.stat().st_size):
                 raise ValueError('Public range download failed: ' + name)
         print('Verified public artifact:', name, flush=True)
+    publish_installers(client, bucket, prefix, base, files, version)
     for name, body in channels.items():
         client.put_object(Bucket=bucket, Key=prefix + '/stable/' + name, Body=body, ACL='public-read',
                           ContentType='text/yaml', CacheControl='no-cache, max-age=0, must-revalidate')

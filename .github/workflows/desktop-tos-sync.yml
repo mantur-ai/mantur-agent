@@ -6,6 +6,10 @@ on:
         description: Existing public stable release tag
         required: true
         type: string
+      windows_from_tos:
+        description: Include the Windows installer already published to TOS for this tag
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -31,6 +35,15 @@ jobs:
           [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
           gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease --jq 'select(.isDraft == false and .isPrerelease == false)' | grep -q isDraft
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir release
+      - name: Download separately published Windows installer from TOS
+        if: ${{ inputs.windows_from_tos }}
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          for name in Mantur-Agent-Windows-x64.exe Mantur-Agent-Windows-x64.exe.blockmap SHA256SUMS-Windows.txt; do
+            test ! -e "release/$name"
+            curl --fail --location --output "release/$name" "https://resource.mantur.ai/mantur-agent/releases/${TAG#v}/$name"
+          done
       - name: Install publisher dependencies
         run: |
           python -m pip install boto3==1.42.97 PyYAML==6.0.3

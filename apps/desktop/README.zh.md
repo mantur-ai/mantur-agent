@@ -92,7 +92,7 @@ smoke 还会检查内置 CLI 的固定来源记录、包版本、许可证和依
 
 工作流会把选中的原生 `latest-mac.yml` 合并为一份可区分架构的更新通道，并把完整候选产物与 `SHA256SUMS` 保留七天。必须从精确匹配 `v<apps/desktop 版本>` 的 tag 运行；tag 必须匹配打包版本。`publish=false` 会在组装候选产物后停止。`publish=true` 还要求审批变量指向完整固定源码配置的 SHA-256 摘要，之后才会创建 GitHub release，并同时上传 DMG、更新 ZIP、blockmap、更新元数据与哈希。工作流会拒绝使用已有 release 的 tag，不会替换已发布文件；仓库级 Release Immutability 则会继续阻止之后修改 tag 或产物。
 
-客户端通过 `https://resource.mantur.ai/mantur-agent/stable/` 通用 HTTPS 更新源检查版本。发布任务将文件保存到 TOS 的 `mantur-agent/releases/<version>/`，匿名分段下载验证通过后才更新 `stable/latest-mac.yml`。发布脚本校验 SHA-256 清单及更新文件的 SHA-512、大小，拒绝覆盖不同内容或降级更新源；仅安装包对象设为公开读。`macos-release` 受保护环境保存 `TOS_ACCESS_KEY` 和 `TOS_SECRET_KEY`，凭据不进入客户端。`Sync desktop release to TOS` 工作流可同步已公开的稳定版及手动附加的 Windows 安装包；未签名 Windows 不提供 `latest.yml`。0.1.18 及更早版本在 GitHub 不可达时需手动安装一次新版。现有资源域名连接新加坡桶，国内各地域的网络性能仍需验收。
+客户端通过 `https://resource.mantur.ai/mantur-agent/stable/` 通用 HTTPS 更新源检查版本。发布任务将文件保存到 TOS 的 `mantur-agent/releases/<version>/`，匿名分段下载验证通过后才更新 `stable/latest-mac.yml`。发布脚本校验 SHA-256 清单及更新文件的 SHA-512、大小，拒绝覆盖不同内容或降级更新源；仅安装包对象设为公开读。`macos-release` 受保护环境保存 `TOS_ACCESS_KEY` 和 `TOS_SECRET_KEY`，凭据不进入客户端。`Sync desktop release to TOS` 工作流可同步已公开的稳定版及手动附加的 Windows 安装包；GitHub 发布不可变且 Windows 包已单独发布到 TOS 时，手动同步选择 `windows_from_tos`，验证并发布该版本的 Windows 文件。未签名 Windows 不提供 `latest.yml`。官网手动下载使用 `stable/Mantur-Agent-macOS-arm64.dmg` 和 `stable/Mantur-Agent-Windows-x64.exe`；发布流程将已验证的安装包复制到禁止缓存的固定地址，并拒绝降级。未包含的平台保留该平台最后发布的安装包。自动更新元数据继续引用不可变的版本文件。0.1.18 及更早版本在 GitHub 不可达时需手动安装一次新版。现有资源域名连接新加坡桶，国内各地域的网络性能仍需验收。
 
 每次交付安装包或更新发布状态，都必须在[飞书产品与安装使用指南](https://guiyi2023.feishu.cn/docx/Iq3id4fr8o2uo9xKfpEcIck9nRf)中追加带日期和版本号的用户更新日志，并保留历史记录与附件。日志说明用户可见的改进、问题修复、更新步骤、支持平台、已知限制，以及经过验证的安装包下载和自动更新状态；仅上传安装包不代表自动更新通道已经可用。最新记录排在最前，同时更新受影响的安装与使用说明。
 

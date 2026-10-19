@@ -5,6 +5,8 @@ import importlib.util
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import MagicMock, patch
+from botocore.exceptions import ClientError
 import yaml
 
 spec = importlib.util.spec_from_file_location('publisher', Path(__file__).with_name('desktop-publish-tos.py'))
@@ -39,6 +41,50 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(data['path'], 'https://resource.mantur.ai/mantur-agent/releases/0.1.19/' + self.zip.name)
         self.assertEqual(data['files'][0]['url'], data['path'])
         self.assertNotIn('latest.yml', channels)
+
+    def test_manual_installer_updates_only_present_platform(self):
+        name = 'Mantur-Agent-macOS-arm64.dmg'
+        artifact = self.root / name
+        artifact.write_bytes(b'installer')
+        client = MagicMock()
+        client.head_object.side_effect = ClientError({'ResponseMetadata': {'HTTPStatusCode': 404}}, 'HeadObject')
+        response = MagicMock()
+        response.status = 206
+        response.headers = {'Content-Range': 'bytes 0-0/9', 'x-tos-meta-sha256': hashlib.sha256(b'installer').hexdigest()}
+        with patch.object(publisher, 'urlopen') as request:
+            request.return_value.__enter__.return_value = response
+            publisher.publish_installers(client, 'bucket', 'agent', 'https://example.com/agent', {name: artifact}, '0.1.20')
+        args = client.copy_object.call_args.kwargs
+        self.assertEqual(client.copy_object.call_count, 1)
+        self.assertEqual(args['Key'], 'agent/stable/' + name)
+        self.assertEqual(args['CopySource']['Key'], 'agent/releases/0.1.20/' + name)
+        self.assertEqual(args['Metadata']['version'], '0.1.20')
+        self.assertIn('no-cache', args['CacheControl'])
+
+    def test_manual_installer_rejects_downgrade(self):
+        client = MagicMock()
+        client.head_object.return_value = {'Metadata': {'version': '0.1.21'}}
+        with self.assertRaisesRegex(ValueError, 'downgrade'):
+            publisher.publish_installers(client, 'bucket', 'agent', 'https://example.com', {'Mantur-Agent-Windows-x64.exe': self.zip}, '0.1.20')
+        client.copy_object.assert_not_called()
+
+    def test_manual_installer_rejects_stale_public_copy(self):
+        client = MagicMock()
+        client.head_object.return_value = {'Metadata': {'version': '0.1.20'}}
+        response = MagicMock()
+        response.status = 206
+        response.headers = {'Content-Range': 'bytes 0-0/11', 'x-tos-meta-sha256': 'old'}
+        with patch.object(publisher, 'urlopen') as request:
+            request.return_value.__enter__.return_value = response
+            with self.assertRaisesRegex(ValueError, 'did not refresh'):
+                publisher.publish_installers(client, 'bucket', 'agent', 'https://example.com', {'Mantur-Agent-Windows-x64.exe': self.zip}, '0.1.20')
+
+    def test_separate_windows_manifest_rejects_corruption(self):
+        name = 'Mantur-Agent-Windows-x64.exe'
+        (self.root / name).write_bytes(b'corrupted windows')
+        (self.root / 'SHA256SUMS-Windows.txt').write_text('0' * 64 + '  ' + name + '\n')
+        with self.assertRaisesRegex(ValueError, 'SHA256 mismatch'):
+            publisher.prepare(self.root, '0.1.19', 'https://example.com')
 
     def test_corrupted_artifact(self):
         self.zip.write_bytes(b'corrupted')
