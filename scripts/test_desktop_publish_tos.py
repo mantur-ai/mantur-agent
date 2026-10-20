@@ -36,9 +36,9 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn('!cancelled()', workflow['jobs']['publish']['if'])
 
     def test_versioned_channel(self):
-        files, channels = publisher.prepare(self.root, '0.1.19', 'https://resource.mantur.ai/mantur-agent')
+        files, channels = publisher.prepare(self.root, '0.1.19', 'https://mantur-pro.tos-accelerate.volces.com/mantur-agent')
         data = yaml.safe_load(channels['latest-mac.yml'])
-        self.assertEqual(data['path'], 'https://resource.mantur.ai/mantur-agent/releases/0.1.19/' + self.zip.name)
+        self.assertEqual(data['path'], 'https://mantur-pro.tos-accelerate.volces.com/mantur-agent/releases/0.1.19/' + self.zip.name)
         self.assertEqual(data['files'][0]['url'], data['path'])
         self.assertNotIn('latest.yml', channels)
 

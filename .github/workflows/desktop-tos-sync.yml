@@ -42,7 +42,7 @@ jobs:
         run: |
           for name in Mantur-Agent-Windows-x64.exe Mantur-Agent-Windows-x64.exe.blockmap SHA256SUMS-Windows.txt; do
             test ! -e "release/$name"
-            curl --fail --location --output "release/$name" "https://resource.mantur.ai/mantur-agent/releases/${TAG#v}/$name"
+            curl --fail --location --output "release/$name" "https://mantur-pro.tos-accelerate.volces.com/mantur-agent/releases/${TAG#v}/$name"
           done
       - name: Install publisher dependencies
         run: |
@@ -57,5 +57,5 @@ jobs:
           TOS_ENDPOINT: https://tos-s3-ap-southeast-1.volces.com
           TOS_BUCKET: mantur-pro
           TOS_PREFIX: mantur-agent
-          TOS_PUBLIC_URL: https://resource.mantur.ai/mantur-agent
+          TOS_PUBLIC_URL: https://mantur-pro.tos-accelerate.volces.com/mantur-agent
         run: python scripts/desktop-publish-tos.py release "${TAG#v}"

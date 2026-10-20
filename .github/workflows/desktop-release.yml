@@ -400,6 +400,6 @@ jobs:
           TOS_ENDPOINT: https://tos-s3-ap-southeast-1.volces.com
           TOS_BUCKET: mantur-pro
           TOS_PREFIX: mantur-agent
-          TOS_PUBLIC_URL: https://resource.mantur.ai/mantur-agent
+          TOS_PUBLIC_URL: https://mantur-pro.tos-accelerate.volces.com/mantur-agent
           RELEASE_VERSION: ${{ needs.validate.outputs.version }}
         run: python scripts/desktop-publish-tos.py release "$RELEASE_VERSION"

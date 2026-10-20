@@ -86,7 +86,7 @@
     "publish": [
       {
         "provider": "generic",
-        "url": "https://resource.mantur.ai/mantur-agent/stable/",
+        "url": "https://mantur-pro.tos-accelerate.volces.com/mantur-agent/stable/",
         "useMultipleRangeRequest": false
       }
     ],

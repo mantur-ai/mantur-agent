@@ -61,7 +61,7 @@ if (!existsSync(packaged.updateConfig)) {
   throw new Error(`packaged updater configuration is missing: ${packaged.updateConfig}`)
 }
 const updateConfig = readFileSync(packaged.updateConfig, 'utf8')
-for (const expected of ['provider: generic', 'url: https://resource.mantur.ai/mantur-agent/stable/', 'useMultipleRangeRequest: false']) {
+for (const expected of ['provider: generic', 'url: https://mantur-pro.tos-accelerate.volces.com/mantur-agent/stable/', 'useMultipleRangeRequest: false']) {
   if (!updateConfig.includes(expected)) {
     throw new Error(`packaged updater configuration is missing ${expected}`)
   }
