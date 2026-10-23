@@ -1,4 +1,5 @@
 /** Session-bound script reads and guarded writes over the Harness filesystem. */
+import { webWorkbenchUrl } from './web-url.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { FsError } from '@deepseek-ai/dsh-fs'
@@ -42,6 +43,24 @@ export class ManturScript extends TypertRemoteService {
     if (ctx.fs.sandboxMode !== undefined && this.mutationPolicy === undefined) {
       throw new Error('Script workbench requires sandboxPolicy for the mounted filesystem')
     }
+    ctx.tools.register(defineTool({
+      name: 'open_web_page',
+      description: 'Request the current conversation’s right-side Web tab for a local skill workbench. First run the skill’s open-workbench command and verify its returned URL is serving. Pass that exact http://127.0.0.1:port URL. This requests display only: it does not confirm rendering, run production, or authorize paid generation. Desktop support is required.',
+      parameters: { url: { type: 'string', required: true } },
+      output: {
+        schema: { type: 'object', additionalProperties: false, properties: {
+          sessionId: { type: 'string', required: true }, url: { type: 'string', required: true }, status: { type: 'string', required: true },
+        } },
+        render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
+        presentationMeta: (_args, value) => ({ kind: 'mantur-web-open', ...value }),
+      },
+      execute: (args, exec) => {
+        if (exec.agent === undefined) throw new Error('Opening a web page requires an owning Agent Session')
+        exec.signal.throwIfAborted()
+        return Promise.resolve({ sessionId: exec.agent.id, url: webWorkbenchUrl(args.url), status: 'requested' })
+      },
+      presentCall: args => ({ card: 'generic', title: 'Open web page', kind: 'other', subtitle: args.url }),
+    }))
     ctx.tools.register(defineTool({
       name: 'replace_script_selection',
       description: 'Replace exactly the selected passage from a script rewrite request. Copy path, version, start, end and selected verbatim from that request; offsets are UTF-16 code units in LF-normalized text. Supply only the replacement text. A stale file or mismatched selection fails without writing: stop and ask the user to select the current passage again. Do not work around a conflict with another write tool. Success confirms a guarded file write, not any other production step.',

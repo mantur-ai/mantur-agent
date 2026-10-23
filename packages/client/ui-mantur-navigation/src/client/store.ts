@@ -24,7 +24,7 @@ export type ManturMarketplaceState =
     readonly installing?: string | undefined
     readonly installError?: 'auth-required' | 'local-conflict' | 'failed' | undefined
     readonly using?: string | undefined
-    readonly useError?: 'no-workspace' | 'failed' | undefined
+    readonly useError?: 'failed' | undefined
     readonly login?: ManturLoginStart | undefined
     readonly loginPhase?: 'starting' | 'authorizing' | 'failed' | 'unavailable' | undefined
   }
@@ -311,9 +311,9 @@ export class ManturMarketplaceStore {
   }
 
   /**
-   * Start a default-named Session in the current Workspace with an installed Skill command as its draft.
+   * Open an installed Skill reference in a new project Session or the resident unassigned draft.
    * @param slug - Installed Skill selected by the user.
-   * @returns whether the draft is ready in the newly opened Session.
+   * @returns whether the unsent reference is ready in the conversation editor.
    */
   async startSkill(slug: string): Promise<boolean> {
     const current = this.store.getSnapshot()
@@ -328,12 +328,18 @@ export class ManturMarketplaceStore {
     const workspace = currentSessionId === undefined
       ? undefined
       : workspaces.list.getSnapshot().items.find(item => item.sessionIds.includes(currentSessionId))
-    if (workspace === undefined) {
-      this.store.set({ ...current, useError: 'no-workspace' })
-      return false
-    }
+    const reference = { source: 'skill', ref: slug, label: skill.name, clipboardText: `/${slug}` }
     this.store.set({ ...current, using: slug, useError: undefined })
     try {
+      if (workspace === undefined) {
+        const drafts = this.ctx.get('conversationDrafts')
+        if (drafts === undefined || !drafts.enabled.getSnapshot() || !drafts.input.appendReference(reference)) {
+          throw new Error('Skill draft is unavailable')
+        }
+        sessions.clear()
+        this.store.set({ ...current, using: undefined, useError: undefined })
+        return true
+      }
       if (this.pendingSkillSession !== undefined
         && this.pendingSkillSession.workspaceId !== workspace.workspaceId) {
         await workspaces.archiveSession(this.pendingSkillSession.sessionId)
@@ -346,7 +352,7 @@ export class ManturMarketplaceStore {
       if (binding === undefined) throw new Error(`Skill session "${sessionId}" resolved no binding`)
       const conversation = binding.ctx.get('conversation')
       if (conversation === undefined) throw new Error('Skill conversation service is unavailable')
-      conversation.input.for(binding.ctx).setDraft(`/${slug}`)
+      if (!conversation.input.for(binding.ctx).appendReference(reference)) throw new Error('Skill draft is unavailable')
       sessions.open(sessionId)
       this.pendingSkillSession = undefined
       const latest = this.store.getSnapshot()

@@ -16,7 +16,7 @@ const nativeBrokerBench: typeof legacyBench = (api, leaseMs) => legacyBench(api,
 const cliPackage = process.env.DSH_NATIVE_CLI_PACKAGE
 const cliTarball = process.env.DSH_NATIVE_CLI_TARBALL
 const execFileAsync = promisify(execFile)
-const packageHash = '98d2eefe59566b220950ac201f7ad133c47e469e3e0dfcad180027d6a623f86d'
+const packageHash = 'a486b168988239485fa45e01ad24a8c319eca5eda0c1587fe9b15c1a244e99a0'
 
 function location(path: string): string {
   if (cliPackage === undefined) throw new Error('DSH_NATIVE_CLI_PACKAGE must name the fixed unpacked CLI')
@@ -66,13 +66,13 @@ function script(source: string): string[] {
 }
 
 // The pinned release artifact is explicit input; ordinary CI does not claim this joint acceptance.
-describe.skipIf(cliPackage === undefined && cliTarball === undefined || process.platform === 'win32')('fixed CLI 1.2.6 and Main broker joint transport (POSIX descriptor fixture)', () => {
+describe.skipIf(cliPackage === undefined && cliTarball === undefined || process.platform === 'win32')('fixed CLI 1.2.10 and Main broker joint transport (POSIX descriptor fixture)', () => {
   beforeAll(async () => {
     if (cliPackage === undefined || cliTarball === undefined) throw new Error('Both fixed CLI package and tarball paths are required')
     expect(createHash('sha256').update(await readFile(cliTarball)).digest('hex')).toBe(packageHash)
     const listed = await execFileAsync('tar', ['-tzf', cliTarball], { encoding: 'utf8' })
     const files = listed.stdout.trim().split('\n').filter(path => !path.endsWith('/'))
-    expect(files).toHaveLength(30)
+    expect(files).toHaveLength(32)
     for (const path of files) {
       expect(path.startsWith('package/')).toBe(true)
       const packed = await execFileAsync('tar', ['-xOf', cliTarball, path], { encoding: 'buffer' })

@@ -6,6 +6,8 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ScriptEntry } from '../types.ts'
 import type { ScriptCommands } from './index.ts'
 import type { createWorkbenchStore } from './store.ts'
+import { WebPanel } from './WebPanel.tsx'
+import type { WebOpening } from './agent-opening.ts'
 import css from './Workbench.module.css'
 
 type Shared = PropsStore<ReturnType<typeof createWorkbenchStore>> & PropsLocale<'script.mantur'>
@@ -23,7 +25,8 @@ export function Workbench(props: WorkbenchProps) {
     <header className={css.tabs}>
       <button type="button" aria-pressed={active === 'script'} onClick={() =>{  props.actions.select(session ?? '', 'script') }}>{props.t('script')}</button>
       {props.renderSlot('main.workbench.assets.tab', { selected: active === 'assets', selectAssets: () => { props.actions.select(session ?? '', 'assets') } })}
-      {props.renderSlot('main.workbench.editing.tab', { selected: active === 'editing', selectEditing: () =>{  props.actions.select(session ?? '', 'editing') } })}
+      {props.renderSlot('main.workbench.editing.tab', { selected: active === 'editing', selectEditing: () =>{  props.actions.select(session ?? '', 'editing') } }, { fallback: <button type="button" aria-pressed={active === 'editing'} onClick={() => { props.actions.select(session ?? '', 'editing') }}>{props.t('editing')}</button> })}
+      <button type="button" aria-pressed={active === 'web'} onClick={() => { props.actions.select(session ?? '', 'web') }}>{props.t('web')}</button>
     </header>
     <div className={css.panel} hidden={active !== 'script'}><ScriptEditor {...props} session={session} /></div>
     {(active === 'assets' || assetsMounted) && <div className={css.panel} hidden={active !== 'assets'}>
@@ -32,12 +35,17 @@ export function Workbench(props: WorkbenchProps) {
     {(active === 'editing' || editingMounted) && <div className={css.panel} hidden={active !== 'editing'}>
       {props.renderSlot('main.workbench.editing.content', { closeWorkbench: props.closeWorkbench }, { fallback: <p className={css.empty}>{props.t('editingUnavailable')}</p> })}
     </div>}
+    {active === 'web' && <WebPanel key={session ?? ''} {...props} session={session ?? ''} />}
   </section>
 }
 
 /** @param props - Visibility and Session-indexed content selection. @returns Single boundary toggle and optional opening observer. */
-export function WorkbenchToggle(props: PropsRuntime<'main.workbench.toggle'> & Shared & PropsRenderSlots<'main.workbench.toggle.editing'>) {
+export function WorkbenchToggle(props: PropsRuntime<'main.workbench.toggle'> & Shared & PropsRenderSlots<'main.workbench.toggle.editing'> & { observeWebOpening?: (open: (opening: WebOpening) => void) => () => void }) {
   const session = props.useSessions(s => s.current)
+  const openWeb = useCallback((opening: WebOpening) => {
+    props.actions.openWeb(opening.sessionId, opening.url); props.openWorkbench()
+  }, [props.actions, props.openWorkbench])
+  useEffect(() => props.observeWebOpening?.(openWeb), [props.observeWebOpening, openWeb])
   const openEditing = useCallback(() => { props.actions.select(session ?? '', 'editing'); props.openWorkbench() }, [props.actions, props.openWorkbench, session])
   return <>
     {props.renderSlot('main.workbench.toggle.editing', {

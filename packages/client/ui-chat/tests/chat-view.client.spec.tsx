@@ -1214,14 +1214,44 @@ describe('ChatView', () => {
     expect(within(cancelledDisclosure).getByRole('status').textContent).toContain('重试已取消')
   })
 
-  it('renders terminal turn failures inline with their durable message and optional code', () => {
+  it('shows localized failure guidance with collapsed diagnostics and hides raw authentication text', () => {
     const h = makeHarness({ nodes: [user(1, 'try'), turnError(2, 'AUTH'), turnError(3)] })
     const view = render(<h.ChatView {...h.props} />)
-    const statuses = view.getAllByRole('status')
-    expect(statuses.map(status => status.textContent)).toEqual([
-      '本轮运行失败API 密钥无效AUTH',
-      '本轮运行失败plugin exploded',
-    ])
+    expect(view.getByText('模型服务拒绝了身份验证。请在“设置 → 模型”检查 API 密钥和访问权限。')).toBeTruthy()
+    expect(view.queryByText('API key is invalid')).toBeNull()
+    const diagnostics = view.getByText('plugin exploded').closest('details')!
+    expect(diagnostics.open).toBe(false)
+    fireEvent.click(within(diagnostics).getByText('技术详情'))
+    expect(diagnostics.open).toBe(true)
+    expect(diagnostics.textContent).toContain('plugin exploded')
+    expect(view.getAllByRole('status')).toHaveLength(2)
+  })
+
+  it.each([
+    ['MISSING_CREDENTIAL', '尚未配置模型 API 密钥。'],
+    ['INVALID_CREDENTIAL', '模型密钥配置无法使用。'],
+    ['QUOTA', '模型服务的余额或配额不足。'],
+    ['RATE_LIMIT', '模型请求过于频繁或暂时受限。'],
+    ['TRANSPORT', '无法连接模型服务。'],
+    ['TIMEOUT', '等待模型回复超时。'],
+    ['SERVER', '模型服务暂时异常。'],
+    ['CONTEXT_WINDOW_EXCEEDED', '当前对话内容超过模型可处理的长度。'],
+    ['INVALID_REQUEST', '模型服务无法处理这次请求。'],
+    ['UNKNOWN_MODEL', '所选模型当前不可用。'],
+    ['EMPTY_RESPONSE', '模型未返回完整可用的回复。'],
+    ['STREAM_CLOSED', '模型未返回完整可用的回复。'],
+    ['MALFORMED_RESPONSE', '模型未返回完整可用的回复。'],
+    ['ABORTED', '本次请求已中止。'],
+    ['PLUGIN_UNKNOWN_LONG_CODE', '本次运行遇到问题，未能完成。'],
+  ])('explains %s without changing its durable diagnostic', (code, guidance) => {
+    const node = { ...turnError(3, code), message: 'original provider diagnostic /some/very/long/path' }
+    const h = makeHarness({ nodes: [node] })
+    const view = render(<h.ChatView {...h.props} />)
+    expect(view.getByRole('status').textContent).toContain(guidance)
+    const detail = view.getByText(node.message).closest('details')!
+    expect(detail.open).toBe(false)
+    expect(within(detail).getByText(code)).toBeTruthy()
+    expect(node.message).toBe('original provider diagnostic /some/very/long/path')
   })
 
   it('renders the max-tokens notice with localized guidance, distinct from turn errors', () => {

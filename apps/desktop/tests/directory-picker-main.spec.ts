@@ -19,7 +19,7 @@ const native = vi.hoisted(() => ({
     loadFile: vi.fn(async () => {}), loadURL: vi.fn(async () => {}), isDestroyed: () => false,
   },
   ipcMain: { handle: vi.fn<(name: string, handler: unknown) => void>() },
-  ipcRenderer: { invoke: vi.fn<(channel: string) => Promise<unknown>>() },
+  ipcRenderer: { invoke: vi.fn<(channel: string, ...args: unknown[]) => Promise<unknown>>(), on: vi.fn(), removeListener: vi.fn() },
   contextBridge: { exposeInMainWorld: vi.fn<(name: string, value: unknown) => void>() },
   dialog: { showOpenDialog: vi.fn(), showMessageBox: vi.fn() },
   drafts: { prepare: vi.fn(async () => 0), release: vi.fn() },
@@ -66,14 +66,15 @@ const resourcesPath = Object.getOwnPropertyDescriptor(process, 'resourcesPath')
 beforeEach(() => {
   vi.resetModules()
   vi.clearAllMocks()
+  native.service.closed = Promise.resolve()
   vi.spyOn(process, 'on').mockReturnValue(process)
   vi.spyOn(process, 'once').mockReturnValue(process)
   // Main runs inside Electron on macOS or Windows; no native platform APIs execute in this fixture.
   Object.defineProperty(process, 'platform', { value: 'darwin' })
   Object.defineProperty(process, 'resourcesPath', { configurable: true, value: '/desktop-resources' })
   native.dialog.showOpenDialog.mockResolvedValue({ canceled: true, filePaths: [] })
-  native.dialog.showMessageBox.mockImplementation((_window: unknown, options: { signal?: AbortSignal }) => {
-    const signal = options.signal
+  native.dialog.showMessageBox.mockImplementation((_window: unknown, options?: { signal?: AbortSignal }) => {
+    const signal = options?.signal
     if (signal === undefined) return Promise.resolve({ response: 0 })
     return new Promise<{ response: number }>((resolve) => {
       if (signal.aborted) resolve({ response: 0 })
@@ -145,7 +146,7 @@ describe('desktop directory picker wiring', () => {
     } finally { result.resolve({ canceled: true, filePaths: [] }); await pending }
     await expect(subject.pick()).resolves.toBeNull()
     await subject.beforeInstall()
-    expect(native.drafts.prepare).not.toHaveBeenCalled()
+    expect(native.drafts.prepare).toHaveBeenCalledOnce()
     expect(native.requestUpdateSave).toHaveBeenCalledOnce()
     expect(native.service.stopAndVerifyExit).toHaveBeenCalledOnce()
   })
@@ -163,7 +164,7 @@ describe('desktop directory picker wiring', () => {
       expect(native.dialog.showMessageBox).not.toHaveBeenCalled()
       expect(native.drafts.release).not.toHaveBeenCalled()
     } finally { checkpoint.reject(error); await rejected }
-    expect(native.drafts.release).not.toHaveBeenCalled()
+    expect(native.drafts.release).toHaveBeenCalledOnce()
     expect(native.requestUpdateSave).toHaveBeenCalledOnce()
     expect(native.service.stopAndVerifyExit).not.toHaveBeenCalled()
     await expect(subject.pick()).resolves.toBeNull()
@@ -210,6 +211,93 @@ describe('client-session startup', () => {
     expect(native.window.loadURL).toHaveBeenCalledExactlyOnceWith('http://127.0.0.1:40001/')
     expect(native.app.quit).not.toHaveBeenCalled()
   })
+})
+
+describe('native draft wiring', () => {
+  it('exposes fixed draft operations on macOS and omits them on Windows', async () => {
+    await import('../src/preload.ts')
+    const registration = native.contextBridge.exposeInMainWorld.mock.calls.find(([name]) => name === 'manturDrafts')
+    expect(registration).toBeDefined()
+    const bridge = registration![1] as { load(): Promise<unknown>; save(value: unknown): Promise<unknown> }
+    await bridge.load()
+    const checkpoint = { format: 1, revision: 1, drafts: [] }
+    await bridge.save(checkpoint)
+    expect(native.ipcRenderer.invoke.mock.calls).toEqual([
+      ['mantur:drafts:load'], ['mantur:drafts:save', checkpoint],
+    ])
+    vi.resetModules()
+    native.contextBridge.exposeInMainWorld.mockClear()
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    await import('../src/preload.ts')
+    expect(native.contextBridge.exposeInMainWorld.mock.calls.some(([name]) => name === 'manturDrafts')).toBe(false)
+  })
+
+  it('waits for the draft receipt before stopping the Host and ignores repeated quit requests', async () => {
+    await startup()
+    const receipt = Promise.withResolvers<number>()
+    const closed = Promise.withResolvers<undefined>()
+    native.service.closed = closed.promise
+    native.drafts.prepare.mockReturnValueOnce(receipt.promise)
+    const quit = native.app.on.mock.calls.find(([name]) => name === 'before-quit')![1] as
+      (event: { preventDefault(): void }) => void
+    const preventDefault = vi.fn()
+    quit({ preventDefault })
+    quit({ preventDefault })
+    expect(native.drafts.prepare).toHaveBeenCalledOnce()
+    expect(native.service.stop).not.toHaveBeenCalled()
+    expect(native.app.quit).not.toHaveBeenCalled()
+    receipt.resolve(7)
+    await vi.waitFor(() => { expect(native.service.stop).toHaveBeenCalledOnce() })
+    quit({ preventDefault })
+    expect(native.app.quit).not.toHaveBeenCalled()
+    expect(preventDefault).toHaveBeenCalledTimes(3)
+    closed.resolve(undefined)
+    await vi.waitFor(() => { expect(native.app.quit).toHaveBeenCalledOnce() })
+    expect(native.service.stop).toHaveBeenCalledOnce()
+    quit({ preventDefault })
+    expect(preventDefault).toHaveBeenCalledTimes(3)
+  })
+
+  it('keeps the Host and editor available after a failed quit save, then permits retry', async () => {
+    const subject = await startup()
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    native.drafts.prepare.mockRejectedValueOnce(new Error('checkpoint write failed'))
+    const quit = native.app.on.mock.calls.find(([name]) => name === 'before-quit')![1] as
+      (event: { preventDefault(): void }) => void
+    quit({ preventDefault: vi.fn() })
+    await vi.waitFor(() => { expect(native.drafts.release).toHaveBeenCalledOnce() })
+    expect(native.service.stop).not.toHaveBeenCalled()
+    expect(native.app.quit).not.toHaveBeenCalled()
+    expect(native.app.exit).not.toHaveBeenCalled()
+    expect(native.dialog.showMessageBox).toHaveBeenCalledWith(expect.objectContaining({ message: desktopCopy('en').draftQuitFailed }))
+    await expect(subject.pick()).resolves.toBeNull()
+    quit({ preventDefault: vi.fn() })
+    await vi.waitFor(() => { expect(native.app.quit).toHaveBeenCalledOnce() })
+  })
+
+  it('does not overlap a quit checkpoint with update preparation', async () => {
+    const subject = await startup()
+    const receipt = Promise.withResolvers<number>()
+    native.drafts.prepare.mockReturnValueOnce(receipt.promise)
+    const installation = subject.beforeInstall()
+    const quit = native.app.on.mock.calls.find(([name]) => name === 'before-quit')![1] as
+      (event: { preventDefault(): void }) => void
+    quit({ preventDefault: vi.fn() })
+    expect(native.drafts.prepare).toHaveBeenCalledOnce()
+    receipt.resolve(1)
+    await installation
+    expect(native.service.stopAndVerifyExit).toHaveBeenCalledOnce()
+    expect(native.app.quit).not.toHaveBeenCalled()
+  })
+})
+
+it('records the localized refusal to quit without saved drafts', () => {
+  expect([desktopCopy('en').draftQuitFailed, desktopCopy('zh-CN').draftQuitFailed]).toMatchInlineSnapshot(`
+    [
+      "Drafts could not be saved safely. The app remains open; keep this window and try again.",
+      "草稿尚未安全保存，应用未退出。请保留窗口并重试。",
+    ]
+  `)
 })
 
 it.each(['en', 'zh-CN'])('records account recovery dialog copy for %s', (locale) => {

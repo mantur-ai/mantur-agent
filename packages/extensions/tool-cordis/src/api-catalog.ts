@@ -1457,10 +1457,10 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'pinned identities and display titles; missing resources reject the request.',
       },
       {
-        signature: '@Remote async updateBundled(signal: AbortSignal): Promise<ManturBundledSkill[]>',
+        signature: '@Remote async updateBundled(signal: AbortSignal): Promise<ManturBundledSkillsUpdateResult>',
         description: 'Check and install published versions of the App\'s recommended Skills.',
         parameters: [{ name: 'signal', description: 'Cancellation supplied by the homepage.' }],
-        returns: 'Verified latest identities; failed checks reject without substituting older versions.',
+        returns: 'Verified available identities and per-item update outcomes; failed checks never imply current versions.',
       },
       {
         signature: '@Remote async resolveBundled(reference: string, signal: AbortSignal): Promise<ManturBundledSkill>',
@@ -4838,6 +4838,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ManturBundledSkillIdentity',
     declaration: 'export interface ManturBundledSkillIdentity {\n    readonly name: string;\n    readonly version: string;\n    readonly digest: string;\n}',
+  },
+  {
+    name: 'ManturBundledSkillsUpdateResult',
+    declaration: 'export interface ManturBundledSkillsUpdateResult {\n    readonly skills: readonly ManturBundledSkill[];\n    readonly updates: readonly ManturBundledSkillUpdate[];\n}',
+  },
+  {
+    name: 'ManturBundledSkillUpdate',
+    declaration: 'export type ManturBundledSkillUpdate = {\n    readonly name: string;\n    readonly status: \'verified\';\n} | {\n    readonly name: string;\n    readonly status: \'failed\';\n    readonly stage: \'metadata\' | \'download\' | \'verification\';\n    readonly error: string;\n    readonly localError?: string;\n};',
   },
   {
     name: 'ManturHubRequestOptions',

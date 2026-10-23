@@ -40,12 +40,34 @@ interface RetryCountdown {
   seconds: number
 }
 
-function failureMessage(
-  message: string,
-  code: unknown,
-  t: ChatViewSlotProps['t'],
-): string {
-  return code === 'AUTH' ? t('message.failure.auth') : message
+function failureMessage(code: unknown, t: ChatViewSlotProps['t']): string {
+  switch (code) {
+    case 'MISSING_CREDENTIAL': return t('message.failure.missingCredential')
+    case 'INVALID_CREDENTIAL': return t('message.failure.invalidCredential')
+    case 'AUTH': return t('message.failure.auth')
+    case 'QUOTA': return t('message.failure.quota')
+    case 'RATE_LIMIT': return t('message.failure.rateLimit')
+    case 'TRANSPORT': return t('message.failure.network')
+    case 'TIMEOUT': return t('message.failure.timeout')
+    case 'SERVER': return t('message.failure.server')
+    case 'CONTEXT_WINDOW_EXCEEDED': return t('message.failure.context')
+    case 'INVALID_REQUEST': return t('message.failure.request')
+    case 'UNKNOWN_MODEL': return t('message.failure.model')
+    case 'EMPTY_RESPONSE':
+    case 'STREAM_CLOSED':
+    case 'MALFORMED_RESPONSE': return t('message.failure.response')
+    case 'ABORTED': return t('message.failure.aborted')
+    // Provider and plugin error codes are extensible; retain their diagnostic below.
+    default: return t('message.failure.unknown')
+  }
+}
+
+function FailureDetails({ code, message, t }: { code: string | undefined; message: string; t: ChatViewSlotProps['t'] }) {
+  return <details className={css.failureDetails}>
+    <summary>{t('message.failure.details')}</summary>
+    {code !== undefined && <code className={css.turnErrorCode}>{code}</code>}
+    {code !== 'AUTH' && message !== '' && <div className={css.failureDiagnostic}>{message}</div>}
+  </details>
 }
 
 function ModelRetryItem({ node, active, t }: {
@@ -107,8 +129,9 @@ function ModelRetryItem({ node, active, t }: {
         </div>
         <div>
           <span className={css.retryDetailLabel}>{t('message.retry.failure')}</span>
-          {failureMessage(node.failure.message, node.failure.code, t)}
+          {failureMessage(node.failure.code, t)}
         </div>
+        <FailureDetails code={node.failure.code} message={node.failure.message} t={t} />
       </div>
     </details>
   )
@@ -124,9 +147,9 @@ function TurnErrorItem({ node, t }: {
       <StateDot state="error" className={css.turnErrorDot} />
       <div className={css.turnErrorCopy}>
         <span className={css.turnErrorTitle}>{t('message.turnError')}</span>
-        <span className={css.turnErrorMessage}>{failureMessage(node.message, node.code, t)}</span>
+        <span className={css.turnErrorMessage}>{failureMessage(node.code, t)}</span>
+        <FailureDetails code={node.code} message={node.message} t={t} />
       </div>
-      {node.code !== undefined && <code className={css.turnErrorCode}>{node.code}</code>}
     </div>
   )
 }

@@ -12,7 +12,7 @@ import type {
   ManturMarketplaceCatalog, ManturMarketplaceInstallResult, ManturMarketplaceSkill,
   ManturMarketplaceRecipe, ManturMarketplaceRecipeCatalog, ManturMarketplaceRecipeDetail,
   ManturMarketplaceRecipeQuery, ManturMarketplaceSkillDetail,
-  ManturBundledSkill, ManturInstalledSkill,
+  ManturBundledSkill, ManturBundledSkillsUpdateResult, ManturInstalledSkill,
 } from './types.ts'
 import { installSkill, type InstallerConfig } from './installer.ts'
 import { loadBundledSkill, readBundledCatalog } from './bundled-catalog.ts'
@@ -28,6 +28,8 @@ export type * from './types.ts'
 export interface Config {
   /** Read-only App resource directory containing the pinned Skill manifest. */
   readonly bundledSkillDir?: string
+  /** Packaged names checked for online updates; omitted checks every packaged Skill. */
+  readonly bundledUpdateNames?: string[]
   /** Harness home containing the live user Skill directory. */
   readonly dshHome?: string
   /** Maximum JSON bytes accepted per response and retained across Skill catalog pages. */
@@ -46,6 +48,7 @@ export interface Config {
 
 interface ResolvedConfig extends InstallerConfig {
   readonly bundledSkillDir?: string
+  readonly bundledUpdateNames?: string[]
   readonly maxMetadataBytes: number
 }
 
@@ -177,6 +180,7 @@ export class ManturHubMarketplace extends TypertRemoteService {
 
   static Config: s<Config> = s.object({
     bundledSkillDir: s.string(),
+    bundledUpdateNames: s.array(s.string().pattern(slugPattern)),
     dshHome: s.string(),
     maxMetadataBytes: s.number().step(1).min(1024).default(defaultMaxMetadataBytes),
     maxBundleBytes: s.number().step(1).min(1024).default(defaultMaxBundleBytes),
@@ -201,6 +205,7 @@ export class ManturHubMarketplace extends TypertRemoteService {
     const dshHome = resolveDshHome(config.dshHome)
     this.config = {
       ...(config.bundledSkillDir === undefined ? {} : { bundledSkillDir: config.bundledSkillDir }),
+      ...(config.bundledUpdateNames === undefined ? {} : { bundledUpdateNames: config.bundledUpdateNames }),
       dshHome,
       skillsRoot: join(dshHome, 'skills'),
       maxMetadataBytes: config.maxMetadataBytes ?? defaultMaxMetadataBytes,
@@ -239,18 +244,23 @@ export class ManturHubMarketplace extends TypertRemoteService {
   /**
    * Check and install published versions of the App's recommended Skills.
    * @param signal - Cancellation supplied by the homepage.
-   * @returns Verified latest identities; failed checks reject without substituting older versions.
+   * @returns Verified available identities and per-item update outcomes; failed checks never imply current versions.
    */
   @Remote
-  async updateBundled(signal: AbortSignal): Promise<ManturBundledSkill[]> {
+  async updateBundled(signal: AbortSignal): Promise<ManturBundledSkillsUpdateResult> {
     signal = AbortSignal.any([signal, this.updateAbort.signal])
     const operation = this.installTail.then(async () => {
       signal.throwIfAborted()
-      const seeds = await readBundledCatalog(this.config.bundledSkillDir, this.config, signal)
-      const skills = await updateBundledSkills(this.ctx, seeds, this.bundledUpdatesRoot, this.config, signal)
-      const enabled = await this.enabledBundled(skills)
-      return enabled.map(({ name, title, version, digest }) => ({ name, title, version, digest,
-        reference: bundledSkillReference({ name, version, digest }), source: 'app-bundled' as const }))
+      const catalog = await readBundledCatalog(this.config.bundledSkillDir, this.config, signal)
+      const seeds = this.config.bundledUpdateNames === undefined ? catalog : this.config.bundledUpdateNames.map((name) => {
+        const seed = catalog.find(skill => skill.name === name)
+        if (seed === undefined) throw new Error(`Configured bundled update Skill is missing: ${name}`)
+        return seed
+      })
+      const result = await updateBundledSkills(this.ctx, seeds, this.bundledUpdatesRoot, this.config, signal, this.config.bundledSkillDir)
+      const enabled = await this.enabledBundled(result.skills)
+      return { updates: result.updates, skills: enabled.map(({ name, title, version, digest }) => ({ name, title, version, digest,
+        reference: bundledSkillReference({ name, version, digest }), source: 'app-bundled' as const })) }
     })
     this.installTail = operation.then(() => {}, () => {})
     return await operation

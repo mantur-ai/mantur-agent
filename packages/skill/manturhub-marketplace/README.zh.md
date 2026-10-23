@@ -33,7 +33,7 @@ kind: "package-reference"
 
 公开目录使用 `/api/public/agent/v1/skills` 和 `/api/public/agent/v1/recipes`，读取网关 `code: 0` 与 `data` 封装。Skill 分页必须完整且编码唯一；缺页和网关失败会明确报错。配方请求使用 `pageNum`、`pageSize`、`category`、`tag` 和 `keyword`。网关时间可以不带时区，客户端保留原值，不推测时区。缺失的价格、作者与复刻次数保留为 null；没有制作说明时客户端禁用配方启动。
 
-`bundledSkillDir` 清单规定推荐 Skill 的允许名单。`updateBundled` 检查当前部署，把发布包下载到用户 Skill 目录之外的 `<DSH_HOME>/manturhub-marketplace/bundled-updates/<name>@<version>`。压缩包 SHA-256、解压限制、文件清单和指令全部校验通过后才原子发布。网络失败、文件被修改或同版本压缩包变化都会拒绝更新，不把旧版本报告为最新。缓存版本保留供精确引用使用，不自动删除。
+`bundledSkillDir` 清单保留用于精确引用的打包身份。可选 `bundledUpdateNames` 选择检查线上更新的打包名称；未设置时检查全部条目，配置名称不在清单中时在联网前拒绝。Mantur profile 保留 `short-drama` 资源供旧草稿使用，但不检查其更新，并推荐 `overseas-comic-script-studio`。`updateBundled` 检查当前部署，把发布包下载到用户 Skill 目录之外的 `<DSH_HOME>/manturhub-marketplace/bundled-updates/<name>@<version>`。压缩包 SHA-256、解压限制、文件清单和指令全部校验通过后才原子发布。`updateBundled` 分别返回可用的 `skills` 和逐项 `updates`。每项更新为 `verified` 或 `failed`；失败记录保留 Skill 名称、元数据/下载/校验阶段和错误。404、网络故障或无效更新不阻止其余条目的检查。更新失败时，仅在完整本地校验通过后返回打包 Skill；损坏的打包副本被排除，并通过 `localError` 报告。这些可用的打包版本不会被报告为线上最新版本。取消和无效的应用清单仍使整个请求失败。缓存版本保留供精确引用使用，不自动删除。
 
 名称、版本和内容摘要共同确定所选包。草稿序列化与指令注入均离线校验该精确身份，读取应用资源或更新存储；两次操作均不会把已捕获引用替换为更新版本。
 
@@ -96,3 +96,5 @@ Host 测试使用真实回环 HTTP 服务与临时 `DSH_HOME`。元数据缓冲�
 </details>
 
 **运行时不变量：** 不发布 companion。API 校验、压缩包检查、解压后检查、元数据校验、内容哈希与原子回滚会分别拒绝每种可独立观察到的无效安装状态。
+
+素材推荐使用 `mantur-preroll-remix-studio`，首页标签为“短剧素材智能剪辑”。原 `mantur-smartclip` 保留打包资源和旧引用，但不检查默认更新。两个替换技能均要求内嵌 CLI 1.2.10，其官方 npm 归档摘要经过验证，依赖锁定；本地 broker 测试验证桌面身份传输。

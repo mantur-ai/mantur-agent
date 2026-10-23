@@ -50,6 +50,8 @@ Chat restores semantic anchors across history prepend and renderer remounts. Whi
 
 -----
 
+Run failures and model retries show locale-owned guidance selected by stable error code. Original diagnostics and codes remain in collapsed technical details; authentication diagnostics stay hidden. Unknown codes use general guidance without guessing a cause. Presentation does not rewrite persisted events.
+
 <a id="model-experience"></a>
 ## Model Experience
 

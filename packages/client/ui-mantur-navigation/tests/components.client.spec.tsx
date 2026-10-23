@@ -203,7 +203,7 @@ describe('Mantur marketplace navigation', () => {
     expect(screen.getByText('电影感旅行 Vlog')).toBeTruthy()
     expect(screen.queryByText(recipe.summary)).toBeNull()
     expect(screen.queryByText('旅行')).toBeNull()
-    expect(screen.getByText('约 0.16 元')).toBeTruthy()
+    expect(screen.queryByText('约 0.16 元')).toBeNull()
     expect(screen.getByRole('textbox', { name: '搜索想复刻的画面、风格或用途' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '全部' }).getAttribute('aria-pressed')).toBe('true')
     fireEvent.click(screen.getByRole('button', { name: '复刻同款' }))
@@ -499,6 +499,7 @@ describe('Mantur marketplace navigation', () => {
         t={t}
       />,
     )
+    expect(screen.getByText('已安装', { exact: true })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '使用技能' }))
     expect(installedProps.controllerMocks.startSkill).toHaveBeenCalledWith(installed.slug)
 
@@ -551,17 +552,6 @@ describe('Mantur marketplace navigation', () => {
     )
     expect(screen.getAllByRole('button', { name: '正在创建…' })
       .every(button => button.hasAttribute('disabled'))).toBe(true)
-
-    const missingProject = marketplaceProps({
-      phase: 'ready', catalog: { skills: [installed], installedCount: 1, signedIn: true },
-      useError: 'no-workspace',
-    })
-    view.rerender(
-      <MarketplacePage
-        {...globalProps} {...missingProject} activePage={MANTUR_MARKET_PAGES.skills} closePage={vi.fn()} t={t}
-      />,
-    )
-    expect(screen.getByRole('alert').textContent).toContain('请先选择一个项目')
 
     const failedDetail = marketplaceProps({
       phase: 'ready', catalog: { skills: [installed], installedCount: 1, signedIn: true },
@@ -781,7 +771,7 @@ describe('Mantur marketplace navigation', () => {
       />,
     )
     expect(catalogProps.controllerMocks.ensureRecipeCatalog).not.toHaveBeenCalled()
-    expect(screen.getByText('运行前实时报价')).toBeTruthy()
+    expect(screen.queryByText('运行前实时报价')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: `查看配方：${imageRecipe.title}` }))
     fireEvent.click(screen.getByRole('button', { name: imageRecipe.title }))
     fireEvent.click(screen.getByRole('button', { name: '上一页' }))

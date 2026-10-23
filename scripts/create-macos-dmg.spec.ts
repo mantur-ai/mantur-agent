@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process'
 import { mkdtemp } from 'node:fs/promises'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createMacMountPoint, macApplicationPath, parseMacArchitecture } from './create-macos-dmg.ts'
+import { compressMacImage, createMacMountPoint, macApplicationPath, parseMacArchitecture } from './create-macos-dmg.ts'
 
 vi.mock('node:child_process', () => ({ spawnSync: vi.fn() }))
 vi.mock('node:fs/promises', async importOriginal => ({
@@ -57,5 +57,23 @@ describe('macOS DMG mount directory', () => {
     vi.mocked(mkdtemp).mockRejectedValue(error)
     await expect(createMacMountPoint()).rejects.toBe(error)
     expect(mkdtemp).toHaveBeenCalledTimes(1)
+  })
+})
+
+
+describe('macOS DMG compression', () => {
+  beforeEach(() => { vi.resetAllMocks() })
+
+  it('uses maximum zlib compression without changing the input volume', () => {
+    vi.mocked(spawnSync).mockReturnValue({ pid: 1, output: [], stdout: '', stderr: '', status: 0, signal: null })
+    compressMacImage('/staging/input.dmg', '/staging/output.dmg')
+    expect(spawnSync).toHaveBeenCalledExactlyOnceWith('hdiutil',
+      ['convert', '/staging/input.dmg', '-format', 'UDZO', '-imagekey', 'zlib-level=9', '-o', '/staging/output.dmg'],
+      { encoding: 'utf8', stdio: 'inherit' })
+  })
+
+  it('stops before blockmap generation when compression fails', () => {
+    vi.mocked(spawnSync).mockReturnValue({ pid: 1, output: [], stdout: '', stderr: '', status: 1, signal: null })
+    expect(() => compressMacImage('/staging/input.dmg', '/staging/output.dmg')).toThrow('hdiutil exited with 1')
   })
 })

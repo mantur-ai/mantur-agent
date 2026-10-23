@@ -7,6 +7,7 @@ import type { ScriptDocument, ScriptVersion } from '../src/types.ts'
 import { createWorkbenchStore } from '../src/client/store.ts'
 import { Workbench, WorkbenchToggle } from '../src/client/Workbench.tsx'
 import { en, zh } from '../src/client/locales.ts'
+import type {} from '../src/client/WebPanel.tsx'
 
 afterEach(cleanup)
 const session = 'session-a' as SessionId
@@ -228,6 +229,17 @@ it('keeps project-free tab choices explicit and shows missing optional panels', 
   expect(view.getByText(zh.selectSession)).toBeTruthy()
 })
 
+it('keeps Editing and Web visible with an explicit diagnostic when the editing provider is absent', () => {
+  const view = setup(zh, {
+    renderSlot: ((_name: string, _owner: unknown, options?: { fallback?: ReactNode }) => options?.fallback) as Props['renderSlot'],
+  })
+  expect(view.getAllByRole('button', { name: zh.editing })).toHaveLength(1)
+  expect(view.getByRole('button', { name: zh.web })).toBeTruthy()
+  fireEvent.click(view.getByRole('button', { name: zh.editing }))
+  expect(view.getByText(zh.editingUnavailable)).toBeTruthy()
+  expect(view.queryByTitle('Test editing')).toBeNull()
+})
+
 it('opens a single plain-text script automatically without Markdown parsing', async () => {
   const text = { ...first, path: '/project/02.txt', content: '# Literal text' }
   const view = setup(zh, { read: async () => text })
@@ -326,4 +338,119 @@ it.each([true, false])('ignores manual-open completion after disposal, success=%
   view.unmount()
   await act(async () => { if (success) resolve(first); else reject(new Error('late failure')) })
   expect(view.instance.getSnapshot().drafts[session]).toBeUndefined()
+})
+
+it('shows the desktop requirement and rejects nonlocal addresses without changing script drafts', async () => {
+  const view = await open()
+  fireEvent.click(view.getByRole('button', { name: zh.web }))
+  expect(view.getByText(zh.webUnsupported)).toBeTruthy()
+  fireEvent.change(view.getByRole('textbox', { name: zh.webAddress }), { target: { value: 'https://example.com/' } })
+  fireEvent.click(view.getByRole('button', { name: zh.webOpen }))
+  expect(view.getByRole('alert').textContent).toBe(zh.webInvalid)
+  expect(view.instance.getSnapshot().urls).toEqual({})
+})
+
+it('positions the native page below its toolbar, hides for dialogs, tab changes and session switches', async () => {
+  const show = vi.fn(async () => {})
+  const hide = vi.fn(async () => {})
+  window.manturWebBrowser = { show, hide }
+  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
+  const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({ x: 500, y: 120, width: 400, height: 500 } as DOMRect)
+  try {
+    const view = await open()
+    fireEvent.click(view.getByRole('button', { name: zh.web }))
+    fireEvent.change(view.getByRole('textbox', { name: zh.webAddress }), { target: { value: 'http://127.0.0.1:43123/' } })
+    fireEvent.click(view.getByRole('button', { name: zh.webOpen }))
+    await waitFor(() => { expect(show).toHaveBeenCalledWith({ url: 'http://127.0.0.1:43123/', bounds: { x: 500, y: 120, width: 400, height: 500 } }) })
+    const modal = document.createElement('div')
+    modal.setAttribute('aria-modal', 'true')
+    document.body.append(modal)
+    await waitFor(() => { expect(hide).toHaveBeenCalled() })
+    modal.remove()
+    await waitFor(() => { expect(show).toHaveBeenCalledTimes(2) })
+    fireEvent.click(view.getByRole('button', { name: zh.script }))
+    expect(hide).toHaveBeenCalledTimes(2)
+    fireEvent.click(view.getByRole('button', { name: zh.web }))
+    await waitFor(() => { expect(show).toHaveBeenCalledTimes(3) })
+    view.redraw({ useSessions: select => select({ current: 'session-b', byId: {} } as never) })
+    expect(hide).toHaveBeenCalledTimes(3)
+    expect(view.instance.getSnapshot().urls['session-a']).toBe('http://127.0.0.1:43123/')
+    expect(view.instance.getSnapshot().drafts['session-a']?.[first.path]?.text).toBe(first.content)
+    view.unmount()
+  } finally { delete window.manturWebBrowser; rect.mockRestore(); vi.unstubAllGlobals() }
+})
+
+
+it('retries the same address after a failed native load', async () => {
+  const show = vi.fn(async () => {}).mockRejectedValueOnce(new Error('Connection refused'))
+  window.manturWebBrowser = { show, hide: vi.fn(async () => {}) }
+  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
+  const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({ x: 500, y: 120, width: 400, height: 500 } as DOMRect)
+  try {
+    const view = await open()
+    fireEvent.click(view.getByRole('button', { name: zh.web }))
+    fireEvent.change(view.getByRole('textbox', { name: zh.webAddress }), { target: { value: 'http://127.0.0.1:43123/' } })
+    fireEvent.click(view.getByRole('button', { name: zh.webOpen }))
+    expect((await view.findByRole('alert')).textContent).toBe(zh.webLoadFailed)
+    expect(view.queryByText('Connection refused')).toBeNull()
+    expect(show).toHaveBeenCalledOnce()
+    fireEvent.click(view.getByRole('button', { name: zh.webOpen }))
+    await waitFor(() => { expect(show).toHaveBeenCalledTimes(2) })
+    expect(view.queryByRole('alert')).toBeNull()
+    view.unmount()
+  } finally { delete window.manturWebBrowser; rect.mockRestore(); vi.unstubAllGlobals() }
+})
+
+it('hides an in-flight address and ignores its late rejection after opening a different address', async () => {
+  const firstLoad = Promise.withResolvers<undefined>()
+  const show = vi.fn(async () => {}).mockImplementationOnce(() => firstLoad.promise)
+  const hide = vi.fn(async () => {})
+  window.manturWebBrowser = { show, hide }
+  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
+  const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({ x: 500, y: 120, width: 400, height: 500 } as DOMRect)
+  try {
+    const view = await open()
+    fireEvent.click(view.getByRole('button', { name: zh.web }))
+    const address = view.getByRole('textbox', { name: zh.webAddress })
+    fireEvent.change(address, { target: { value: 'http://127.0.0.1:43123/' } })
+    fireEvent.click(view.getByRole('button', { name: zh.webOpen }))
+    await waitFor(() => { expect(show).toHaveBeenCalledOnce() })
+    fireEvent.change(address, { target: { value: 'http://127.0.0.1:43124/' } })
+    fireEvent.click(view.getByRole('button', { name: zh.webOpen }))
+    await waitFor(() => { expect(show).toHaveBeenCalledTimes(2) })
+    expect(hide).toHaveBeenCalledOnce()
+    await act(async () => { firstLoad.reject(new Error('Superseded')) })
+    expect(view.queryByRole('alert')).toBeNull()
+    expect(show).toHaveBeenLastCalledWith(expect.objectContaining({ url: 'http://127.0.0.1:43124/' }))
+    view.unmount()
+  } finally { delete window.manturWebBrowser; rect.mockRestore(); vi.unstubAllGlobals() }
+})
+
+
+it('closes an in-flight page, preserves script drafts and does not reopen after a late completion', async () => {
+  const load = Promise.withResolvers<undefined>()
+  const show = vi.fn(() => load.promise)
+  const hide = vi.fn(async () => {})
+  window.manturWebBrowser = { show, hide }
+  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
+  const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({ x: 500, y: 120, width: 400, height: 500 } as DOMRect)
+  try {
+    const view = await open()
+    fireEvent.click(view.getByRole('button', { name: zh.web }))
+    fireEvent.change(view.getByRole('textbox', { name: zh.webAddress }), { target: { value: 'http://127.0.0.1:43123/' } })
+    fireEvent.click(view.getByRole('button', { name: zh.webOpen }))
+    await waitFor(() => { expect(show).toHaveBeenCalledOnce() })
+    fireEvent.click(view.getByRole('button', { name: zh.webClose }))
+    expect(hide).toHaveBeenCalledOnce()
+    expect(view.instance.getSnapshot().urls['session-a']).toBeUndefined()
+    expect((view.getByRole('textbox', { name: zh.webAddress }) as HTMLInputElement).value).toBe('')
+    expect(view.getByText(zh.webEmpty)).toBeTruthy()
+    await act(async () => { load.resolve(undefined) })
+    expect(show).toHaveBeenCalledOnce()
+    fireEvent.click(view.getByRole('button', { name: zh.script }))
+    fireEvent.click(view.getByRole('button', { name: zh.web }))
+    expect(show).toHaveBeenCalledOnce()
+    expect(view.instance.getSnapshot().drafts['session-a']?.[first.path]?.text).toBe(first.content)
+    view.unmount()
+  } finally { delete window.manturWebBrowser; rect.mockRestore(); vi.unstubAllGlobals() }
 })

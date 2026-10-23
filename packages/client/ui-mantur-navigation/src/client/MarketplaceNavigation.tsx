@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import clsx from 'clsx'
 import { decodeHTML } from 'entities'
 import {
-  IconChevronLeftOutline14, IconChevronRightOutline14, IconCopyOutline16,
+  IconChevronLeftOutline14, IconCopyOutline16,
   IconListPenOutline16, IconPlayOutline16, IconSearchOutline16,
   IconSkillOutline16, MarkdownText, Modal, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -174,7 +174,7 @@ function SkillMarketplace({ closePage, controller, useMarketplace, t }: {
       ? (
         <button
           type="button"
-          className={css.install}
+          className={`${css.install} ${css.useSkill}`}
           disabled={ready.using !== undefined}
           ref={detailAction}
           onClick={() => { void useSkill(detail.slug) }}
@@ -220,7 +220,7 @@ function SkillMarketplace({ closePage, controller, useMarketplace, t }: {
     ? undefined
     : (
       <p className={css.installError} role="alert">
-        {ready.useError === 'no-workspace' ? t('skills.noWorkspace') : t('skills.useFailed')}
+        {t('skills.useFailed')}
       </p>
     )
 
@@ -286,9 +286,10 @@ function SkillMarketplace({ closePage, controller, useMarketplace, t }: {
                       </button>
                       <div className={css.cardFooter}>
                         <span className={css.tag}>{skill.category}</span>
+                        {skill.installed && <span className={css.installedBadge}>{t('skills.installed')}</span>}
                         <button
                           type="button"
-                          className={css.install}
+                          className={skill.installed ? `${css.install} ${css.useSkill}` : css.install}
                           disabled={ready?.installing !== undefined || ready?.using !== undefined}
                           onClick={() => {
                             if (skill.installed) void useSkill(skill.slug)
@@ -332,6 +333,7 @@ function SkillMarketplace({ closePage, controller, useMarketplace, t }: {
           <div className={css.detail}>
             <div className={css.detailMeta}>
               <span className={css.tag}>{detail.category}</span>
+              {detail.installed && <span className={css.installedBadge}>{t('skills.installed')}</span>}
               <span>{t('skills.version').replace('{version}', detail.version)}</span>
             </div>
             {detail.introduction !== undefined && (
@@ -497,9 +499,8 @@ function RecipeMarketplace({ closePage, controller, useRecipes, t }: {
                                   <button type="button" className={css.recipeTitle} onClick={() => { void controller.openRecipeDetail(recipe.slug) }}>{recipe.title}</button>
                                   <div className={css.recipeMeta}>
                                     {recipe.copies !== null && <span><IconCopyOutline16 size={14} />{t('recipes.copies').replace('{count}', String(recipe.copies))}</span>}
-                                    <span className={css.recipeCost}>{recipe.costEstimate || t('recipes.liveQuote')}</span>
                                     <button type="button" onClick={() => { void controller.openRecipeDetail(recipe.slug) }}>
-                                      {t('recipes.recreate')}<IconChevronRightOutline14 />
+                                      {t('recipes.recreate')}
                                     </button>
                                   </div>
                                 </div>

@@ -24,6 +24,8 @@ This Mantur plugin owns the shared workbench shell and edits existing `.md`, `.t
 
 The Mantur bundle mounts the plugin with explicit `maxBytes` and `maxEntries` bounds. Open the workbench with the conversation-edge chevron. Its catalog lists supported text documents from the workspace root, its `剧本` folder, and direct child projects’ `剧本` folders. A sole document opens automatically; multiple documents appear by title for selection. Directory-path controls are absent, and a sole document uses the full reading width. One file is one editable document; the plugin does not infer episodes from headings. Reading and switching modes never write files. Save commits the current draft only against its last observed file generation.
 
+The Web tab opens a local skill workbench beside the conversation in the desktop application. Enter the service URL with the literal host `127.0.0.1`, HTTP and an explicit port, then open it. The skill owns service startup; this tab only displays its page. Switching tabs or collapsing the workbench hides the page without stopping the service. Close page clears the current conversation’s page address and hides the page without stopping the service or changing script drafts. Ordinary browsers report that the native desktop capability is unavailable.
+
 Save a draft before selecting a passage and entering a rewrite instruction. Send selection submits a JSON user message through the captured Session's existing `conversation.send`, preserving the conversation composer and its attachments. The message includes the path, file generation, UTF-16 start/end offsets, selected text, and instruction. Admission means queued input, not successful rewriting. The Agent uses `replace_script_selection` to check the generation and exact passage before a guarded write. No second Agent, provider, credentials, or login flow is introduced.
 
 Check file reads the current disk generation. An observed Session running-to-idle transition also requests a read; it does not attribute completion to a particular message. New disk text replaces a clean view, while a dirty draft remains intact beside an explicit conflict comparison. A changed generation invalidates the old selection. Restore previous version performs another guarded write and is disabled while a draft is dirty or conflicted.
@@ -31,7 +33,7 @@ Check file reads the current disk generation. An observed Session running-to-idl
 <a id="composition"></a>
 ## Composition
 
-The plugin is the sole registrant of `main.workbench` and `main.workbench.toggle`. Its editing child slots accept the optional [editing plugin](../ui-mantur-editing/README.md). The optional `main.workbench.assets.tab` and `main.workbench.assets.content` slots accept an asset contribution; the tab receives `selected` and `selectAssets`, and content receives `closeWorkbench`. The editing tab exists only while that plugin is mounted. Selecting content does not alter panel visibility. After first activation, activated content panels remain mounted across same-Session tab switches and collapse. The layout releases the panel instance on a Session switch; the registration store retains document drafts by Session and file for later remounts. Removing an optional provider leaves the script shell intact; its selected panel reports unavailability without selecting another panel.
+The plugin is the sole registrant of `main.workbench` and `main.workbench.toggle`. Its editing child slots accept the optional [editing plugin](../ui-mantur-editing/README.md). The optional `main.workbench.assets.tab` and `main.workbench.assets.content` slots accept an asset contribution; the tab receives `selected` and `selectAssets`, and content receives `closeWorkbench`. The editing tab remains visible when the provider is absent and shows a runtime configuration diagnostic; it does not start or imitate an editor. Selecting content does not alter panel visibility. After first activation, asset and editing content panels remain mounted across same-Session tab switches and collapse. The layout releases the panel instance on a Session switch; the registration store retains document drafts by Session and file for later remounts. Removing an optional provider leaves the script shell intact; its selected panel reports unavailability without selecting another panel.
 
 Reads resolve through `ctx.fs` against the owning Agent's recorded working directory. Files outside that project, including escaping symlinks, are rejected. UTF-8 reads are bounded and use matching before/after versions; text is normalized to LF for textarea offsets. Every save, restore, and selected rewrite uses `replaceIfVersion` and the mounted filesystem's Session sandbox policy. No invariant companion is published because file generation checks are enforced directly by the filesystem mutation and have no independently maintained registry to compare.
 
@@ -51,6 +53,20 @@ The tool schema contributes to request headers. Each sent selection adds its pas
 #### KV Cache effect
 
 Mounting or removing the tool changes the tool-schema request prefix. Explicit selections append to the current conversation without replacing earlier history.
+
+### Local web workbench
+
+#### What the model sees
+
+The `open_web_page` tool accepts the local workbench URL after the skill starts its service. The recorded result requests opening that URL in the current conversation’s Web tab; it does not confirm rendering or production. The client opens successful live requests and does not replay historical requests on loading a conversation.
+
+#### Token effect
+
+The tool schema contributes to request headers. Calls and results enter the ordinary Session history; manual URL entry and tab visibility add no model messages.
+
+#### KV Cache effect
+
+Mounting the tool changes the tool-schema request prefix. Calls append to history without replacing earlier messages.
 
 ## Known Limitations and Deferred Work
 

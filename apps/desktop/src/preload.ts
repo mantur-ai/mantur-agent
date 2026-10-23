@@ -1,5 +1,25 @@
-/** Sandboxed preload: expose only named draft, updater, directory-picker and native-account capabilities. */
+/** Sandboxed preload: expose only named draft, updater, directory-picker, workbench and native-account capabilities. */
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
+
+if (process.platform === 'darwin') contextBridge.exposeInMainWorld('manturDrafts', {
+  load: () => ipcRenderer.invoke('mantur:drafts:load'),
+  save: (checkpoint: unknown) => ipcRenderer.invoke('mantur:drafts:save', checkpoint),
+  onPrepare: (handler: () => Promise<number>) => {
+    const listener = (_event: Electron.IpcRendererEvent, id: string): void => {
+      void Promise.resolve().then(handler).then(
+        revision => ipcRenderer.invoke('mantur:drafts:prepared', { id, ok: true, revision }),
+        (error: unknown) => ipcRenderer.invoke('mantur:drafts:prepared', { id, ok: false, error: String(error) }),
+      ).catch(() => { /* Main rejects stale receipts after cancellation; release unlocks the editor. */ })
+    }
+    ipcRenderer.on('mantur:drafts:prepare', listener)
+    return () => { ipcRenderer.removeListener('mantur:drafts:prepare', listener) }
+  },
+  onRelease: (handler: () => void) => {
+    const listener = (): void => { handler() }
+    ipcRenderer.on('mantur:drafts:release', listener)
+    return () => { ipcRenderer.removeListener('mantur:drafts:release', listener) }
+  },
+})
 
 contextBridge.exposeInMainWorld('manturFiles', {
   importFiles: (files: File[]) => {
@@ -33,4 +53,9 @@ contextBridge.exposeInMainWorld('manturUpdates', {
     ipcRenderer.on('mantur:updates:changed', listener)
     return () => { ipcRenderer.removeListener('mantur:updates:changed', listener) }
   },
+})
+
+contextBridge.exposeInMainWorld('manturWebBrowser', {
+  show: (request: unknown) => ipcRenderer.invoke('mantur:web-browser:show', request),
+  hide: () => ipcRenderer.invoke('mantur:web-browser:hide'),
 })

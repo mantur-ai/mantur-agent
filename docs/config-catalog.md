@@ -493,7 +493,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/client/ui-mantur-script/src/index.ts:13`](../packages/client/ui-mantur-script/src/index.ts)
+Source: [`packages/client/ui-mantur-script/src/index.ts:14`](../packages/client/ui-mantur-script/src/index.ts)
 
 <a id="deepseek-aidsh-client-ui-workspace"></a>
 
@@ -1626,6 +1626,8 @@ Requires: `manturAccount`
 export interface Config {
   /** Read-only App resource directory containing the pinned Skill manifest. */
   readonly bundledSkillDir?: string
+  /** Packaged names checked for online updates; omitted checks every packaged Skill. */
+  readonly bundledUpdateNames?: string[]
   /** Harness home containing the live user Skill directory. */
   readonly dshHome?: string
   /** Maximum JSON bytes accepted per response and retained across Skill catalog pages. */

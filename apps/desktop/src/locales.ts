@@ -49,6 +49,7 @@ const zh = {
   updateErrorTitle: '更新暂不可用',
   updateErrorMessage: (detail: string) => `无法完成更新。\n\n${detail}`,
   okButton: '好',
+  draftQuitFailed: '草稿尚未安全保存，应用未退出。请保留窗口并重试。',
 } as const
 
 type DesktopCopy = {
@@ -106,6 +107,7 @@ const en = {
   updateErrorTitle: 'Update unavailable',
   updateErrorMessage: (detail: string) => `ManTur Agent could not complete the update.\n\n${detail}`,
   okButton: 'OK',
+  draftQuitFailed: 'Drafts could not be saved safely. The app remains open; keep this window and try again.',
 } satisfies DesktopCopy
 
 /** Resolve native-window copy for one operating-system locale. */

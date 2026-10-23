@@ -1,6 +1,6 @@
----
-description: "ManTur Agent 桌面端的产品介绍、安装使用、创作流程与开发贡献入口。"
----
+<p align="center">
+  <img src="apps/web/public/mantur-logo.png" alt="ManTur Agent" width="128" />
+</p>
 
 # ManTur Agent
 
@@ -8,7 +8,7 @@ description: "ManTur Agent 桌面端的产品介绍、安装使用、创作流�
 
 面向剧本创作、AI 漫剧制作和素材生产的桌面工作台。带上剧本与参考素材，用自然语言描述目标，与 Agent 一起完成方案整理、资产准备、生成和剪辑。
 
-[下载安装与使用指南](https://guiyi2023.feishu.cn/docx/Iq3id4fr8o2uo9xKfpEcIck9nRf) · [ManturHub](https://hub.mantur.ai) · [反馈问题](https://github.com/mantur-ai/mantur-agent/issues)
+[下载](#run) · [安装使用指南](https://guiyi2023.feishu.cn/docx/Iq3id4fr8o2uo9xKfpEcIck9nRf) · [ManturHub](https://hub.mantur.ai) · [反馈问题](https://github.com/mantur-ai/mantur-agent/issues)
 
 ![ManTur Agent 首页与文件导入](docs/assets/mantur-agent/home.png)
 
@@ -39,12 +39,21 @@ description: "ManTur Agent 桌面端的产品介绍、安装使用、创作流�
 
 ## 安装与开始使用
 
-1. 打开[安装使用指南](https://guiyi2023.feishu.cn/docx/Iq3id4fr8o2uo9xKfpEcIck9nRf)，下载适合自己电脑的附件，以指南标注的可用版本为准。
-2. **macOS Apple Silicon**：打开 DMG，将应用拖入“应用程序”。**Windows x64**：运行 EXE，按安装程序提示完成安装。该指南目前不提供 Intel Mac 安装包。
-3. 打开ManTur Agent，在设置中配置模型提供商并选择模型。请使用自己的提供商凭证；安装包不附带供所有用户共用的模型 API Key。
-4. 选择工作区，创建对话，添加剧本或参考素材。发送具体要求，检查 Agent 返回的结果。
+官方加速下载：
 
-Windows 安装包包含应用运行环境，解压进度并不是再次下载应用。所提供的 Windows 安装包尚无 Windows 签名证书，系统可能提示“未知发布者”；所提供的 Mac 包具有 Developer ID 签名，但尚未公证。具体文件及安装说明请查看指南。
+| 平台 | 安装包 | 可用版本 |
+| --- | --- | --- |
+| macOS Apple Silicon | [下载 DMG](https://mantur-pro.tos-accelerate.volces.com/mantur-agent/stable/Mantur-Agent-macOS-arm64.dmg) | 0.1.21 |
+| Windows x64 | [下载 EXE](https://mantur-pro.tos-accelerate.volces.com/mantur-agent/stable/Mantur-Agent-Windows-x64.exe) | 0.1.20 |
+
+版本核验于 2026 年 10 月 23 日。以上官方稳定下载地址按平台独立更新。[GitHub Releases](https://github.com/mantur-ai/mantur-agent/releases) 提供发布历史与校验和；GitHub 最新发布 [v0.1.21](https://github.com/mantur-ai/mantur-agent/releases/tag/v0.1.21) 仅包含 Apple Silicon Mac 安装包。此下载列表不提供 Intel Mac 或 Linux 安装包。
+
+1. 从上表下载适合自己电脑的安装包，图文安装步骤及版本说明见[安装使用指南](https://guiyi2023.feishu.cn/docx/Iq3id4fr8o2uo9xKfpEcIck9nRf)。
+2. **macOS Apple Silicon**：打开 DMG，将应用拖入“应用程序”。**Windows x64**：运行 EXE，按安装程序提示完成安装。
+3. 打开 ManTur Agent，在设置中配置模型提供商并选择模型。请使用自己的提供商凭证；安装包不附带供所有用户共用的模型 API Key。
+4. 创建对话，添加剧本或参考素材。选择已有项目，或在首次发送前检查保存位置；未选择已有项目时，应用会在首次发送时创建项目。检查 Agent 返回的结果。
+
+Windows 安装包包含应用运行环境，解压进度并不是再次下载应用。所提供的 Windows 安装包尚无 Windows 签名证书，系统可能提示“未知发布者”；Mac 0.1.21 发布包已通过 Developer ID 签名及 Apple 公证检查。Windows 0.1.20 没有自动更新通道，请使用上方安装包手动更新。安装说明请查看指南。
 
 ## 导入剧本或整个文件夹
 

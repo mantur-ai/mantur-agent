@@ -267,9 +267,9 @@ Host service for catalog reads and local Skill installation.
 /**
  * Check and install published versions of the App's recommended Skills.
  * @param signal - Cancellation supplied by the homepage.
- * @returns Verified latest identities; failed checks reject without substituting older versions.
+ * @returns Verified available identities and per-item update outcomes; failed checks never imply current versions.
  */
-@Remote async updateBundled(signal: AbortSignal): Promise<ManturBundledSkill[]>
+@Remote async updateBundled(signal: AbortSignal): Promise<ManturBundledSkillsUpdateResult>
 
 /**
  * Verify that a draft still refers to the exact App resource the user selected.

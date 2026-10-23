@@ -34,7 +34,7 @@ async function bench() {
     signal.throwIfAborted()
     return { ok: true, value: { reference } }
   })
-  const bundled = vi.fn().mockResolvedValue({ ok: true, value: [] })
+  const bundled = vi.fn().mockResolvedValue({ ok: true, value: { skills: [], updates: [] } })
   const remote = new TestRemote(ctx, {
     manturMarketplace: { updateBundled: bundled, resolveBundled }, manturAccount: {},
     manturProjects: { settings: () => ({ ok: true, value: { source: 'unconfigured' } }) },

@@ -84,6 +84,14 @@ jobs:
       - name: Smoke packaged dependency closure
         run: pnpm run desktop:smoke
 
+      - name: Retain desktop debugging symbols
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-symbols-${{ matrix.target }}
+          path: apps/desktop/dist/symbols/
+          if-no-files-found: error
+          retention-days: 90
+
       - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.target }}

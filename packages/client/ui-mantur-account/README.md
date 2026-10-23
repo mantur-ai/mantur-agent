@@ -19,7 +19,7 @@ The native sidebar footer displays a yellow bun icon and Mantou number without a
 
 The requested dialog uses `shell.overlay`. Return and Escape dismiss the view without cancelling Main's accepted operation; successful Not now persists the choice and cancels authorization. Repeated openings share one result. Another active modal, a busy operation or a missing owner fails explicitly. Unloading rejects unfinished requests and releases its observer; late results cannot reopen dismissed dialogs.
 
-The login page presents one browser-login button and the product logo. Waiting, cancellation, exchange retry, expiry, independent device logout and account switching use Main-confirmed state. Opening the browser does not report sign-in.
+The startup login page centers a compact card with one browser-login button and the product logo. Its scrollable full-window layout keeps authorization errors and recovery controls reachable on small windows; Settings and requested dialogs retain their own layout. Waiting, cancellation, exchange retry, expiry, independent device logout and account switching use Main-confirmed state. Opening the browser does not report sign-in.
 
 In the expanded sidebar, the balance icon and number align with the Settings icon and label. The collapsed sidebar retains its stacked icon and compact number.
 

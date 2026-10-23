@@ -25,7 +25,7 @@ export function NativeAccountOnboarding({ useNativeAccount, run, t, formatExpiry
     && state.snapshot.authenticated
   useEffect(() => { if (completed) setVerified(true) }, [completed])
   if (completed || verified) return null
-  return <OnboardingSurface><div className={css.onboarding}>
+  return <OnboardingSurface><div className={css.welcome}>
     <NativeAccountView state={state} run={run} t={t} formatExpiry={formatExpiry} />
   </div></OnboardingSurface>
 }

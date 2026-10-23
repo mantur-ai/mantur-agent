@@ -1655,7 +1655,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'main.workbench.assets.content\', () => ctx.slots.register(\n      { name: \'main.workbench.assets.content\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-mantur-script/src/client/index.ts:34',
+    source: 'packages/client/ui-mantur-script/src/client/index.ts:35',
   },
   {
     key: 'main.workbench.assets.tab',
@@ -1681,7 +1681,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'main.workbench.assets.tab\', () => ctx.slots.register(\n      { name: \'main.workbench.assets.tab\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-mantur-script/src/client/index.ts:32',
+    source: 'packages/client/ui-mantur-script/src/client/index.ts:33',
   },
   {
     key: 'main.workbench.editing.content',
@@ -1707,7 +1707,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'main.workbench.editing.content\', () => ctx.slots.register(\n      { name: \'main.workbench.editing.content\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-mantur-script/src/client/index.ts:38',
+    source: 'packages/client/ui-mantur-script/src/client/index.ts:39',
   },
   {
     key: 'main.workbench.editing.tab',
@@ -1733,7 +1733,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'main.workbench.editing.tab\', () => ctx.slots.register(\n      { name: \'main.workbench.editing.tab\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-mantur-script/src/client/index.ts:36',
+    source: 'packages/client/ui-mantur-script/src/client/index.ts:37',
   },
   {
     key: 'main.workbench.toggle',
@@ -1785,7 +1785,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'main.workbench.toggle.editing\', () => ctx.slots.register(\n      { name: \'main.workbench.toggle.editing\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-mantur-script/src/client/index.ts:40',
+    source: 'packages/client/ui-mantur-script/src/client/index.ts:41',
   },
   {
     key: 'root',

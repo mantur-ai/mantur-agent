@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-本目录固定 MIT 许可的 `@manturhub/cli` 1.2.6 交付，源码提交为 `c9b569d198f1b65690a28b5b1f2584b9c2e76f82`。归档大小为 58,619 字节，SHA-256 为 `98d2eefe59566b220950ac201f7ad133c47e469e3e0dfcad180027d6a623f86d`；30 个条目包含上游许可证和未经修改的 CLI 源码。
+本目录固定 MIT 许可的 `@manturhub/cli` 1.2.10 正式版本，来源为[官方 npm registry](https://registry.npmjs.org/@manturhub/cli/-/cli-1.2.10.tgz)。归档大小为 66,425 字节，SHA-256 为 `a486b168988239485fa45e01ad24a8c319eca5eda0c1587fe9b15c1a244e99a0`；32 个条目包含上游许可证和未经修改的 CLI 源码。
 
 [prepare-cli.ts](../scripts/prepare-cli.ts)校验归档，通过 `npm ci` 仅安装锁定的生产依赖，并准备保留许可证文件的桌面资源。独立锁文件将 Apache-2.0 许可的 `@vercel/detect-agent` 固定为 1.2.1，并锁定 CLI 的 JSON Schema 校验依赖及 `libsql` 0.5.29 和对应平台的原生依赖。它不修改根 pnpm 依赖图，也不安装全局命令。
 

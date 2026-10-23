@@ -9,6 +9,7 @@ import type {} from '@deepseek-ai/dsh-api-gateway/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ScriptDocument, ScriptEntry, ScriptSelection } from '../types.ts'
 import scriptRemote from '@deepseek-ai/dsh-client-ui-mantur-script/remote'
+import { installAgentOpening } from './agent-opening.ts'
 import { createWorkbenchStore } from './store.ts'
 import { Workbench, WorkbenchToggle } from './Workbench.tsx'
 import { en, zh, type ScriptKey } from './locales.ts'
@@ -53,6 +54,7 @@ export async function apply(ctx: Context): Promise<void> {
   ctx.effect(() => dispose, 'script: client remote')
   await ctx.inject(['remote.manturScript'], (ctx) => {
     const store = createWorkbenchStore()
+    const observeWebOpening = installAgentOpening(ctx)
     ctx.effect(() => ctx.locale.register('script.mantur', { en, zh }), 'script: dictionaries')
     ctx.slots.inject('main.workbench', () => ctx.slots.register({
       name: 'main.workbench', locale: 'script.mantur', store,
@@ -82,6 +84,7 @@ export async function apply(ctx: Context): Promise<void> {
     }, Workbench))
     ctx.slots.inject('main.workbench.toggle', () => ctx.slots.register({
       name: 'main.workbench.toggle', locale: 'script.mantur', store,
+      inject: () => ({ observeWebOpening }),
       children: { 'main.workbench.toggle.editing': { kind: 'single', scope: 'root' } },
     }, WorkbenchToggle))
     ctx.effect(() => () => { ctx.layout.closeWorkbench() }, 'script: close owned shell on unload')

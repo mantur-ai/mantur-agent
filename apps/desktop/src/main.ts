@@ -4,13 +4,17 @@ import { appendFile } from 'node:fs/promises'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { app, BrowserWindow, dialog, ipcMain, Menu, safeStorage, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, safeStorage, shell, WebContentsView } from 'electron'
 import electronUpdater from 'electron-updater'
 import { clearDesktopConnectionCookies } from './browser-session.ts'
 import { requestUpdateSave } from './update-save.ts'
+import { prepareDesktopUpdate } from './prepare-update.ts'
+import { DesktopDraftStorage } from './draft-storage.ts'
+import { installDraftBridge } from './draft-bridge.ts'
 import { installUpdateBridge } from './update-bridge.ts'
 import { installFileImportBridge } from './file-import-bridge.ts'
 import { installDirectoryPickerBridge } from './directory-picker-bridge.ts'
+import { installNativeWebBrowser } from './native-web-browser.ts'
 import { NativeAccountHost } from './auth/host.ts'
 import type { AccountController } from './auth/client-session-controller.ts'
 import { installNativeAccountBridge } from './auth/ipc.ts'
@@ -36,6 +40,7 @@ let mainWindow: BrowserWindow | undefined
 let service: DesktopService | undefined
 let serviceUrl: string | undefined
 let quitting = false
+let preparingQuit = false
 let updates: DesktopUpdateController | undefined
 let updateState: DesktopUpdateState = { kind: 'idle' }
 let preparingUpdate = false
@@ -46,6 +51,11 @@ app.setName(APP_STORAGE_NAME)
 const paths = initializeDesktopPaths(app, app.commandLine.hasSwitch('user-data-dir')
   ? app.commandLine.getSwitchValue('user-data-dir')
   : undefined)
+const drafts = process.platform === 'darwin' ? installDraftBridge({
+  ipc: ipcMain, window: () => mainWindow,
+  origin: () => serviceUrl === undefined ? undefined : new URL(serviceUrl).origin,
+  storage: new DesktopDraftStorage(paths.userData),
+}) : undefined
 const accountBridge = installNativeAccountBridge({ ipc: ipcMain, window: () => mainWindow,
   origin: () => serviceUrl === undefined ? undefined : new URL(serviceUrl).origin,
   controller: () => nativeAccount,
@@ -64,7 +74,12 @@ installFileImportBridge({ ipc: ipcMain, window: () => mainWindow,
 const directoryPicker = installDirectoryPickerBridge({ ipc: ipcMain, window: () => mainWindow,
   origin: () => serviceUrl === undefined ? undefined : new URL(serviceUrl).origin,
   showOpenDialog: (window, options) => dialog.showOpenDialog(window, options),
-  unavailable: () => preparingUpdate || quitting, copy: () => desktopCopy(app.getLocale()),
+  unavailable: () => preparingUpdate || preparingQuit || quitting, copy: () => desktopCopy(app.getLocale()),
+})
+
+const webBrowser = installNativeWebBrowser({ ipc: ipcMain, window: () => mainWindow,
+  origin: () => serviceUrl === undefined ? undefined : new URL(serviceUrl).origin,
+  createView: options => new WebContentsView(options),
 })
 
 function writeDesktopLog(message: string): void {
@@ -144,10 +159,11 @@ function createWindow(target = STARTUP_PAGE): BrowserWindow {
     openExternal(target)
   })
   window.webContents.on('did-start-navigation', (_event, _url, _isInPlace, isMainFrame) => {
-    if (isMainFrame) { directoryPicker.invalidate() }
+    if (isMainFrame) { drafts?.release(); directoryPicker.invalidate(); webBrowser.invalidate() }
   })
+  window.on('resize', () => { webBrowser.resize() })
   window.once('ready-to-show', () => { window.show() })
-  window.on('closed', () => { directoryPicker.invalidate(); mainWindow = undefined })
+  window.on('closed', () => { drafts?.release(); directoryPicker.invalidate(); webBrowser.invalidate(); mainWindow = undefined })
   if (target === STARTUP_PAGE) void window.loadFile(target)
   else void window.loadURL(target)
   mainWindow = window
@@ -283,14 +299,17 @@ function startUpdates(): void {
       const window = mainWindow
       if (window === undefined || window.isDestroyed()) throw new Error(copy.updateShutdownUnavailable)
       preparingUpdate = true
-      try {
-        await requestUpdateSave({ child: active.child, timeoutMs: 30_000 })
-        if (quitting) throw new Error(copy.updateShutdownUnavailable)
-        await accountHost?.close()
-        accountHost = undefined
-        await active.stopAndVerifyExit()
-        if (service === active) service = undefined
-      } finally { preparingUpdate = false }
+      try { await prepareDesktopUpdate({
+        saveDrafts: async () => { await drafts?.prepare() },
+        releaseDrafts: () => { drafts?.release() },
+        saveHost: () => requestUpdateSave({ child: active.child, timeoutMs: 30_000 }),
+        closeAccount: async () => { await accountHost?.close(); accountHost = undefined },
+        stopHost: async () => {
+          await active.stopAndVerifyExit()
+          if (service === active) service = undefined
+        },
+        cancelled: () => quitting || preparingQuit,
+      }) } finally { preparingUpdate = false }
     },
     prompts: {
       confirmInstall: async (version) => {
@@ -349,15 +368,29 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', (event) => {
-  quitting = true
-  directoryPicker.invalidate()
-  updates?.dispose()
-  updates = undefined
-  if (service === undefined) return
+  if (quitting) { if (service !== undefined) event.preventDefault(); return }
+  if (service === undefined) { quitting = true; return }
   event.preventDefault()
-  void stopService().then(() => { app.quit() }).catch((error: unknown) => {
+  if (preparingQuit || preparingUpdate) return
+  preparingQuit = true
+  directoryPicker.invalidate()
+  void (async () => {
+    if (mainWindow !== undefined && serviceUrl !== undefined) {
+      await drafts?.prepare()
+    }
+    quitting = true
+    updates?.dispose()
+    updates = undefined
+    await stopService()
+    app.quit()
+  })().catch((error: unknown) => {
     console.error(error)
-    app.exit(1)
+    if (quitting) { app.exit(1); return }
+    preparingQuit = false
+    drafts?.release()
+    const copy = desktopCopy(app.getLocale())
+    void dialog.showMessageBox({ type: 'error', title: APP_NAME,
+      message: copy.draftQuitFailed, buttons: [copy.okButton], noLink: true }).catch((failure: unknown) => { console.error(failure) })
   })
 })
 

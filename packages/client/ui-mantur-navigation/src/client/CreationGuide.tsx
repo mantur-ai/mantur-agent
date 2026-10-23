@@ -121,9 +121,11 @@ function ReadyGuide({ disabled, sessionId, preferences, useGuideInput, useBundle
   })
 
   const recommended = preferences.recommendations[preferences.mode].flatMap((slug) => {
-    const skill = bundled.phase === 'ready' ? bundled.skills.find(item => item.name === slug) : undefined
+    const skill = bundled.skills.find(item => item.name === slug)
     return skill === undefined ? [] : [skill]
   })
+  const failures = bundled.updates.filter(update => update.status === 'failed')
+    .filter(update => preferences.recommendations[preferences.mode].includes(update.name))
   const missingAlias = recommended.some(skill => !GUIDE_SKILL_LABELS.has(skill.name))
   const insertBundled = (skill: ManturBundledSkill): void => {
     const alias = GUIDE_SKILL_LABELS.get(skill.name)
@@ -155,17 +157,27 @@ function ReadyGuide({ disabled, sessionId, preferences, useGuideInput, useBundle
     </section>}
     <div className={css.shortcutRow} data-hero={true}>
       <GuideSkillRail empty={recommended.length === 0} t={t}>
-        {bundled.phase === 'idle' || bundled.phase === 'loading' ? <span role="status">{mt('skills.updating')}</span>
-          : bundled.phase === 'failed' ? <><span role="alert">{mt('skills.updateFailed')}</span><button type="button" onClick={() => { void loadBundled() }}>{mt('skills.retry')}</button></>
-            : recommended.length === 0 ? <span className={css.empty}>{t('empty')}</span>
-              : recommended.map((skill) => {
-                const label = GUIDE_SKILL_LABELS.get(skill.name)
-                return label === undefined ? null : <button key={skill.reference} type="button" title={skill.title}
-                  aria-pressed={input?.occurrences.some(item => item.source === 'mantur-bundled-skill' && item.ref === skill.reference) ?? false}
-                  disabled={disabled}
-                  onClick={() => { insertBundled(skill) }}
-                >{t(label)}</button>
-              })}
+        {(bundled.phase === 'idle' || bundled.phase === 'loading') && <span role="status">{mt('skills.updating')}</span>}
+        {bundled.phase === 'failed' && <span role="alert">{mt('skills.updateFailed')}</span>}
+        {recommended.length === 0 && bundled.phase === 'ready' && <span className={css.empty}>{t('empty')}</span>}
+        {recommended.map((skill) => {
+          const label = GUIDE_SKILL_LABELS.get(skill.name)
+          return label === undefined ? null : <button key={skill.reference} type="button" title={skill.title}
+            aria-pressed={input?.occurrences.some(item => item.source === 'mantur-bundled-skill' && item.ref === skill.reference) ?? false}
+            disabled={disabled}
+            onClick={() => { insertBundled(skill) }}
+          >{t(label)}</button>
+        })}
+        {failures.map((update) => {
+          const label = GUIDE_SKILL_LABELS.get(update.name)
+          return <span key={update.name} role="status"
+            title={`${t(`updateStage.${update.stage}`)}: ${update.error}${update.localError === undefined ? '' : `; ${update.localError}`}`}>
+            {t(bundled.skills.some(skill => skill.name === update.name) ? 'updateFailedAvailable' : 'updateFailedUnavailable')
+              .replace('{name}', label === undefined ? update.name : t(label))}
+          </span>
+        })}
+        {(bundled.phase === 'failed' || failures.length > 0) && <button type="button"
+          disabled={bundled.phase === 'loading'} onClick={() => { void loadBundled() }}>{mt('skills.retry')}</button>}
         {missingAlias && <span role="alert">{t('aliasMissing')}</span>}
       </GuideSkillRail>
       <button ref={helper} type="button" className={css.helper} aria-expanded={panelVisible} aria-controls={bubbleId}

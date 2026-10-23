@@ -368,10 +368,10 @@
 .install {
   height: 32px;
   padding: 0 14px;
-  border: 0;
+  border: 0.5px solid var(--dsw-alias-border-l2);
   border-radius: 9px;
-  background: var(--dsw-alias-brand-primary);
-  color: white;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
   font: inherit;
   font-size: 13px;
   font-weight: 500;
@@ -385,7 +385,7 @@
 }
 
 .install:not(:disabled):hover {
-  background: color-mix(in srgb, var(--dsw-alias-brand-primary) 88%, var(--dsw-alias-label-primary));
+  background: var(--dsw-alias-interactive-bg-hover);
 }
 
 .detail {
@@ -628,13 +628,11 @@
 }
 
 .recipeMeta {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 5px 8px;
-  margin-top: 12px;
-  padding-top: 8px;
-  border-top: 0.5px solid var(--dsw-alias-border-l3);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 12px;
   color: var(--dsw-alias-label-tertiary);
   font-size: 12px;
 }
@@ -646,34 +644,32 @@
   gap: 5px;
 }
 
-.recipeCost {
-  grid-column: 1 / -1;
-  grid-row: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.recipeMeta > span:first-child {
-  grid-column: 1;
-  grid-row: 2;
-}
-
 .recipeMeta button {
-  grid-column: 2;
-  grid-row: 2;
+  width: 100%;
+  min-height: 44px;
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  padding: 0;
+  justify-content: center;
+  padding: 10px 12px;
   border: 0;
-  background: transparent;
-  color: var(--dsw-alias-brand-primary);
+  border-radius: 9px;
+  background: var(--dsw-alias-button-primary-fill);
+  color: var(--dsw-alias-label-primary-foreground);
   font: inherit;
   font-size: 13px;
   font-weight: 550;
-  white-space: nowrap;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
   cursor: pointer;
+}
+
+.recipeMeta button:hover:not(:disabled) {
+  background: var(--dsw-alias-button-primary-hover);
+}
+
+.recipeMeta button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .pagination {
@@ -996,4 +992,20 @@
   margin-top: 20px;
   color: var(--dsw-alias-label-primary);
   overflow-wrap: anywhere;
+}
+
+.useSkill {
+  background: var(--dsw-alias-state-success-tertiary);
+  color: var(--dsw-alias-label-primary);
+  border-color: var(--dsw-alias-state-success-primary);
+}
+
+.useSkill:not(:disabled):hover {
+  background: color-mix(in srgb, var(--dsw-alias-state-success-primary) 25%, var(--dsw-alias-bg-base));
+}
+
+.installedBadge {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  margin-left: auto;
 }

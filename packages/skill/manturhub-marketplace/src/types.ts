@@ -23,6 +23,23 @@ export interface ManturBundledSkill extends ManturBundledSkillIdentity {
   readonly source: 'app-bundled'
 }
 
+/** Result of checking one recommended Skill against the active online source. */
+export type ManturBundledSkillUpdate =
+  | { readonly name: string; readonly status: 'verified' }
+  | {
+    readonly name: string
+    readonly status: 'failed'
+    readonly stage: 'metadata' | 'download' | 'verification'
+    readonly error: string
+    readonly localError?: string
+  }
+
+/** Available verified resources and independent online update outcomes. */
+export interface ManturBundledSkillsUpdateResult {
+  readonly skills: readonly ManturBundledSkill[]
+  readonly updates: readonly ManturBundledSkillUpdate[]
+}
+
 /** One public Skill card returned by ManturHub. */
 export interface ManturMarketplaceSkill {
   readonly slug: string

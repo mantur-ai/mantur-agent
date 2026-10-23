@@ -889,6 +889,568 @@
           "sha256": "d921e092c6fa43e27bab7eed355d19afef3fcfa6846023434a1750563675e610"
         }
       ]
+    },
+    {
+      "name": "overseas-comic-script-studio",
+      "title": "出海短剧剧本创编",
+      "version": "0.3.11",
+      "digest": "1f0b0a46c225dc2a7d16a5a922179714a7c5f9298f10de458780b318af19a81e",
+      "archive": "archives/overseas-comic-script-studio-0.3.11.zip",
+      "archiveSha256": "c9fdbdebcef86d0888061064f5a65c9fffbccf8752f82d0b330b8353e25f8c9a",
+      "archiveBytes": 272138,
+      "files": [
+        {
+          "path": "SKILL.md",
+          "bytes": 26069,
+          "sha256": "1892d19d3b5107bca04cc332c5648bf082a92a71cf9b359eedf06000ca0393fa"
+        },
+        {
+          "path": "assets/account-links.json",
+          "bytes": 63,
+          "sha256": "9c8e2a278219c65e23a13d9858c68eaa5274cb146779fabf419a76a0c8357c21"
+        },
+        {
+          "path": "assets/workbuddy-model-context.png",
+          "bytes": 58396,
+          "sha256": "5f0067100e04d4a306f036b20a80b9b590f8e73927eba38cecd42d4b275a83ea"
+        },
+        {
+          "path": "references/access.md",
+          "bytes": 3584,
+          "sha256": "c7e3be4bad633b202e2f495f02efa36b8d563b75e655b5f2c71463ba0f041547"
+        },
+        {
+          "path": "references/adaptation.md",
+          "bytes": 13942,
+          "sha256": "0aef72d100283dcb3f58f2104d0a376e4c784635405f722867ed5e4deb909225"
+        },
+        {
+          "path": "references/attribution.md",
+          "bytes": 1743,
+          "sha256": "9dce1eee8d0c96882ad88ac02b9cc992567d0360b598d1e6a9004bb4d60f1b53"
+        },
+        {
+          "path": "references/balance-recharge.md",
+          "bytes": 1755,
+          "sha256": "266772268bea6550edb40e0fad5c6a4e2101999402e44924895ed707d9635d05"
+        },
+        {
+          "path": "references/channel.md",
+          "bytes": 10044,
+          "sha256": "f853a164a121326d3ba7b595011eb367db1eb7ffac26b278217bafd9ed129d05"
+        },
+        {
+          "path": "references/cli-upgrade.md",
+          "bytes": 3974,
+          "sha256": "61f2d8a0b3e7029d7639bf8e86946f01ac16a67068904e9f2bd3c33780935b9e"
+        },
+        {
+          "path": "references/cli.md",
+          "bytes": 10151,
+          "sha256": "42157d42c5ebe31dbd806607af26da15dfb78c136814d9a5fceb5ac7e5998bbe"
+        },
+        {
+          "path": "references/creation.md",
+          "bytes": 3713,
+          "sha256": "c7764cd5e944391b5ef56c5797987b93aa571b6c4643b7dbe6c225f2ec4c86a8"
+        },
+        {
+          "path": "references/languages.md",
+          "bytes": 11273,
+          "sha256": "4b4aaabdffb96d3f4ca7bfbf705a54396f5a717326fbbae5c7297d23fbfab79d"
+        },
+        {
+          "path": "references/operators.md",
+          "bytes": 28855,
+          "sha256": "ea474ad9da78688c7db9e784b5883cca3e52d32cb10ae5c0865e457003d141de"
+        },
+        {
+          "path": "references/quality-gates.md",
+          "bytes": 20406,
+          "sha256": "73208c6c4ca3707112466ae0a274e72a6ed25ef9f33946c30975bbb306bd4f10"
+        },
+        {
+          "path": "references/recovery.md",
+          "bytes": 10179,
+          "sha256": "e443807291391b8b658c4a57b4e21d6df445f798c3fafb334e4af6a9671cd6df"
+        },
+        {
+          "path": "references/registration.md",
+          "bytes": 2107,
+          "sha256": "dee7d969752775afd4f1f7bb8c80485cb0bd64c4a2767d4d2c369db27b6725e1"
+        },
+        {
+          "path": "references/review-policy.md",
+          "bytes": 11432,
+          "sha256": "ba2ad44165da5406b937dcefbec634f232bd5e0ff2f50b116ec0edf724b9b116"
+        },
+        {
+          "path": "references/runtime.md",
+          "bytes": 46930,
+          "sha256": "c45dd1a46119168258ce0b65a9d4c248aab06f3236ea1d3ff61839e04affd684"
+        },
+        {
+          "path": "references/skill-journey.md",
+          "bytes": 9343,
+          "sha256": "ac9d91d8e0d10e894e07f7be83a61f45215adcd7e05dd94c0971e25a5c1bdd64"
+        },
+        {
+          "path": "references/source-facts.md",
+          "bytes": 14515,
+          "sha256": "20279243a6e752d43c076d6db1adef9cc84f3dbc8cd5d4af0a500fe99d55b07f"
+        },
+        {
+          "path": "references/test-mode.md",
+          "bytes": 2565,
+          "sha256": "625405b3d79cd2ca3005de069d43ce29f4701bf60f25859c83a18926b3267dba"
+        },
+        {
+          "path": "references/warnings-and-revisions.md",
+          "bytes": 14324,
+          "sha256": "50419442f26a152d639db563db6f269db07d3773cbe19cd08b3c3ac6c96d8ba5"
+        },
+        {
+          "path": "references/workbuddy-model-setup.md",
+          "bytes": 2792,
+          "sha256": "e1093de44ef58c560feee22f45feea044cc5be687c283e8b62446326bba4bbb3"
+        },
+        {
+          "path": "scripts/access-base.mjs",
+          "bytes": 27415,
+          "sha256": "430edffb9b1bc403864fade70f7640a11447d0b6ece275c0c3ea7c4a297a72b7"
+        },
+        {
+          "path": "scripts/access-core.mjs",
+          "bytes": 11943,
+          "sha256": "6d8a844cc692dc6e852fa78f9ec54cdf0622f9edebf119b4c8630dd71e22ab64"
+        },
+        {
+          "path": "scripts/access-profile.json",
+          "bytes": 714,
+          "sha256": "bd2abe9f7be9a1c6cb90d096b23d443c6ceaf61a40f4cdd207622c17c6b17502"
+        },
+        {
+          "path": "scripts/access.mjs",
+          "bytes": 2706,
+          "sha256": "331c1ed5b7ea826469d0feb0f282e093b8dcd874c5d098b35ea0bd4fb50a0a52"
+        },
+        {
+          "path": "scripts/attribution-policy.json",
+          "bytes": 1005,
+          "sha256": "65f91eeed0795d33a7dfa7ba8891041205434ebbb8237e9f97871f08870f5a71"
+        },
+        {
+          "path": "scripts/contracts.mjs",
+          "bytes": 4815,
+          "sha256": "62f3fba18a668248fbad8c093cbf5d9e3e717e5af6d6bc3e7f99a8de3e6b8dd4"
+        },
+        {
+          "path": "scripts/issues.mjs",
+          "bytes": 14422,
+          "sha256": "f97c7d7e621aa6f4b75df00c29084660faf0301d7a4b71a5f7d0ed0a14e581de"
+        },
+        {
+          "path": "scripts/launch.mjs",
+          "bytes": 3005,
+          "sha256": "a4c7736f080cfa42abe2948ab21944af81196fa439dfc7e54975e5e46cb456e2"
+        },
+        {
+          "path": "scripts/presentation.mjs",
+          "bytes": 6425,
+          "sha256": "b62813729147cac2044e94f7a90408921def41483c3f40aee760d05ccdd023c3"
+        },
+        {
+          "path": "scripts/project-environment.mjs",
+          "bytes": 769,
+          "sha256": "9863d7ed32dfc335f91ddfa9ec013f6da3bd7e4f7c5bd7138ea3ad650694b877"
+        },
+        {
+          "path": "scripts/project.mjs",
+          "bytes": 147101,
+          "sha256": "cad174551d9280205b07fb6a84a57eaa6999c592488eedefb213a9cb17708de3"
+        },
+        {
+          "path": "scripts/readable.mjs",
+          "bytes": 13594,
+          "sha256": "10f6a8f59ec7dc1d787aef52f56860d79d0cea30ce0f1e08245918f9e232b306"
+        },
+        {
+          "path": "scripts/receipts.mjs",
+          "bytes": 4586,
+          "sha256": "5a0017d4c02befc5e0ec9fc4ba6a9cc98e3b2eaaa5652f28674765b14f76e3b7"
+        },
+        {
+          "path": "scripts/source-facts.mjs",
+          "bytes": 14722,
+          "sha256": "d614e3c36bd75d5e0e374b31fb55e127f97f36415d11acb312de43c1fa6bb92a"
+        },
+        {
+          "path": "scripts/source.mjs",
+          "bytes": 6733,
+          "sha256": "000916e65d941b5e6a679c9aa12ec99497c8aa07b58c40a5c25337861644511c"
+        },
+        {
+          "path": "scripts/test-mode.mjs",
+          "bytes": 4624,
+          "sha256": "d919d4c427b9e226d24cc7724374d6bedc13bf19f2cf0c3e0b1c433dbb9d01cf"
+        },
+        {
+          "path": "scripts/workflow-context.mjs",
+          "bytes": 4795,
+          "sha256": "2762a77571db609d4b9917bf84e008a4e3577d65a166c70c4692499f6dd11333"
+        },
+        {
+          "path": "skill-runtime.json",
+          "bytes": 294,
+          "sha256": "3a7aca5465dc2ad845d39589533f533893405558e120cb301dc97bb2e55ae141"
+        }
+      ]
+    },
+    {
+      "name": "mantur-preroll-remix-studio",
+      "title": "短剧前贴与混剪助手",
+      "version": "0.2.31",
+      "digest": "235d51ecb900f7e49fdd8aec9b39ba5092af307c2afb50346964e8c6698c1f70",
+      "archive": "archives/mantur-preroll-remix-studio-0.2.31.zip",
+      "archiveSha256": "58306425bf5cc61fd05f950a84ce6cfe5dc031f9306a4403fb0652ce8f5c40cc",
+      "archiveBytes": 963774,
+      "files": [
+        {
+          "path": "SKILL.md",
+          "bytes": 20850,
+          "sha256": "32b7c7f0d8eecc2c7773b6361519b606339010fc66f03de7c7542c47a861f0ed"
+        },
+        {
+          "path": "assets/account-links.json",
+          "bytes": 63,
+          "sha256": "9c8e2a278219c65e23a13d9858c68eaa5274cb146779fabf419a76a0c8357c21"
+        },
+        {
+          "path": "assets/app.js",
+          "bytes": 37853,
+          "sha256": "bb32deaad66932729f7ea05f1cd01d80fa144cca4f6ea2b253362f9e958e8dc7"
+        },
+        {
+          "path": "assets/index.html",
+          "bytes": 4380,
+          "sha256": "f99d7e0875ced28726d12e8024d6ffd8e8e3714209016d96c9328111d10d3bbe"
+        },
+        {
+          "path": "assets/mantur-logo.png",
+          "bytes": 866326,
+          "sha256": "3c1453dc73b1793039725c5f3a19d80007dcabe4afb0825edfb5c2d1e2b655d0"
+        },
+        {
+          "path": "assets/presentation.js",
+          "bytes": 16623,
+          "sha256": "89d8b8f587080e22739484a92649e3ad05971144d76b3233a66c0ab675315ace"
+        },
+        {
+          "path": "assets/style.css",
+          "bytes": 19453,
+          "sha256": "82d7ec21923fbb6dc3b0b34feeb325d66bc2cb6ce59dc1dd439c164e64a9cd85"
+        },
+        {
+          "path": "assets/sync.js",
+          "bytes": 5015,
+          "sha256": "91103e34f0098209eaf4e5804f17c9462713f8f07abc084fc7bdc7522128dbe4"
+        },
+        {
+          "path": "assets/workbuddy-model-context.png",
+          "bytes": 58396,
+          "sha256": "5f0067100e04d4a306f036b20a80b9b590f8e73927eba38cecd42d4b275a83ea"
+        },
+        {
+          "path": "references/access.md",
+          "bytes": 7121,
+          "sha256": "7966981ff8e76ee36b6ad94db86f5866861f0c0107ed04edd580a590a44d0b93"
+        },
+        {
+          "path": "references/attribution.md",
+          "bytes": 1584,
+          "sha256": "767cb61841e01afb2fa9b3e3f26de8191e693312c1c1fc0ac4b1b60394d9aabc"
+        },
+        {
+          "path": "references/balance-recharge.md",
+          "bytes": 1755,
+          "sha256": "266772268bea6550edb40e0fad5c6a4e2101999402e44924895ed707d9635d05"
+        },
+        {
+          "path": "references/channel.md",
+          "bytes": 9670,
+          "sha256": "ec55c0ded6aae95d762f40d7f00e41641f1bb5d1152ee06f09dec2c8192f73f2"
+        },
+        {
+          "path": "references/cli-upgrade.md",
+          "bytes": 3974,
+          "sha256": "61f2d8a0b3e7029d7639bf8e86946f01ac16a67068904e9f2bd3c33780935b9e"
+        },
+        {
+          "path": "references/cli.md",
+          "bytes": 14544,
+          "sha256": "2ce9301059e9516bf4c9b5bc35cbe143a4c2aad661bda2a74992f5190f73634b"
+        },
+        {
+          "path": "references/commands.md",
+          "bytes": 14625,
+          "sha256": "dbebba0124404328fe5652c831a1f1d69059b0bbb90b432494e7304e135cc0a3"
+        },
+        {
+          "path": "references/front-size.md",
+          "bytes": 3484,
+          "sha256": "1c4b3377eb96b14921aef41f5d179571cf6479951895c942467fd5b908ea0690"
+        },
+        {
+          "path": "references/front-styles.md",
+          "bytes": 4833,
+          "sha256": "0d12a02a66356578f47cf9b47f8d9e0fb9310cd88c4380f5fcbda90e3cde14cc"
+        },
+        {
+          "path": "references/media-validation.md",
+          "bytes": 4572,
+          "sha256": "4f25c07eff784a1a7cafdcc1b664fef6c23952c5ea5b712b2e74a31a5dc92791"
+        },
+        {
+          "path": "references/operators.md",
+          "bytes": 8814,
+          "sha256": "0f9ca0456331cb28fc1ed0c69af9f156aa5e2a51a584e6aef7e1a6b57713edf7"
+        },
+        {
+          "path": "references/production-mode.md",
+          "bytes": 4071,
+          "sha256": "fd149a8a0d7e5521c7cbb1e093215180b25b9a8e091357a21aeaaa04d4d6ea1c"
+        },
+        {
+          "path": "references/recovery.md",
+          "bytes": 7035,
+          "sha256": "11022f91024045a4e2f8a3e04b1f14df8a21cc2c4f61b24d0132e2931bc459af"
+        },
+        {
+          "path": "references/registration.md",
+          "bytes": 1888,
+          "sha256": "ce5f3f2ceee473b967f3bac55d2ff2ad96c6fe1dfd676ae8928139978973a0b1"
+        },
+        {
+          "path": "references/workbench.md",
+          "bytes": 15557,
+          "sha256": "6dd433a620a4db1a88fd2efc7b1ce1b22a4859aae30fb3e6c06531e3d6eb1f1a"
+        },
+        {
+          "path": "references/workbuddy-model-setup.md",
+          "bytes": 2792,
+          "sha256": "e1093de44ef58c560feee22f45feea044cc5be687c283e8b62446326bba4bbb3"
+        },
+        {
+          "path": "scripts/access-core.mjs",
+          "bytes": 27038,
+          "sha256": "e1c18d10252e6e1e1af89fd51604a9b6678d62b429e89357e8849d2982d266b9"
+        },
+        {
+          "path": "scripts/access-profile.json",
+          "bytes": 766,
+          "sha256": "7f923953f3d0fc9d7ea6184e1954a9ff518e1fb4b645ab8c37a106421a38dcbc"
+        },
+        {
+          "path": "scripts/access.mjs",
+          "bytes": 2706,
+          "sha256": "331c1ed5b7ea826469d0feb0f282e093b8dcd874c5d098b35ea0bd4fb50a0a52"
+        },
+        {
+          "path": "scripts/account-balance.mjs",
+          "bytes": 9346,
+          "sha256": "263171d8c903653ae4f7e20da5db02b3ad1d18a978de5676fef5bfe66514b4c2"
+        },
+        {
+          "path": "scripts/analysis-view.mjs",
+          "bytes": 5427,
+          "sha256": "5aee4cd1d21a43dcad8c8ffcc4bd8c505e94e5f33a08d3ebf0c46db923f8a1e9"
+        },
+        {
+          "path": "scripts/artifact-download.mjs",
+          "bytes": 9544,
+          "sha256": "65bdc9e43c4f8c888b2e55b3bb93dbb00208ef7d3f9aef20c9531770e976c0eb"
+        },
+        {
+          "path": "scripts/artifact-view.mjs",
+          "bytes": 7104,
+          "sha256": "12ab1204dc99725a702e34e536314146fb0033a7b78fe1ba56c106f3e9736d82"
+        },
+        {
+          "path": "scripts/attribution-policy.json",
+          "bytes": 645,
+          "sha256": "d55387ec095293de76b9d90494efa1393a985aef0e8420a181f0a7e8a9d85b4a"
+        },
+        {
+          "path": "scripts/background-recovery.mjs",
+          "bytes": 6907,
+          "sha256": "a4e82873846283f062b9dc1e88425f7f874adaa2c8ebc4915c4cf0c2aea8a29a"
+        },
+        {
+          "path": "scripts/balance-query-monitor.mjs",
+          "bytes": 5080,
+          "sha256": "9f27abc7cfa650d597fff835abb277dbd1ac2ee4b018b6c2bc70e3e326f80bb7"
+        },
+        {
+          "path": "scripts/balance-query.mjs",
+          "bytes": 1672,
+          "sha256": "0e6dd18a00c5d5c1ccd2ca18f21f277d11aa15d0c209e658ee07b524f7cc53eb"
+        },
+        {
+          "path": "scripts/billing-view.mjs",
+          "bytes": 601,
+          "sha256": "06a038c042b51dcdc6afedf941574ce5cc86268dc12d3271720a4f9dfa7f7c87"
+        },
+        {
+          "path": "scripts/browser-launch.mjs",
+          "bytes": 954,
+          "sha256": "2406791b111b910efcd94435ce8576191b57a59d5feb977953f51bc5c6c5d790"
+        },
+        {
+          "path": "scripts/cli-client.mjs",
+          "bytes": 20201,
+          "sha256": "5746b5a0f975277caa8557eaa6cf91613d32e942ebc9212ad2e6f297541d0683"
+        },
+        {
+          "path": "scripts/diagnostics.mjs",
+          "bytes": 3521,
+          "sha256": "6dd18dceed19cc3413f3ed5947fa0e110fc7778275165f8d62402ca875544538"
+        },
+        {
+          "path": "scripts/front-size.mjs",
+          "bytes": 5209,
+          "sha256": "1e998ce2f28e93a6f2df0efef6ccc6a1f0eac4ab791beba8c1791d45fb040285"
+        },
+        {
+          "path": "scripts/front-styles.mjs",
+          "bytes": 1509,
+          "sha256": "767c5a1dfe643e4fcf76cda0d947641595de74cebe66ff9334f11ee2a0fa9c26"
+        },
+        {
+          "path": "scripts/guidance.mjs",
+          "bytes": 27878,
+          "sha256": "3f6a1423a29208bba8d215e64a48877f2dbfa1f0f840d35487f5e2ad90d8f103"
+        },
+        {
+          "path": "scripts/integration.mjs",
+          "bytes": 12455,
+          "sha256": "51772d7e72be485d8b3327be35f1028f5ca2cdc012e7d72dc845fb858fd68b5a"
+        },
+        {
+          "path": "scripts/media-facts.mjs",
+          "bytes": 1303,
+          "sha256": "3184f3d76d094d6cdd82d5fcd1dcb549cf3780c9d4e176dc4fb0b6bc5ae279cb"
+        },
+        {
+          "path": "scripts/media-probe-worker.mjs",
+          "bytes": 18761,
+          "sha256": "70d5d52bfc00df465259700454d159c38f818357db1d2a9376e15722d1a01efc"
+        },
+        {
+          "path": "scripts/media-probe.mjs",
+          "bytes": 2115,
+          "sha256": "7ac75f0acf1c1d316b1f30bf6113cfa5c74219be5c50ea80a2d83b55ff596eda"
+        },
+        {
+          "path": "scripts/mp4box-LICENSE.txt",
+          "bytes": 1534,
+          "sha256": "ebad0332150a08f37389158289d93ab2f70b0ee8717d1db9b3d002febc6c5047"
+        },
+        {
+          "path": "scripts/mp4box-SOURCE.json",
+          "bytes": 583,
+          "sha256": "e594fed554ae7810ea63b4e20e937d7f94e637ae7f3993f1a4e8e13600d8a3ba"
+        },
+        {
+          "path": "scripts/mp4box.all.cjs",
+          "bytes": 284455,
+          "sha256": "42de3103f2356438054c4760018ba433584f1fbf6cb8a7db39c6569cc8a3294a"
+        },
+        {
+          "path": "scripts/onboarding.mjs",
+          "bytes": 12911,
+          "sha256": "b25a3d5384a85967e674455cd24537e693b4299044619b130e27f965d81bb6e3"
+        },
+        {
+          "path": "scripts/operation-time.mjs",
+          "bytes": 1486,
+          "sha256": "6dc38593d7cdd6717a1678680d393f2e280ae3677ae5f4bdc89154dce69f6663"
+        },
+        {
+          "path": "scripts/optional-media-tools.mjs",
+          "bytes": 5232,
+          "sha256": "7f4ddeb6e1e52b6d7041cc9fe4e756aa458dc71e11719558e2ea789c071799ad"
+        },
+        {
+          "path": "scripts/plan.mjs",
+          "bytes": 9437,
+          "sha256": "3a3e2cd1a4c1e78dab41c00bda45c198c734430603ecef8feac3e90e2d3e6a09"
+        },
+        {
+          "path": "scripts/production-mode.mjs",
+          "bytes": 4807,
+          "sha256": "560ae0563b5155b0852d4534a2df9af9ebff027ace8f2aad2554a25ae95da61e"
+        },
+        {
+          "path": "scripts/project.mjs",
+          "bytes": 18437,
+          "sha256": "218a92f90c6dee4c62b488d29ad002cde56d81395049c60f819bad8432474757"
+        },
+        {
+          "path": "scripts/server.mjs",
+          "bytes": 19286,
+          "sha256": "fb7061d794b6891a78bd8f0e948e302961f4efeaa1af5b494f45764e32a98f40"
+        },
+        {
+          "path": "scripts/skill-update.mjs",
+          "bytes": 1957,
+          "sha256": "c5c89eda82f3940399d560d7f0a48ce458541fcafcd99c9b385da1f37dbc5a36"
+        },
+        {
+          "path": "scripts/studio.mjs",
+          "bytes": 11674,
+          "sha256": "40a195b52f2a5e7de7d0d7f063e9bc68c044238a0b9539928c2e136e0fd8a605"
+        },
+        {
+          "path": "scripts/synchronizer.mjs",
+          "bytes": 1946,
+          "sha256": "84d7b937e0d30b60732ec5287795cf8960df8a2ecb112ea2e74457b0471518da"
+        },
+        {
+          "path": "scripts/upgrade.mjs",
+          "bytes": 2417,
+          "sha256": "2a22c72f7064c708a1f7c26de6e6dcd8137f1bc084875e75e2a406abd6101a99"
+        },
+        {
+          "path": "scripts/webm-probe.mjs",
+          "bytes": 9243,
+          "sha256": "6eb8a5ba6912ce3d8f39ec283d7efc321e346297c826bc48739b2350bd5ebef1"
+        },
+        {
+          "path": "scripts/workbench-identity.mjs",
+          "bytes": 1417,
+          "sha256": "38e442c5cdc95e63a259e0a1f09766f38244fbefe4dce4be523ce5f518c40131"
+        },
+        {
+          "path": "scripts/workbench.mjs",
+          "bytes": 2808,
+          "sha256": "1df06b73a01eeb3b9af451b1c1897af42e5ecbd7b9343dcb523bc76fef87582f"
+        },
+        {
+          "path": "scripts/workflow-context.mjs",
+          "bytes": 4795,
+          "sha256": "2762a77571db609d4b9917bf84e008a4e3577d65a166c70c4692499f6dd11333"
+        },
+        {
+          "path": "scripts/workflow.mjs",
+          "bytes": 42949,
+          "sha256": "984187f8c123a2c6b71043236bf79f4f362a3e262c3acd9c8c86dc0d0eb9f99a"
+        },
+        {
+          "path": "skill-runtime.json",
+          "bytes": 765,
+          "sha256": "448a41b78953e7b2675ad62188e2372c2129588d16828fd32efd661d12d4878f"
+        }
+      ]
     }
   ]
 }

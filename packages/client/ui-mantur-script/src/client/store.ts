@@ -11,12 +11,15 @@ export interface Draft {
 }
 /** Shared workbench viewing state; saved files remain owned by the Host. */
 export interface WorkbenchState {
-  views: Record<string, 'script' | 'editing' | 'assets'>
+  views: Record<string, 'script' | 'editing' | 'assets' | 'web'>
+  urls: Record<string, string | undefined>
   paths: Record<string, string>
   drafts: Record<string, Record<string, Draft>>
 }
 const workbenchActions = {
-  select: (d: WorkbenchState, session: string, view: 'script' | 'editing' | 'assets') => { d.views[session] = view },
+  closeWeb: (d: WorkbenchState, session: string) => { d.urls[session] = undefined },
+  openWeb: (d: WorkbenchState, session: string, url: string) => { d.urls[session] = url; d.views[session] = 'web' },
+  select: (d: WorkbenchState, session: string, view: 'script' | 'editing' | 'assets' | 'web') => { d.views[session] = view },
   open: (d: WorkbenchState, session: string, document: ScriptDocument) => {
     d.paths[session] = document.path
     const drafts = d.drafts[session] ??= {}
@@ -60,7 +63,7 @@ const workbenchActions = {
  */
 export function createWorkbenchStore(): ReturnType<typeof defineStore<WorkbenchState, typeof workbenchActions>> {
   return defineStore({
-    init: (): WorkbenchState => ({ views: {}, paths: {}, drafts: {} }),
+    init: (): WorkbenchState => ({ views: {}, urls: {}, paths: {}, drafts: {} }),
     actions: workbenchActions,
   })
 }

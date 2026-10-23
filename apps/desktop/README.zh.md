@@ -55,7 +55,9 @@ Chrome for Testing 下载 URL 将版本号放在目录中，并使用 `chrome-he
 
 编辑器的固定版本渲染器补丁公开每个浏览器子进程及管道关闭的完成证据。安装准备同时等待该证据和公开浏览器关闭操作；缺失证据或清理失败仍会阻止安装。见[渲染浏览器关闭](../../.agents/notes/implemented/bug-fix/2026-09-09-mantur-render-browser-close.zh.md)。
 
-macOS 命令先由 electron-builder 完成签名并生成更新 ZIP，再用 Apple 的 `hdiutil` 创建 DMG。构建阶段使用临时唯一卷名，避免与已安装或已挂载的同名应用冲突；最终镜像会恢复 `ManTur Agent` 卷名、加入 Applications 快捷方式，并生成独立的更新 blockmap。挂载点使用 macOS `getconf DARWIN_USER_TEMP_DIR` 下的独立临时目录，镜像文件仍位于构建输出目录；解析或创建挂载点失败会停止打包。
+打包前须从同一 checkout 重新构建桌面产物，期间不得并行修改源码。`beforePack` hook 将桌面 `lib/**/*.js.map` 与 `lib/**/*.d.ts.map`、对应生成文件及源码字节保存到唯一的 `dist/symbols/desktop-*` 目录，清单记录版本、目标、路径与 SHA-256。源码缺失或备份失败会终止打包。Builder 仅从应用副本中排除这些 map；依赖 map、编辑器资源、许可证和源码提供说明保持不变。调试符号目录须随发行版本保留，但不进入安装包。打包工作流将其保存为受仓库访问策略约束的独立 90 天 artifact，不参与公开发行组装；须在过期前另行归档。参见[打包决策](../../.agents/notes/implemented/process/2026-10-22-desktop-package-size.zh.md)。
+
+macOS 命令先由 electron-builder 完成签名并生成更新 ZIP，再用 Apple 的 `hdiutil`（UDZO，zlib level 9） 创建 DMG。构建阶段使用临时唯一卷名，避免与已安装或已挂载的同名应用冲突；最终镜像会恢复 `ManTur Agent` 卷名、加入 Applications 快捷方式，并生成独立的更新 blockmap。挂载点使用 macOS `getconf DARWIN_USER_TEMP_DIR` 下的独立临时目录，镜像文件仍位于构建输出目录；解析或创建挂载点失败会停止打包。
 
 在没有 Developer ID 凭据的情况下进行本地 Apple Silicon 验收时，请在独立、干净的构建副本中运行 `pnpm run desktop:dist:mac:arm64:local`。该命令明确选择 electron-builder 的 ad-hoc 身份，关闭证书自动发现及公证，并要求严格签名校验。标准签名器在生成 ZIP 前封装已装配的应用；创建 DMG 前还必须通过 `codesign --verify --deep --strict`。签名后不得修改应用内容。这种本地身份只证明应用包完整性，不表示 Apple 认可、已公证、通过 Gatekeeper 或适用于公开更新。正式发行工作流及证书要求保持不变；见[本地签名决策](../../.agents/notes/implemented/bug-fix/2026-09-09-local-macos-bundle-signing.zh.md)。
 
@@ -69,7 +71,7 @@ macOS x64 命令必须在 Intel Mac 上运行，Windows 命令必须在 x64 Wind
 
 smoke 会从解包应用自己的依赖目录启动 `dsh`，把打印出的进程 token 换成会话 cookie，并要求带品牌标题的 Web 页面返回 HTTP 200。它还会校验 Mantur Cut manifest 中的每条路径，以 `--help` 启动包内 Whisper CLI 与 server，要求源码、许可证、构建及安全记录齐全，并检查 updater 依赖与 TOS 通用更新源配置。它使用空的临时 Harness home，避免开发者数据影响包检查结果。启用安装包内剪辑资源和更新 IPC 后，它要求真实保存回执及 Host 正常退出；拒绝关闭会使打包检查失败。
 
-smoke 还会检查内置 CLI 的固定来源记录、包版本、许可证和依赖入口，创建真实的配置目录内启动脚本，并要求 `manturhub --version` 使用包内 Electron 可执行文件返回 `1.2.6`。启动脚本关闭 CLI 和技能更新检查。缺少资源直接失败，不搜索全局 CLI。该检查不会创建账号授权尝试，也不验证浏览器授权、Main 的操作系统存储，或以 macOS 结果证明 Windows 行为。
+smoke 还会检查内置 CLI 的固定来源记录、包版本、许可证和依赖入口，创建真实的配置目录内启动脚本，并要求 `manturhub --version` 使用包内 Electron 可执行文件返回 `1.2.10`。启动脚本关闭 CLI 和技能更新检查。缺少资源直接失败，不搜索全局 CLI。该检查不会创建账号授权尝试，也不验证浏览器授权、Main 的操作系统存储，或以 macOS 结果证明 Windows 行为。
 
 打包时将 CLI 来源记录和 `node_modules` 目录分别作为资源输入。Electron Builder 在复制目录时排除其顶层 `node_modules` 子目录；直接选择模块目录本身，才能保留内置 CLI 及其依赖。
 
@@ -97,6 +99,8 @@ smoke 还会检查内置 CLI 的固定来源记录、包版本、许可证和依
 每次交付安装包或更新发布状态，都必须在[飞书产品与安装使用指南](https://guiyi2023.feishu.cn/docx/Iq3id4fr8o2uo9xKfpEcIck9nRf)中追加带日期和版本号的用户更新日志，并保留历史记录与附件。日志说明用户可见的改进、问题修复、更新步骤、支持平台、已知限制，以及经过验证的安装包下载和自动更新状态；仅上传安装包不代表自动更新通道已经可用。最新记录排在最前，同时更新受影响的安装与使用说明。
 
 ## 运行时设计
+
+对话工作台提供“网页”标签来显示本地技能页面。桌面通过独立的 `WebContentsView` 打开页面，不启用 Node 集成或 preload，并保留页面的 CSP 和框架限制。只接受主机字面值为 `127.0.0.1` 且包含显式端口的 HTTP URL，并排除应用自身 origin。原生页面使用独立的内存浏览器会话，拒绝权限请求、下载和弹窗，导航限制在初始 origin 内。只有受信任的应用主框架可以请求显示或隐藏。隐藏标签不会停止技能服务。参见[内置网页工作台决策](../../.agents/notes/implemented/feature/2026-10-22-embedded-workbench-web.zh.md)。
 
 目录选择使用无参数的 `manturDirectoryPicker.pick()` preload 能力。Main 只接受当前本地主 frame，并将 Electron 单目录对话框的父窗口设为当前应用窗口。取消返回 `null`；失败直接报错，不调用 Host 选择器。对话框尚未结束时，重复请求会被拒绝，更新准备也会被阻止，直到原生调用结束。更新准备或退出期间，Main 拒绝新请求；主 frame 导航、窗口关闭或退出后，迟到的结果会失效。
 
@@ -126,7 +130,7 @@ macOS Intel、macOS Apple Silicon 与 Windows 使用同一个更新控制器。m
 
 <a id="draft-checkpoints"></a>
 
-桌面端使用原版逐 Session 浏览器草稿存储，不再暴露原生草稿检查点桥，也不在切换 Session 时锁定草稿。未发送草稿不保证在 loopback origin 改变后保留；已发送消息仍存于 Session 日志。旧原生检查点文件保留在磁盘上，但不自动恢复。
+macOS 桌面端从所选用户数据目录下的私有检查点恢复完整编辑器文档、精确引用和已选图片字节，不依赖 loopback 端口。正常退出在停止 Host 前等待已验证的持久草稿回执；保存失败会保留应用窗口并释放编辑器以便重试。更新准备期间的退出请求需等操作结束后再尝试。Windows 因尚不支持原生持久替换，仍使用浏览器草稿存储，不保证未发送草稿在 origin 改变后保留。已发送消息仍存于 Session 日志。参见 [macOS 草稿恢复决策](../../.agents/notes/implemented/bug-fix/2026-10-22-macos-draft-bridge.zh.md)。
 
 桌面对话框接受本机文件与文件夹拖拽，并提供添加文件和添加文件夹按钮。文档逐字节复制到 `userData/attachments` 下的独立目录，保留嵌套路径和空目录。文件名不限定接受类型：Markdown、Word、音频等资料均保留原始字节。失败批次被清理并显示错误，不修改原文件。符号链接及包含附件存储目录的导入会被拒绝。
 

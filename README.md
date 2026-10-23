@@ -1,6 +1,6 @@
----
-description: "ManTur Agent desktop introduction, installation, creative workflows, and contributor entry points."
----
+<p align="center">
+  <img src="apps/web/public/mantur-logo.png" alt="ManTur Agent" width="128" />
+</p>
 
 # ManTur Agent
 
@@ -8,7 +8,7 @@ English | [中文](README.zh.md)
 
 An AI desktop workspace for scriptwriting, AI drama production, and creative assets. Bring your scripts and reference files, describe the result you want, and work with the Agent through planning, asset preparation, generation, and editing.
 
-[Download & installation guide](https://guiyi2023.feishu.cn/docx/Iq3id4fr8o2uo9xKfpEcIck9nRf) · [ManturHub](https://hub.mantur.ai) · [Report an issue](https://github.com/mantur-ai/mantur-agent/issues)
+[Download](#run) · [Installation guide](https://guiyi2023.feishu.cn/docx/Iq3id4fr8o2uo9xKfpEcIck9nRf) · [ManturHub](https://hub.mantur.ai) · [Report an issue](https://github.com/mantur-ai/mantur-agent/issues)
 
 ![ManTur Agent home and file import](docs/assets/mantur-agent/home.png)
 
@@ -39,12 +39,21 @@ Actual desktop screenshots from an empty demonstration profile. Marketplace entr
 
 ## Install and start
 
-1. Open the [installation guide](https://guiyi2023.feishu.cn/docx/Iq3id4fr8o2uo9xKfpEcIck9nRf) and download the attachment for your computer. The guide identifies the available version.
-2. On **macOS Apple Silicon**, open the DMG and drag the app into Applications. On **Windows x64**, run the EXE and follow the installer. An Intel Mac installer is not currently provided through this guide.
-3. Open ManTur Agent. In Settings, configure your model provider and select a model. Use your own provider credentials; an installer does not include a shared model API key.
-4. Select a workspace, create a conversation, and add your script or reference materials. Send a specific request and review the Agent’s output.
+Official accelerated downloads:
 
-The Windows installer includes the application runtime; its extraction progress is not another application download. Windows may show an unknown-publisher warning because the supplied installer lacks a Windows signing certificate. The supplied Mac package has Developer ID signing but is not notarized. See the guide for the exact package and installation notes.
+| Platform | Installer | Available version |
+| --- | --- | --- |
+| macOS Apple Silicon | [Download DMG](https://mantur-pro.tos-accelerate.volces.com/mantur-agent/stable/Mantur-Agent-macOS-arm64.dmg) | 0.1.21 |
+| Windows x64 | [Download EXE](https://mantur-pro.tos-accelerate.volces.com/mantur-agent/stable/Mantur-Agent-Windows-x64.exe) | 0.1.20 |
+
+Versions checked on October 23, 2026. These official stable links advance independently by platform. [GitHub Releases](https://github.com/mantur-ai/mantur-agent/releases) provides release history and checksums; the latest GitHub release, [v0.1.21](https://github.com/mantur-ai/mantur-agent/releases/tag/v0.1.21), contains only Apple Silicon Mac installers. Intel Mac and Linux installers are not provided in this download list.
+
+1. Download the installer for your computer above. See the [installation guide](https://guiyi2023.feishu.cn/docx/Iq3id4fr8o2uo9xKfpEcIck9nRf) for illustrated setup instructions and release notes.
+2. On **macOS Apple Silicon**, open the DMG and drag the app into Applications. On **Windows x64**, run the EXE and follow the installer.
+3. Open ManTur Agent. In Settings, configure your model provider and select a model. Use your own provider credentials; an installer does not include a shared model API key.
+4. Create a conversation and add your script or reference materials. Select an existing project or check the save location before sending your first request; the app creates a project on first send if no existing project is selected. Review the Agent’s output.
+
+The Windows installer includes the application runtime; its extraction progress is not another application download. Windows may show an unknown-publisher warning because the supplied installer lacks a Windows signing certificate. The Mac 0.1.21 release passes Developer ID signing and Apple notarization checks. Windows 0.1.20 has no automatic update feed; use the installer above for manual updates. See the guide for installation notes.
 
 ## Bring a script or a whole folder
 

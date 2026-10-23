@@ -68,6 +68,7 @@
       name: '@deepseek-ai/dsh-manturhub-marketplace'
       config:
         bundledSkillDir: !!js process.env.DSH_BUNDLED_SKILL_DIR
+        bundledUpdateNames: [overseas-comic-script-studio, mantur-drama-visual-studio, mantur-copyhit, mantur-preroll-remix-studio]
     - id: mantur-projects
       name: '@deepseek-ai/dsh-mantur-projects'
       config:
@@ -76,9 +77,9 @@
       name: '@deepseek-ai/dsh-client-ui-mantur-navigation'
       config:
         recommendations:
-          script: [short-drama]
-          production: [mantur-drama-visual-studio, mantur-copyhit]
-          assets: [mantur-smartclip]
+          script: [overseas-comic-script-studio]
+          production: [mantur-drama-visual-studio]
+          assets: [mantur-preroll-remix-studio]
     - id: ui-mantur-script
       name: '@deepseek-ai/dsh-client-ui-mantur-script'
       config:

@@ -37,3 +37,21 @@ exports[`loads, executes, and disposes the script plugin from cordis.yml 1`] = `
   },
 }
 `;
+
+exports[`loads, executes, and disposes the script plugin from cordis.yml 2`] = `
+{
+  "description": "Request the current conversation’s right-side Web tab for a local skill workbench. First run the skill’s open-workbench command and verify its returned URL is serving. Pass that exact http://127.0.0.1:port URL. This requests display only: it does not confirm rendering, run production, or authorize paid generation. Desktop support is required.",
+  "name": "open_web_page",
+  "parameters": {
+    "properties": {
+      "url": {
+        "type": "string",
+      },
+    },
+    "required": [
+      "url",
+    ],
+    "type": "object",
+  },
+}
+`;

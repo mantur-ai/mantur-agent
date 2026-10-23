@@ -687,6 +687,8 @@ export const FOUNDATION_TYPE_NAMES: ReadonlySet<string> = new Set([
 export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
   ManturBalanceStatus: 'Fresh Mantou balance and signed-out semantics are documented in packages/credentials/authorization-manturhub/README.md',
   ManturBundledSkill: 'Pinned offline Skill provenance is documented in packages/skill/manturhub-marketplace/README.md',
+  ManturBundledSkillsUpdateResult: 'Verified available resources and per-item update outcomes are documented in packages/skill/manturhub-marketplace/README.md',
+  ManturBundledSkillUpdate: 'Update verification and failure stages are documented in packages/skill/manturhub-marketplace/README.md',
   ManturInstalledSkill: 'Pinned offline Skill provenance is documented in packages/skill/manturhub-marketplace/README.md',
   AssetEntry: 'Guarded report and media observations are documented in packages/client/ui-mantur-assets/README.md',
   AssetProject: 'Operator output discovery is documented in packages/client/ui-mantur-assets/README.md',

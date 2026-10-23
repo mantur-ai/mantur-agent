@@ -147,6 +147,14 @@ jobs:
       - name: Smoke packaged dependency closure
         run: pnpm run desktop:smoke
 
+      - name: Retain desktop debugging symbols
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-symbols-macos-${{ matrix.arch }}
+          path: apps/desktop/dist/symbols/
+          if-no-files-found: error
+          retention-days: 90
+
       - uses: actions/upload-artifact@v7
         with:
           name: desktop-macos-${{ matrix.arch }}
@@ -227,6 +235,14 @@ jobs:
 
       - name: Smoke packaged dependency closure
         run: pnpm run desktop:smoke
+
+      - name: Retain desktop debugging symbols
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-symbols-windows-x64
+          path: apps/desktop/dist/symbols/
+          if-no-files-found: error
+          retention-days: 90
 
       - uses: actions/upload-artifact@v7
         with:

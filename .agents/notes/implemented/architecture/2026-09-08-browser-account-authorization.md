@@ -34,6 +34,8 @@ The Mantur client build registers neither official first-run dialog in Models se
 
 **Retry with a new request or infer another default Key.** A lost response can already have committed an authorization. Exact finite replay and explicit policy selection preserve identity and revocation.
 
+The startup login card has a dedicated full-window style in the account plugin. Settings and requested account dialogs keep their existing layout; all three reuse the same Main-confirmed state and actions.
+
 ## Consequences
 
 Account storage version 2 rejects other nonempty versions without automatic migration. No compatibility mode opens the old native forms or sends v1 credentials. The production default remains `https://hub.mantur.ai`; test configuration explicitly selects `https://hub.mantur.cn`, with no cross-origin retry.

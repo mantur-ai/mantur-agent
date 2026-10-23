@@ -36,3 +36,4 @@
 .reading{font-size:15px;padding:28px clamp(20px,4vw,48px)}
 .reading>div{max-width:760px;margin-inline:auto}
 @container(max-width:540px){.files{width:145px}.toolbar strong{flex-basis:100%}}
+.webAddress{flex:1;min-width:100px;padding:6px;background:var(--dsw-alias-bg-base);color:inherit;border:0.5px solid var(--dsw-alias-border-l3);border-radius:6px;font:inherit}

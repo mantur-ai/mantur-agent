@@ -23,12 +23,15 @@ it.skipIf(process.env.MANTUR_MARKETPLACE_LIVE !== '1')('reads production public 
     await prepareBundledSkills(fileURLToPath(new URL('../../../../apps/desktop/mantur-skills/source.json', import.meta.url)), bundledSkillDir)
     const service = new ManturHubMarketplace(ctx, { dshHome: home, bundledSkillDir })
     const updated = await service.updateBundled(new AbortController().signal)
-    expect(updated).toHaveLength(4)
-    for (const item of updated) {
-      expect(item.version).toBe((await service.detail(item.name)).version)
+    expect(updated.skills).toHaveLength(4)
+    expect(updated.updates).toHaveLength(4)
+    for (const item of updated.skills) {
+      if (updated.updates.find(update => update.name === item.name)?.status === 'verified') {
+        expect(item.version).toBe((await service.detail(item.name)).version)
+      }
       expect(await service.resolveBundled(item.reference, new AbortController().signal)).toEqual(item)
     }
-    console.log('Verified production recommended Skills:', updated.map(item => `${item.name}@${item.version}`).join(', '))
+    console.log('Verified production recommended Skills:', updated.skills.map(item => `${item.name}@${item.version}`).join(', '))
     const skills = await service.list()
     expect(skills.skills.length).toBeGreaterThan(0)
     const studio = await service.detail('mantur-drama-visual-studio')

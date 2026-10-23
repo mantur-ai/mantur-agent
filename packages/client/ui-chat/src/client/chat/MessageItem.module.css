@@ -237,7 +237,7 @@
 
 .turnErrorRow {
   display: grid;
-  grid-template-columns: 10px minmax(0, 1fr) auto;
+  grid-template-columns: 10px minmax(0, 1fr);
   gap: 8px;
   align-items: start;
   padding: 2px 0;
@@ -255,6 +255,7 @@
 }
 
 .turnErrorTitle {
+  display: block;
   margin-right: 6px;
   color: var(--dsw-alias-state-error-primary);
   font-weight: 600;
@@ -265,6 +266,8 @@
 }
 
 .turnErrorCode {
+  display: block;
+  overflow-wrap: anywhere;
   color: var(--dsw-alias-label-tertiary);
   font: var(--dsw-font-markdown-code-block-small);
 }
@@ -291,4 +294,19 @@
     color: inherit;
     animation: none;
   }
+}
+
+.failureDetails {
+  min-width: 0;
+  margin-top: 6px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.failureDetails > summary {
+  cursor: pointer;
+}
+
+.failureDiagnostic {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }

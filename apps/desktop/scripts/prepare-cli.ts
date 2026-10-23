@@ -7,9 +7,9 @@ import { z } from 'zod'
 
 const desktop = resolve(import.meta.dirname, '..')
 const source = join(desktop, 'cli-runtime')
-const archive = await readFile(join(source, 'manturhub-cli-1.2.6.tgz'))
+const archive = await readFile(join(source, 'manturhub-cli-1.2.10.tgz'))
 const sha256 = createHash('sha256').update(archive).digest('hex')
-if (sha256 !== '98d2eefe59566b220950ac201f7ad133c47e469e3e0dfcad180027d6a623f86d') {
+if (sha256 !== 'a486b168988239485fa45e01ad24a8c319eca5eda0c1587fe9b15c1a244e99a0') {
   throw new Error('Embedded Mantur CLI archive does not match its reviewed source')
 }
 const options = { cwd: source, stdio: 'inherit' as const }
@@ -21,11 +21,11 @@ await mkdir(output, { recursive: true })
 await cp(join(source, 'node_modules'), join(output, 'node_modules'), { recursive: true })
 await rm(join(output, 'node_modules/.bin'), { recursive: true, force: true })
 const cli = join(output, 'node_modules/@manturhub/cli')
-z.object({ name: z.literal('@manturhub/cli'), version: z.literal('1.2.6'), license: z.literal('MIT') })
+z.object({ name: z.literal('@manturhub/cli'), version: z.literal('1.2.10'), license: z.literal('MIT') })
   .parse(JSON.parse(await readFile(join(cli, 'package.json'), 'utf8')) as unknown)
 await readFile(join(cli, 'LICENSE'))
 await writeFile(join(output, 'source.json'), JSON.stringify({
-  formatVersion: 1, package: '@manturhub/cli', version: '1.2.6',
-  sourceCommit: 'c9b569d198f1b65690a28b5b1f2584b9c2e76f82', archiveSha256: sha256,
+  formatVersion: 1, package: '@manturhub/cli', version: '1.2.10',
+  sourceUrl: 'https://registry.npmjs.org/@manturhub/cli/-/cli-1.2.10.tgz', archiveSha256: sha256,
 }, null, 2) + '\n')
-console.log('Prepared embedded Mantur CLI 1.2.6 from the verified archive and lockfile')
+console.log('Prepared embedded Mantur CLI 1.2.10 from the verified archive and lockfile')

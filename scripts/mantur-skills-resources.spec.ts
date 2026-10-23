@@ -1,4 +1,4 @@
-/** Offline resource preparation against the four audited, checked-in Skill archives. */
+/** Offline resource preparation against the audited, checked-in Skill archives. */
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -13,7 +13,7 @@ afterEach(async () => {
   await Promise.all(temporary.splice(0).map(path => rm(path, { recursive: true, force: true })))
 })
 
-it('stages all 169 pinned files without account credentials or online discovery', async () => {
+it('stages all pinned files including retained legacy references without online discovery', async () => {
   const root = await mkdtemp(join(tmpdir(), 'mantur-bundled-skills-'))
   temporary.push(root)
   const destination = join(root, 'resources')
@@ -23,8 +23,10 @@ it('stages all 169 pinned files without account credentials or online discovery'
     ['mantur-drama-visual-studio', '0.0.13'],
     ['mantur-copyhit', '1.0.5'],
     ['mantur-smartclip', '1.0.1'],
+    ['overseas-comic-script-studio', '0.3.11'],
+    ['mantur-preroll-remix-studio', '0.2.31'],
   ])
-  expect(manifest.skills.reduce((total, skill) => total + skill.files.length, 0)).toBe(169)
+  expect(manifest.skills.reduce((total, skill) => total + skill.files.length, 0)).toBe(277)
   expect(JSON.parse(await readFile(join(destination, 'manifest.json'), 'utf8'))).toEqual(manifest)
   const limits = { maxMetadataBytes: 1024 * 1024, maxFiles: 200, maxUnpackedBytes: 10 * 1024 * 1024 }
   expect(await readBundledCatalog(destination, limits)).toEqual(manifest.skills)

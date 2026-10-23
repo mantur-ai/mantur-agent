@@ -49,6 +49,9 @@
     "src/client/store.ts",
     "src/client/locales.ts",
     "src/types.ts",
-    "src/css-modules.d.ts"
+    "src/css-modules.d.ts",
+    "src/web-url.ts",
+    "src/client/WebPanel.tsx",
+    "src/client/agent-opening.ts"
   ]
 }

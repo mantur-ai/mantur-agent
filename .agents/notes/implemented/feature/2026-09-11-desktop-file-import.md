@@ -14,7 +14,7 @@ The desktop imports explicitly selected local documents and directories as durab
 
 The importer owns a unique batch directory and publishes its results only after every entry succeeds. Failure removes that batch. Original files remain unchanged, duplicate names receive separate parent directories, and symlinks and self-containing imports fail explicitly. IPC accepts only the authenticated native main frame. A pending import locks its originating composer; navigation cannot redirect completion into a different draft.
 
-The carrier removes native draft-checkpoint exposure and uses original browser draft persistence as requested. Existing checkpoint files are not deleted. Origin-independent recovery is no longer promised. Host save and exit verification still precede update installation. Internal draft-lock guards remain intact for attachment import and other explicit transactions.
+The browser-only draft decision is superseded on macOS by [native draft restoration](../bug-fix/2026-10-22-macos-draft-bridge.md). Windows retains browser draft persistence without origin-independent recovery. Existing checkpoint files are not deleted. Host save and exit verification still precede update installation. Internal draft-lock guards remain intact for attachment import and other explicit transactions.
 
 ## Alternatives considered
 
@@ -22,7 +22,7 @@ Backporting the newer upstream generic upload service requires a separate multi-
 
 ## Consequences
 
-Local copies consume disk space until explicitly removed. File paths in sent messages refer to this computer. Word extraction remains a separate tool operation; browser-origin changes may lose unsent drafts.
+Local copies consume disk space until explicitly removed. File paths in sent messages refer to this computer. Word extraction remains a separate tool operation; browser-origin changes on Windows may lose unsent drafts.
 
 ## Verification
 

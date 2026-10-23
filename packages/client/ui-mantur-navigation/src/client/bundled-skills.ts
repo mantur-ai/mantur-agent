@@ -1,21 +1,21 @@
 /** Updated homepage catalog and version-preserving input references. */
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
-import type { ManturBundledSkill } from '@deepseek-ai/dsh-manturhub-marketplace/types'
+import type { ManturBundledSkillsUpdateResult } from '@deepseek-ai/dsh-manturhub-marketplace/types'
 
-/** Verified online releases are independent of user-installed Skill state. */
-export type BundledSkillsState =
-  | { readonly phase: 'idle' | 'loading' | 'failed' }
-  | { readonly phase: 'ready'; readonly skills: readonly ManturBundledSkill[] }
+/** Available verified resources and the latest per-skill update outcomes. */
+export type BundledSkillsState = ManturBundledSkillsUpdateResult & {
+  readonly phase: 'idle' | 'loading' | 'failed' | 'ready'
+}
 
 /** Own one cancellable update request for the mounted navigation plugin. */
 export class BundledSkills {
   /** Observable catalog discovery state for the mounted homepage. */
-  readonly store = createSnapshotStore<BundledSkillsState>({ phase: 'idle' })
+  readonly store = createSnapshotStore<BundledSkillsState>({ phase: 'idle', skills: [], updates: [] })
   private pending: AbortController | undefined
   private disposed = false
 
   /** @param read - Host update operation that checks the active marketplace and verifies immutable resources. */
-  constructor(private readonly read: (signal: AbortSignal) => Promise<readonly ManturBundledSkill[]>) {}
+  constructor(private readonly read: (signal: AbortSignal) => Promise<ManturBundledSkillsUpdateResult>) {}
 
   /**
    * Check and update recommended skills and publish their loading result.
@@ -25,15 +25,16 @@ export class BundledSkills {
     if (this.disposed || this.pending !== undefined) return
     const request = new AbortController()
     this.pending = request
-    this.store.set({ phase: 'loading' })
+    const previous = this.store.getSnapshot()
+    this.store.set({ ...previous, phase: 'loading' })
     try {
-      const skills = await this.read(request.signal)
+      const result = await this.read(request.signal)
       // oxlint-disable-next-line typescript/no-unnecessary-condition -- Disposal can run while the catalog read is awaited.
-      if (!this.disposed) this.store.set({ phase: 'ready', skills })
+      if (!this.disposed) this.store.set({ ...result, phase: 'ready' })
     } catch {
       // The UI exposes a retryable discovery error; teardown does not publish late state.
       // oxlint-disable-next-line typescript/no-unnecessary-condition -- Disposal can run while the catalog read is awaited.
-      if (!this.disposed) this.store.set({ phase: 'failed' })
+      if (!this.disposed) this.store.set({ ...previous, phase: 'failed' })
     } finally {
       this.pending = undefined
     }

@@ -51,6 +51,15 @@ function run(command: string, arguments_: string[]): void {
   if (result.status !== 0) throw new Error(`${command} exited with ${String(result.status)}`)
 }
 
+/**
+ * Compress the completed volume before generating its update blockmap.
+ * @param input - Unmounted writable disk image.
+ * @param output - Destination compressed image.
+ */
+export function compressMacImage(input: string, output: string): void {
+  run('hdiutil', ['convert', input, '-format', 'UDZO', '-imagekey', 'zlib-level=9', '-o', output])
+}
+
 async function loadBlockMapBuilder(): Promise<(input: string, compression: 'gzip', output: string) => Promise<unknown>> {
   const require = createRequire(join(desktopRoot, 'package.json'))
   const electronBuilderPackage = require.resolve('electron-builder/package.json')
@@ -84,7 +93,7 @@ async function main(): Promise<void> {
     run('diskutil', ['rename', mountPoint, 'ManTur Agent'])
     run('hdiutil', ['detach', mountPoint])
     mounted = false
-    run('hdiutil', ['convert', writableImage, '-format', 'UDZO', '-o', compressedImage])
+    compressMacImage(writableImage, compressedImage)
     const buildBlockMap = await loadBlockMapBuilder()
     await buildBlockMap(compressedImage, 'gzip', temporaryBlockMap)
     await rename(compressedImage, output)

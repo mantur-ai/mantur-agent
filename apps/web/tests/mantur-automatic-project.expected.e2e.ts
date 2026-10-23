@@ -42,7 +42,9 @@ it.skipIf(webSnapshotMode() === 'record' || process.platform === 'win32')('resum
   const checkpoints: DraftCheckpoint[] = []
   const server = createServer((request, response) => {
     response.writeHead(200, { 'content-type': 'application/json' })
-    response.end(JSON.stringify(request.url === '/api/v1/skills' ? { skills: [skill] } : { skill }))
+    response.end(JSON.stringify(request.url?.startsWith('/api/public/agent/v1/skills?') === true
+      ? { code: 0, data: { records: [{ ...skill, code: skill.slug, skillVersion: skill.version }], total: 1, pageNum: 1, pages: 1 } }
+      : { skill }))
   })
   let scaffold: WebScaffold | undefined
   let browser: Browser | undefined
@@ -137,8 +139,14 @@ it.skipIf(webSnapshotMode() === 'record' || process.platform === 'win32')('resum
     const locationAria = await captureStableAria(page, '[role="group"][aria-label="默认项目路径"]', scaffold.workspaceCwd)
     await settings.getByRole('button', { name: '关闭', exact: true }).click()
     await editor.fill('根据参考图编写第一集 ')
-    await page.getByRole('button', { name: '剧本改编', exact: true }).click()
-    await expect.poll(() => editor.innerText()).toContain('剧本改编')
+    await page.getByRole('button', { name: '技能广场', exact: true }).click()
+    await page.getByText('已安装', { exact: true }).waitFor()
+    const marketplaceAria = await captureStableAria(page, 'main[aria-labelledby="mantur-marketplace-title"]', scaffold.workspaceCwd)
+    await page.getByRole('button', { name: '使用技能', exact: true }).click()
+    await expect.poll(() => editor.innerText()).toContain(skill.name)
+    expect(await editor.innerText()).toContain('根据参考图编写第一集')
+    expect(scaffold.ctx.workspaceRegistry.list()).toHaveLength(0)
+    expect(prompts).toBe(0)
     await editor.evaluate((element, bytes) => {
       const transfer = new DataTransfer()
       transfer.items.add(new File([new Uint8Array(bytes)], 'reference.png', { type: 'image/png' }))
@@ -201,8 +209,9 @@ it.skipIf(webSnapshotMode() === 'record' || process.platform === 'win32')('resum
     expect(persistedRoot).toMatchObject({ global: { rootPath: desktopRoot } })
     expect(existsSync(desktopRoot)).toBe(false)
     await settings.getByRole('button', { name: '关闭', exact: true }).click()
-    await expect.poll(() => editor.innerText()).toContain('剧本改编')
+    await expect.poll(() => editor.innerText()).toContain(skill.name)
     expect(await editor.innerText()).toContain('根据参考图编写第一集')
+    expect(await editor.innerText()).toContain(skill.name)
     await page.getByRole('img', { name: 'reference.png', exact: true }).waitFor()
 
     const settled = scaffold.whenTurnSettled()
@@ -235,11 +244,11 @@ it.skipIf(webSnapshotMode() === 'record' || process.platform === 'win32')('resum
     expect(image?.type === 'image' && image.attachment.name).toBe('reference.png')
     const text = messages[0]!.content.find(block => block.type === 'text')
     expect(text?.type === 'text' && text.text).toContain('根据参考图编写第一集')
-    expect(text?.type === 'text' && text.text).toContain('/mantur-builtin:short-drama')
+    expect(text?.type === 'text' && text.text).toContain('/short-drama')
     expect(JSON.stringify(events)).not.toContain('data:image')
     expect(console.pageErrors).toEqual([])
     expect(console.warnings).toEqual([])
-    await compareOrRefreshGolden(expected, `# Unassigned home\n\n${homeAria}\n\n# Default project location in General settings\n\n${locationAria}\n\n# Lost response, retained draft\n\n${failureAria}`, webSnapshotMode())
+    await compareOrRefreshGolden(expected, `# Unassigned home\n\n${homeAria}\n\n# Installed Skill marketplace\n\n${marketplaceAria}\n\n# Default project location in General settings\n\n${locationAria}\n\n# Lost response, retained draft\n\n${failureAria}`, webSnapshotMode())
   } catch (error) {
     failures.push(error)
     const page = browser?.contexts()[0]?.pages()[0]
