@@ -1,10 +1,11 @@
 import CommandScopes from '@deepseek-ai/dsh-command-scopes'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, rmSync, writeFileSync, chmodSync, existsSync, readFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { writeFileSync, chmodSync, existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { Context } from '@deepseek-ai/cordis'
+import type { Context } from '@deepseek-ai/cordis'
+import { HookCoverageFixture } from '../../hook-protocol/tests/coverage-fixture.ts'
+import { hookSubprocessTimeout } from '../../hook-protocol/tests/coverage-budget.ts'
 import { SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
@@ -24,14 +25,14 @@ const testToolSignal = new AbortController().signal
 /** Targeted branch coverage for the CC bridge: option arms, warn paths, no-agent
  * fallbacks, contextFrom-empty, and the detached-listener catch handlers. */
 
-const dirs: string[] = []
-afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }) })
+const fixture = new HookCoverageFixture()
+afterEach(async () => { await fixture.dispose() }, hookSubprocessTimeout)
 
 function subagentCarrier(ctx: Context) {
   return scopeTarget(ctx as unknown as SubagentRuntime, undefined)
 }
 
-function dir(): string { const d = mkdtempSync(join(tmpdir(), 'dsh-hc-cov-')); dirs.push(d); return d }
+function dir(): string { return fixture.directory('dsh-hc-cov-') }
 function sh(d: string, name: string, body: string): string {
   const p = join(d, name); writeFileSync(p, body); chmodSync(p, 0o755); return p
 }
@@ -41,15 +42,19 @@ function hooks(d: string, h: unknown): string {
 
 type HarnessOpts = { pluginRoot?: string; projectDir?: string; stderrSummaryMaxChars?: number; sessionRoot?: string }
 async function harness(configPath: string, adapter: MockAdapter, opts: HarnessOpts = {}): Promise<Context> {
-  const ctx = new Context()
+  const ctx = fixture.context()
   await mountAgentLoopTestDependencies(ctx)
   await ctx.plugin(SessionProjectionRegistry)
   if (opts.sessionRoot !== undefined) await ctx.plugin(JsonlSessionPersistence, { root: opts.sessionRoot })
-  await ctx.plugin(AgentLoop, { agents: [] })
+  const agentOwner = ctx.plugin(AgentLoop, { agents: [] })
+  fixture.agentOwner(ctx, () => agentOwner.dispose())
+  await agentOwner
   await ctx.plugin(LocalSubprocessRuntime)
   await ctx.plugin(CommandScopes, { identity: 'none' })
   await ctx.plugin(LocalBashExecutor, { timeoutMs: 10_000 })
-  await ctx.plugin(HooksClaude, { configPath, ...opts })
+  const bridge = ctx.plugin(HooksClaude, { configPath, ...opts })
+  fixture.hook(ctx, () => bridge.dispose())
+  await bridge
   ctx.llm.registerAdapter(['mock'], adapter)
   return ctx
 }
@@ -59,7 +64,7 @@ function waitForIdle(_ctx: Context, agent: Agent): Promise<void> {
 function events(agent: Agent): readonly SessionEvent[] { return agent.session.snapshotEvents() }
 /** Poll until `predicate` holds or the deadline passes — robust to detached
  * emit-listener hooks firing on a `.then` (a fixed sleep flakes under load). */
-async function waitFor(predicate: () => boolean, timeout = 5000, interval = 10): Promise<void> {
+async function waitFor(predicate: () => boolean, timeout = hookSubprocessTimeout, interval = 10): Promise<void> {
   const deadline = Date.now() + timeout
   while (!predicate()) {
     if (Date.now() > deadline) throw new Error('waitFor: condition not met before deadline')
@@ -85,7 +90,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
       // The persistence seam exposes no artifact paths, so the field stays ''
       // even with a persistence backend mounted.
       expect((JSON.parse(readFileSync(cap, 'utf8')) as { transcript_path: string }).transcript_path).toBe('')
-    }, 15_000) // The real agent/hook subprocess loop needs process startup and teardown headroom.
+    }, hookSubprocessTimeout)
 
     it('honors pluginRoot + projectDir substitution and warns on a skipped non-command hook', async () => {
       const d = dir()
@@ -107,7 +112,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
       agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }))
       await waitForIdle(ctx, agent)
       expect(existsSync(marker)).toBe(true) // substituted command ran
-    }, 15_000) // Real agent and hook subprocess startup can exceed Vitest's default under coverage concurrency.
+    }, hookSubprocessTimeout)
 
     it('warns and honors updatedInput as a no-op (input rewrite deferred)', async () => {
       const d = dir()
@@ -125,7 +130,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
       // updatedInput is NOT honored — the tool ran with the ORIGINAL args.
       expect((sawArgs as { command?: string }).command).toBe('original')
       expect(warn).toHaveBeenCalledWith(expect.stringContaining('updatedInput'))
-    })
+    }, hookSubprocessTimeout)
   })
 
   if (group === 'config') describe('hooks-claude-code coverage — empty/no-op outcomes and no-agent paths', () => {
@@ -141,7 +146,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
       // The prompt proceeded unchanged; no injected context.
       expect(adapter.requests).toHaveLength(1)
       expect(events(agent).some(e => e.type === 'user/message' && e.data.source.kind !== 'user')).toBe(false)
-    })
+    }, hookSubprocessTimeout)
 
     it('a PreToolUse hook fires for a no-agent direct tool call (no session/turn to record into)', async () => {
       const d = dir()
@@ -154,7 +159,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
       const result = await ctx.tools.execute({ signal: testToolSignal, callId: ToolCallId('c1'), name: 'echo', arguments: {} })
       expect(ran).toBe(false)
       expect(result.isError).toBe(true)
-    })
+    }, hookSubprocessTimeout)
 
     it('a long stderr is truncated in the hook/result summary', async () => {
       const d = dir()
@@ -169,7 +174,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
       const res = events(agent).find(e => e.type === 'hook/result')
       expect(res?.type === 'hook/result' && res.data.stderrSummary?.endsWith('…')).toBe(true)
       expect(res?.type === 'hook/result' && res.data.stderrSummary?.length).toBe(501) // default 500-char cap + ellipsis
-    })
+    }, hookSubprocessTimeout)
 
     it('rejects a non-positive or fractional stderrSummaryMaxChars at load', async () => {
       const d = dir()
@@ -193,7 +198,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
       await waitForIdle(ctx, agent)
       const res = events(agent).find(e => e.type === 'hook/result')
       expect(res?.type === 'hook/result' && res.data.stderrSummary).toBe('x'.repeat(40) + '…')
-    })
+    }, hookSubprocessTimeout)
   })
 
   if (group === 'stop') describe('hooks-claude-code coverage — Stop continuation + subagent inject/catch', () => {
@@ -209,7 +214,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
       await waitForIdle(ctx, agent)
       expect(adapter.requests).toHaveLength(2)
       expect(JSON.stringify(adapter.requests[1]!.messages)).toContain('continue please')
-    })
+    }, hookSubprocessTimeout)
 
     it('a Stop hook that blocks with EMPTY stderr still forces continuation (no reason required)', async () => {
     // A blocking Stop hook with no stderr yields `deny` without a reason. The block still forces
@@ -227,7 +232,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
       expect(adapter.requests).toHaveLength(2)
       // The steering carried the fallback reason (no stderr to use).
       expect(JSON.stringify(adapter.requests[1]!.messages)).toContain('blocked by Stop hook')
-    })
+    }, hookSubprocessTimeout)
 
     it('SubagentStart additionalContext is injected into a REGISTERED live child', async () => {
       const d = dir()
@@ -246,7 +251,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
       ctx.emit(subagentCarrier(ctx), 'subagent/start', { runId: SubagentRunId('run-x'), provider: 'p', id: SessionId('child-x'), local: true })
       await waitFor(() => injected.includes('child guidance'))
       expect(injected).toContain('child guidance')
-    })
+    }, hookSubprocessTimeout)
 
     it('a throwing SubagentStart/SubagentStop hook run is contained (logged)', async () => {
       const d = dir()
@@ -262,7 +267,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
       ctx.emit(subagentCarrier(ctx), 'subagent/start', { runId: SubagentRunId('run-y'), provider: 'p', id: SessionId('child-y'), local: true })
       await waitFor(() => warn.mock.calls.some(c => String(c[0]).includes('SubagentStart hook failed')))
       expect(warn).toHaveBeenCalledWith(expect.stringContaining('SubagentStart hook failed'))
-    })
+    }, hookSubprocessTimeout)
   })
 
   if (group === 'stop') describe('hooks-claude-code coverage — default reasons + sparse payloads', () => {
@@ -278,7 +283,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
       await waitForIdle(ctx, agent)
       const result = events(agent).find(e => e.type === 'tool/result')
       expect(result?.type === 'tool/result' && result.data.message.content[0].content.some(b => b.type === 'text' && b.text.includes('blocked by PreToolUse hook'))).toBe(true)
-    })
+    }, hookSubprocessTimeout)
 
     it('PostToolUse deny with EMPTY stderr + no context uses the default feedback', async () => {
       const d = dir()
@@ -292,7 +297,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
       await waitForIdle(ctx, agent)
       const result = events(agent).find(e => e.type === 'tool/result')
       expect(result?.type === 'tool/result' && result.data.message.content[0].content.some(b => b.type === 'text' && b.text.includes('blocked by PostToolUse hook'))).toBe(true)
-    })
+    }, hookSubprocessTimeout)
 
     it('SubagentStop with no registered child runs the hook cleanly (fire-and-forget)', async () => {
       const d = dir()
@@ -306,7 +311,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
       ctx.emit(subagentCarrier(ctx), 'subagent/end', { runId: SubagentRunId('run-z'), provider: 'p', id: SessionId('child-z'), local: false, stopReason: 'completed' })
       await waitFor(() => existsSync(marker))
       expect(existsSync(marker)).toBe(true)
-    })
+    }, hookSubprocessTimeout)
   })
 
   if (group === 'edge-paths') describe('hooks-claude-code coverage — more default/sparse arms', () => {
@@ -322,7 +327,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
       expect(events(agent).filter(e => e.type === 'turn/start' || e.type === 'hook/invoked'
         || e.type === 'hook/result' || e.type === 'turn/end').map(e => e.type))
         .toEqual(['turn/start', 'hook/invoked', 'hook/result', 'turn/end'])
-    })
+    }, hookSubprocessTimeout)
 
     it('a PreToolUse ask with NO reason omits the reason (false arm)', async () => {
       const d = dir()
@@ -338,7 +343,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
       // ask (no reason) → degrades to deny with the registry's generic message.
       expect(ran).toBe(false)
       expect(events(agent).some(e => e.type === 'tool/result' && e.data.message.content[0].isError)).toBe(true)
-    })
+    }, hookSubprocessTimeout)
 
     it('a recorded clean exit-0 hook with no stderr omits exitCode-extra/stderrSummary fields', async () => {
       const d = dir()
@@ -353,7 +358,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
       const res = events(agent).find(e => e.type === 'hook/result')
       expect(res?.type === 'hook/result' && res.data.exitCode).toBe(0)
       expect(res?.type === 'hook/result' && 'stderrSummary' in res.data).toBe(false)
-    })
+    }, hookSubprocessTimeout)
   })
 
   if (group === 'edge-paths') describe('hooks-claude-code coverage — schema-bypass apply + unspawnable hook', () => {
@@ -363,23 +368,27 @@ export function defineCoverageCases(group: CoverageGroup): void {
       const s = sh(d, 'h.sh', `#!/usr/bin/env bash\ntouch "${marker}"\n`)
       hooks(d, { UserPromptSubmit: [{ hooks: [{ type: 'command', command: s }] }] })
       const adapter = new MockAdapter([textResponse('ok')])
-      const ctx = new Context()
+      const ctx = fixture.context()
       await mountAgentLoopTestDependencies(ctx)
       await ctx.plugin(SessionProjectionRegistry)
-      await ctx.plugin(AgentLoop, { agents: [] })
+      const agentOwner = ctx.plugin(AgentLoop, { agents: [] })
+      fixture.agentOwner(ctx, () => agentOwner.dispose())
+      await agentOwner
       await ctx.plugin(LocalSubprocessRuntime)
       await ctx.plugin(CommandScopes, { identity: 'none' })
       await ctx.plugin(LocalBashExecutor, { timeoutMs: 10_000 })
       // Direct apply with only configPath — bypasses schemastery's defaults, so
       // the bridge must run on the raw minimal config (the per-hook timeout is
       // the protocol lib's reference default, not a config knob).
-      HooksClaude.apply(ctx, { configPath: join(d, 'hooks.json') })
+      const bridge = ctx.plugin({ inject: HooksClaude.inject, apply: (scope) => { HooksClaude.apply(scope, { configPath: join(d, 'hooks.json') }) } })
+      fixture.hook(ctx, () => bridge.dispose())
+      await bridge
       ctx.llm.registerAdapter(['mock'], adapter)
       const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
       agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }))
       await waitForIdle(ctx, agent)
       expect(existsSync(marker)).toBe(true)
-    })
+    }, hookSubprocessTimeout)
 
     it('a non-zero non-2 hook exit (e.g. a command-not-found 127) is a non-blocking error; the tool still runs', async () => {
       const d = dir()
@@ -396,7 +405,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
       expect(ran).toBe(true)
       const res = events(agent).find(e => e.type === 'hook/result')
       expect(res?.type === 'hook/result' && res.data.exitCode).toBe(127)
-    })
+    }, hookSubprocessTimeout)
 
     it('a PostToolUse deny with empty stderr + no context uses the default feedback (no context arm)', async () => {
       const d = dir()
@@ -410,7 +419,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
       await waitForIdle(ctx, agent)
       const result = events(agent).find(e => e.type === 'tool/result')
       expect(result?.type === 'tool/result' && result.data.message.content[0].isError).toBe(true)
-    })
+    }, hookSubprocessTimeout)
   })
 
   if (group === 'context') describe('hooks-claude-code coverage — continue:false, context arm, no-cwd', () => {
@@ -432,7 +441,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
       expect(ran).toBe(true) // NOT honored: the tool still ran (halt is deferred)
       const turnEnd = events(agent).findLast(e => e.type === 'turn/end')
       expect(turnEnd?.type === 'turn/end' && turnEnd.data.reason.kind).toBe('completed') // ran to completion
-    })
+    }, hookSubprocessTimeout)
 
     it('a PostToolUse hook that BOTH blocks AND attaches additionalContext', async () => {
       const d = dir()
@@ -449,7 +458,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
       expect(result?.type === 'tool/result' && result.data.message.content[0].content.some(b => b.type === 'text' && b.text.includes('bad'))).toBe(true)
       // additionalContext also injected (the block + context arm).
       expect(events(agent).some(e => e.type === 'user/message' && e.data.source.kind !== 'user' && e.data.content.some(b => b.type === 'text' && b.text.includes('context too')))).toBe(true)
-    })
+    }, hookSubprocessTimeout)
 
     it('a PreToolUse hook whose hookSpecificOutput names a DIFFERENT event does NOT deny the tool', async () => {
     // The block's hookEventName (UserPromptSubmit) mismatches the firing event
@@ -465,7 +474,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
       agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }))
       await waitForIdle(ctx, agent)
       expect(ran).toBe(true) // the mismatched deny was discarded → the tool ran
-    })
+    }, hookSubprocessTimeout)
 
     it('defaults CLAUDE_PROJECT_DIR to the session workspace when no projectDir is configured', async () => {
     // The default ACP wiring sets no projectDir. A stock CC hook that references
@@ -485,7 +494,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
       expect(events(handle.agent).some(e => e.type === 'user/message'
       && e.data.content.some(b => b.type === 'text' && b.text.includes(`dir=${workspace}`)))).toBe(true)
       await handle.dispose()
-    })
+    }, hookSubprocessTimeout)
 
     it('a context-only UserPromptSubmit hook DELEGATES so a later listener can still block', async () => {
     // A context-only hook delegates with `next()` and folds its context, so a downstream policy
@@ -509,7 +518,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
       expect(events(agent).filter(e => e.type === 'turn/start' || e.type === 'hook/invoked'
         || e.type === 'hook/result' || e.type === 'turn/end').map(e => e.type))
         .toEqual(['turn/start', 'hook/invoked', 'hook/result', 'turn/end'])
-    })
+    }, hookSubprocessTimeout)
 
     it('preserves separate bridge and downstream prompt contexts with framing and metadata', async () => {
     // Both the bridge hook and a later pre-step listener attach context; the
@@ -544,7 +553,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
         { kind: 'plugin', plugin: 'policy' },
         { kind: 'plugin', plugin: 'hooks-claude-code' },
       ])
-    })
+    }, hookSubprocessTimeout)
 
     it('folds the bridge PostToolUse context onto a downstream canonical value replacement', async () => {
     // The bridge hook adds context; a later post-execute listener accepts with a
@@ -562,7 +571,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
       const result = events(agent).find(e => e.type === 'tool/result')
       expect(result?.type === 'tool/result' && result.data.message.content[0].content.some(b => b.type === 'text' && b.text === 'rewritten-result')).toBe(true)
       expect(events(agent).some(e => e.type === 'user/message' && e.data.source.kind !== 'user' && e.data.content.some(b => b.type === 'text' && b.text.includes('bridge-note')))).toBe(true)
-    })
+    }, hookSubprocessTimeout)
 
     it('keeps bridge and downstream PostToolUse contexts as separate sourced events', async () => {
       const d = dir()
@@ -587,7 +596,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
         { kind: 'plugin', plugin: 'hooks-claude-code' },
         { kind: 'plugin', plugin: 'policy' },
       ])
-    })
+    }, hookSubprocessTimeout)
 
     it('folds the bridge PostToolUse context onto a downstream listener BLOCK', async () => {
     // The bridge hook only adds context; a later post-execute listener blocks the
@@ -608,7 +617,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
       expect(result?.type === 'tool/result' && result.data.message.content[0].content.some(b => b.type === 'text' && b.text.includes('downstream-block'))).toBe(true)
       // the bridge's context still landed (folded onto the block)
       expect(events(agent).some(e => e.type === 'user/message' && e.data.source.kind !== 'user' && e.data.content.some(b => b.type === 'text' && b.text.includes('bridge-note')))).toBe(true)
-    })
+    }, hookSubprocessTimeout)
 
   })
 
@@ -651,7 +660,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
       agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }))
       await waitForIdle(ctx, agent)
       expect(adapter.requests).toHaveLength(1) // loop survived the thrown inject
-    })
+    }, hookSubprocessTimeout)
   })
 
   if (group === 'stop') describe('hooks-claude-code coverage — hook runs in the session cwd, not the server cwd', () => {
@@ -664,15 +673,19 @@ export function defineCoverageCases(group: CoverageGroup): void {
       // The hook is invoked with cwd = session dir, so a relative marker path lands there.
       hooks(serverDir, { PreToolUse: [{ hooks: [{ type: 'command', command: 'pwd > where' }] }] })
       const adapter = new MockAdapter([toolCallResponse('c1', 'echo', {}), textResponse('done')])
-      const ctx = new Context()
+      const ctx = fixture.context()
       await mountAgentLoopTestDependencies(ctx)
       await ctx.plugin(SessionProjectionRegistry)
-      await ctx.plugin(AgentLoop, { agents: [] })
+      const agentOwner = ctx.plugin(AgentLoop, { agents: [] })
+      fixture.agentOwner(ctx, () => agentOwner.dispose())
+      await agentOwner
       // Executor default cwd = serverDir (deliberately NOT the session cwd).
       await ctx.plugin(LocalSubprocessRuntime)
       await ctx.plugin(CommandScopes, { identity: 'none' })
       await ctx.plugin(LocalBashExecutor, { timeoutMs: 10_000, cwd: serverDir })
-      await ctx.plugin(HooksClaude, { configPath: join(serverDir, 'hooks.json') })
+      const bridge = ctx.plugin(HooksClaude, { configPath: join(serverDir, 'hooks.json') })
+      fixture.hook(ctx, () => bridge.dispose())
+      await bridge
       ctx.llm.registerAdapter(['mock'], adapter)
       ctx.tools.register(defineContentToolFixture({ name: 'echo', description: 'e', parameters: {}, async execute() { return [{ type: 'text', text: 'ok' }] } }))
 
@@ -687,7 +700,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
       // `pwd` may resolve symlinks (/var → /private/var etc.), so compare basenames.
       expect(where.endsWith(sessionDir.split('/').pop()!)).toBe(true)
       await handle.dispose()
-    })
+    }, hookSubprocessTimeout)
 
     it('runs a SubagentStop hook in the CHILD session workspace, not the server cwd', async () => {
       const serverDir = dir()
@@ -695,15 +708,19 @@ export function defineCoverageCases(group: CoverageGroup): void {
       const marker = join(childDir, 'stopwhere')
       const payload = join(childDir, 'stoppayload')
       hooks(serverDir, { SubagentStop: [{ hooks: [{ type: 'command', command: 'cat > stoppayload.tmp; mv stoppayload.tmp stoppayload; pwd > stopwhere' }] }] })
-      const ctx = new Context()
+      const ctx = fixture.context()
       await mountAgentLoopTestDependencies(ctx)
       await ctx.plugin(SessionProjectionRegistry)
-      await ctx.plugin(AgentLoop, { agents: [] })
+      const agentOwner = ctx.plugin(AgentLoop, { agents: [] })
+      fixture.agentOwner(ctx, () => agentOwner.dispose())
+      await agentOwner
       // Executor default cwd = serverDir (deliberately NOT the child session cwd).
       await ctx.plugin(LocalSubprocessRuntime)
       await ctx.plugin(CommandScopes, { identity: 'none' })
       await ctx.plugin(LocalBashExecutor, { timeoutMs: 10_000, cwd: serverDir })
-      await ctx.plugin(HooksClaude, { configPath: join(serverDir, 'hooks.json') })
+      const bridge = ctx.plugin(HooksClaude, { configPath: join(serverDir, 'hooks.json') })
+      fixture.hook(ctx, () => bridge.dispose())
+      await bridge
       ctx.llm.registerAdapter(['mock'], new MockAdapter([]))
 
       const { SessionId } = await import('@deepseek-ai/dsh-session')
@@ -724,7 +741,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
       // `pwd` may resolve symlinks (/var → /private/var etc.), so compare basenames.
       expect(where.endsWith(childDir.split('/').pop()!)).toBe(true)
       expect(input).toMatchObject({ cwd: childDir, session_id: childHandle.agent.id })
-    })
+    }, hookSubprocessTimeout)
   })
 
   if (group === 'config') describe('hooks-claude-code coverage — systemMessage is warned, not surfaced', () => {
@@ -741,7 +758,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
       expect(warn).toHaveBeenCalledWith(expect.stringContaining('systemMessage'))
       // Not surfaced: the systemMessage text never reaches the model request.
       expect(JSON.stringify(adapter.requests[0]!.messages)).not.toContain('heads up')
-    })
+    }, hookSubprocessTimeout)
   })
 
   if (group === 'edge-paths') describe('hooks-claude-code coverage — SessionStart timing is best-effort (no-wait)', () => {
@@ -758,6 +775,6 @@ export function defineCoverageCases(group: CoverageGroup): void {
       agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }))
       await waitForIdle(ctx, agent)
       expect(adapter.requests).toHaveLength(1) // the turn ran regardless of hook timing
-    })
+    }, hookSubprocessTimeout)
   })
 }

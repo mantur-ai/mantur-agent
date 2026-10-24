@@ -1,10 +1,11 @@
 import CommandScopes from '@deepseek-ai/dsh-command-scopes'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, rmSync, writeFileSync, chmodSync, existsSync, readFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { writeFileSync, chmodSync, existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { Context } from '@deepseek-ai/cordis'
+import type { Context } from '@deepseek-ai/cordis'
+import { HookCoverageFixture } from '../../hook-protocol/tests/coverage-fixture.ts'
+import { hookSubprocessTimeout } from '../../hook-protocol/tests/coverage-budget.ts'
 import { SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
@@ -19,9 +20,9 @@ import { MockAdapter, textResponse, toolCallResponse } from '../../../core/agent
 
 const testToolSignal = new AbortController().signal
 
-const dirs: string[] = []
-afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }) })
-function dir(): string { const d = mkdtempSync(join(tmpdir(), 'dsh-hx-cov-')); dirs.push(d); return d }
+const fixture = new HookCoverageFixture()
+afterEach(async () => { await fixture.dispose() }, hookSubprocessTimeout)
+function dir(): string { return fixture.directory('dsh-hx-cov-') }
 function sh(d: string, name: string, body: string): string {
   const p = join(d, name); writeFileSync(p, body); chmodSync(p, 0o755); return p
 }
@@ -31,15 +32,19 @@ function hooks(d: string, h: unknown): string {
 
 type HarnessOpts = { stderrSummaryMaxChars?: number; sessionRoot?: string }
 async function harness(configPath: string, adapter: MockAdapter, opts: HarnessOpts = {}): Promise<Context> {
-  const ctx = new Context()
+  const ctx = fixture.context()
   await mountAgentLoopTestDependencies(ctx)
   await ctx.plugin(SessionProjectionRegistry)
   if (opts.sessionRoot !== undefined) await ctx.plugin(JsonlSessionPersistence, { root: opts.sessionRoot })
-  await ctx.plugin(AgentLoop, { agents: [] })
+  const agentOwner = ctx.plugin(AgentLoop, { agents: [] })
+  fixture.agentOwner(ctx, () => agentOwner.dispose())
+  await agentOwner
   await ctx.plugin(LocalSubprocessRuntime)
   await ctx.plugin(CommandScopes, { identity: 'none' })
   await ctx.plugin(LocalBashExecutor, { timeoutMs: 10_000 })
-  await ctx.plugin(HooksCodex, { configPath, model: 'm', ...opts })
+  const bridge = ctx.plugin(HooksCodex, { configPath, model: 'm', ...opts })
+  fixture.hook(ctx, () => bridge.dispose())
+  await bridge
   ctx.llm.registerAdapter(['mock'], adapter)
   return ctx
 }
@@ -49,7 +54,7 @@ function waitForIdle(_ctx: Context, agent: Agent): Promise<void> {
 function events(agent: Agent): readonly SessionEvent[] { return agent.session.snapshotEvents() }
 /** Poll until `predicate` holds or the deadline passes — robust to detached
  * emit-listener hooks firing on a `.then` (a fixed sleep flakes under load). */
-async function waitFor(predicate: () => boolean, timeout = 5000, interval = 10): Promise<void> {
+async function waitFor(predicate: () => boolean, timeout = hookSubprocessTimeout, interval = 10): Promise<void> {
   const deadline = Date.now() + timeout
   while (!predicate()) {
     if (Date.now() > deadline) throw new Error('waitFor: condition not met before deadline')
@@ -76,7 +81,7 @@ export function defineCoverageCases(groups: CoverageGroup | readonly CoverageGro
       // The persistence seam exposes no artifact paths, so the field stays null
       // even with a persistence backend mounted.
       expect((JSON.parse(readFileSync(cap, 'utf8')) as { transcript_path: string | null }).transcript_path).toBeNull()
-    }, 15_000) // The real agent/hook subprocess loop needs process startup and teardown headroom.
+    }, hookSubprocessTimeout)
 
     it('UserPromptSubmit block (exit 2) closes a blocked turn without a step', async () => {
       const d = dir()
@@ -89,7 +94,7 @@ export function defineCoverageCases(groups: CoverageGroup | readonly CoverageGro
       expect(events(agent).filter(e => e.type === 'turn/start' || e.type === 'hook/invoked'
         || e.type === 'hook/result' || e.type === 'turn/end').map(e => e.type))
         .toEqual(['turn/start', 'hook/invoked', 'hook/result', 'turn/end'])
-    })
+    }, hookSubprocessTimeout)
 
     it('UserPromptSubmit additionalContext is injected; a no-op hook proceeds', async () => {
       const d = dir()
@@ -99,7 +104,7 @@ export function defineCoverageCases(groups: CoverageGroup | readonly CoverageGro
       const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
       agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } })); await waitForIdle(ctx, agent)
       expect(JSON.stringify(adapter.requests[0]!.messages)).toContain('ctx-x')
-    })
+    }, hookSubprocessTimeout)
 
     it('a context-only UserPromptSubmit hook DELEGATES so a later listener can still block', async () => {
     // Context alone is not a veto: the bridge delegates with `next()` and folds its context, so a
@@ -118,7 +123,7 @@ export function defineCoverageCases(groups: CoverageGroup | readonly CoverageGro
       expect(events(agent).filter(e => e.type === 'turn/start' || e.type === 'hook/invoked'
         || e.type === 'hook/result' || e.type === 'turn/end').map(e => e.type))
         .toEqual(['turn/start', 'hook/invoked', 'hook/result', 'turn/end'])
-    })
+    }, hookSubprocessTimeout)
 
     it('preserves separate bridge and downstream prompt contexts with framing and metadata', async () => {
       const d = dir()
@@ -146,7 +151,7 @@ export function defineCoverageCases(groups: CoverageGroup | readonly CoverageGro
         { kind: 'plugin', plugin: 'policy' },
         { kind: 'plugin', plugin: 'hooks-codex' },
       ])
-    })
+    }, hookSubprocessTimeout)
   })
 
   if (selected.has('post-tool')) describe('hooks-codex coverage — post-tool and session context mapping', () => {
@@ -162,7 +167,7 @@ export function defineCoverageCases(groups: CoverageGroup | readonly CoverageGro
       const result = events(agent).find(e => e.type === 'tool/result')
       expect(result?.type === 'tool/result' && result.data.message.content[0].content.some(b => b.type === 'text' && b.text === 'rewritten-result')).toBe(true)
       expect(events(agent).some(e => e.type === 'user/message' && e.data.source.kind !== 'user' && e.data.content.some(b => b.type === 'text' && b.text.includes('bridge-note')))).toBe(true)
-    })
+    }, hookSubprocessTimeout)
 
     it('keeps bridge and downstream PostToolUse contexts as separate sourced events', async () => {
       const d = dir()
@@ -185,7 +190,7 @@ export function defineCoverageCases(groups: CoverageGroup | readonly CoverageGro
         { kind: 'plugin', plugin: 'hooks-codex' },
         { kind: 'plugin', plugin: 'policy' },
       ])
-    })
+    }, hookSubprocessTimeout)
 
     it('folds the bridge PostToolUse context onto a downstream listener BLOCK', async () => {
       const d = dir()
@@ -200,7 +205,7 @@ export function defineCoverageCases(groups: CoverageGroup | readonly CoverageGro
       expect(result?.type === 'tool/result' && result.data.message.content[0].isError).toBe(true)
       expect(result?.type === 'tool/result' && result.data.message.content[0].content.some(b => b.type === 'text' && b.text.includes('downstream-block'))).toBe(true)
       expect(events(agent).some(e => e.type === 'user/message' && e.data.source.kind !== 'user' && e.data.content.some(b => b.type === 'text' && b.text.includes('bridge-note')))).toBe(true)
-    }, 10_000) // The real hook subprocess needs startup and teardown headroom under full-suite contention.
+    }, hookSubprocessTimeout)
 
     it('SessionStart additionalContext is injected for the first request', async () => {
       const d = dir()
@@ -212,7 +217,7 @@ export function defineCoverageCases(groups: CoverageGroup | readonly CoverageGro
         message.content.some(block => block.type === 'text' && block.text.includes('start-ctx'))))
       agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } })); await waitForIdle(ctx, agent)
       expect(JSON.stringify(adapter.requests[0]!.messages)).toContain('start-ctx')
-    })
+    }, hookSubprocessTimeout)
 
     it('PostToolUse block (exit 2) → isError feedback; default reason', async () => {
       const d = dir()
@@ -225,7 +230,7 @@ export function defineCoverageCases(groups: CoverageGroup | readonly CoverageGro
       const r = events(agent).find(e => e.type === 'tool/result')
       expect(r?.type === 'tool/result' && r.data.message.content[0].isError).toBe(true)
       expect(r?.type === 'tool/result' && r.data.message.content[0].content.some(b => b.type === 'text' && b.text.includes('blocked by PostToolUse hook'))).toBe(true)
-    })
+    }, hookSubprocessTimeout)
 
     it('PostToolUse additionalContext (clean exit) is attached after the result', async () => {
       const d = dir()
@@ -236,7 +241,7 @@ export function defineCoverageCases(groups: CoverageGroup | readonly CoverageGro
       const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
       agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } })); await waitForIdle(ctx, agent)
       expect(events(agent).some(e => e.type === 'user/message' && e.data.source.kind !== 'user' && e.data.content.some(b => b.type === 'text' && b.text.includes('post-ctx')))).toBe(true)
-    })
+    }, hookSubprocessTimeout)
   })
 
   if (selected.has('result-shape')) describe('hooks-codex coverage — hook result shape and configuration', () => {
@@ -250,7 +255,7 @@ export function defineCoverageCases(groups: CoverageGroup | readonly CoverageGro
       const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
       agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } })); await waitForIdle(ctx, agent)
       expect(ran).toBe(true) // clean-exit hook allows; commandOf returned ''
-    })
+    }, hookSubprocessTimeout)
 
     it('a clean exit-0 hook records exitCode 0 and omits stderrSummary', async () => {
       const d = dir()
@@ -263,7 +268,7 @@ export function defineCoverageCases(groups: CoverageGroup | readonly CoverageGro
       const res = events(agent).find(e => e.type === 'hook/result')
       expect(res?.type === 'hook/result' && res.data.exitCode).toBe(0)
       expect(res?.type === 'hook/result' && 'stderrSummary' in res.data).toBe(false)
-    })
+    }, hookSubprocessTimeout)
 
     it('a long stderr is truncated in the hook/result summary', async () => {
       const d = dir()
@@ -276,7 +281,7 @@ export function defineCoverageCases(groups: CoverageGroup | readonly CoverageGro
       const res = events(agent).find(e => e.type === 'hook/result')
       expect(res?.type === 'hook/result' && res.data.stderrSummary?.endsWith('…')).toBe(true)
       expect(res?.type === 'hook/result' && res.data.stderrSummary?.length).toBe(501) // default 500-char cap + ellipsis
-    })
+    }, hookSubprocessTimeout)
 
     it('rejects a non-positive or fractional stderrSummaryMaxChars at load', async () => {
       const d = dir()
@@ -298,7 +303,7 @@ export function defineCoverageCases(groups: CoverageGroup | readonly CoverageGro
       agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } })); await waitForIdle(ctx, agent)
       const res = events(agent).find(e => e.type === 'hook/result')
       expect(res?.type === 'hook/result' && res.data.stderrSummary).toBe('x'.repeat(40) + '…')
-    })
+    }, hookSubprocessTimeout)
 
     it('warns on a skipped async hook and a direct apply() (schema bypass) runs', async () => {
       const d = dir()
@@ -309,22 +314,26 @@ export function defineCoverageCases(groups: CoverageGroup | readonly CoverageGro
       ] }] })
       const warn = vi.fn()
       const adapter = new MockAdapter([textResponse('ok')])
-      const ctx = new Context()
+      const ctx = fixture.context()
       await mountAgentLoopTestDependencies(ctx)
       await ctx.plugin(SessionProjectionRegistry)
-      await ctx.plugin(AgentLoop, { agents: [] })
+      const agentOwner = ctx.plugin(AgentLoop, { agents: [] })
+      fixture.agentOwner(ctx, () => agentOwner.dispose())
+      await agentOwner
       await ctx.plugin(LocalSubprocessRuntime)
       await ctx.plugin(CommandScopes, { identity: 'none' })
       await ctx.plugin(LocalBashExecutor, { timeoutMs: 10_000 })
       ctx.logger.warn = warn as never
       // Direct apply (schema bypass) → the `model ?? ''` fallback is exercised.
-      HooksCodex.apply(ctx, { configPath: join(d, 'hooks.json') })
+      const bridge = ctx.plugin({ inject: HooksCodex.inject, apply: (scope) => { HooksCodex.apply(scope, { configPath: join(d, 'hooks.json') }) } })
+      fixture.hook(ctx, () => bridge.dispose())
+      await bridge
       ctx.llm.registerAdapter(['mock'], adapter)
       const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
       agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } })); await waitForIdle(ctx, agent)
       expect(existsSync(marker)).toBe(true)
       expect(warn).toHaveBeenCalledWith(expect.stringContaining('async hook'))
-    })
+    }, hookSubprocessTimeout)
 
     it('a no-op clean hook proceeds (contextFrom empty → next)', async () => {
       const d = dir()
@@ -336,7 +345,7 @@ export function defineCoverageCases(groups: CoverageGroup | readonly CoverageGro
       const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
       agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } })); await waitForIdle(ctx, agent)
       expect(ran).toBe(true)
-    })
+    }, hookSubprocessTimeout)
 
     it('SessionStart with no additionalContext is a no-op (contextFrom empty)', async () => {
       const d = dir()
@@ -351,7 +360,7 @@ export function defineCoverageCases(groups: CoverageGroup | readonly CoverageGro
       await waitFor(() => existsSync(marker)) // the clean no-output hook has finished
       agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } })); await waitForIdle(ctx, agent)
       expect(events(agent).some(e => e.type === 'user/message' && e.data.source.kind !== 'user')).toBe(false)
-    })
+    }, hookSubprocessTimeout)
 
     it('a throwing SessionStart inject is contained (logged)', async () => {
       const d = dir()
@@ -363,7 +372,7 @@ export function defineCoverageCases(groups: CoverageGroup | readonly CoverageGro
       agent.inject = (() => { throw new Error('inject boom') })
       await waitFor(() => warn.mock.calls.some(c => String(c[0]).includes('SessionStart hook failed')))
       expect(warn).toHaveBeenCalledWith(expect.stringContaining('SessionStart hook failed'))
-    })
+    }, hookSubprocessTimeout)
   })
 
   if (selected.has('edge-paths')) describe('hooks-codex coverage — matching and no-agent edge paths', () => {
@@ -377,7 +386,7 @@ export function defineCoverageCases(groups: CoverageGroup | readonly CoverageGro
       const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
       agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } })); await waitForIdle(ctx, agent)
       expect(ran).toBe(true)
-    })
+    }, hookSubprocessTimeout)
 
     it('a non-matching regex matcher skips the hook (matchesMatcher false → continue)', async () => {
       const d = dir()
@@ -408,7 +417,7 @@ export function defineCoverageCases(groups: CoverageGroup | readonly CoverageGro
       const res = events(agent).find(e => e.type === 'hook/result')
       expect(res?.type === 'hook/result' && res.data.decision).toBe('stop') // recorded
       expect(ran).toBe(true) // NOT honored: the tool still ran (halt is deferred)
-    })
+    }, hookSubprocessTimeout)
 
     it('PreToolUse deny with EMPTY stderr uses the default reason (?? right arm)', async () => {
       const d = dir()
@@ -420,7 +429,7 @@ export function defineCoverageCases(groups: CoverageGroup | readonly CoverageGro
       agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } })); await waitForIdle(ctx, agent)
       const r = events(agent).find(e => e.type === 'tool/result')
       expect(r?.type === 'tool/result' && r.data.message.content[0].content.some(b => b.type === 'text' && b.text.includes('blocked by PreToolUse hook'))).toBe(true)
-    })
+    }, hookSubprocessTimeout)
 
     it('PostToolUse block AND additionalContext are surfaced together', async () => {
       const d = dir()
@@ -434,7 +443,7 @@ export function defineCoverageCases(groups: CoverageGroup | readonly CoverageGro
       expect(r?.type === 'tool/result' && r.data.message.content[0].isError).toBe(true)
       expect(r?.type === 'tool/result' && r.data.message.content[0].content.some(b => b.type === 'text' && b.text.includes('bad'))).toBe(true)
       expect(events(agent).some(e => e.type === 'user/message' && e.data.source.kind !== 'user' && e.data.content.some(b => b.type === 'text' && b.text.includes('ctx too')))).toBe(true)
-    })
+    }, hookSubprocessTimeout)
 
     it('commandOf reads a non-string command arg as an empty command', async () => {
       const d = dir()
@@ -449,7 +458,7 @@ export function defineCoverageCases(groups: CoverageGroup | readonly CoverageGro
       agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } })); await waitForIdle(ctx, agent)
       const payload = JSON.parse(readFileSync(cap, 'utf8')) as { tool_input: { command: string } }
       expect(payload.tool_input.command).toBe('')
-    })
+    }, hookSubprocessTimeout)
 
     it('a no-agent direct PreToolUse run uses process.cwd() and turn 0 (no session to record)', async () => {
       const d = dir()
@@ -461,7 +470,7 @@ export function defineCoverageCases(groups: CoverageGroup | readonly CoverageGro
       const result = await ctx.tools.execute({ signal: testToolSignal, callId: ToolCallId('c1'), name: 'Bash', arguments: { command: 'x' } })
       expect(ran).toBe(false) // denied
       expect(result.isError).toBe(true)
-    })
+    }, hookSubprocessTimeout)
 
     it('a no-agent direct PostToolUse run attaches context with no session to record', async () => {
       const d = dir()
@@ -472,7 +481,7 @@ export function defineCoverageCases(groups: CoverageGroup | readonly CoverageGro
       const result = await ctx.tools.execute({ signal: testToolSignal, callId: ToolCallId('c1'), name: 'Bash', arguments: { command: 'x' } })
       expect(result.isError).toBeFalsy()
       expect(result.additionalContexts?.[0]?.content.some(b => b.type === 'text' && b.text === 'x')).toBe(true)
-    })
+    }, hookSubprocessTimeout)
 
     it('when the bash executor REJECTS, the hook/result omits exitCode (non-blocking)', async () => {
       const d = dir()
@@ -501,7 +510,7 @@ export function defineCoverageCases(groups: CoverageGroup | readonly CoverageGro
       agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } })); await waitForIdle(ctx, agent)
       expect(adapter.requests).toHaveLength(2) // empty-reason block forced continuation
       expect(JSON.stringify(adapter.requests[1]!.messages)).toContain('blocked by Stop hook')
-    })
+    }, hookSubprocessTimeout)
 
     it('a clean UserPromptSubmit hook that prints PLAIN stdout injects it as context', async () => {
     // Codex feeds a SessionStart/UserPromptSubmit hook's PLAIN (non-JSON) stdout
@@ -513,7 +522,7 @@ export function defineCoverageCases(groups: CoverageGroup | readonly CoverageGro
       const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
       agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } })); await waitForIdle(ctx, agent)
       expect(JSON.stringify(adapter.requests[0]!.messages)).toContain('extra guidance from a plain hook')
-    })
+    }, hookSubprocessTimeout)
 
     it('a NON-clean SessionStart hook (exit 2) does NOT inject its stdout as context', async () => {
     // SessionStart cannot block, but non-clean stdout still must not become context. The marker
@@ -528,7 +537,7 @@ export function defineCoverageCases(groups: CoverageGroup | readonly CoverageGro
       await waitFor(() => existsSync(marker)) // the exit-2 hook has finished
       expect(events(agent).some(e => e.type === 'user/message'
       && e.data.content.some(b => b.type === 'text' && b.text.includes('stale')))).toBe(false)
-    })
+    }, hookSubprocessTimeout)
 
     it('a UserPromptSubmit hook with a non-blocking error exit (1) + stdout does NOT inject it', async () => {
     // Exit 1 is a non-blocking error (no decision), so the prompt is NOT blocked
@@ -542,7 +551,7 @@ export function defineCoverageCases(groups: CoverageGroup | readonly CoverageGro
       agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } })); await waitForIdle(ctx, agent)
       expect(adapter.requests).toHaveLength(1) // exit 1 is non-blocking → the turn ran
       expect(JSON.stringify(adapter.requests[0]!.messages)).not.toContain('stale')
-    })
+    }, hookSubprocessTimeout)
 
     it('a clean SessionStart hook that prints PLAIN stdout injects it (not JSON)', async () => {
       const d = dir()
@@ -554,7 +563,7 @@ export function defineCoverageCases(groups: CoverageGroup | readonly CoverageGro
         message.content.some(block => block.type === 'text' && block.text.includes('session preamble'))))
       agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } })); await waitForIdle(ctx, agent)
       expect(JSON.stringify(adapter.requests[0]!.messages)).toContain('session preamble')
-    })
+    }, hookSubprocessTimeout)
 
     it('a clean hook that prints JSON is NOT injected as prose (plain-stdout gate)', async () => {
     // A structured (JSON) stdout must go through the hookSpecificOutput path, not
@@ -566,7 +575,7 @@ export function defineCoverageCases(groups: CoverageGroup | readonly CoverageGro
       const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
       agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } })); await waitForIdle(ctx, agent)
       expect(JSON.stringify(adapter.requests[0]!.messages)).not.toContain('unrelated')
-    })
+    }, hookSubprocessTimeout)
 
     it('the PreToolUse payload carries the REAL tool name (matches the matcher subject)', async () => {
     // Regression: the payload once hardcoded tool_name "Bash", disagreeing with
@@ -583,7 +592,7 @@ export function defineCoverageCases(groups: CoverageGroup | readonly CoverageGro
       const payload = JSON.parse(readFileSync(cap, 'utf8')) as { tool_name: string; tool_input: { command: string } }
       expect(payload.tool_name).toBe('shell')
       expect(payload.tool_input.command).toBe('ls')
-    })
+    }, hookSubprocessTimeout)
 
     it('a Codex matcher on the REAL tool name fires (matcher subject === payload tool_name)', async () => {
     // A regex matcher matching the real tool name must select the hook — proving
@@ -598,7 +607,7 @@ export function defineCoverageCases(groups: CoverageGroup | readonly CoverageGro
       agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } })); await waitForIdle(ctx, agent)
       expect(ran).toBe(false) // the matcher fired → the hook denied the tool
       expect(events(agent).some(e => e.type === 'hook/invoked' && e.data.point === 'PreToolUse')).toBe(true)
-    })
+    }, hookSubprocessTimeout)
 
     it('a hook emitting a systemMessage is warned as not-yet-surfaced', async () => {
       const d = dir()
@@ -610,7 +619,7 @@ export function defineCoverageCases(groups: CoverageGroup | readonly CoverageGro
       agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } })); await waitForIdle(ctx, agent)
       expect(warn).toHaveBeenCalledWith(expect.stringContaining('systemMessage'))
       expect(JSON.stringify(adapter.requests[0]!.messages)).not.toContain('heads up')
-    })
+    }, hookSubprocessTimeout)
 
     it('runs an agent-scoped hook in the session cwd, not the executor default', async () => {
     // Same regression as the CC bridge: the Codex bridge must thread the session
@@ -621,14 +630,18 @@ export function defineCoverageCases(groups: CoverageGroup | readonly CoverageGro
       const marker = join(sessionDir, 'where')
       hooks(serverDir, { PreToolUse: [{ hooks: [{ type: 'command', command: 'pwd > where' }] }] })
       const adapter = new MockAdapter([toolCallResponse('c1', 'Bash', { command: 'x' }), textResponse('done')])
-      const ctx = new Context()
+      const ctx = fixture.context()
       await mountAgentLoopTestDependencies(ctx)
       await ctx.plugin(SessionProjectionRegistry)
-      await ctx.plugin(AgentLoop, { agents: [] })
+      const agentOwner = ctx.plugin(AgentLoop, { agents: [] })
+      fixture.agentOwner(ctx, () => agentOwner.dispose())
+      await agentOwner
       await ctx.plugin(LocalSubprocessRuntime)
       await ctx.plugin(CommandScopes, { identity: 'none' })
       await ctx.plugin(LocalBashExecutor, { timeoutMs: 10_000, cwd: serverDir })
-      await ctx.plugin(HooksCodex, { configPath: join(serverDir, 'hooks.json'), model: 'm' })
+      const bridge = ctx.plugin(HooksCodex, { configPath: join(serverDir, 'hooks.json'), model: 'm' })
+      fixture.hook(ctx, () => bridge.dispose())
+      await bridge
       ctx.llm.registerAdapter(['mock'], adapter)
       ctx.tools.register(defineContentToolFixture({ name: 'Bash', description: 'b', parameters: { command: { type: 'string' } }, async execute() { return [{ type: 'text', text: 'ok' }] } }))
       const { SessionId } = await import('@deepseek-ai/dsh-session')
@@ -638,6 +651,6 @@ export function defineCoverageCases(groups: CoverageGroup | readonly CoverageGro
       expect(existsSync(marker)).toBe(true)
       expect(readFileSync(marker, 'utf8').trim().endsWith(sessionDir.split('/').pop()!)).toBe(true)
       await handle.dispose()
-    })
+    }, hookSubprocessTimeout)
   })
 }

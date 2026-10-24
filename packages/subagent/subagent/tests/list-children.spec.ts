@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { z } from 'zod'
@@ -14,7 +14,7 @@ import type { SessionObservation } from '@deepseek-ai/dsh-session-query'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
-import SessionProjectionCache from '@deepseek-ai/dsh-session-projection-cache'
+import SessionProjectionCache, { projectionCacheDomainSpec } from '@deepseek-ai/dsh-session-projection-cache'
 import Storage from '@deepseek-ai/dsh-storage'
 import {
   apply as storageJsonApply, Config as storageJsonConfig, inject as storageJsonInject, name as storageJsonName,
@@ -34,13 +34,21 @@ import { seedStoredSession } from './persistence-helpers.ts'
 
 type Script = ConstructorParameters<typeof MockAdapter>[0]
 
+const contexts: Context[] = []
 const roots: string[] = []
 const projCacheRoots: string[] = []
 
-afterEach(() => {
+async function cleanup(): Promise<void> {
+  await Promise.all(contexts.splice(0).map(async (ctx) => {
+    // Cache writes must drain before concurrent fiber disposers close storage.
+    await ctx.get('sessionProjectionCache')?.stopForShutdown()
+    await ctx.fiber.dispose()
+  }))
   for (const root of projCacheRoots.splice(0)) rmSync(root, { recursive: true, force: true })
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
-})
+}
+
+afterEach(cleanup)
 
 /** Boot the continuable stack with real JSONL session persistence. */
 async function setup(
@@ -48,6 +56,7 @@ async function setup(
   options: { sessionProjections?: boolean; projectionCache?: boolean } = {},
 ) {
   const ctx = new Context()
+  contexts.push(ctx)
   await mountAgentLoopTestDependencies(ctx)
   const root = mkdtempSync(join(tmpdir(), 'dsh-subagent-list-'))
   roots.push(root)
@@ -78,6 +87,61 @@ async function setup(
     : await loop.create(SessionId('parent'), { provider: 'mock', model: 'mock' })
   return { ctx, parent }
 }
+
+describe('listing fixture teardown', () => {
+  it('drains an admitted checkpoint before removing its directory', async () => {
+    const { ctx, parent } = await setup([], { projectionCache: true })
+    const cache = ctx.sessionProjectionCache
+    await cache.write(parent.session)
+    const root = projCacheRoots.at(-1)!
+    const record = join(root, 'session_projcache', 'sessions', 'parent.json')
+    const table = ctx.storageDomain.get(projectionCacheDomainSpec.name)!.table('sessions')
+    const originalPut = table.put.bind(table)
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const stopping = Promise.withResolvers<undefined>()
+    const originalStop = cache.stopForShutdown.bind(cache)
+    const stop = vi.spyOn(cache, 'stopForShutdown').mockImplementation(() => {
+      stopping.resolve(undefined)
+      return originalStop()
+    })
+    let written = false
+    const put = vi.spyOn(table, 'put').mockImplementation(async (...args) => {
+      entered.resolve(undefined)
+      await release.promise
+      expect(existsSync(root), 'cache directory must survive the admitted write').toBe(true)
+      await originalPut(...args)
+      expect(JSON.parse(readFileSync(record, 'utf8'))).toHaveProperty('record')
+      written = true
+    })
+    const write = cache.write(parent.session)
+    // Observe rejection immediately so a failing assertion can still drain the write.
+    const settledWrite = Promise.allSettled([write])
+    let cleaning: Promise<void> | undefined
+    try {
+      await entered.promise
+      cleaning = cleanup()
+      await Promise.race([stopping.promise, cleaning])
+      expect(existsSync(root), 'cleanup removed the cache before its write completed').toBe(true)
+      expect(written).toBe(false)
+      release.resolve(undefined)
+      await write
+      await cleaning
+      expect(written).toBe(true)
+      expect(existsSync(root)).toBe(false)
+    } finally {
+      release.resolve(undefined)
+      try {
+        await settledWrite
+        await cleaning
+      } finally {
+        put.mockRestore()
+        stop.mockRestore()
+        await ctx.fiber.dispose()
+      }
+    }
+  })
+})
 
 const testSignal = new AbortController().signal
 

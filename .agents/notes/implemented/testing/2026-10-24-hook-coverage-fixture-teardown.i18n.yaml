@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/testing/2026-10-24-hook-coverage-fixture-teardown.md
+2026-10-24-hook-coverage-fixture-teardown.md: 8ada82c55bec83cfa8779af72d3bc0b80902be47
+2026-10-24-hook-coverage-fixture-teardown.zh.md: 77134d84e7f6887d976ce8f50f0606300bef557d
