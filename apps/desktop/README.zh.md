@@ -69,7 +69,7 @@ macOS x64 命令必须在 Intel Mac 上运行，Windows 命令必须在 x64 Wind
 | macOS x64 | `pnpm run desktop:dist:mac:x64` | `Mantur-Agent-macOS-x64.dmg`、`Mantur-Agent-macOS-x64.zip` |
 | Windows x64 | `pnpm run desktop:dist:win:x64` | `Mantur-Agent-Windows-x64.exe` |
 
-smoke 会从解包应用自己的依赖目录启动 `dsh`，把打印出的进程 token 换成会话 cookie，并要求带品牌标题的 Web 页面返回 HTTP 200。它还会校验 Mantur Cut manifest 中的每条路径，以 `--help` 启动包内 Whisper CLI 与 server，要求源码、许可证、构建及安全记录齐全，并检查 updater 依赖与 TOS 通用更新源配置。它使用空的临时 Harness home，避免开发者数据影响包检查结果。启用安装包内剪辑资源和更新 IPC 后，它要求真实保存回执及 Host 正常退出；拒绝关闭会使打包检查失败。
+smoke 会从解包应用自己的依赖目录启动 `dsh`，把打印出的进程 token 换成会话 cookie，并要求带品牌标题的 Web 页面返回 HTTP 200。它还会校验 Mantur Cut manifest 中的每条路径，以 `--help` 启动包内 Whisper CLI 与 server，要求源码、许可证、构建及安全记录齐全，并检查 updater 依赖与 TOS 通用更新源配置。updater smoke 加载与 Main 共用的包内控制器入口，拦截包内 generic provider 的请求；首次检查前必须确认完整的稳定版元数据 URL 且已禁用降级，包括 builder 配置含 `channel: rc` 的情况。该检查不访问更新源，也不验证安装。它使用空的临时 Harness home，避免开发者数据影响包检查结果。启用安装包内剪辑资源和更新 IPC 后，它要求真实保存回执及 Host 正常退出；拒绝关闭会使打包检查失败。
 
 smoke 还会检查内置 CLI 的固定来源记录、包版本、许可证和依赖入口，创建真实的配置目录内启动脚本，并要求 `manturhub --version` 使用包内 Electron 可执行文件返回 `1.2.10`。启动脚本关闭 CLI 和技能更新检查。缺少资源直接失败，不搜索全局 CLI。该检查不会创建账号授权尝试，也不验证浏览器授权、Main 的操作系统存储，或以 macOS 结果证明 Windows 行为。
 
@@ -124,7 +124,7 @@ Main 管理客户端会话浏览器登录、刷新和系统加密账号存储。
 
 客户端使用 TOS 通用 HTTPS 更新源；GitHub 更新源测试保留旧版客户端验证。旧版 GitHub 检查先比较已选发行标签，再请求更新文件。相同或更旧的发行显示暂无可用更新。不完整的更高发行和网络故障显示简短本地化反馈；原始诊断保留在日志中。参见[版本检查决策](../../.agents/notes/implemented/bug-fix/2026-09-12-github-update-version-check.zh.md)。
 
-已打包应用会在 macOS 的原生应用菜单和 Windows 的帮助菜单中显示当前版本与**检查更新…**。菜单会显示检查中、下载进度、可安装、已是最新版与失败状态；手动检查还会打开本地化的结果或错误对话框。应用启动后会开始检查，并每六小时重复。stable 构建只接收 stable release，版本号含 `alpha`、`beta` 或 `rc` 的构建可以接收预发布版本。后台发现新版本时保持安静。通用设置提供已安装版本、手动检查与重试操作。漫途侧栏仅在发现新版、下载中或已有待安装版本时显示入口，展开与收起状态均支持。只有用户点击下载才开始传输，显示实际字节数，仅在已知时显示百分比。下载并校验完成后，准备重启前会请求确认。确认安装后，Main 保存原生草稿，通过所属 IPC 通道请求 Host 停机回执，再关闭账号通道并请求 Host 正常退出。Main 等待进程真正退出和诊断日志关闭后才调用安装器。不支持的 Host 组合、保存失败、取消、异常退出和超时都会阻止安装；检查和下载不会冻结工作。等待失败后 Host 清理可能继续，工作不会自动恢复。参见 [Host 更新策略](../../packages/bundle/mantur-app/README.zh.md#use-this-package)。选择稍后会保留重启安装入口，不重复弹窗。侧栏和原生菜单共用主进程确认；保存失败会保留已校验的下载并报告错误。关闭 updater 会抑制后续安装。
+已打包应用会在 macOS 的原生应用菜单和 Windows 的帮助菜单中显示当前版本与**检查更新…**。菜单会显示检查中、下载进度、可安装、已是最新版与失败状态；手动检查还会打开本地化的结果或错误对话框。应用启动后会开始检查，并每六小时重复。所有客户端（包括预发布构建）都检查 `stable/latest[-mac].yml`。初始化在首次自动或手动检查前选择 `latest`，随后禁用降级和预发布偏好。相同或更旧的版本不提供更新；RC 可以升级到相同主次补丁版本的正式版。generic provider 不会通过 `allowPrerelease` 过滤预发布元数据，因此稳定目录必须只包含稳定版本。元数据缺失和网络故障仍报错，不回退到其他通道。参见[稳定更新路由决策](../../.agents/notes/implemented/bug-fix/2026-10-24-desktop-stable-update-route.zh.md)。后台发现新版本时保持安静。通用设置提供已安装版本、手动检查与重试操作。漫途侧栏仅在发现新版、下载中或已有待安装版本时显示入口，展开与收起状态均支持。只有用户点击下载才开始传输，显示实际字节数，仅在已知时显示百分比。下载并校验完成后，准备重启前会请求确认。确认安装后，Main 保存原生草稿，通过所属 IPC 通道请求 Host 停机回执，再关闭账号通道并请求 Host 正常退出。Main 等待进程真正退出和诊断日志关闭后才调用安装器。不支持的 Host 组合、保存失败、取消、异常退出和超时都会阻止安装；检查和下载不会冻结工作。等待失败后 Host 清理可能继续，工作不会自动恢复。参见 [Host 更新策略](../../packages/bundle/mantur-app/README.zh.md#use-this-package)。选择稍后会保留重启安装入口，不重复弹窗。侧栏和原生菜单共用主进程确认；保存失败会保留已校验的下载并报告错误。关闭 updater 会抑制后续安装。
 
 macOS Intel、macOS Apple Silicon 与 Windows 使用同一个更新控制器。macOS release 更新需要已签名并 notarize 的应用，以及生成的 ZIP 与更新元数据；DMG 仍是人工安装产物。Windows 对外更新需要代码签名身份、受保护的发布凭据与生成的 NSIS 更新产物；本仓库不提供或绕过这些前置条件。
 

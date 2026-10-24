@@ -109,6 +109,7 @@
     "apps/web/stress-tests/reasoning-chunks.stress.ts",
     "apps/cli/tests/**/*.ts",
     "apps/desktop/tests/**/*.ts",
+    "apps/desktop/scripts/update-route-smoke.ts",
     "packages/*/*/tests/**/*.ts",
     "scripts/**/*.ts",
     "website/**/*.ts",

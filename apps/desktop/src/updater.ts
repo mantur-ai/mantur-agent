@@ -21,7 +21,11 @@ export interface DesktopUpdater {
   autoDownload: boolean
   /** Whether a downloaded version installs during an unrelated application quit. */
   autoInstallOnAppQuit: boolean
-  /** Whether prerelease versions participate in update selection. */
+  /** Runtime metadata channel; electron-updater enables downgrades when this is set. */
+  channel: string | null
+  /** Whether update selection may return a version older than the installed version. */
+  allowDowngrade: boolean
+  /** Prerelease preference; the generic provider does not filter metadata by this flag. */
   allowPrerelease: boolean
   /** Check the configured release feed once. */
   checkForUpdates: () => Promise<unknown>
@@ -79,13 +83,6 @@ export interface DesktopUpdateController {
   dispose: () => void
 }
 
-const PRERELEASE_CHANNEL = /-(?:alpha|beta|rc)(?:[.-]|$)/iu
-
-/** Return whether a desktop version participates in alpha, beta, or RC releases. */
-export function allowsPrerelease(version: string): boolean {
-  return PRERELEASE_CHANNEL.test(version)
-}
-
 /**
  * Start delayed and periodic update checks and expose manual update actions.
  * @returns a controller that owns schedules, listeners, and pending prompt work.
@@ -94,7 +91,10 @@ export function startAutoUpdates(options: StartAutoUpdatesOptions): DesktopUpdat
   const { updater } = options
   updater.autoDownload = false
   updater.autoInstallOnAppQuit = false
-  updater.allowPrerelease = allowsPrerelease(options.currentVersion)
+  updater.channel = 'latest'
+  // The channel setter enables downgrades, so restore this policy after choosing the channel.
+  updater.allowDowngrade = false
+  updater.allowPrerelease = false
   let active = true
   let checkingManually = false
   let checkAttempt = 0

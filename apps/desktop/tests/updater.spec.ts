@@ -2,12 +2,16 @@
 import { EventEmitter } from 'node:events'
 import { setImmediate } from 'node:timers/promises'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { allowsPrerelease, startAutoUpdates, type DesktopUpdater, type StartAutoUpdatesOptions } from '../src/updater.ts'
+import { startAutoUpdates, type DesktopUpdater, type DesktopUpdateState, type StartAutoUpdatesOptions } from '../src/updater.ts'
 
 class FakeUpdater extends EventEmitter implements DesktopUpdater {
   autoDownload = true
   autoInstallOnAppQuit = true
   allowPrerelease = false
+  allowDowngrade = false
+  private selectedChannel: string | null = null
+  get channel(): string | null { return this.selectedChannel }
+  set channel(value: string | null) { this.selectedChannel = value; this.allowDowngrade = true }
   checkForUpdates = vi.fn(async () => null)
   downloadUpdate = vi.fn(async () => [])
   quitAndInstall = vi.fn()
@@ -47,9 +51,58 @@ describe('desktop updates', () => {
     expect(controller.getState()).toEqual({ kind: 'error', detail: 'Update service unavailable', requestedByUser: true })
     expect(log).toHaveBeenCalledWith('desktop update: HTTP 404 with raw headers')
   })
-  it.each([['1.2.3', false], ['1.2.3-alpha.4', true], ['1.2.3-beta.2', true], ['1.2.3-rc.1', true], ['1.2.3-preview.1', false]])('selects the release channel for %s', (version, expected) => {
-    expect(allowsPrerelease(version)).toBe(expected)
-    expect(start({ currentVersion: version }).updater.allowPrerelease).toBe(expected)
+  it.each(['1.2.3', '1.2.3-alpha.4', '1.2.3-beta.2', '1.2.3-rc.1', '1.2.3-preview.1'])('keeps %s on stable metadata without downgrades', (currentVersion) => {
+    const { updater } = start({ currentVersion })
+    expect(updater.channel).toBe('latest')
+    expect(updater.allowDowngrade).toBe(false)
+    expect(updater.allowPrerelease).toBe(false)
+  })
+  it.each([false, true])('initializes policy before the first check (manual=%s)', async (manual) => {
+    vi.useFakeTimers()
+    const updater = new FakeUpdater()
+    const observed: object[] = []
+    updater.checkForUpdates.mockImplementation(async () => {
+      observed.push({
+        channel: updater.channel, allowDowngrade: updater.allowDowngrade,
+        allowPrerelease: updater.allowPrerelease, autoDownload: updater.autoDownload,
+        autoInstallOnAppQuit: updater.autoInstallOnAppQuit,
+      })
+      return null
+    })
+    const { controller } = start({ updater, currentVersion: '0.1.22-rc.2', checkDelayMs: 10 })
+    if (manual) controller.checkNow()
+    else await vi.advanceTimersByTimeAsync(10)
+    expect(updater.checkForUpdates).toHaveBeenCalledOnce()
+    expect(observed).toEqual([{
+      channel: 'latest', allowDowngrade: false, allowPrerelease: false,
+      autoDownload: false, autoInstallOnAppQuit: false,
+    }])
+  })
+  it.each([false, true])('preserves error, no-update and available feedback (manual=%s)', async (manual) => {
+    vi.useFakeTimers()
+    const states: DesktopUpdateState[] = []
+    const { updater, controller } = start({ checkDelayMs: 10, checkIntervalMs: 100, onStateChange: state => states.push(state) })
+    let firstCheck = true
+    const check = async (): Promise<void> => {
+      if (manual) controller.checkNow()
+      else await vi.advanceTimersByTimeAsync(firstCheck ? 10 : 100)
+      firstCheck = false
+      await Promise.resolve()
+    }
+    for (const detail of ['HTTP 404: latest-mac.yml', 'network offline']) {
+      updater.checkForUpdates.mockRejectedValueOnce(new Error(detail))
+      await check()
+      expect(controller.getState()).toEqual({ kind: 'error', detail, requestedByUser: manual })
+    }
+    updater.checkForUpdates.mockImplementationOnce(async () => { updater.emit('update-not-available', {}); return null })
+    await check()
+    expect(controller.getState()).toEqual({ kind: 'up-to-date', requestedByUser: manual })
+    updater.checkForUpdates.mockImplementationOnce(async () => { updater.emit('update-available', { version: '0.1.22' }); return null })
+    await check()
+    expect(controller.getState()).toEqual({ kind: 'available', version: '0.1.22', prompting: false })
+    expect(updater.downloadUpdate).not.toHaveBeenCalled()
+    expect(updater.quitAndInstall).not.toHaveBeenCalled()
+    expect(states).toMatchSnapshot()
   })
   it('checks silently and leaves an available version until an explicit download', async () => {
     vi.useFakeTimers()

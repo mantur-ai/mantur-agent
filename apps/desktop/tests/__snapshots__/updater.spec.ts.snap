@@ -1,0 +1,73 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`desktop updates > preserves error, no-update and available feedback (manual=false) 1`] = `
+[
+  {
+    "kind": "checking",
+  },
+  {
+    "detail": "HTTP 404: latest-mac.yml",
+    "kind": "error",
+    "requestedByUser": false,
+  },
+  {
+    "kind": "checking",
+  },
+  {
+    "detail": "network offline",
+    "kind": "error",
+    "requestedByUser": false,
+  },
+  {
+    "kind": "checking",
+  },
+  {
+    "kind": "up-to-date",
+    "requestedByUser": false,
+  },
+  {
+    "kind": "checking",
+  },
+  {
+    "kind": "available",
+    "prompting": false,
+    "version": "0.1.22",
+  },
+]
+`;
+
+exports[`desktop updates > preserves error, no-update and available feedback (manual=true) 1`] = `
+[
+  {
+    "kind": "checking",
+  },
+  {
+    "detail": "HTTP 404: latest-mac.yml",
+    "kind": "error",
+    "requestedByUser": true,
+  },
+  {
+    "kind": "checking",
+  },
+  {
+    "detail": "network offline",
+    "kind": "error",
+    "requestedByUser": true,
+  },
+  {
+    "kind": "checking",
+  },
+  {
+    "kind": "up-to-date",
+    "requestedByUser": true,
+  },
+  {
+    "kind": "checking",
+  },
+  {
+    "kind": "available",
+    "prompting": false,
+    "version": "0.1.22",
+  },
+]
+`;

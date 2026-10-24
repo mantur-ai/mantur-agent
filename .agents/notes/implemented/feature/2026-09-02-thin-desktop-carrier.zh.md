@@ -20,7 +20,7 @@ client 构建 profile `mantur` 会把 `DSH_CLIENT_TITLE` 固定为 `ManTur Agent
 
 显式配置本地 profile 使用既有 Electron `--user-data-dir` 参数，不另加环境变量。传入的绝对非根目录同时选择 Electron `userData` 和 `sessionData`，其 `harness` 子目录仍是桌面端唯一的 `DSH_HOME`。校验和目录创建先于账号、草稿及 Harness 初始化，错误不会改选默认存储。未传参数时，两种模式的默认目录及初始化保持不变。不同配置目录隔离 profile 文件；选择同一目录会共享文件。该参数既不发现，也不迁移账号或凭据。
 
-已安装构建通过 electron-updater 检查 `mantur-ai/mantur-harness` GitHub Releases。stable 构建只接收 stable release；版本号含 `alpha`、`beta` 或 `rc` 的构建可以接收预发布版本。检查会在启动后开始，并每六小时重复。macOS 的原生应用菜单和 Windows 的帮助菜单会显示当前版本、手动检查操作、检查与下载进度、失败状态和可安装操作。手动检查得到无更新或错误结果时，还会显示本地化原生对话框。两个改变状态的步骤都需要分别同意：载体会先在下载前询问，再在停止 Harness 并重启进入安装器前第二次询问。下载后选择稍后仍可从菜单触发安装。释放 updater 会移除监听器，并阻止尚未完成的对话框结果触发下载或安装。后台检查与失败都会写入桌面日志。
+已安装构建通过 electron-updater 检查 TOS 稳定更新源。所有客户端（包括预发布构建）都选择 `latest` 并禁用降级；[稳定更新路由决策](../bug-fix/2026-10-24-desktop-stable-update-route.zh.md)规定有效地址和发布要求。检查会在启动后开始，并每六小时重复。macOS 的原生应用菜单和 Windows 的帮助菜单会显示当前版本、手动检查操作、检查与下载进度、失败状态和可安装操作。手动检查得到无更新或错误结果时，还会显示本地化原生对话框。两个改变状态的步骤都需要分别同意：载体会先在下载前询问，再在停止 Harness 并重启进入安装器前第二次询问。下载后选择稍后仍可从菜单触发安装。释放 updater 会移除监听器，并阻止尚未完成的对话框结果触发下载或安装。后台检查与失败都会写入桌面日志。
 
 根目录的 `desktop:dev` 命令负责本地编辑循环，不会调用 electron-builder。监听器会重新运行桌面端 TypeScript 增量项目、bundle Electron 入口，并直接启动 Electron。源码或资源改动会终止活动 Electron 进程；Electron 先等待其 dsh 子进程关闭，再开始下一轮。开发 dsh 输出会同步显示在终端，同时保留在持久日志中。开发模式选用 `mantur-agent-dev` 用户数据目录，不会触及已安装应用的 `mantur-agent` 状态；`app.isPackaged` 会保持 updater 不活动。
 

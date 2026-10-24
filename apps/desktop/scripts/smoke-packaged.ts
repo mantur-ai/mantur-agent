@@ -1,6 +1,10 @@
 /** Native smoke for the dependency closure inside one unpacked desktop application. */
 
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import { pathToFileURL } from 'node:url'
+import type { startAutoUpdates } from '../src/updater.ts'
+import { verifyDesktopUpdateRoute } from './update-route-smoke.ts'
 import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -60,12 +64,16 @@ for (const path of [manturCutManifest.paths.whisperCli, manturCutManifest.paths.
 if (!existsSync(packaged.updateConfig)) {
   throw new Error(`packaged updater configuration is missing: ${packaged.updateConfig}`)
 }
-const updateConfig = readFileSync(packaged.updateConfig, 'utf8')
-for (const expected of ['provider: generic', 'url: https://mantur-pro.tos-accelerate.volces.com/mantur-agent/stable/', 'useMultipleRangeRequest: false']) {
-  if (!updateConfig.includes(expected)) {
-    throw new Error(`packaged updater configuration is missing ${expected}`)
-  }
-}
+const { startAutoUpdates: startPackagedUpdates } = await import(pathToFileURL(join(packaged.resourcesRoot, 'lib', 'updater.js')).href) as { startAutoUpdates: typeof startAutoUpdates }
+const packagedManifest = JSON.parse(readFileSync(join(packaged.resourcesRoot, 'package.json'), 'utf8')) as { version: string }
+const updateRoute = await verifyDesktopUpdateRoute({
+  requireFromApp: createRequire(join(packaged.resourcesRoot, 'package.json')),
+  configText: readFileSync(packaged.updateConfig, 'utf8'),
+  currentVersion: packagedManifest.version,
+  platform: process.platform === 'darwin' ? 'darwin' : 'win32',
+  startUpdates: startPackagedUpdates,
+})
+console.log(`desktop packaged updater route: ${updateRoute} (offline)`)
 const dshHome = mkdtempSync(join(tmpdir(), 'mantur-agent-desktop-smoke-'))
 try {
   await smokeEmbeddedCli({

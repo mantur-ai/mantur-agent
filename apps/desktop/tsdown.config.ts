@@ -2,7 +2,7 @@ import { defineConfig } from 'tsdown'
 
 /** Bundle the native desktop carrier without embedding Electron itself. */
 export default defineConfig([{
-  entry: ['lib/types/main.js'],
+  entry: ['lib/types/main.js', 'lib/types/updater.js'],
   outDir: 'lib',
   format: ['esm'],
   platform: 'node',
