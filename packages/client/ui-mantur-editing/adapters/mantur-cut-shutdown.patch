@@ -712,7 +712,7 @@ index 0e72452..75e2253 100644
      },
      "node_modules/sharp/node_modules/semver": {
 diff --git a/package.json b/package.json
-index 69a1f6b..c7744e8 100644
+index 69a1f6b..b9ade78 100644
 --- a/package.json
 +++ b/package.json
 @@ -12,6 +12,7 @@
@@ -734,7 +734,17 @@ index 69a1f6b..c7744e8 100644
      "verify:salvage": "tsx src/agent/model-selection.verify.ts && tsx src/agent/context-compaction.verify.ts && tsx src/agent/context-overflow-guidance.verify.ts && tsx src/agent/tool-activation.verify.ts && tsx src/agent/tool-result-compaction.verify.ts && tsx src/agent/tool-result-output.verify.ts && tsx src/agent/token-efficiency.verify.ts && tsx src/captions/srt.verify.ts && tsx server/plugins/assemblyai-upload.verify.ts && tsx src/agent/capabilities.verify.ts && tsx src/agent/vision.verify.ts",
      "verify:harness": "tsx src/agent/harness-context.verify.ts && tsx src/agent/harness-runtime.verify.ts && tsx src/agent/agent-hydration-recovery.verify.ts && tsx src/agent/retry-message.verify.ts && tsx src/agent/useAgentHistoryActions.verify.ts && tsx src/agent/external-draft-persistence.verify.ts && tsx server/external-agent/agent-runtime-persistence.verify.ts && tsx server/plugins/project-store-project-document.verify.ts",
      "verify:skills": "tsx src/agent/skills/skill-loading.verify.ts && tsx src/agent/skills/skill-deps.verify.ts && tsx server/skills-files.verify.ts",
-@@ -80,7 +81,8 @@
+@@ -41,7 +42,8 @@
+     "verify:model-persistence-restart": "tsx server/plugins/model-persistence-restart.verify.ts",
+     "verify:music-intelligence": "npm run verify:model-persistence-restart && tsx server/plugins/model-pack-install.verify.ts && tsx server/plugins/hf-proxy.verify.ts && tsx server/plugins/asr-models.verify.ts && tsx shared/model-packs/client.verify.ts && tsx src/components/settings/model-pack-pane.verify.ts && tsx src/components/settings/local-asr-model-mutation.verify.ts && tsx src/transcript/local-asr-model-source.verify.ts && tsx src/audio/intelligence/audioDecode.verify.ts && tsx src/audio/intelligence/beatThisPreprocess.verify.ts && tsx src/audio/intelligence/beatThisClient.verify.ts && tsx src/audio/intelligence/clapClient.verify.ts && tsx src/audio/intelligence/clapProfile.verify.ts && tsx src/audio/intelligence/sections.verify.ts && tsx src/audio/intelligence/store.verify.ts && tsx src/audio/intelligence/useAutoMusicAnalysis.verify.ts && tsx src/agent/tools/music-intelligence-tools.verify.ts && tsx src/agent/tools/music-missing-pack-action.verify.ts",
+     "verify:caption-motion": "tsx src/captions/captionMotion.verify.ts && tsx src/agent/tools/caption-animation.verify.ts",
+-    "verify:project-store-transport": "tsx server/project-store-http-auth.verify.ts && tsx server/plugins/project-store-agent-session.verify.ts && tsx src/persist/projectStoreTransport.verify.ts && tsx src/persist/sharedKv.verify.ts && tsx src/app/appShell.verify.ts",
++    "verify:mantur-project-save": "tsx server/plugins/mantur-project-save-http.verify.ts",
++    "verify:project-store-transport": "npm run verify:mantur-project-save && tsx server/project-store-http-auth.verify.ts && tsx server/plugins/project-store-agent-session.verify.ts && tsx src/persist/projectStoreTransport.verify.ts && tsx src/persist/sharedKv.verify.ts && tsx src/app/appShell.verify.ts",
+     "verify:desktop-window": "tsx desktop/context-menu.verify.ts && tsx desktop/page-origin.verify.ts && tsx desktop/local-media-import.verify.ts && tsx src/media/desktop-local-import.verify.ts && tsx desktop/window-frame.verify.ts && tsx desktop/single-instance.verify.ts && tsx desktop/window-scale.verify.ts && tsx desktop/remotion-binaries.verify.ts && tsx --tsconfig tsconfig.app.json src/components/window-titlebar.verify.tsx && npm run verify:desktop-inference && tsx desktop/desktop.verify.ts && tsx desktop/export-reveal.verify.ts && tsx desktop/export-directory-state.verify.ts",
+     "verify:desktop-inference": "tsx --tsconfig tsconfig.node.json desktop/native-hardware-profile.verify.ts && tsx --tsconfig tsconfig.node.json desktop/native-inference-budget.verify.ts && tsx --tsconfig tsconfig.node.json desktop/native-inference-residency.verify.ts && tsx --tsconfig tsconfig.node.json desktop/native-asr-service.verify.ts && tsx --tsconfig tsconfig.node.json desktop/native-asr-worker.verify.ts && tsx --tsconfig tsconfig.node.json shared/desktop-inference.verify.ts && tsx --tsconfig tsconfig.app.json src/transcript/desktop-native-asr.verify.ts && tsx --tsconfig tsconfig.app.json src/media/semantic-search/nativeSemanticWorkerAdapter.verify.ts && tsx --tsconfig tsconfig.app.json src/media/semantic-search/nativeSemanticDuplicateFallback.verify.ts && tsx --tsconfig tsconfig.app.json src/audio/intelligence/nativeClapWorkerAdapter.verify.ts && tsx --tsconfig tsconfig.app.json src/audio/intelligence/nativeBeatThisWorkerAdapter.verify.ts",
+     "verify:desktop-worker-lifecycle": "tsx --tsconfig tsconfig.node.json desktop/native-asr-worker-lifecycle.verify.ts",
+@@ -80,7 +82,8 @@
      "verify:export-gl": "tsx src/export/export-reliability.verify.ts && tsx src/export/exportMediaPlan.verify.ts && tsx src/export/range.verify.ts && tsx src/gl/customTransitions.verify.ts && tsx src/gl/fx/chroma-key.verify.ts && tsx src/gl/fx/cube.verify.ts && tsx src/gl/fx/fx.verify.ts && tsx src/gl/shader-contract.verify.ts && tsx src/generate/media-export.geometry.verify.ts && tsx src/generate/video.verify.ts && tsx src/plugins/export.verify.ts && tsx src/plugins/resourcePreview.verify.ts && tsx src/plugins/validate.verify.ts && tsx src/multicam/align.verify.ts && tsx src/multicam/sync.verify.ts && tsx src/reframe/detect.verify.ts && tsx src/script/script.verify.ts && tsx --tsconfig tsconfig.app.json src/fonts/notoSansOffline.verify.ts",
      "verify:server-extra": "tsx server/media-process.verify.ts && tsx server/media-references.verify.ts && tsx server/media-normalization-reason.verify.ts && tsx server/media-normalization-reference.verify.ts && tsx server/media-normalization-admission.verify.ts && tsx server/plugins/upload-multipart-meta.verify.ts && tsx server/plugins/firecrawl.verify.ts && tsx server/plugins/request-shape-gate.verify.ts && tsx server/plugins/isolate-voice.verify.ts && tsx server/plugins/project-store-merge.verify.ts && tsx server/plugins/render-clip-cancellation.verify.ts && tsx server/plugins/storage-lifecycle.verify.ts && tsx server/plugins/video-reference.verify.ts && tsx server/safe-public-fetch.verify.ts && tsx shared/timeline-geometry.verify.ts && tsx remotion/render-timeout.verify.mjs && tsx server/plugins/stock-check.verify.ts",
      "verify:sqlite-migration": "tsx server/storage/sqlite-store.verify.ts && tsx server/storage/sqlite-migration-http.verify.ts && tsx server/plugins/project-store-export-recovery-sqlite.verify.ts && tsx src/export/serverExportRecovery.verify.ts",
@@ -744,7 +754,7 @@ index 69a1f6b..c7744e8 100644
    },
    "dependencies": {
      "@ai-sdk/alibaba": "^2.0.16",
-@@ -149,6 +151,12 @@
+@@ -149,6 +152,12 @@
      "vite": "^8.1.1"
    },
    "overrides": {
@@ -1843,6 +1853,66 @@ index d5b4530..fd2b6b8 100644
 
  onRegisteredToolsChanged(() => {
    for (const session of sessions.values()) {
+diff --git a/server/external-agent/offline-project-store.verify.ts b/server/external-agent/offline-project-store.verify.ts
+index 5462264..1ef94b0 100644
+--- a/server/external-agent/offline-project-store.verify.ts
++++ b/server/external-agent/offline-project-store.verify.ts
+@@ -256,8 +256,8 @@ try {
+     'browser-competing-owner',
+     serializedCommit.revision!,
+   );
+-  assert.equal(competingBrowser.status, 'claimed',
+-    'a current browser revision can replace a stale browser registration without a window lock');
++  assert.equal(competingBrowser.status, 'blocked',
++    'a competing browser cannot replace a live registration');
+   // A browser window re-claiming its OWN project (same ownerId, same revision)
+   // recovers (claimed) even without a capability, because the route-level
+   // capability check (broker capabilityMatches) already rejects forged/mismatched
+diff --git a/server/external-agent/project-edit-ownership-codec.ts b/server/external-agent/project-edit-ownership-codec.ts
+index 20ce1fb..b29cfa7 100644
+--- a/server/external-agent/project-edit-ownership-codec.ts
++++ b/server/external-agent/project-edit-ownership-codec.ts
+@@ -73,9 +73,7 @@ export function projectEditOwnershipMatches(
+   now = Date.now(),
+ ): boolean {
+   const row = parseProjectEditOwnership(value, claim.projectId);
+-  // CAS removed: the base revision is no longer compared (a concurrent save
+-  // must not fail with a revision mismatch); ownership still gates on
+-  // owner identity, epoch and lease so writes stay fenced to the editor.
++  // The document write checks its revision under the same store lock.
+   return Boolean(row
+     && row.ownerKind === claim.ownerKind
+     && row.ownerId === claim.ownerId
+diff --git a/server/external-agent/project-edit-ownership.ts b/server/external-agent/project-edit-ownership.ts
+index 7f9a5d0..77c437a 100644
+--- a/server/external-agent/project-edit-ownership.ts
++++ b/server/external-agent/project-edit-ownership.ts
+@@ -76,23 +76,8 @@ export async function claimBrowserProjectOwnership(
+     const sameOwner = current?.ownerKind === 'browser'
+       && current.ownerId === ownerId
+       && current.leaseExpiresAt > Date.now();
+-    // A browser window that already owns this project (the same ownerId, still a
+-    // live lease) may re-claim it even without its in-memory capability. In
+-    // normal single-window use the bridge occasionally tears down and reconnects
+-    // with the same editor id but no capability; blocking that re-claim produced
+-    // a spurious 409 that flashed "close the other window" during routine use.
+-    // Genuine anti-spoof is enforced at the registration-route capability layer
+-    // (broker capabilityMatches / the route's renewing check), so this claim
+-    // gate only needs to fence cross-layer writes, not same-owner recovery.
+-    // A genuinely DIFFERENT browser window that holds the expected revision also
+-    // takes over from a previously registered browser window. Single-window
+-    // desktop users never open the same project in two windows, so there is no
+-    // cross-browser exclusivity to enforce. We still refuse to steal from a live
+-    // OFFLINE writer (external MCP / a serialized offline commit) or an
+-    // epoch-pinned owner, so the browser cannot clobber a non-browser write in
+-    // flight. Lost-update protection additionally holds via the CAS revision
+-    // match in createProjectDocumentStoreOperation.
+-    if (current && current.leaseExpiresAt > Date.now() && current.ownerKind !== 'browser') {
++    // A live editor keeps its lease until release or expiry; retries cannot steal it.
++    if (current && current.leaseExpiresAt > Date.now() && !sameOwner) {
+       return { status: 'blocked' };
+     }
+     if (current && current.epoch === Number.MAX_SAFE_INTEGER) return { status: 'blocked' };
 diff --git a/server/frame-grid.ts b/server/frame-grid.ts
 index 64509b0..5bc5027 100644
 --- a/server/frame-grid.ts
@@ -2139,7 +2209,7 @@ index db26432..04b98db 100644
        registerRenderStillRoute(server);
        registerRenderClipRoute(server);
 diff --git a/server/plugins/external-agent-bridge-routes.ts b/server/plugins/external-agent-bridge-routes.ts
-index 77291be..273f2d3 100644
+index 77291be..f93e566 100644
 --- a/server/plugins/external-agent-bridge-routes.ts
 +++ b/server/plugins/external-agent-bridge-routes.ts
 @@ -6,11 +6,9 @@ import {
@@ -2166,7 +2236,20 @@ index 77291be..273f2d3 100644
    mcpTools: typeof mcpTools;
  }
 
-@@ -268,24 +264,13 @@ async function settleBridgeCall(
+@@ -131,11 +127,7 @@ async function registerBridgeEditor(
+ ): Promise<void> {
+   const input = registrationInput(await readBridgeJson(req));
+   const capability = registrationCapability(req, false);
+-  // A matching registration capability marks a legitimate renewal from the
+-  // currently connected runtime. A reload or different window with a
+-  // missing/mismatched capability is no longer blocked —
+-  // that window simply takes over (single-window desktop has no cross-window
+-  // exclusivity). Stale-revision protection below still prevents clobbering.
++  // Capabilities identify renewal; ownership rejects a different live editor.
+   const renewing = capability !== null && operations.editorRegistrationMatches(
+     input.projectId,
+     input.editorId,
+@@ -268,24 +260,13 @@ async function settleBridgeCall(
          : null;
    if (!outcome) throw new Error('invalid tool result outcome');
    const capability = registrationCapability(req, true);
@@ -3147,6 +3230,279 @@ index 0000000..26a3b27
 +    await rm(root, { recursive: true, force: true });
 +  }
 +}
+diff --git a/server/plugins/mantur-project-save-http.verify.ts b/server/plugins/mantur-project-save-http.verify.ts
+new file mode 100644
+index 0000000..a158239
+--- /dev/null
++++ b/server/plugins/mantur-project-save-http.verify.ts
+@@ -0,0 +1,267 @@
++import assert from 'node:assert/strict';
++import { createServer } from 'node:http';
++import { mkdtemp, readFile, rm } from 'node:fs/promises';
++import { tmpdir } from 'node:os';
++import { join } from 'node:path';
++import type { ProjectDoc } from '../../src/editor/types.ts';
++import type { ProjectDocumentMutationResponse } from '../../shared/project-store-transport.ts';
++import type { BrowserProjectOwnership } from '../../src/persist/projectStoreTransport.ts';
++import type { ProjectStoreHttpOperations } from '../project-store-http-routes.ts';
++
++const root = await mkdtemp(join(tmpdir(), 'mantur-project-save-http-'));
++const previousDataDir = process.env.OPENCHATCUT_DATA_DIR;
++process.env.OPENCHATCUT_DATA_DIR = root;
++const originalFetch = globalThis.fetch;
++const previousLocation = Object.getOwnPropertyDescriptor(globalThis, 'location');
++const server = createServer();
++
++try {
++  // Store modules capture their paths at import time; no user storage is opened.
++  const store = await import('./project-store.ts');
++  const ownership = await import('../external-agent/project-edit-ownership.ts');
++  const broker = await import('../external-agent/broker.ts');
++  const { routeExternalAgentBridge } = await import('./external-agent-bridge-routes.ts');
++  const { handleProjectStoreRequest } = await import('../project-store-http.ts');
++  const { projectStoreHttpAuthorized, projectStoreReadAuthorized } = await import('../project-store-http-auth.ts');
++  const { revisionOf } = await import('../../src/agent/external-edit-session.ts');
++  const { CURRENT_PROJECT_VERSION } = await import('../../shared/project-version.ts');
++  const transport = await import('../../src/persist/projectStoreTransport.ts');
++  const { loadProjectForEditing, loadProject, saveProject, resetProjectStoreMemory } = await import('../../src/persist/projectStore.ts');
++  const { registerEditorBridge, unregisterEditorBridge } = await import('../../src/agent/external-bridge-registration.ts');
++  const unused = (): never => { throw new Error('unexpected route in project save verification'); };
++  const operations: ProjectStoreHttpOperations = {
++    readSnapshot: store.readStore,
++    getEntry: store.getStoredEntry,
++    setEntry: store.setStoredEntry,
++    deleteEntry: store.deleteStoredEntry,
++    mergeEntries: store.mergeStoredEntries,
++    writeProjectDocument: store.writeProjectDocument,
++    writeAgentRuntime: store.writeAgentRuntime,
++    rotateAgentSession: store.rotateAgentSession,
++    updateAgentRunLease: store.updateStoredAgentRunLease,
++    updateExportRecoveryLease: store.updateExportRecoveryLease,
++    purgeProject: unused,
++    semanticVectorsAvailable: () => false,
++    semanticVectorsUpsert: unused, semanticVectorsSearch: unused,
++    semanticVectorsPrune: unused, semanticVectorsClear: unused,
++  };
++  const bridgeOperations = {
++    claimBrowserOwnership: ownership.claimBrowserProjectOwnership,
++    editorRegistrationMatches: broker.editorRegistrationMatches,
++    registerEditor: broker.registerEditor,
++    unregisterEditor: broker.unregisterEditor,
++    nextEditorCall: broker.nextEditorCall,
++    nextEditorCancellation: broker.nextEditorCancellation,
++    settleEditorCall: broker.settleEditorCallWithRevision,
++    mcpTools: () => [],
++  };
++  server.on('request', (req, res) => {
++    void (async () => {
++      const authorized = req.method === 'GET'
++        ? projectStoreReadAuthorized(req) : projectStoreHttpAuthorized(req);
++      if (!authorized) { res.writeHead(403); res.end(); return; }
++      if (req.url?.startsWith('/api/project-store')) {
++        req.url = req.url.slice('/api/project-store'.length) || '/';
++        await handleProjectStoreRequest(req, res, operations);
++      } else if (req.url?.startsWith('/api/external-agent')) {
++        req.url = req.url.slice('/api/external-agent'.length);
++        await routeExternalAgentBridge(req, res, new URL(req.url, 'http://localhost'), bridgeOperations);
++      } else { res.writeHead(404); res.end(); }
++    })().catch((error: unknown) => {
++      res.writeHead(500, { 'Content-Type': 'application/json' });
++      res.end(JSON.stringify({ error: String(error) }));
++    });
++  });
++  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
++  const address = server.address();
++  assert(address && typeof address === 'object');
++  const origin = `http://127.0.0.1:${address.port}`;
++  Object.defineProperty(globalThis, 'location', { configurable: true, value: new URL(origin) });
++  let holdSaveRequest: (() => Promise<void>) | undefined;
++  let holdSaveAck: ((response: Response) => Promise<Response>) | undefined;
++  globalThis.fetch = async (input, init) => {
++    const url = new URL(String(input), origin);
++    const headers = new Headers(init?.headers);
++    headers.set('Origin', origin);
++    headers.set('Sec-Fetch-Site', 'same-origin');
++    if (url.pathname.endsWith('/project-document/write') && holdSaveRequest) {
++      const hold = holdSaveRequest;
++      holdSaveRequest = undefined;
++      await hold();
++    }
++    const response = await originalFetch(url, { ...init, headers });
++    if (url.pathname.endsWith('/project-document/write') && holdSaveAck) {
++      const hold = holdSaveAck;
++      holdSaveAck = undefined;
++      return hold(response);
++    }
++    return response;
++  };
++  const projectId = 'dirty-reconnect';
++  const key = `project:${projectId}`;
++  const base: ProjectDoc = {
++    version: CURRENT_PROJECT_VERSION, assets: [], mediaFolders: [], activeTimelineId: 'timeline-1',
++    timelines: [{ id: 'timeline-1', name: 'Timeline 1', order: 0, width: 1920, height: 1080,
++      fps: 30, items: [], selectedId: null, trackOrder: ['track-v1'], tracks: { 'track-v1': { kind: 'video' } } }],
++  };
++  const post = async (path: string, body: unknown): Promise<Response> => fetch(path, {
++    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
++  });
++  const create = await post('/api/project-store/project-document/write', {
++    operation: 'project-document-write', key, expectedRevision: null, value: base,
++  });
++  assert.equal(create.status, 200);
++  assert.equal((await create.json()).accepted, true);
++  await transport.requestProjectStore({ operation: 'set', key: 'projects', value: [{ id: projectId, name: 'Test', updatedAt: 1 }] });
++  const loaded = await loadProjectForEditing(projectId);
++  assert.equal(loaded.status, 'ok');
++  if (loaded.status !== 'ok') throw new Error('project did not load');
++  const r0 = revisionOf(loaded.doc);
++  assert.equal(transport.browserProjectBase(projectId).revision, r0);
++  const claim = async (ownerId: string): Promise<BrowserProjectOwnership> => registerEditorBridge(
++    projectId, ownerId, transport.browserProjectBase(projectId), new AbortController().signal,
++  );
++  const disconnect = async (lease: BrowserProjectOwnership): Promise<void> => {
++    await unregisterEditorBridge(projectId, lease.ownerId, lease.registrationCapability, true);
++    transport.clearBrowserProjectOwnership(lease);
++  };
++  let lease = await claim('editor-a');
++  assert.equal(transport.installBrowserProjectOwnership(lease, transport.browserProjectBase(projectId)), true);
++  const dirty = structuredClone(loaded.doc);
++  dirty.timelines[0].width = 1280;
++  await disconnect(lease);
++  assert.notEqual(revisionOf(dirty), r0);
++  assert.equal(transport.browserProjectBase(projectId).revision, r0);
++  const dirtyRegistration = await post('/api/external-agent/register', { projectId, editorId: 'editor-a', baseRevision: revisionOf(dirty), tools: [] });
++  assert.equal(dirtyRegistration.status, 409, 'dirty memory revision is not the persisted registration base');
++  assert.equal((await dirtyRegistration.json()).reloadRequired, true);
++  lease = await claim('editor-a');
++  assert.equal(transport.installBrowserProjectOwnership(lease, transport.browserProjectBase(projectId)), true);
++  assert.equal((await saveProject(projectId, dirty)).saved, true);
++  assert.equal(transport.browserProjectBase(projectId).revision, revisionOf(dirty));
++  // A real file read verifies the HTTP acknowledgement represents durable bytes.
++  const storedFile = join(root, 'project-store-v1', `${encodeURIComponent(key)}.json`);
++  assert.equal(revisionOf(JSON.parse(await readFile(storedFile, 'utf8'))), revisionOf(dirty));
++  await disconnect(lease);
++  const reopened = await loadProjectForEditing(projectId);
++  assert.equal(reopened.status, 'ok');
++  if (reopened.status !== 'ok') throw new Error('project did not reopen');
++  assert.equal(revisionOf(reopened.doc), revisionOf(dirty));
++
++  lease = await claim('editor-a');
++  assert.equal(transport.installBrowserProjectOwnership(lease, transport.browserProjectBase(projectId)), true);
++  const committed = Promise.withResolvers<void>();
++  const releaseAck = Promise.withResolvers<void>();
++  holdSaveAck = async (response) => { committed.resolve(); await releaseAck.promise; return response; };
++  const secondDirty = structuredClone(dirty);
++  secondDirty.timelines[0].width = 960;
++  const pendingSave = saveProject(projectId, secondDirty);
++  await committed.promise;
++  await disconnect(lease);
++  releaseAck.resolve();
++  assert.equal((await pendingSave).saved, true);
++  assert.equal(transport.browserProjectBase(projectId).revision, revisionOf(secondDirty), 'ack after clear advances the known base');
++  lease = await claim('editor-a');
++  assert.equal(transport.installBrowserProjectOwnership(lease, transport.browserProjectBase(projectId)), true);
++  const beforeCommit = Promise.withResolvers<void>();
++  const resumeCommit = Promise.withResolvers<void>();
++  holdSaveRequest = async () => { beforeCommit.resolve(); await resumeCommit.promise; };
++  const thirdDirty = structuredClone(secondDirty);
++  thirdDirty.timelines[0].width = 800;
++  const reregisteredSave = saveProject(projectId, thirdDirty);
++  await beforeCommit.promise;
++  const renewedLease = await claim('editor-a');
++  assert.equal(renewedLease.epoch, lease.epoch);
++  assert.equal(transport.installBrowserProjectOwnership(renewedLease, transport.browserProjectBase(projectId)), true);
++  resumeCommit.resolve();
++  assert.equal((await reregisteredSave).saved, true);
++  assert.equal(transport.browserProjectBase(projectId).revision, revisionOf(thirdDirty));
++
++  lease = transport.browserProjectOwnership(projectId)!;
++  // Repeated competitors cannot oscillate the live owner or its epoch.
++  for (let i = 0; i < 3; i += 1) {
++    await assert.rejects(claim('editor-b'), /409|owned/);
++  }
++  const active = await store.getStoredEntry(ownership.projectEditOwnershipKey(projectId));
++  assert.equal((active.value as { ownerId: string }).ownerId, 'editor-a');
++  assert.equal((active.value as { epoch: number }).epoch, lease.epoch);
++  await disconnect(lease);
++  const competing = await claim('editor-b');
++  const otherDoc = structuredClone(thirdDirty);
++  otherDoc.timelines[0].width = 640;
++  const write = async (owner: BrowserProjectOwnership, expectedRevision: string, value: ProjectDoc): Promise<ProjectDocumentMutationResponse> => {
++    const response = await post('/api/project-store/project-document/write', {
++      operation: 'project-document-write', key, expectedRevision,
++      ownerId: owner.ownerId, ownershipEpoch: owner.epoch, value,
++    });
++    assert.equal(response.status, 200);
++    return response.json();
++  };
++  assert.equal((await write(competing, competing.baseRevision, otherDoc)).accepted, true);
++  const preservedDirty = structuredClone(thirdDirty);
++  preservedDirty.timelines[0].width = 720;
++  const dirtyBefore = JSON.stringify(preservedDirty);
++  await assert.rejects(claim('editor-a'), /409|changed/);
++  assert.equal((await write(lease, revisionOf(otherDoc), preservedDirty)).accepted, false, 'old epoch is fenced even with latest revision');
++  assert.equal((await write(competing, competing.baseRevision, preservedDirty)).accepted, false, 'same owner cannot write a stale revision');
++  assert.equal(transport.installBrowserProjectOwnership(lease, transport.browserProjectBase(projectId)), true);
++  assert.equal((await saveProject(projectId, preservedDirty)).saved, false, 'a rejected client save remains failed');
++  assert.equal(JSON.stringify(preservedDirty), dirtyBefore);
++  assert.equal(revisionOf(JSON.parse(await readFile(storedFile, 'utf8'))), revisionOf(otherDoc));
++  // A general read must not authorize the old dirty context to overwrite a newer document.
++  await loadProject(projectId);
++  assert.equal(transport.browserProjectBase(projectId).revision, revisionOf(thirdDirty));
++
++  const outcomes = await Promise.all([
++    write(competing, revisionOf(otherDoc), preservedDirty),
++    write(competing, revisionOf(otherDoc), secondDirty),
++  ]);
++  assert.equal(outcomes.filter((result) => result.accepted).length, 1, 'revision check and write share one disk-store lock');
++  const winner = outcomes.find((result) => result.accepted)!;
++  await unregisterEditorBridge(projectId, competing.ownerId, competing.registrationCapability, true);
++  transport.initializeBrowserProjectBase(projectId, winner.currentRevision!);
++  const previousBase = transport.browserProjectBase(projectId);
++  const newContext = await claim('editor-c');
++  assert.equal(transport.installBrowserProjectOwnership(newContext, transport.browserProjectBase(projectId)), true);
++  transport.advanceBrowserProjectOwnership(previousBase, lease, r0);
++  assert.equal(transport.browserProjectBase(projectId).revision, winner.currentRevision, 'old context ack cannot roll back new context');
++  const replacementContext = { ...newContext, registrationCapability: 'replacement-capability' };
++  const oldBase = transport.browserProjectBase(projectId);
++  transport.initializeBrowserProjectBase(projectId, winner.currentRevision!);
++  assert.equal(transport.browserProjectOwnership(projectId), undefined, 'loading a new context clears its predecessor lease');
++  assert.equal(transport.installBrowserProjectOwnership(newContext, oldBase), false, 'late registration cannot install into a different context');
++  assert.equal(transport.installBrowserProjectOwnership(replacementContext, transport.browserProjectBase(projectId)), true);
++  transport.advanceBrowserProjectOwnership(oldBase, newContext, r0);
++  assert.equal(transport.browserProjectBase(projectId).revision, winner.currentRevision, 'same owner and epoch from an older context cannot advance the replacement');
++  transport.clearBrowserProjectOwnership(newContext);
++  assert.equal(transport.browserProjectOwnership(projectId), replacementContext, 'old capability cannot clear new registration');
++  await unregisterEditorBridge(projectId, newContext.ownerId, newContext.registrationCapability, true);
++  transport.clearBrowserProjectOwnership(replacementContext);
++  // Expiry is another controlled takeover path, without sleeping for a production lease.
++  const expired = await store.getStoredEntry(ownership.projectEditOwnershipKey(projectId));
++  await store.withSerializedProjectStore((locked) => locked.writeEntryExact(ownership.projectEditOwnershipKey(projectId), { ...expired.value as object, leaseExpiresAt: Date.now() - 1 }));
++  const afterExpiry = await claim('editor-d');
++  assert.ok(afterExpiry.epoch > newContext.epoch);
++  await disconnect(afterExpiry);
++  assert.equal((await loadProjectForEditing('new-project')).status, 'missing');
++  assert.equal((await saveProject('new-project', base)).saved, true);
++  assert.equal(transport.browserProjectBase('new-project').revision, revisionOf(base), 'new document creation initializes the acknowledged base');
++  const beforeCancelledLoad = transport.browserProjectBase(projectId);
++  const cancelled = new AbortController();
++  cancelled.abort();
++  assert.equal((await loadProjectForEditing(projectId, undefined, cancelled.signal)).status, 'unreadable');
++  assert.equal(transport.browserProjectBase(projectId), beforeCancelledLoad, 'cancelled loads cannot replace the active context');
++  resetProjectStoreMemory();
++  assert.throws(() => transport.browserProjectBase(projectId).revision, /not been loaded/);
++  broker.resetExternalAgentBrokerForTest();
++  console.log('mantur-project-save-http: dirty reconnect, durable reopen, ack-after-clear, stale writes, competing owners passed');
++} finally {
++  globalThis.fetch = originalFetch;
++  if (previousLocation) Object.defineProperty(globalThis, 'location', previousLocation);
++  else Reflect.deleteProperty(globalThis, 'location');
++  server.closeAllConnections();
++  if (server.listening) await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
++  if (previousDataDir === undefined) delete process.env.OPENCHATCUT_DATA_DIR;
++  else process.env.OPENCHATCUT_DATA_DIR = previousDataDir;
++  await rm(root, { recursive: true, force: true });
++}
 diff --git a/server/plugins/mantur-shutdown.ts b/server/plugins/mantur-shutdown.ts
 new file mode 100644
 index 0000000..6b0cf21
@@ -3760,6 +4116,65 @@ index 2332d59..c7b5b91 100644
    writeAgentRuntime,
    writeProjectDocument,
    deleteEntry: deleteStoredEntry,
+diff --git a/server/plugins/project-store-project-document.ts b/server/plugins/project-store-project-document.ts
+index c908283..6f14ef1 100644
+--- a/server/plugins/project-store-project-document.ts
++++ b/server/plugins/project-store-project-document.ts
+@@ -111,10 +111,10 @@ export function createProjectDocumentStoreOperation(withStoreLock: WithStoreLock
+       if (current.found && !currentDoc) {
+         throw new Error('stored project document is corrupt or unsupported');
+       }
+-      // CAS removed: writes are serialized by the store lock (single local
+-      // instance); the revision still increments for audit/ordering but is
+-      // no longer compared against the request's expected revision, so a
+-      // concurrent save can no longer fail with a revision mismatch.
++      const currentRevision = currentDoc ? revisionOf(currentDoc) : undefined;
++      if (request.expectedRevision !== (currentRevision ?? null)) {
++        return mutationResponse(current, false, currentRevision);
++      }
+       const project = normalizedProject(request.value);
+       if (!project) throw new Error('project document CAS value is invalid or unsupported');
+       const projectId = request.key.slice('project:'.length);
+diff --git a/server/plugins/project-store-project-document.verify.ts b/server/plugins/project-store-project-document.verify.ts
+index b4546a4..8744739 100644
+--- a/server/plugins/project-store-project-document.verify.ts
++++ b/server/plugins/project-store-project-document.verify.ts
+@@ -43,7 +43,7 @@ const store: LockedProjectStore = {
+ const compareAndSwap = createProjectDocumentStoreOperation(async (work) => work(store));
+ const updated = projectDoc(1280);
+ const applied = await compareAndSwap({
+-  operation: 'project-document-cas',
++  operation: 'project-document-write',
+   key: projectKey,
+   expectedRevision: originalRevision,
+   ownerId: claim.ownerId,
+@@ -55,22 +55,22 @@ assert.equal(applied.currentRevision, revisionOf(updated));
+ assert.equal(applied.ownershipEpoch, claim.epoch);
+
+ const stale = await compareAndSwap({
+-  operation: 'project-document-cas',
++  operation: 'project-document-write',
+   key: projectKey,
+   expectedRevision: originalRevision,
+   ownerId: claim.ownerId,
+   ownershipEpoch: claim.epoch,
+   value: projectDoc(720),
+ });
+-assert.equal(stale.accepted, true, 'CAS removed: a save with a stale revision still lands');
++assert.equal(stale.accepted, false, 'a stale revision cannot replace the saved document');
+ const landed = entries.get(projectKey) as { timelines?: readonly { width: number }[] };
+-assert.equal(landed.timelines?.[0]?.width, 720, 'the latest write wins');
++assert.equal(landed.timelines?.[0]?.width, 1280, 'the acknowledged document remains unchanged');
+
+ const future = { version: CURRENT_PROJECT_VERSION + 100, sentinel: 'preserve-raw' };
+ entries.set(projectKey, future);
+ await assert.rejects(
+   compareAndSwap({
+-    operation: 'project-document-cas',
++    operation: 'project-document-write',
+     key: projectKey,
+     expectedRevision: revisionOf(updated),
+     ownerId: claim.ownerId,
 diff --git a/server/plugins/project-store.ts b/server/plugins/project-store.ts
 index 818e5fe..4071baa 100644
 --- a/server/plugins/project-store.ts
@@ -4081,9 +4496,17 @@ index 0000000..7b6431d
 +  }
 +}
 diff --git a/src/agent/external-bridge-registration.ts b/src/agent/external-bridge-registration.ts
-index 63b1f3c..28404ae 100644
+index 63b1f3c..7fc38df 100644
 --- a/src/agent/external-bridge-registration.ts
 +++ b/src/agent/external-bridge-registration.ts
+@@ -1,6 +1,6 @@
+ import { externalToolSchemas } from './external-tool-schemas';
+ import type { ExternalEditSessionTerminalStatus } from './external-edit-session';
+-import type { BrowserProjectOwnership } from '../persist/projectStoreTransport';
++import type { BrowserProjectBase, BrowserProjectOwnership } from '../persist/projectStoreTransport';
+
+ const EDITOR_REGISTRATION_CAPABILITY_HEADER = 'X-OpenChatCut-Editor-Registration';
+
 @@ -35,6 +35,7 @@ export async function sendEditorBridgeResult(
    signal: AbortSignal,
    registrationCapability: string,
@@ -4101,7 +4524,7 @@ index 63b1f3c..28404ae 100644
      throw new EditorBridgeRequestError('result', response.status);
    }
  }
-@@ -51,14 +52,22 @@ export async function unregisterEditorBridge(
+@@ -51,23 +52,32 @@ export async function unregisterEditorBridge(
    projectId: string,
    editorInstanceId: string,
    registrationCapability?: string,
@@ -4126,6 +4549,17 @@ index 63b1f3c..28404ae 100644
  }
 
  export async function registerEditorBridge(
+   projectId: string,
+   editorInstanceId: string,
+-  baseRevision: string,
++  base: BrowserProjectBase,
+   signal: AbortSignal,
+   registrationCapability?: string,
+ ): Promise<BrowserProjectOwnership> {
++  const baseRevision = base.revision;
+   const response = await fetch('/api/external-agent/register', {
+     method: 'POST',
+     headers: editorBridgeHeaders(true, registrationCapability),
 diff --git a/src/agent/external-bridge-runtime.ts b/src/agent/external-bridge-runtime.ts
 index ad731cd..d8bba01 100644
 --- a/src/agent/external-bridge-runtime.ts
@@ -4544,7 +4978,7 @@ index 9c82668..b2a894c 100644
      .find((recorder) => recorder.runId === runId);
    if (!claimedLeaseToken && active) return active;
 diff --git a/src/agent/useExternalAgentBridge.ts b/src/agent/useExternalAgentBridge.ts
-index f885af7..e4c2910 100644
+index f885af7..e61a136 100644
 --- a/src/agent/useExternalAgentBridge.ts
 +++ b/src/agent/useExternalAgentBridge.ts
 @@ -2,6 +2,8 @@ import {
@@ -4556,7 +4990,15 @@ index f885af7..e4c2910 100644
  import {
    ExternalBridgeRuntime, type ExternalGuardRequest, type ExternalProposalSnapshot,
  } from './external-bridge-runtime';
-@@ -120,12 +122,9 @@ export async function executeExternalCall(
+@@ -14,6 +16,7 @@ import { loadExternalProposal } from '../persist/externalProposalStore';
+ import {
+   clearBrowserProjectOwnership,
+   browserProjectOwnership,
++  browserProjectBase,
+   installBrowserProjectOwnership,
+   projectStoreRemoteAvailable,
+   type BrowserProjectOwnership,
+@@ -120,12 +123,9 @@ export async function executeExternalCall(
        // syncs the registry to the committed store revision, and a follow-up MCP
        // session binding against a pre-autosave revision would be rejected as
        // stale by the ownership renew check.
@@ -4572,7 +5014,7 @@ index f885af7..e4c2910 100644
      } catch (error) {
        const failed = failedOutcome(error, controller.signal);
        outcome = failed.outcome;
-@@ -144,7 +143,7 @@ async function pollEditor(
+@@ -144,7 +144,7 @@ async function pollEditor(
    cancellations: ExternalCallCancellationRegistry,
    ownership: BrowserProjectOwnership,
    signal: AbortSignal,
@@ -4581,7 +5023,7 @@ index f885af7..e4c2910 100644
    while (!signal.aborted) {
      const binding = runtime.binding();
      const query = new URLSearchParams({
-@@ -158,8 +157,19 @@ async function pollEditor(
+@@ -158,8 +158,19 @@ async function pollEditor(
      });
      if (response.status === 204) continue;
      if (!response.ok) throw new EditorBridgeRequestError('poll', response.status);
@@ -4602,7 +5044,7 @@ index f885af7..e4c2910 100644
        runtime,
        signal,
        cancellations,
-@@ -173,6 +183,7 @@ async function pollEditor(
+@@ -173,6 +184,7 @@ async function pollEditor(
        ),
      );
    }
@@ -4610,7 +5052,7 @@ index f885af7..e4c2910 100644
  }
 
  async function pollCancellations(
-@@ -208,9 +219,10 @@ async function pollRegisteredBridge(
+@@ -208,9 +220,10 @@ async function pollRegisteredBridge(
    cancellations: ExternalCallCancellationRegistry,
    ownership: BrowserProjectOwnership,
    signal: AbortSignal,
@@ -4622,7 +5064,7 @@ index f885af7..e4c2910 100644
      pollCancellations(
        projectId,
        editorInstanceId,
-@@ -226,11 +238,12 @@ async function runBridgeAttempt(
+@@ -226,20 +239,22 @@ async function runBridgeAttempt(
    projectId: string, editorInstanceId: string,
    runtime: ExternalBridgeRuntime, signal: AbortSignal,
    onError: (message: string | null) => void,
@@ -4636,7 +5078,19 @@ index f885af7..e4c2910 100644
    if (signal.aborted) controller.abort(signal.reason);
    else signal.addEventListener('abort', cancel, { once: true });
    try {
-@@ -248,9 +261,10 @@ async function runBridgeAttempt(
++    const base = browserProjectBase(projectId);
+     ownership = await registerEditorBridge(
+-      projectId, editorInstanceId, runtime.binding().baseRevision,
++      projectId, editorInstanceId, base,
+       controller.signal,
+       browserProjectOwnership(projectId)?.registrationCapability,
+     );
+-    installBrowserProjectOwnership(ownership);
++    if (controller.signal.aborted || !installBrowserProjectOwnership(ownership, base)) return false;
+     onError(null);
+     await pollRegisteredBridge(
+       projectId,
+@@ -248,9 +263,10 @@ async function runBridgeAttempt(
        cancellations,
        ownership,
        controller.signal,
@@ -4648,7 +5102,7 @@ index f885af7..e4c2910 100644
    } finally {
      controller.abort();
      signal.removeEventListener('abort', cancel);
-@@ -258,9 +272,11 @@ async function runBridgeAttempt(
+@@ -258,9 +274,11 @@ async function runBridgeAttempt(
      await unregisterEditorBridge(
        projectId, editorInstanceId,
        ownership?.registrationCapability,
@@ -4660,7 +5114,7 @@ index f885af7..e4c2910 100644
  }
 
  async function runBridge(
-@@ -271,7 +287,7 @@ async function runBridge(
+@@ -271,7 +289,7 @@ async function runBridge(
  ): Promise<void> {
    const { editorInstanceId } = runtime.binding();
    while (!signal.aborted) {
@@ -4669,6 +5123,29 @@ index f885af7..e4c2910 100644
      if (!signal.aborted) await retryDelay();
    }
  }
+diff --git a/src/app/AppViews.tsx b/src/app/AppViews.tsx
+index 9dfdeb0..51ba2cd 100644
+--- a/src/app/AppViews.tsx
++++ b/src/app/AppViews.tsx
+@@ -39,7 +39,8 @@ function EditorLoader({ meta, onHome, onRename }: EditorLoaderProps) {
+   useEffect(() => {
+     let alive = true;
+     setLoad({ kind: 'loading' });
+-    void loadProjectForEditing(meta.id).then((result) => {
++    const controller = new AbortController();
++    void loadProjectForEditing(meta.id, undefined, controller.signal).then((result) => {
+       if (!alive) return;
+       // "missing" opens a legitimately empty project; "unreadable" must block
+       // the editor — opening it empty would let autosave overwrite real data.
+@@ -47,7 +48,7 @@ function EditorLoader({ meta, onHome, onRename }: EditorLoaderProps) {
+       else if (result.status === 'missing') setLoad({ kind: 'ready', doc: emptyProjectDoc() });
+       else setLoad({ kind: 'unreadable' });
+     });
+-    return () => { alive = false; };
++    return () => { alive = false; controller.abort(); };
+   }, [meta.id, attempt]);
+   if (load.kind === 'loading') return <AppSplash text={t('加载工程…')} />;
+   if (load.kind === 'unreadable') {
 diff --git a/src/editor/mantur-shutdown.ts b/src/editor/mantur-shutdown.ts
 new file mode 100644
 index 0000000..6b36880
@@ -5263,11 +5740,114 @@ index ee0d693..6807f47 100644
        }
        if (onlyProvisionalMisses && pending.size && Date.now() < deadline) {
          await new Promise((resolvePromise) => setTimeout(resolvePromise, 250));
+diff --git a/src/persist/projectStore.ts b/src/persist/projectStore.ts
+index 4e42d16..fed6bf9 100644
+--- a/src/persist/projectStore.ts
++++ b/src/persist/projectStore.ts
+@@ -1,3 +1,5 @@
++import { revisionOf } from '../agent/external-edit-session';
++import { initializeBrowserProjectBase } from './projectStoreTransport';
+ import type { ProjectDoc, TimelineState } from '../editor/types';
+ import type { LlmProvider } from '../../shared/llm-providers';
+ import { CURRENT_PROJECT_VERSION } from '../../shared/project-version';
+@@ -325,6 +327,7 @@ export type ProjectLoadResult =
+ export async function loadProjectForEditing(
+   id: string,
+   options?: ProjectMigrationOptions,
++  signal?: AbortSignal,
+ ): Promise<ProjectLoadResult> {
+   let raw: unknown;
+   try {
+@@ -333,9 +336,12 @@ export async function loadProjectForEditing(
+     // Transient read failure is NOT "no document" — block editing, retry later.
+     return { status: 'unreadable' };
+   }
++  if (signal?.aborted) return { status: 'unreadable' };
+   if (raw === undefined || raw === null) return { status: 'missing' };
+   const doc = migrateProjectDoc(raw, options);
+-  return doc ? { status: 'ok', doc } : { status: 'unreadable' };
++  if (!doc) return { status: 'unreadable' };
++  initializeBrowserProjectBase(id, revisionOf(doc));
++  return { status: 'ok', doc };
+ }
+
+ /** Capture and enqueue a project's document; writes for the same project never overlap. */
 diff --git a/src/persist/projectStoreTransport.ts b/src/persist/projectStoreTransport.ts
-index 2df2c2b..bb03e27 100644
+index 2df2c2b..f12f871 100644
 --- a/src/persist/projectStoreTransport.ts
 +++ b/src/persist/projectStoreTransport.ts
-@@ -166,6 +166,9 @@ async function requestHttp(request: ProjectStoreRequest): Promise<ProjectStoreRe
+@@ -4,6 +4,12 @@ import type {
+ } from '../../shared/project-store-transport';
+
+ const API_PATH = '/api/project-store';
++// The editing context keeps its acknowledged base when its bridge disconnects.
++export interface BrowserProjectBase {
++  revision: string;
++  ownership?: BrowserProjectOwnership;
++}
++const browserProjectBases = new Map<string, BrowserProjectBase>();
+ const browserOwnerships = new Map<string, BrowserProjectOwnership>();
+ const PROJECT_OWNERSHIP_READY_TIMEOUT_MS = 15_000;
+ const browserOwnershipWaiters = new Map<string, Set<BrowserProjectOwnershipWaiter>>();
+@@ -38,9 +44,27 @@ function resolveBrowserProjectOwnershipWaiters(
+   }
+ }
+
+-export function installBrowserProjectOwnership(ownership: BrowserProjectOwnership): void {
++/** Begin an editor load; acknowledgements from its previous context cannot advance it. */
++export function initializeBrowserProjectBase(projectId: string, revision: string): void {
++  browserOwnerships.delete(projectId);
++  resolveBrowserProjectOwnershipWaiters(projectId, undefined);
++  browserProjectBases.set(projectId, { revision });
++}
++
++/** The last loaded or acknowledged revision, never a freshly fetched remote revision. */
++export function browserProjectBase(projectId: string): BrowserProjectBase {
++  const base = browserProjectBases.get(projectId);
++  if (!base) throw new Error('Project persistence base has not been loaded');
++  return base;
++}
++
++/** Install only into the editing context and revision that requested registration. */
++export function installBrowserProjectOwnership(ownership: BrowserProjectOwnership, base: BrowserProjectBase): boolean {
++  if (browserProjectBases.get(ownership.projectId) !== base || base.revision !== ownership.baseRevision) return false;
++  base.ownership = ownership;
+   browserOwnerships.set(ownership.projectId, ownership);
+   resolveBrowserProjectOwnershipWaiters(ownership.projectId, ownership);
++  return true;
+ }
+
+ export function browserProjectOwnership(projectId: string): BrowserProjectOwnership | undefined {
+@@ -68,19 +92,27 @@ export function waitForBrowserProjectOwnership(
+ }
+
+ export function advanceBrowserProjectOwnership(
++  base: BrowserProjectBase,
+   ownership: BrowserProjectOwnership,
+   baseRevision: string,
+ ): BrowserProjectOwnership | undefined {
++  if (browserProjectBases.get(ownership.projectId) !== base
++    || base.ownership?.ownerId !== ownership.ownerId || base.ownership.epoch !== ownership.epoch
++    || base.revision !== ownership.baseRevision) return undefined;
++  base.revision = baseRevision;
+   const current = browserOwnerships.get(ownership.projectId);
++  // A successful in-flight save may settle after disconnect cleared the lease.
+   if (current?.ownerId !== ownership.ownerId || current.epoch !== ownership.epoch) return undefined;
+   const advanced = { ...current, baseRevision };
++  base.ownership = advanced;
+   browserOwnerships.set(ownership.projectId, advanced);
+   return advanced;
+ }
+
+ export function clearBrowserProjectOwnership(ownership: BrowserProjectOwnership): void {
+   const current = browserOwnerships.get(ownership.projectId);
+-  if (current?.ownerId === ownership.ownerId && current.epoch === ownership.epoch) {
++  if (current?.ownerId === ownership.ownerId && current.epoch === ownership.epoch
++    && current.registrationCapability === ownership.registrationCapability) {
+     browserOwnerships.delete(ownership.projectId);
+   }
+ }
+@@ -166,6 +198,9 @@ async function requestHttp(request: ProjectStoreRequest): Promise<ProjectStoreRe
        path = '/project/purge';
        init = postJson(init, headers, request);
        break;
@@ -5277,3 +5857,83 @@ index 2df2c2b..bb03e27 100644
      case 'semantic-vectors-upsert':
        path = '/semantic-vectors/upsert';
        init = postJson(init, headers, request);
+@@ -223,6 +258,7 @@ export function fetchWithEditorSession(
+
+ export function resetProjectStoreTransport(): void {
+   browserOwnerships.clear();
++  browserProjectBases.clear();
+   for (const projectId of browserOwnershipWaiters.keys()) {
+     resolveBrowserProjectOwnershipWaiters(projectId, undefined);
+   }
+diff --git a/src/persist/projectStoreTransport.verify.ts b/src/persist/projectStoreTransport.verify.ts
+index 7d6bf0d..4bd0c76 100644
+--- a/src/persist/projectStoreTransport.verify.ts
++++ b/src/persist/projectStoreTransport.verify.ts
+@@ -89,6 +89,8 @@ try {
+     clearBrowserProjectOwnership,
+     fetchWithEditorSession,
+     installBrowserProjectOwnership,
++    initializeBrowserProjectBase,
++    browserProjectBase,
+     projectStoreRemoteAvailable,
+     projectStoreWriteCredential,
+     requestProjectStore,
+@@ -198,6 +200,7 @@ try {
+
+   // Browser project ownership: install / wait / advance / clear / reset.
+   resetProjectStoreTransport();
++  initializeBrowserProjectBase('project-race', 'v7-initial');
+   const pendingOwnership = waitForBrowserProjectOwnership('project-race', 1_000);
+   const installedOwnership = {
+     projectId: 'project-race',
+@@ -206,15 +209,15 @@ try {
+     baseRevision: 'v7-initial',
+     registrationCapability: 'capability',
+   };
+-  installBrowserProjectOwnership(installedOwnership);
++  installBrowserProjectOwnership(installedOwnership, browserProjectBase('project-race'));
+   assert.deepEqual(await pendingOwnership, installedOwnership,
+     'a save started during editor registration must resume with installed ownership');
+   assert.deepEqual(await waitForBrowserProjectOwnership('project-race', 1), installedOwnership,
+     'an existing ownership must be returned without waiting');
+-  const advanced = advanceBrowserProjectOwnership(installedOwnership, 'v7-next');
++  const advanced = advanceBrowserProjectOwnership(browserProjectBase('project-race'), installedOwnership, 'v7-next');
+   assert.equal(advanced?.baseRevision, 'v7-next',
+     'ownership advances with the authoritative base revision');
+-  assert.equal(advanceBrowserProjectOwnership({ ...installedOwnership, epoch: 2 }, 'v7-stale'), undefined,
++  assert.equal(advanceBrowserProjectOwnership(browserProjectBase('project-race'), { ...installedOwnership, epoch: 2 }, 'v7-stale'), undefined,
+     'a stale epoch must not advance ownership');
+   assert.equal(browserProjectOwnership('project-race')?.baseRevision, 'v7-next');
+   clearBrowserProjectOwnership(installedOwnership);
+diff --git a/src/persist/sharedKv.ts b/src/persist/sharedKv.ts
+index d39b548..95dea61 100644
+--- a/src/persist/sharedKv.ts
++++ b/src/persist/sharedKv.ts
+@@ -1,6 +1,8 @@
+ import {
+   advanceBrowserProjectOwnership,
++  initializeBrowserProjectBase,
+   browserProjectOwnership,
++  browserProjectBase,
+   projectStoreRemoteAvailable,
+   projectStoreWriteCredential,
+   requestProjectStore,
+@@ -447,6 +449,7 @@ async function setProjectDocument(key: string, value: unknown): Promise<void> {
+     ownership = await waitForBrowserProjectOwnership(projectId);
+     if (!ownership) throw new Error('工程编辑权尚未注册，工程未保存');
+   }
++  const base = ownership ? browserProjectBase(projectId) : undefined;
+   const request: ProjectDocumentWriteRequest = ownership
+     ? {
+       operation: 'project-document-write',
+@@ -475,7 +478,9 @@ async function setProjectDocument(key: string, value: unknown): Promise<void> {
+     if (result.ownershipEpoch !== ownership.epoch) {
+       throw new Error('project ownership epoch changed during save');
+     }
+-    advanceBrowserProjectOwnership(ownership, result.currentRevision);
++    advanceBrowserProjectOwnership(base!, ownership, result.currentRevision);
++  } else {
++    initializeBrowserProjectBase(projectId, result.currentRevision);
+   }
+   await cacheMutation(key, result);
+ }

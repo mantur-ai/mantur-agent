@@ -37,6 +37,8 @@ The Project media tab browses the current Agent directory and its subdirectories
 
 Agent local-file imports retain one-shot confirmation in manual mode and add assets to the editing draft. Repeated imports deduplicate against that draft; review applies imported assets together with timeline edits. A concurrent live project change still rejects the draft as stale. Stale, cancelled and failed sessions retain their last saved checkpoint as read-only evidence, including the original revision, draft document and operations. Initial saves, later saves and terminal closure run in order. Reloading never resumes a terminal session or reconstructs missing historical content.
 
+Browser reconnect uses the last acknowledged project revision and retains unsaved edits. A stale revision or another active editor blocks saving; the editor does not adopt a newer server revision to overwrite it. Save failure continues to block returning to the project list. See the [save-base decision](../../../.agents/notes/implemented/bug-fix/2026-10-24-mantur-cut-persisted-save-base.md).
+
 The workbench header, buttons, and conversation divider use Mantur's 0.5px neutral borders.
 
 The embedded editor follows Mantur's resolved light/dark theme, including system preference changes, without reloading its page. The OpenChatCut deployment must load [the theme adapter](adapters/openchatcut-theme.mjs) before its application renders and call `installManturTheme(window, parentOrigin)` with the exact trusted Mantur loopback origin. Import this module into the editor entry or inject an equivalent module script from its server; include the adapter in the editor's deployed assets. Standalone editor windows keep their own skin preference. The adapter changes UI tokens only, preserves media colors and project state, and never writes the standalone skin preference.
@@ -80,11 +82,7 @@ Local `/api/extract-frames` requests retain FFmpeg, FFprobe, optional Python lab
 
 Isolated-profile POST and PUT requests to `/upload` retain their request body, storage work and file-stream close result. Other upload routes and default profiles remain unconfirmed. The [local upload decision](../../../.agents/notes/implemented/bug-fix/2026-09-08-mantur-local-upload-shutdown.md) records supported paths and validation limits.
 
-| Shutdown layer | Fixed value |
-|---|---|
-| Editor commit | `2ee4ba5962336268d5de95b24a4fe5b09d8ba5c1` |
-| Result tree | `6f3b4ba1dbfbfbe02fcaefd80998b8f6d049c15b` |
-| Patch SHA-256 | `ed820c9fd777c305986f713be304387109003d6cb7b4fb07f0956f5865bbb9c4` |
+The shutdown patch digest and result tree are fixed by the [desktop source configuration](../../../apps/desktop/mantur-cut/source.json).
 
 The Host Remote resolves the Agent, coalesces concurrent opens, and launches `adapters/mantur-runtime.mjs`. It mounts the existing MCP client inside that Agent's scope. All mounted MCP clients resolve the same peer instance, preserving Agent-scoped server-name reservations. The MCP bearer remains in Host memory and the child environment. Disposal drains both connection and subprocess. The Client ignores startup responses from a Session that is no longer selected. No invariant companion is published: subprocess exit state belongs to the child handle; connection and tool-generation invariants belong to the MCP client.
 

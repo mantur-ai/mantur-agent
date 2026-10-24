@@ -33,6 +33,8 @@ Agent 可在原生剪辑工具挂载前调用 `open_editing_workbench`。调用�
 
 每个会话使用 `<cwd>/剪辑/<session-id>/`：`工程/` 保存工程和运行状态，`素材/` 保存导入媒体，`导出/` 是默认成片目录。Host 从已解析 Agent 的 Session header 读取 `cwd`，浏览器不能指定其他目录。会话目录拒绝路径穿越和符号链接，重新打开保留已有文件。同一项目内的不同会话也使用独立编辑进程和工具作用域。
 
+浏览器重连使用最后确认的工程版本，并保留未保存编辑。版本陈旧或另一活跃编辑器会阻止保存；编辑器不会采用服务端较新版本来覆盖其文档。保存失败继续阻止返回工程列表。参见[保存基线决策](../../../.agents/notes/implemented/bug-fix/2026-10-24-mantur-cut-persisted-save-base.zh.md)。
+
 工作台标题栏、按钮与对话分隔线使用漫途的 0.5px 中性边框。
 
 嵌入的剪辑器跟随漫途解析后的明暗主题，包括系统偏好变化，切换时不重新加载页面。OpenChatCut 部署必须在应用渲染前加载[主题适配器](adapters/openchatcut-theme.mjs)，并以明确可信的漫途回环源地址调用 `installManturTheme(window, parentOrigin)`。在剪辑器入口导入该模块，或通过服务器注入等效的模块脚本；部署资源中必须包含适配器。独立打开的剪辑器继续使用自己的皮肤偏好。适配器只修改界面颜色变量，保留媒体颜色和工程状态，不写入独立皮肤偏好。
@@ -80,11 +82,7 @@ Agent 导入本地文件在手动模式下保留单次确认，素材先加入�
 
 隔离配置下 `/upload` 的 POST 和 PUT 请求保留请求体、存储工作及文件流关闭结果。其他上传路由和默认配置仍未确认。[本地上传决策](../../../.agents/notes/implemented/bug-fix/2026-09-08-mantur-local-upload-shutdown.zh.md)记录支持路径与验证限制。
 
-| 退出补丁层 | 固定值 |
-|---|---|
-| 编辑器提交 | `2ee4ba5962336268d5de95b24a4fe5b09d8ba5c1` |
-| 结果树 | `6f3b4ba1dbfbfbe02fcaefd80998b8f6d049c15b` |
-| 补丁 SHA-256 | `ed820c9fd777c305986f713be304387109003d6cb7b4fb07f0956f5865bbb9c4` |
+退出补丁摘要和结果树由[桌面源码配置](../../../apps/desktop/mantur-cut/source.json)固定。
 
 Host Remote 解析 Agent，合并并发打开请求，并启动 `adapters/mantur-runtime.mjs`。既有 MCP 客户端挂载于该 Agent 作用域。所有挂载的 MCP 客户端解析到同一 peer 实例，保留 Agent 作用域内的服务器名称预留。MCP bearer 只存在于 Host 内存和子进程环境。卸载等待连接与子进程退出。Client 忽略已切走会话的启动结果。本包不发布 invariant companion：退出状态由子进程句柄直接持有，连接和工具版本约束由 MCP 客户端负责。
 
