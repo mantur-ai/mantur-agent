@@ -370,3 +370,15 @@ it.each([
     ref: `mantur-drama-visual-studio@1.0.0#${'a'.repeat(64)}`, label: skillLabel }))
   expect(p.inputActions.submit).not.toHaveBeenCalled()
 })
+
+
+it('identifies an unavailable configured skill by its name when no shortcut label is registered', () => {
+  const p = props({ ...settings, recommendations: { ...settings.recommendations, script: ['custom-script'] } })
+  p.useBundledSkills = select => select({ phase: 'ready', skills: [], updates: [
+    { name: 'custom-script', status: 'failed', stage: 'metadata', error: 'Not published' },
+  ] })
+  render(guide(p))
+  expect(screen.getByText('「custom-script」更新失败，暂无可用版本。').title).toBe('发布信息: Not published')
+  expect(screen.queryByRole('button', { name: 'custom-script' })).toBeNull()
+  expect(p.appendReference).not.toHaveBeenCalled()
+})

@@ -3,7 +3,7 @@
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
 import { UiConversation } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import { SessionSeq, type SessionEvent } from '@deepseek-ai/dsh-session/types'
+import { SessionSeq, type SessionEvent, type SessionId } from '@deepseek-ai/dsh-session/types'
 import { installAgentOpening } from '../src/client/agent-opening.ts'
 
 function call(seq: number, id: string): SessionEvent<'tool/call'> {
@@ -110,6 +110,29 @@ it('does not replay a background completion when returning to that Session', asy
   await append(call(4, 'foreground'))
   await append(result(5, 'foreground'))
   expect(openWorkbench).toHaveBeenCalledOnce()
+})
+
+it('ignores an already queued opening notification after selection changes', async () => {
+  const { runtime, append, openWorkbench } = await setup()
+  await runtime.sessions.setCurrent(undefined)
+  const source = runtime.ctx.uiConversation.binding('a' as SessionId).target('mantur-web-open')
+  const subscribe = source.subscribe.bind(source)
+  const queued: (() => void)[] = []
+  const scheduled = vi.spyOn(source, 'subscribe').mockImplementation(listener => subscribe(() => { queued.push(listener) }))
+  onTestFinished(() => { scheduled.mockRestore() })
+  await runtime.sessions.setCurrent('a')
+  await append(call(1, 'queued'))
+  await append(result(2, 'queued'))
+  expect(source.getSnapshot()).toMatchObject({ sessionId: 'a', seq: SessionSeq(2) })
+  expect(queued.length).toBeGreaterThan(0)
+  await runtime.sessions.add({ id: 'b' }, { current: true })
+  for (const notify of queued.splice(0)) notify()
+  expect(openWorkbench).not.toHaveBeenCalled()
+  await runtime.sessions.setCurrent('a')
+  await append(call(3, 'foreground'))
+  await append(result(4, 'foreground'))
+  for (const notify of queued.splice(0)) notify()
+  expect(openWorkbench).toHaveBeenCalledExactlyOnceWith({ sessionId: 'a', seq: SessionSeq(4), url: 'http://127.0.0.1:5000/' })
 })
 
 it('rejects invalid result metadata without opening a panel', async () => {

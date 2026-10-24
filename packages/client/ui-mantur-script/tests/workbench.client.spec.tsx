@@ -2,12 +2,13 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { useSyncExternalStore, type ComponentProps, type ReactNode } from 'react'
-import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import { SessionSeq, type SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ScriptDocument, ScriptVersion } from '../src/types.ts'
 import { createWorkbenchStore } from '../src/client/store.ts'
 import { Workbench, WorkbenchToggle } from '../src/client/Workbench.tsx'
 import { en, zh } from '../src/client/locales.ts'
 import type {} from '../src/client/WebPanel.tsx'
+import type { WebOpening } from '../src/client/agent-opening.ts'
 
 afterEach(cleanup)
 const session = 'session-a' as SessionId
@@ -212,6 +213,28 @@ it.each([true, false])('routes the boundary control with expanded=%s and opens t
   expect(instance.getSnapshot().views['']).toBe('editing')
 })
 
+it('opens a live web request in its owning Session and releases the observer on unmount', () => {
+  const instance = createWorkbenchStore().create()
+  const openWorkbench = vi.fn()
+  const stop = vi.fn()
+  let receive!: (opening: WebOpening) => void
+  const observeWebOpening = vi.fn((open: (opening: WebOpening) => void) => { receive = open; return stop })
+  const props = {
+    actions: instance.actions, expanded: false, openWorkbench, closeWorkbench: vi.fn(), observeWebOpening,
+    t: (key: keyof typeof zh) => zh[key], useSessions: (select: (value: unknown) => unknown) => select({ current: session }),
+    renderSlot: () => null,
+  } as ComponentProps<typeof WorkbenchToggle>
+  const view = render(<WorkbenchToggle {...props} />)
+  const opening = { sessionId: session, seq: SessionSeq(2), url: 'http://127.0.0.1:43123/' }
+  act(() => { receive(opening) })
+  expect(instance.getSnapshot().views[session]).toBe('web')
+  expect(instance.getSnapshot().urls[session]).toBe(opening.url)
+  expect(openWorkbench).toHaveBeenCalledOnce()
+  expect(observeWebOpening).toHaveBeenCalledOnce()
+  view.unmount()
+  expect(stop).toHaveBeenCalledOnce()
+})
+
 it('keeps project-free tab choices explicit and shows missing optional panels', () => {
   const view = setup(zh, {
     useSessions: select => select({ current: undefined, byId: {} } as never),
@@ -231,6 +254,7 @@ it('keeps project-free tab choices explicit and shows missing optional panels', 
 
 it('keeps Editing and Web visible with an explicit diagnostic when the editing provider is absent', () => {
   const view = setup(zh, {
+    useSessions: select => select({ current: undefined, byId: {} } as never),
     renderSlot: ((_name: string, _owner: unknown, options?: { fallback?: ReactNode }) => options?.fallback) as Props['renderSlot'],
   })
   expect(view.getAllByRole('button', { name: zh.editing })).toHaveLength(1)
@@ -238,6 +262,11 @@ it('keeps Editing and Web visible with an explicit diagnostic when the editing p
   fireEvent.click(view.getByRole('button', { name: zh.editing }))
   expect(view.getByText(zh.editingUnavailable)).toBeTruthy()
   expect(view.queryByTitle('Test editing')).toBeNull()
+  expect(view.instance.getSnapshot().views['']).toBe('editing')
+  fireEvent.click(view.getByRole('button', { name: zh.web }))
+  expect(view.instance.getSnapshot().views['']).toBe('web')
+  expect(view.getByText(zh.webUnsupported)).toBeTruthy()
+  expect(view.props.list).not.toHaveBeenCalled()
 })
 
 it('opens a single plain-text script automatically without Markdown parsing', async () => {
@@ -453,4 +482,42 @@ it('closes an in-flight page, preserves script drafts and does not reopen after 
     expect(view.instance.getSnapshot().drafts['session-a']?.[first.path]?.text).toBe(first.content)
     view.unmount()
   } finally { delete window.manturWebBrowser; rect.mockRestore(); vi.unstubAllGlobals() }
+})
+
+it.each([false, true])('drops superseded queued bounds and contains late native failures, unmount=%s', async (unmount) => {
+  const initial = Promise.withResolvers<undefined>()
+  const show = vi.fn(async () => {}).mockImplementationOnce(() => initial.promise)
+  const hide = vi.fn(async () => { throw new Error('Desktop bridge closed') })
+  const previous = Object.getOwnPropertyDescriptor(window, 'manturWebBrowser')
+  window.manturWebBrowser = { show, hide }
+  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
+  let width = 400
+  const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(() => ({ x: 0, y: 0, width, height: 500 }) as DOMRect)
+  try {
+    const view = await open()
+    fireEvent.click(view.getByRole('button', { name: zh.web }))
+    fireEvent.change(view.getByRole('textbox', { name: zh.webAddress }), { target: { value: 'http://127.0.0.1:43123/' } })
+    fireEvent.click(view.getByRole('button', { name: zh.webOpen }))
+    await waitFor(() => { expect(show).toHaveBeenCalledOnce() })
+    width = 300
+    fireEvent.resize(window)
+    width = 200
+    fireEvent.resize(window)
+    if (unmount) view.unmount()
+    await act(async () => { initial.reject(new Error('Old bounds rejected')) })
+    expect(view.queryByRole('alert')).toBeNull()
+    if (unmount) {
+      expect(show).toHaveBeenCalledOnce()
+      expect(hide).toHaveBeenCalledOnce()
+    } else {
+      await waitFor(() => { expect(show).toHaveBeenCalledTimes(2) })
+      expect(show).toHaveBeenLastCalledWith({ url: 'http://127.0.0.1:43123/', bounds: { x: 0, y: 0, width: 200, height: 500 } })
+    }
+  } finally {
+    cleanup()
+    if (previous === undefined) delete window.manturWebBrowser
+    else Object.defineProperty(window, 'manturWebBrowser', previous)
+    rect.mockRestore()
+    vi.unstubAllGlobals()
+  }
 })

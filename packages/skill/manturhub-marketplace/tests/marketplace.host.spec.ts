@@ -560,6 +560,7 @@ describe('ManturHub marketplace Host', () => {
   })
 
   it.each([
+    ['missing response', () => undefined],
     ['HTTP failure', () => new Response('', { status: 503 })],
     ['missing body', () => new Response(null, { status: 200 })],
     ['unauthorized response', () => new Response('', { status: 401 })],

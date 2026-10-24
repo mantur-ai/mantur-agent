@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import SkillRegistry from '@deepseek-ai/dsh-skill'
 import { Context } from '@deepseek-ai/cordis'
 import { zipSync, strToU8 } from 'fflate'
 import { afterEach, expect, it } from 'vitest'
@@ -52,7 +53,7 @@ async function subject(names = ['example'], bundledUpdateNames?: string[]) {
   } } as never)
   const service = new ManturHubMarketplace(ctx, { dshHome: home, bundledSkillDir: resources,
     ...(bundledUpdateNames === undefined ? {} : { bundledUpdateNames }) })
-  return { service, state, home, resources, identities, signal: new AbortController().signal }
+  return { service, state, ctx, home, resources, identities, signal: new AbortController().signal }
 }
 
 it('retains excluded packaged references without querying their retired releases', async () => {
@@ -164,4 +165,29 @@ it('propagates cancellation during metadata instead of returning fallback succes
   await expect(s.service.updateBundled(s.state.abort.signal)).rejects.toThrow()
   expect(s.state.requests).toBe(1)
   expect(s.state.downloads).toBe(0)
+})
+
+it('lists packaged skills offline, preserves discovered metadata, and blocks disabled exact references', async () => {
+  const s = await subject(['example', 'second'])
+  await s.ctx.plugin(SkillRegistry)
+  s.ctx.skills.register({ name: 'example', title: 'Discovered example', description: 'Local description', source: 'custom', content: 'Local instructions' })
+  const original = (await s.service.bundled(s.signal))[1]!
+  expect(await s.service.installedSkills()).toEqual([
+    { name: 'example', title: 'Discovered example', description: 'Local description', source: 'local', enabled: true },
+    { name: 'second', title: 'second', description: '', source: 'bundled', enabled: true },
+  ])
+  await s.service.setSkillEnabled('second', false)
+  expect(await s.service.installedSkills()).toEqual(expect.arrayContaining([
+    { name: 'second', title: 'second', description: '', source: 'bundled', enabled: false },
+  ]))
+  await expect(s.service.resolveBundled(original.reference, s.signal)).rejects.toThrow('Skill is disabled')
+  expect(s.state.requests).toBe(0)
+  await s.service.setSkillEnabled('second', true)
+  expect(await s.service.resolveBundled(original.reference, s.signal)).toEqual(original)
+})
+
+it('reports unavailable local discovery rather than an empty installed list', async () => {
+  const s = await subject()
+  await expect(s.service.installedSkills()).rejects.toThrow('Skill registry unavailable')
+  expect(s.state.requests).toBe(0)
 })

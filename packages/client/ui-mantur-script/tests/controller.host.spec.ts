@@ -125,6 +125,18 @@ it('presents replacement and refuses a tool call without an owning Agent', async
   expect(JSON.stringify(result.content)).toContain('owning Agent')
 })
 
+it('presents the requested web address and refuses opening without an owning Session', async () => {
+  const args = { url: 'http://127.0.0.1:43123/project' }
+  expect(ctx.tools.get('open_web_page')!.presentCall?.(args)).toEqual({
+    card: 'generic', title: 'Open web page', kind: 'other', subtitle: args.url,
+  })
+  const result = await ctx.tools.execute({ name: 'open_web_page', arguments: args,
+    callId: ToolCallId('web-no-agent'), signal: new AbortController().signal })
+  expect(result.isError).toBe(true)
+  expect(JSON.stringify(result.content)).toContain('Opening a web page requires an owning Agent Session')
+  expect(result.meta).toBeUndefined()
+})
+
 it.each([{ start: -1, end: 2 }, { start: 0, end: 0 }, { start: 0, end: 999 }])('rejects out-of-range selection %o', async (range) => {
   const doc = await ctx.manturScript.read(agent, '01.md')
   const result = await ctx.tools.execute({ name: 'replace_script_selection', arguments: {

@@ -2,6 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import type { ManturRecipeJsonValue } from '@deepseek-ai/dsh-manturhub-marketplace/types'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import {
   MANTUR_MARKET_PAGES, MarketplaceNavigation, MarketplacePage,
@@ -952,4 +953,48 @@ it('shows published input requirements and ordered steps without enabling a reci
   expect(screen.getByRole('heading', { name: '制作步骤' })).toBeTruthy()
   expect(screen.getByText('先生成参考图')).toBeTruthy()
   expect(screen.getByRole('button', { name: '交给 Agent 复刻' }).hasAttribute('disabled')).toBe(true)
+})
+
+
+it('opens installed skill management from the marketplace and returns to the catalog', async () => {
+  const props = marketplaceProps()
+  const installedSkills = vi.fn(async () => [])
+  Object.assign(props.controller, { installedSkills })
+  render(<MarketplacePage {...globalProps} {...props}
+    activePage={MANTUR_MARKET_PAGES.skills} closePage={vi.fn()} t={t} />)
+  fireEvent.click(screen.getByRole('button', { name: '已安装技能' }))
+  await screen.findByRole('heading', { name: '已安装技能 (0)' })
+  expect(installedSkills).toHaveBeenCalledOnce()
+  expect(screen.queryByRole('heading', { name: '技能广场' })).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: '技能广场' }))
+  expect(screen.getByRole('heading', { name: '技能广场' })).toBeTruthy()
+  expect(screen.queryByRole('heading', { name: '已安装技能 (0)' })).toBeNull()
+})
+
+it.each<Record<string, ManturRecipeJsonValue>>([
+  { type: 'string' },
+  { properties: null },
+  { properties: ['prompt'] },
+])('preserves a published input schema without object properties: %j', (inputSchema) => {
+  const detail = { ...recipe, sampleText: '', promptTemplate: '', parameters: null, models: ['model-only'],
+    operatorId: null, inputSchema, steps: [], agentPayload: 'Use the published schema.' }
+  render(<MarketplacePage {...globalProps} {...marketplaceProps(emptyReady, { phase: 'ready', query: {}, detail,
+    catalog: { recipes: [detail], total: 1, page: 1, pageSize: 15, totalPages: 1, availableTags: [] } })}
+  activePage={MANTUR_MARKET_PAGES.recipes} closePage={vi.fn()} t={t} />)
+  const requirements = screen.getByRole('heading', { name: '输入要求' }).parentElement!
+  expect(requirements.querySelector('pre')?.textContent).toBe(JSON.stringify(inputSchema, null, 2))
+  expect(screen.getByRole('heading', { name: '模型与算子' }).parentElement?.textContent).toContain('model-only')
+  expect(screen.getByText('model-only')).toBeTruthy()
+})
+
+it('renders optional named inputs when property metadata is a boolean, null, or an array', () => {
+  const detail = { ...recipe, sampleText: '', promptTemplate: '', parameters: null, models: [],
+    inputSchema: { properties: { enabled: true, empty: null, choices: ['a', 'b'] } }, steps: [], agentPayload: 'Use inputs.' }
+  render(<MarketplacePage {...globalProps} {...marketplaceProps(emptyReady, { phase: 'ready', query: {}, detail,
+    catalog: { recipes: [detail], total: 1, page: 1, pageSize: 15, totalPages: 1, availableTags: [] } })}
+  activePage={MANTUR_MARKET_PAGES.recipes} closePage={vi.fn()} t={t} />)
+  const requirements = screen.getByRole('heading', { name: '输入要求' }).parentElement!
+  expect([...requirements.querySelectorAll('dt')].map(term => term.textContent)).toEqual(['enabled', 'empty', 'choices'])
+  expect([...requirements.querySelectorAll('dd')].map(description => description.textContent)).toEqual(['', '', ''])
+  expect(requirements.textContent).not.toContain('必填')
 })

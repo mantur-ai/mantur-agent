@@ -516,6 +516,13 @@ describe('Mantur marketplace store', () => {
     await expect(store.startSkill(listed.slug)).resolves.toBe(false)
     expect(sessions.create).toHaveBeenCalledTimes(1)
 
+    bindingMode = 'ready'
+    appendReference.mockReturnValueOnce(false)
+    await expect(store.startSkill(listed.slug)).resolves.toBe(false)
+    expect(store.store.getSnapshot()).toMatchObject({ using: undefined, useError: 'failed' })
+    expect(sessions.open).not.toHaveBeenCalled()
+    expect(sessions.create).toHaveBeenCalledTimes(1)
+
     selection.current = 'session-current-2'
     bindingMode = 'ready'
     store.store.set(ready)
@@ -1015,4 +1022,21 @@ it('refuses a recipe launch without published instructions before creating a ses
   store.recipes.set({ phase: 'ready', query: {}, detail: { ...recipeDetail, inputSchema: {}, steps: [], agentPayload: '' },
     catalog: { recipes: [recipe], total: 1, page: 1, pageSize: 15, totalPages: 1, availableTags: [] } })
   await expect(store.startRecipe(zhLaunchCopy)).resolves.toBe(false)
+})
+
+
+it('forwards installed catalog reads and persistent switches and propagates Remote errors', async () => {
+  const skills = [{ name: 'local-skill', title: 'Local skill', description: '', source: 'local', enabled: false }]
+  const installedSkills = vi.fn().mockResolvedValue({ ok: true, value: skills })
+  const setSkillEnabled = vi.fn().mockResolvedValue({ ok: true, value: undefined })
+  const store = subject({ manturMarketplace: { installedSkills, setSkillEnabled } })
+  await expect(store.installedSkills()).resolves.toEqual(skills)
+  expect(installedSkills).toHaveBeenCalledExactlyOnceWith()
+  await expect(store.setSkillEnabled('local-skill', true)).resolves.toBeUndefined()
+  expect(setSkillEnabled).toHaveBeenCalledExactlyOnceWith('local-skill', true)
+  installedSkills.mockResolvedValueOnce({ ok: false, error: { code: 'gateway/internal', message: 'Catalog unavailable' } })
+  await expect(store.installedSkills()).rejects.toThrow('Catalog unavailable')
+  setSkillEnabled.mockResolvedValueOnce({ ok: false, error: { code: 'gateway/internal', message: 'Write denied' } })
+  await expect(store.setSkillEnabled('local-skill', false)).rejects.toThrow('Write denied')
+  expect(setSkillEnabled).toHaveBeenLastCalledWith('local-skill', false)
 })

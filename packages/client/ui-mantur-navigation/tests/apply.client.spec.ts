@@ -105,6 +105,26 @@ describe('ui-mantur-navigation apply', () => {
     } finally { await fiber.dispose() }
   })
 
+  it('refreshes bundled homepage resources on a forwarded skill change', async () => {
+    const subject = await bench()
+    const fiber = subject.ctx.plugin({ inject: [...inject], apply })
+    try {
+      await fiber.await()
+      const createGuide = subject.slots.entries('conversation.composer.guide')[0]!.inject as unknown as
+        (id: SessionId | undefined) => CreationGuideInjected
+      const guide = createGuide(undefined)
+      await guide.loadBundled()
+      const previousCalls = subject.bundled.mock.calls.length
+      const updated = { skills: [], updates: [{ name: 'short-drama', status: 'failed', stage: 'metadata', error: 'Unavailable' }] }
+      subject.bundled.mockResolvedValueOnce({ ok: true, value: updated })
+      subject.remote.emit('skills/change', [])
+      await vi.waitFor(() => {
+        expect(guide.hooks.bundledSkills.getSnapshot()).toEqual({ phase: 'ready', ...updated })
+      })
+      expect(subject.bundled).toHaveBeenCalledTimes(previousCalls + 1)
+    } finally { await fiber.dispose() }
+  })
+
   it('maps only the retired editing preference to production and preserves dismissal', () => {
     const recommendations = { script: ['short-drama'], production: [], assets: [] }
     // Persisted input includes pre-migration and invalid values, not only the resolved settings type.

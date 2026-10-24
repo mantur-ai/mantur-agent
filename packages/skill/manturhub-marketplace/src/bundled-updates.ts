@@ -86,7 +86,7 @@ export async function updateBundledSkills(
         }
         const catalog = await readBundledCatalog(destination, config, signal)
         const selected = catalog[0]
-        if (catalog.length !== 1 || selected === undefined || selected.name !== release.name || selected.version !== release.version) {
+        if (selected === undefined || catalog.length !== 1 || selected.name !== release.name || selected.version !== release.version) {
           throw new Error('Stored Skill release identity differs')
         }
         await loadBundledSkill(destination, selected, config, signal)

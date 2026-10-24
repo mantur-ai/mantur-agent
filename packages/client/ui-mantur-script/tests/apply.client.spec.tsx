@@ -14,7 +14,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ScriptDocument, ScriptVersion } from '../src/types.ts'
 import * as script from '../src/client/index.ts'
 import * as editing from '../../ui-mantur-editing/src/client/index.ts'
-import { Workbench } from '../src/client/Workbench.tsx'
+import { Workbench, type WorkbenchToggle } from '../src/client/Workbench.tsx'
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { useState, useSyncExternalStore, type ComponentProps } from 'react'
 import { zh } from '../src/client/locales.ts'
@@ -39,7 +39,7 @@ async function setup(assetPlugin?: { inject: string[]; apply: (ctx: Context) => 
   let current: SessionId | undefined = 'session-a' as SessionId
   let bound = true
   const sessions = {
-    list: { getSnapshot: () => ({ current, byId: {} }), subscribe: () => () => {} },
+    list: { getSnapshot: () => ({ current, byId: {} }), subscribe: vi.fn(() => vi.fn()) },
     binding: vi.fn((id: SessionId) => bound ? { ctx: { get: () => id === 'session-a' ? { send } : undefined } } : undefined),
   }
   ctx.provide('sessions', sessions as never)
@@ -66,7 +66,7 @@ async function setup(assetPlugin?: { inject: string[]; apply: (ctx: Context) => 
   await ctx.loader.await()
   const fiber = [...ctx.loader.entries()].find(entry => entry.options.name === 'script-shell')!.fiber!
   return { ctx, slots, fiber, layout, send, sessions, locale, manturScript,
-    select: (id: SessionId) => { current = id }, unbind: () => { bound = false } }
+    select: (id: SessionId | undefined) => { current = id }, unbind: () => { bound = false } }
 }
 
 async function assets() {
@@ -221,6 +221,21 @@ it('has one shell owner and removing editing leaves the script shell mounted', a
   await fiber.dispose()
   expect(layout.closeWorkbench).toHaveBeenCalledOnce()
   expect(slots.entries('main.workbench')).toHaveLength(0)
+})
+
+it('injects a live web-opening observer that releases its selection subscription', async () => {
+  const { slots, sessions, select } = await setup()
+  select(undefined)
+  const entry = slots.entries('main.workbench.toggle')[0]!
+  const injected = (entry.inject as () => Pick<ComponentProps<typeof WorkbenchToggle>, 'observeWebOpening'>)()
+  const before = sessions.list.subscribe.mock.calls.length
+  const open = vi.fn()
+  const stop = injected.observeWebOpening!(open)
+  expect(sessions.list.subscribe).toHaveBeenCalledTimes(before + 1)
+  const unsubscribe: unknown = sessions.list.subscribe.mock.results.at(-1)!.value
+  expect(open).not.toHaveBeenCalled()
+  stop()
+  expect(unsubscribe).toHaveBeenCalledOnce()
 })
 
 it('sends the logged request only through its captured Session and rejects a switched or unavailable binding', async () => {
