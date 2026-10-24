@@ -23,6 +23,48 @@ const ctx: NormalizeContext = {
   cwd: '/tmp/acp-snap-cwd-abc123',
 }
 
+describe('caller-projected payloads', () => {
+  it('keeps stdout payloads verbatim while retaining stable RPC envelopes', () => {
+    const params = {
+      cwd: ctx.cwd,
+      usage: { sessionUpdate: 'usage_update', used: 99 },
+      text: '/tmp/dsh-acp-snap-abcdef123/session-abcdef123456/abcdef123456-output.txt',
+    }
+    const raw = JSON.stringify({ jsonrpc: '2.0', id: 42, method: 'session/update', params })
+    expect(JSON.parse(normalizeStdout(raw, ctx, { payloadMode: 'verbatim' }))).toEqual({
+      jsonrpc: '2.0', id: 1, method: 'session/update', params,
+    })
+    const ordinary = normalizeStdout(raw, ctx)
+    expect(ordinary).toContain('"cwd":"{{cwd}}"')
+    expect(ordinary).toContain('"used":"{{usedTokens}}"')
+    expect(ordinary).toContain('{{spillLocator:output.txt}}')
+  })
+
+  it('preserves payload values only with an explicit verbatim option', () => {
+    const rows = [
+      { type: 'session', id: ctx.sessionIds[0], cwd: ctx.cwd, createdAt: 123 },
+      { type: 'hook/result', seq: 1, time: 123, data: {
+        durationMs: 45, path: `${ctx.cwd}\\business`,
+        business: { sessionUpdate: 'usage_update', used: 99 },
+      } },
+      { type: 'goal/change', seq: 2, time: 123, data: { createdAt: 123, updatedAt: 456 } },
+    ]
+    const raw = rows.map(row => JSON.stringify(row)).join('\n') + '\n'
+    const verbatim = normalizeSessionLog(raw, ctx, { identityMode: 'preserve', payloadMode: 'verbatim' })
+    const expected = structuredClone(rows)
+    expected[0]!.createdAt = 0
+    expected[1]!.time = 0
+    expected[2]!.time = 0
+    expect(verbatim).toBe(expected.map(row => JSON.stringify(row)).join('\n') + '\n')
+    const ordinary = normalizeSessionLog(raw, ctx)
+    expect(ordinary).toContain('"durationMs":0')
+    expect(ordinary).toContain('"used":"{{usedTokens}}"')
+    expect(ordinary).toContain('"updatedAt":0')
+    expect(ordinary).toContain('{{cwd}}/business')
+    expect(ordinary).not.toBe(verbatim)
+  })
+})
+
 describe('normalizeStdout', () => {
   it('rewrites JSON-RPC ids to a stable first-seen sequence', () => {
     const raw = [

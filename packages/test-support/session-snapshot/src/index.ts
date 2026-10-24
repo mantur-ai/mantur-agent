@@ -18,6 +18,13 @@
  */
 
 export {
+  compareCutSessionArtifacts,
+  createCutSessionArtifacts,
+  harvestCutSessionArtifacts,
+  type CutRecordingSource,
+  type CutSessionArtifacts,
+} from './cut-comparison.ts'
+export {
   redactSessionSnapshotIds,
 } from './identity.ts'
 export {

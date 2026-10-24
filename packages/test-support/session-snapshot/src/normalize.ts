@@ -102,6 +102,8 @@ export type CwdPathMode = 'canonical' | 'native'
 
 /** Optional controls shared by stdout and session-log normalization. */
 export interface NormalizeOptions {
+  /** Skip log/stdout payload scrubbing; normalizeSessionSnapshots still applies its own typed identity projection. */
+  payloadMode?: 'scrub' | 'verbatim'
   /** Use `/` for shared goldens, or preserve captured separators for a platform-specific golden. */
   cwdPathMode?: CwdPathMode
   /** Keep already-redacted typed ids and arbitrary UUID-like prose unchanged. */
@@ -320,7 +322,8 @@ export function normalizeStdout(
     if ('id' in frame && frame.id !== undefined && frame.id !== null) {
       frame.id = stableId(frame.id)
     }
-    return scrubValue(frame, ctx, cwdPathMode, identityMode) as Record<string, unknown>
+    return options.payloadMode === 'verbatim' ? frame
+      : scrubValue(frame, ctx, cwdPathMode, identityMode) as Record<string, unknown>
   })
   return frames.map(f => JSON.stringify(f)).join('\n') + '\n'
 }
@@ -361,11 +364,11 @@ export function normalizeSessionLog(
     } else if ('time' in record) {
       record.time = 0
     }
-    if (record.type === 'hook/result' && record.data !== null && typeof record.data === 'object') {
+    if (options.payloadMode !== 'verbatim' && record.type === 'hook/result' && record.data !== null && typeof record.data === 'object') {
       const data = record.data as Record<string, unknown>
       if ('durationMs' in data) data.durationMs = 0
     }
-    if (record.type === 'goal/change' && record.data !== null && typeof record.data === 'object') {
+    if (options.payloadMode !== 'verbatim' && record.type === 'goal/change' && record.data !== null && typeof record.data === 'object') {
       const data = record.data as Record<string, unknown>
       if ('createdAt' in data) data.createdAt = 0
       if ('updatedAt' in data) data.updatedAt = 0
@@ -373,7 +376,8 @@ export function normalizeSessionLog(
     if (Object.hasOwn(record, 'sourceEventSeqs')) {
       record.sourceEventSeqs = decodeSeqRanges(record.sourceEventSeqs)
     }
-    return scrubValue(record, ctx, cwdPathMode, identityMode) as Record<string, unknown>
+    return options.payloadMode === 'verbatim' ? record
+      : scrubValue(record, ctx, cwdPathMode, identityMode) as Record<string, unknown>
   })
   return records.map(r => JSON.stringify(r)).join('\n') + '\n'
 }

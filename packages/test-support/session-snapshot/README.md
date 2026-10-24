@@ -84,6 +84,14 @@ A pin owns its generated `system-prompt.expected.md` or `tool-schemas.expected.j
 
 A scenario requiring a non-Windows host declares `posixOnly`, which skips its run test on Windows while the fixture guards keep covering its committed files everywhere; a scenario whose composition needs a usable `pwsh` declares `pwshOnly`. `workspaceParent` moves the generated child cwd outside the platform temp directory when temporary-directory grants are themselves under test; a scenario's committed `workspace/` is copied into that child first, then `prepareWorkspace` runs against the generated cwd before the agent starts. Default generated workspaces are stored in session fixtures as `{{cwd}}`, so platform temp roots and random basenames do not affect recordings.
 
+### Comparing Cut recordings
+
+`createCutSessionArtifacts` validates a single root session with one successful `open_editing_workbench` call and binds its result to the call and session. Cut-specific substitutions cover the two observed loopback editor URL fields, `header.cwd`, the two verified workbench directory fields, and the header-derived cwd slot in the Mantur system prompt. The adapter also maps cwd in a system-prompt plugin snapshot's exact `sandbox:policy` workspace-write section and its verified rendered message copy. It retains every event and compares complete prompt and tool-schema sequences. Business text containing URLs or cwd remains significant. Unsupported result layouts fail rather than receiving broader normalization.
+
+`harvestCutSessionArtifacts` writes a new artifact directory with the supplied product revision, verified raw SHA256, and output hashes. `compareCutSessionArtifacts` verifies those hashes and compares all three artifacts without rewriting inputs. Callers must review recordings for public disclosure before committing them. These functions compare recordings; they do not execute Cut UI actions or certify a product revision. A mutating corpus scenario still needs its own shipped-profile driver and complete independent `workspace.expected/` tree.
+
+Cut prompt artifacts prefix the readable prompt sequence with original string lengths, preserving final newline differences and disambiguating separator text inside prompts. This format belongs to the Cut comparator and is not interchangeable with generic snapshot prompt sidecars. Cut comparison maps identities only in observed session, message, tool, and inbox fields, then uses `payloadMode: 'verbatim'` to preserve business identifiers, text, and usage values. The default normalizers retain their existing scrubbing behavior.
+
 ### What can go wrong
 
 `waitForSubagentTurnEnd` stops polling at its configured deadline and reports the child index and required turn on timeout. An already-started filesystem harvest finishes before scenario cleanup, so slow I/O can delay error delivery beyond that deadline.

@@ -84,6 +84,14 @@ defineAcpSnapshotSuite({
 
 需要非 Windows 主机的场景声明 `posixOnly`，在 Windows 上跳过运行测试，但 fixture 保护仍在所有平台覆盖其已提交文件；组合需要可用 `pwsh` 的场景声明 `pwshOnly`。当临时目录授权自身待测时，`workspaceParent` 将生成子级 cwd 移出平台临时区域；场景签入的 `workspace/` 会先复制到该子级，随后 `prepareWorkspace` 在 agent 启动前针对生成 cwd 运行。默认生成的 workspace 在会话 fixture 中存储为 `{{cwd}}`，使平台临时根目录与随机 basename 不影响录制。
 
+### 比较 Cut 录制
+
+`createCutSessionArtifacts` 验证只有一次成功 `open_editing_workbench` 调用的单根会话，并将结果绑定到调用与会话。Cut 专用替换涵盖两处已观察的回环编辑器 URL 字段、`header.cwd`、两处已验证的工作台目录字段，以及 Mantur 系统提示中由会话头推导的 cwd 位置。适配器还映射系统提示插件快照中精确的 `sandbox:policy` workspace-write 段及其已验证渲染消息副本中的 cwd。它保留所有事件，并比较完整提示和工具 schema 序列。含 URL 或 cwd 的业务文本仍参与比较。不支持的结果布局直接失败，不扩大归一化范围。
+
+`harvestCutSessionArtifacts` 在新产物目录中写入提供的产品版本、已验证的原始 SHA256 和输出哈希。`compareCutSessionArtifacts` 验证这些哈希并比较三项完整产物，不改写输入。调用者必须在提交前审查录制是否可公开。这些函数比较录制，不执行 Cut UI 操作，也不认证产品版本。会修改工作区的 corpus 场景仍需要自己的正式 profile 驱动和完整独立 `workspace.expected/` 树。
+
+Cut 提示产物在可读提示序列之前记录原始字符串长度，保留末尾换行差异，并消除提示内分隔文本的歧义。此格式属于 Cut 比较器，不能与通用快照提示侧车互换。Cut 比较仅映射已观察的会话、消息、工具和收件箱字段中的身份，然后使用 `payloadMode: 'verbatim'` 保留业务标识符、文本及用量值。默认归一化器保持既有替换行为。
+
 ### 可能出什么问题
 
 `waitForSubagentTurnEnd` 在配置的截止时间停止轮询，超时时报告子会话序号与所需轮次。已开始的文件系统收集会在场景清理前完成，因此慢 I/O 可能使错误报告晚于该截止时间。
