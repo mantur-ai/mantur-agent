@@ -56,6 +56,8 @@ Profiles with `patchReload: live` watch both user patch files: a valid edit reco
 
 `stopUserPatchWatches(ctx)` freezes new profile patch watchers for the application root and joins admitted openings and exact-path watcher cleanup, including running refreshes. Repeated calls share the same outcome; opening or close failures reject the stop. This operation does not stop module HMR or dispose the application.
 
+Live patch watcher registration waits for startup in macOS native-event mode before returning. Its disposer also waits for admitted refresh transactions; a candidate entry config is not evidence that a refresh committed. The [startup synchronization decision](../../../.agents/notes/implemented/bug-fix/2026-10-24-hmr-native-startup-barrier.md) records the platform dependency and upgrade checks.
+
 ### Previewing the effective configuration
 
 Before you boot, you can print the exact configuration the app will mount: the dump shows the composed entry list with `!!js` expressions verbatim, grouped under comments naming each source file and the patch layers that changed it, as one loadable YAML document. Patches that match no row are reported with their layer label; a missing, unparsable, or invalid config fails the dump.

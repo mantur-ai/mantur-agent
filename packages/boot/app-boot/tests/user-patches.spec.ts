@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os'
 import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Hmr from '@deepseek-ai/cordis-plugin-hmr'
 import Include, { type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
@@ -357,14 +357,23 @@ describe('boot with user patches', () => {
     ctx.on('hmr/config-update-failed', (failedFilename, error) => {
       failures.push({ filename: failedFilename, error })
     })
-    const dispose = await watchUserPatches(ctx, {
-      binName: NAME,
-      filename,
-      compose: userPatches => [...basePatches, ...userPatches],
+    const include = ctx.loader.resolve('include')
+    const originalUpdate = include.update.bind(include)
+    let settledValue: string | undefined
+    const update = vi.spyOn(include, 'update').mockImplementation(async (...args) => {
+      await originalUpdate(...args)
+      const config = [...ctx.loader.entries()].find(entry => entry.options.id === 'noop')?.fiber?.config as { value?: string }
+      settledValue = config.value
     })
+    let dispose: (() => Promise<void>) | undefined
     try {
+      dispose = await watchUserPatches(ctx, {
+        binName: NAME,
+        filename,
+        compose: userPatches => [...basePatches, ...userPatches],
+      })
       writeFileSync(filename, '- id: noop\n  config:\n    value: live\n')
-      await eventually(() => (entryConfig(ctx, 'noop') as { value?: string }).value === 'live', 'user patch addition was not applied')
+      await eventually(() => settledValue === 'live' && (entryConfig(ctx, 'noop') as { value?: string }).value === 'live', 'user patch addition was not applied')
 
       writeFileSync(filename, '- id: noop\n  config:\n    fail: true\n')
       await eventually(() => failures.length === 1, 'failed candidate was not broadcast')
@@ -380,11 +389,11 @@ describe('boot with user patches', () => {
       await settleChokidarChangeThrottle()
 
       writeFileSync(filename, '- id: noop\n  config:\n    value: recovered\n')
-      await eventually(() => (entryConfig(ctx, 'noop') as { value?: string }).value === 'recovered', 'valid recovery was not applied')
+      await eventually(() => settledValue === 'recovered' && (entryConfig(ctx, 'noop') as { value?: string }).value === 'recovered', 'valid recovery was not applied')
       await settleChokidarChangeThrottle()
 
       unlinkSync(filename)
-      await eventually(() => (entryConfig(ctx, 'noop') as { value?: string }).value === 'generated', 'user patch removal did not restore the app-owned patch')
+      await eventually(() => settledValue === 'generated' && (entryConfig(ctx, 'noop') as { value?: string }).value === 'generated', 'user patch removal did not restore the app-owned patch')
       expect(failures).toHaveLength(2)
       await settleChokidarChangeThrottle()
 
@@ -394,13 +403,19 @@ describe('boot with user patches', () => {
       const disposeDefault = await watchUserPatches(ctx, { binName: NAME, filename })
       try {
         writeFileSync(filename, '- id: noop\n  config:\n    value: identity\n')
-        await eventually(() => (entryConfig(ctx, 'noop') as { value?: string }).value === 'identity', 'default-compose user patch was not applied')
+        await eventually(() => settledValue === 'identity' && (entryConfig(ctx, 'noop') as { value?: string }).value === 'identity', 'default-compose user patch was not applied')
       } finally {
         await disposeDefault()
       }
     } finally {
-      await dispose()
-      await ctx.fiber.dispose()
+      try {
+        await dispose?.()
+      } finally {
+        update.mockRestore()
+        await ctx.fiber.dispose()
+        await rm(dir, { recursive: true, force: true })
+        await rm(userDir, { recursive: true, force: true })
+      }
     }
   })
 

@@ -5,6 +5,7 @@ import type { Include } from '@deepseek-ai/cordis-plugin-include'
 import { FSWatcher, watch, type ChokidarOptions } from 'chokidar'
 import { dirname, relative, resolve } from 'node:path'
 import { realpath, stat } from 'node:fs/promises'
+import { watch as watchNative } from 'node:fs'
 import { handleError } from './error.ts'
 import type {} from '@deepseek-ai/cordis-plugin-timer'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -174,6 +175,16 @@ class Hmr extends Service {
 
     try {
       await ready.promise
+      if (process.platform === 'darwin' && !watcher.options.usePolling) {
+        // libuv starts the shared FSEvents stream asynchronously, but closing
+        // a directory handle joins its reschedule before registration returns.
+        const barrier = watchNative(root, () => {})
+        await new Promise<void>((resolve, reject) => {
+          barrier.once('close', resolve)
+          barrier.once('error', reject)
+          barrier.close()
+        })
+      }
       return this.ctx.effect(() => async () => {
         if (this.configs.get(watchFilename) === registration) this.configs.delete(watchFilename)
         await watcher.close()

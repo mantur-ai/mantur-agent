@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-10-24-hmr-native-startup-barrier.md
+2026-10-24-hmr-native-startup-barrier.md: fb628f6efbfd98270443cd300944334b74048a53
+2026-10-24-hmr-native-startup-barrier.zh.md: 6f3ac5e6ee7e87d3a2ed4b5b6a7b25db0d1747be

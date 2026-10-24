@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, unlinkSync, watch as watchNative, writeFileSync } from 'node:fs'
 import { realpath } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -8,6 +8,11 @@ import Hmr from '@deepseek-ai/cordis-plugin-hmr'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Timer from '@deepseek-ai/cordis-plugin-timer'
 import { describe, expect, it, vi } from 'vitest'
+
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>()
+  return { ...actual, watch: vi.fn(actual.watch) }
+})
 
 async function bootHmr(dir: string, root: string[] = [], usePolling?: boolean): Promise<Context> {
   const ctx = new Context()
@@ -32,6 +37,71 @@ async function eventually(test: () => boolean, message: string): Promise<void> {
 }
 
 describe('HMR exact config paths', () => {
+  it('waits for the Darwin native startup barrier before returning a registration', { timeout: 20_000 }, async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'dsh-hmr-native-startup-'))
+    const ctx = await bootHmr(dir)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
+    const barrier = watchNative(dir)
+    const close = barrier.close.bind(barrier)
+    const closing = Promise.withResolvers<undefined>()
+    const closeSpy = vi.spyOn(barrier, 'close').mockImplementation(() => { closing.resolve(undefined) })
+    vi.mocked(watchNative).mockReturnValueOnce(barrier)
+    Object.defineProperty(process, 'platform', { ...platform, value: 'darwin' })
+    let registration: Promise<() => Promise<void>> | undefined
+    try {
+      let ready = false
+      registration = ctx.hmr.registerConfig(join(dir, 'plugins.yml'), () => {}).then((dispose) => {
+        ready = true
+        return dispose
+      })
+      expect(await Promise.race([
+        closing.promise.then(() => 'closing'),
+        registration.then(() => 'ready'),
+      ])).toBe('closing')
+      // The close request is observed, but its completion remains under test control.
+      await new Promise<void>(resolve => setImmediate(resolve))
+      expect(ready).toBe(false)
+      close()
+      const dispose = await registration
+      expect(ready).toBe(true)
+      await dispose()
+    } finally {
+      Object.defineProperty(process, 'platform', platform)
+      closeSpy.mockRestore()
+      close()
+      try {
+        await registration?.then(dispose => dispose())
+      } finally {
+        vi.mocked(watchNative).mockReset()
+        try {
+          await ctx.fiber.dispose()
+        } finally {
+          rmSync(dir, { recursive: true, force: true })
+        }
+      }
+    }
+  })
+
+  it('releases the exact registration when its native startup barrier fails', { timeout: 20_000 }, async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'dsh-hmr-native-startup-error-'))
+    const filename = join(dir, 'plugins.yml')
+    const ctx = await bootHmr(dir)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
+    const failure = new Error('native startup barrier failed')
+    Object.defineProperty(process, 'platform', { ...platform, value: 'darwin' })
+    vi.mocked(watchNative).mockImplementationOnce(() => { throw failure })
+    try {
+      await expect(ctx.hmr.registerConfig(filename, () => {})).rejects.toBe(failure)
+      const dispose = await ctx.hmr.registerConfig(filename, () => {})
+      await dispose()
+    } finally {
+      Object.defineProperty(process, 'platform', platform)
+      vi.mocked(watchNative).mockReset()
+      await ctx.fiber.dispose()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   it('observes module changes when its watch base is a filesystem alias', { timeout: 30_000 }, async () => {
     const target = mkdtempSync(join(tmpdir(), 'dsh-hmr-module-canonical-'))
     const alias = `${target}-alias`

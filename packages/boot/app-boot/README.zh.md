@@ -56,6 +56,8 @@ profile 是同一套 dsh 安装提供不同应用界面的方式：`web`、`mant
 
 `stopUserPatchWatches(ctx)` 冻结应用根作用域内的新 profile 补丁监听器，并等待已接纳的打开操作及精确路径监听器清理，包括正在运行的刷新。重复调用共享同一结果；打开或关闭失败会使停止操作拒绝。该操作不停止模块 HMR，也不销毁应用。
 
+实时 patch watcher 注册在 macOS 原生事件模式下等待启动后才返回。其 disposer 还会等待已接纳的刷新事务；候选 entry 配置不能证明刷新已提交。[启动同步决策](../../../.agents/notes/implemented/bug-fix/2026-10-24-hmr-native-startup-barrier.zh.md)记录平台依赖与升级检查。
+
 ### 预览生效配置
 
 启动前，你可以打印应用将挂载的确切配置：dump 会以 `!!js` 表达式原样展示组合后的条目列表，并按注释分组标明每个源文件及其 patch 层，输出是一份可加载的 YAML 文档。未匹配到任何行的 patch 会连同其层标签一起报告；配置缺失、无法解析或字段无效都会使 dump 失败。
