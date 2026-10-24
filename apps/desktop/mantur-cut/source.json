@@ -29,8 +29,8 @@
     },
     {
       "file": "mantur-cut-shutdown.patch",
-      "sha256": "2c03dec328828eb4fe71b7f5d2aa7c6496039d606cf21fa29fa8873faa92bbb4",
-      "resultTree": "d470f3176079ad8050cd04a743431d62314aa3dc"
+      "sha256": "36876fdcf1f32d6ddf325f3a9b99b17f31bda6688577703cfe1fd00f52abcd54",
+      "resultTree": "72fd1884c344a3165be8f7caaa6f052adbb76fe0"
     }
   ],
   "targets": {

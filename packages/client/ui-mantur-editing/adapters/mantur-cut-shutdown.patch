@@ -712,7 +712,7 @@ index 0e72452..75e2253 100644
      },
      "node_modules/sharp/node_modules/semver": {
 diff --git a/package.json b/package.json
-index 69a1f6b..dbc616f 100644
+index 69a1f6b..901556c 100644
 --- a/package.json
 +++ b/package.json
 @@ -12,6 +12,7 @@
@@ -739,7 +739,7 @@ index 69a1f6b..dbc616f 100644
      "verify:music-intelligence": "npm run verify:model-persistence-restart && tsx server/plugins/model-pack-install.verify.ts && tsx server/plugins/hf-proxy.verify.ts && tsx server/plugins/asr-models.verify.ts && tsx shared/model-packs/client.verify.ts && tsx src/components/settings/model-pack-pane.verify.ts && tsx src/components/settings/local-asr-model-mutation.verify.ts && tsx src/transcript/local-asr-model-source.verify.ts && tsx src/audio/intelligence/audioDecode.verify.ts && tsx src/audio/intelligence/beatThisPreprocess.verify.ts && tsx src/audio/intelligence/beatThisClient.verify.ts && tsx src/audio/intelligence/clapClient.verify.ts && tsx src/audio/intelligence/clapProfile.verify.ts && tsx src/audio/intelligence/sections.verify.ts && tsx src/audio/intelligence/store.verify.ts && tsx src/audio/intelligence/useAutoMusicAnalysis.verify.ts && tsx src/agent/tools/music-intelligence-tools.verify.ts && tsx src/agent/tools/music-missing-pack-action.verify.ts",
      "verify:caption-motion": "tsx src/captions/captionMotion.verify.ts && tsx src/agent/tools/caption-animation.verify.ts",
 -    "verify:project-store-transport": "tsx server/project-store-http-auth.verify.ts && tsx server/plugins/project-store-agent-session.verify.ts && tsx src/persist/projectStoreTransport.verify.ts && tsx src/persist/sharedKv.verify.ts && tsx src/app/appShell.verify.ts",
-+    "verify:mantur-project-save": "tsx server/plugins/mantur-project-save-http.verify.ts",
++    "verify:mantur-project-save": "tsx server/plugins/mantur-save-fallback-http.verify.ts && tsx server/plugins/mantur-project-save-http.verify.ts",
 +    "verify:project-store-transport": "npm run verify:mantur-project-save && tsx server/project-store-http-auth.verify.ts && tsx server/plugins/project-store-agent-session.verify.ts && tsx src/persist/projectStoreTransport.verify.ts && tsx src/persist/sharedKv.verify.ts && tsx src/app/appShell.verify.ts",
      "verify:desktop-window": "tsx desktop/context-menu.verify.ts && tsx desktop/page-origin.verify.ts && tsx desktop/local-media-import.verify.ts && tsx src/media/desktop-local-import.verify.ts && tsx desktop/window-frame.verify.ts && tsx desktop/single-instance.verify.ts && tsx desktop/window-scale.verify.ts && tsx desktop/remotion-binaries.verify.ts && tsx --tsconfig tsconfig.app.json src/components/window-titlebar.verify.tsx && npm run verify:desktop-inference && tsx desktop/desktop.verify.ts && tsx desktop/export-reveal.verify.ts && tsx desktop/export-directory-state.verify.ts",
      "verify:desktop-inference": "tsx --tsconfig tsconfig.node.json desktop/native-hardware-profile.verify.ts && tsx --tsconfig tsconfig.node.json desktop/native-inference-budget.verify.ts && tsx --tsconfig tsconfig.node.json desktop/native-inference-residency.verify.ts && tsx --tsconfig tsconfig.node.json desktop/native-asr-service.verify.ts && tsx --tsconfig tsconfig.node.json desktop/native-asr-worker.verify.ts && tsx --tsconfig tsconfig.node.json shared/desktop-inference.verify.ts && tsx --tsconfig tsconfig.app.json src/transcript/desktop-native-asr.verify.ts && tsx --tsconfig tsconfig.app.json src/media/semantic-search/nativeSemanticWorkerAdapter.verify.ts && tsx --tsconfig tsconfig.app.json src/media/semantic-search/nativeSemanticDuplicateFallback.verify.ts && tsx --tsconfig tsconfig.app.json src/audio/intelligence/nativeClapWorkerAdapter.verify.ts && tsx --tsconfig tsconfig.app.json src/audio/intelligence/nativeBeatThisWorkerAdapter.verify.ts",
@@ -3651,6 +3651,239 @@ index 0000000..a158239
 +  else process.env.OPENCHATCUT_DATA_DIR = previousDataDir;
 +  await rm(root, { recursive: true, force: true });
 +}
+diff --git a/server/plugins/mantur-save-fallback-http.verify.ts b/server/plugins/mantur-save-fallback-http.verify.ts
+new file mode 100644
+index 0000000..d19f4e3
+--- /dev/null
++++ b/server/plugins/mantur-save-fallback-http.verify.ts
+@@ -0,0 +1,227 @@
++import assert from 'node:assert/strict';
++import { createServer } from 'node:http';
++import { mkdtemp, readFile, rm } from 'node:fs/promises';
++import { tmpdir } from 'node:os';
++import { join } from 'node:path';
++import type { ProjectDoc } from '../../src/editor/types.ts';
++import type { BrowserProjectOwnership } from '../../src/persist/projectStoreTransport.ts';
++import type { ProjectStoreHttpOperations } from '../project-store-http-routes.ts';
++
++const root = await mkdtemp(join(tmpdir(), 'mantur-project-save-http-'));
++const previousDataDir = process.env.OPENCHATCUT_DATA_DIR;
++process.env.OPENCHATCUT_DATA_DIR = root;
++const originalFetch = globalThis.fetch;
++const previousLocation = Object.getOwnPropertyDescriptor(globalThis, 'location');
++const server = createServer();
++let fault: 'none' | '503' | 'disconnect' | 'bootstrap' = 'none';
++let writeRequests = 0;
++
++try {
++  // Store modules capture their paths at import time; no user storage is opened.
++  const store = await import('./project-store.ts');
++  const ownership = await import('../external-agent/project-edit-ownership.ts');
++  const broker = await import('../external-agent/broker.ts');
++  const { routeExternalAgentBridge } = await import('./external-agent-bridge-routes.ts');
++  const { handleProjectStoreRequest } = await import('../project-store-http.ts');
++  const { projectStoreHttpAuthorized, projectStoreReadAuthorized } = await import('../project-store-http-auth.ts');
++  const { revisionOf } = await import('../../src/agent/external-edit-session.ts');
++  const { CURRENT_PROJECT_VERSION } = await import('../../shared/project-version.ts');
++  const transport = await import('../../src/persist/projectStoreTransport.ts');
++  const { loadProjectForEditing, saveProject, flushProjectSaves, hasProjectSaveFailure, resetProjectStoreMemory } = await import('../../src/persist/projectStore.ts');
++  const { configureSharedKvBackend, kvGet } = await import('../../src/persist/sharedKv.ts');
++  const { registerEditorBridge, unregisterEditorBridge } = await import('../../src/agent/external-bridge-registration.ts');
++  const unused = (): never => { throw new Error('unexpected route in project save verification'); };
++  const operations: ProjectStoreHttpOperations = {
++    readSnapshot: store.readStore,
++    getEntry: store.getStoredEntry,
++    setEntry: store.setStoredEntry,
++    deleteEntry: store.deleteStoredEntry,
++    mergeEntries: store.mergeStoredEntries,
++    writeProjectDocument: store.writeProjectDocument,
++    writeAgentRuntime: store.writeAgentRuntime,
++    rotateAgentSession: store.rotateAgentSession,
++    updateAgentRunLease: store.updateStoredAgentRunLease,
++    updateExportRecoveryLease: store.updateExportRecoveryLease,
++    purgeProject: unused,
++    semanticVectorsAvailable: () => false,
++    semanticVectorsUpsert: unused, semanticVectorsSearch: unused,
++    semanticVectorsPrune: unused, semanticVectorsClear: unused,
++  };
++  const bridgeOperations = {
++    claimBrowserOwnership: ownership.claimBrowserProjectOwnership,
++    editorRegistrationMatches: broker.editorRegistrationMatches,
++    registerEditor: broker.registerEditor,
++    unregisterEditor: broker.unregisterEditor,
++    nextEditorCall: broker.nextEditorCall,
++    nextEditorCancellation: broker.nextEditorCancellation,
++    settleEditorCall: broker.settleEditorCallWithRevision,
++    mcpTools: () => [],
++  };
++  server.on('request', (req, res) => {
++    void (async () => {
++      const authorized = req.method === 'GET'
++        ? projectStoreReadAuthorized(req) : projectStoreHttpAuthorized(req);
++      if (!authorized) { res.writeHead(403); res.end(); return; }
++      if (req.url?.includes('/project-document/write')) {
++        writeRequests += 1;
++        if (fault === '503' || fault === 'bootstrap') {
++          res.writeHead(503, { 'Content-Type': 'application/json' });
++          res.end(JSON.stringify({ error: 'injected temporary save failure' }));
++          return;
++        }
++        if (fault === 'disconnect') { req.socket.destroy(); return; }
++      }
++      if (fault === 'bootstrap' && req.method === 'GET') {
++        res.writeHead(503); res.end(); return;
++      }
++      if (req.url?.startsWith('/api/project-store')) {
++        req.url = req.url.slice('/api/project-store'.length) || '/';
++        await handleProjectStoreRequest(req, res, operations);
++      } else if (req.url?.startsWith('/api/external-agent')) {
++        req.url = req.url.slice('/api/external-agent'.length);
++        await routeExternalAgentBridge(req, res, new URL(req.url, 'http://localhost'), bridgeOperations);
++      } else { res.writeHead(404); res.end(); }
++    })().catch((error: unknown) => {
++      res.writeHead(500, { 'Content-Type': 'application/json' });
++      res.end(JSON.stringify({ error: String(error) }));
++    });
++  });
++  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
++  const address = server.address();
++  assert(address && typeof address === 'object');
++  const origin = `http://127.0.0.1:${address.port}`;
++  Object.defineProperty(globalThis, 'location', { configurable: true, value: new URL(origin) });
++  type ObservedWrite = {
++    status: number;
++    request: { expectedRevision: string | null; ownerId?: string; ownershipEpoch?: number };
++    response: { accepted?: boolean; currentRevision?: string };
++  };
++  let lastWrite: ObservedWrite | undefined;
++  globalThis.fetch = async (input, init) => {
++    const url = new URL(String(input), origin);
++    const headers = new Headers(init?.headers);
++    headers.set('Origin', origin);
++    headers.set('Sec-Fetch-Site', 'same-origin');
++    const response = await originalFetch(url, { ...init, headers });
++    if (url.pathname.endsWith('/project-document/write')) {
++      const request = JSON.parse(String(init?.body)) as ObservedWrite['request'];
++      lastWrite = {
++        status: response.status,
++        request: { expectedRevision: request.expectedRevision, ownerId: request.ownerId, ownershipEpoch: request.ownershipEpoch },
++        response: await response.clone().json() as ObservedWrite['response'],
++      };
++    }
++    return response;
++  };
++  const projectId = 'dirty-reconnect';
++  const key = `project:${projectId}`;
++  const base: ProjectDoc = {
++    version: CURRENT_PROJECT_VERSION, assets: [], mediaFolders: [], activeTimelineId: 'timeline-1',
++    timelines: [{ id: 'timeline-1', name: 'Timeline 1', order: 0, width: 1920, height: 1080,
++      fps: 30, items: [], selectedId: null, trackOrder: ['track-v1'], tracks: { 'track-v1': { kind: 'video' } } }],
++  };
++  const post = async (path: string, body: unknown): Promise<Response> => fetch(path, {
++    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
++  });
++  const create = await post('/api/project-store/project-document/write', {
++    operation: 'project-document-write', key, expectedRevision: null, value: base,
++  });
++  assert.equal(create.status, 200);
++  assert.equal((await create.json()).accepted, true);
++  await transport.requestProjectStore({ operation: 'set', key: 'projects', value: [{ id: projectId, name: 'Test', updatedAt: 1 }] });
++  const loaded = await loadProjectForEditing(projectId);
++  assert.equal(loaded.status, 'ok');
++  if (loaded.status !== 'ok') throw new Error('project did not load');
++  const r0 = revisionOf(loaded.doc);
++  assert.equal(transport.browserProjectBase(projectId).revision, r0);
++  const claim = async (ownerId: string): Promise<BrowserProjectOwnership> => registerEditorBridge(
++    projectId, ownerId, transport.browserProjectBase(projectId), new AbortController().signal,
++  );
++  const disconnect = async (lease: BrowserProjectOwnership): Promise<void> => {
++    await unregisterEditorBridge(projectId, lease.ownerId, lease.registrationCapability, true);
++    transport.clearBrowserProjectOwnership(lease);
++  };
++  let lease = await claim('editor-a');
++  assert.equal(transport.installBrowserProjectOwnership(lease, transport.browserProjectBase(projectId)), true);
++  const dirty = structuredClone(loaded.doc);
++  dirty.timelines[0].width = 1280;
++  const storedFile = join(root, 'project-store-v1', `${encodeURIComponent(key)}.json`);
++  const r0Bytes = await readFile(storedFile, 'utf8');
++  const dirtyBytes = JSON.stringify(dirty);
++  for (const mode of ['503', 'disconnect', 'bootstrap'] as const) {
++    fault = mode;
++    if (mode === 'bootstrap') configureSharedKvBackend(undefined);
++    for (let attempt = 0; attempt < 2; attempt += 1) {
++      const before = writeRequests;
++      const result = await saveProject(projectId, dirty);
++      assert.equal(result.saved, false, `${mode} retry ${attempt} must not report local writes as saved`);
++      assert.equal(result.status, 'failed');
++      assert.ok(result.error instanceof Error, 'save retains an explicit error for the UI');
++      assert.equal(writeRequests, before + 1, 'every retry attempts the real server');
++      assert.equal(hasProjectSaveFailure(projectId), true);
++      assert.equal((await flushProjectSaves(projectId)).ok, false, 'the editor leave guard remains blocked');
++      assert.equal(await readFile(storedFile, 'utf8'), r0Bytes, 'failed save preserves full durable R0');
++      assert.equal(JSON.stringify(dirty), dirtyBytes, 'failed save retains the dirty draft');
++      assert.equal(transport.browserProjectBase(projectId).revision, r0, 'local cache never advances the ack base');
++      assert.equal(revisionOf((await kvGet<ProjectDoc>(key))!), r0, 'failed document is not cached as saved');
++    }
++  }
++  fault = 'none';
++  assert.equal((await saveProject(projectId, dirty)).saved, true);
++  assert.equal((await flushProjectSaves(projectId)).ok, true);
++  assert.equal(hasProjectSaveFailure(projectId), false);
++  assert.equal(revisionOf(JSON.parse(await readFile(storedFile, 'utf8'))), revisionOf(dirty));
++  await disconnect(transport.browserProjectOwnership(projectId)!);
++  resetProjectStoreMemory();
++  const reopened = await loadProjectForEditing(projectId);
++  assert.equal(reopened.status, 'ok');
++  if (reopened.status !== 'ok') throw new Error('saved project did not reopen');
++  assert.deepEqual(reopened.doc, dirty, 'reopen after clearing client memory reads the durable document');
++
++  lease = await claim('editor-a');
++  assert.equal(transport.installBrowserProjectOwnership(lease, transport.browserProjectBase(projectId)), true);
++  await unregisterEditorBridge(projectId, lease.ownerId, lease.registrationCapability, true);
++  const competitor = await claim('editor-b');
++  assert.ok(competitor.epoch > lease.epoch);
++  const rejectedDoc = structuredClone(dirty);
++  rejectedDoc.timelines[0].width = 640;
++  const savedBytes = await readFile(storedFile, 'utf8');
++  for (let attempt = 0; attempt < 2; attempt += 1) {
++    const before = writeRequests;
++    lastWrite = undefined;
++    assert.equal((await saveProject(projectId, rejectedDoc)).saved, false, 'old owner is rejected with current revision');
++    assert.equal(writeRequests, before + 1);
++    // The fetch callback assigns this observation during the awaited save.
++    const rejectedWrite = lastWrite as ObservedWrite | undefined;
++    assert.ok(rejectedWrite, 'a real HTTP owner response was observed');
++    assert.equal(rejectedWrite.status, 200);
++    assert.equal(rejectedWrite.response.accepted, false);
++    assert.equal(rejectedWrite.response.currentRevision, revisionOf(dirty));
++    assert.equal(rejectedWrite.request.expectedRevision, rejectedWrite.response.currentRevision,
++      'owner rejection is tested with a matching current revision');
++    assert.equal(rejectedWrite.request.ownerId, lease.ownerId);
++    assert.equal(rejectedWrite.request.ownershipEpoch, lease.epoch);
++    assert.equal((await flushProjectSaves(projectId)).ok, false);
++    assert.equal(await readFile(storedFile, 'utf8'), savedBytes);
++    assert.equal(transport.browserProjectBase(projectId).revision, revisionOf(dirty));
++  }
++  await unregisterEditorBridge(projectId, competitor.ownerId, competitor.registrationCapability, true);
++  resetProjectStoreMemory();
++  Reflect.deleteProperty(globalThis, 'location');
++  assert.equal((await saveProject('standalone', base)).saved, true);
++  assert.equal((await flushProjectSaves('standalone')).ok, true);
++  const local = await loadProjectForEditing('standalone');
++  assert.equal(local.status, 'ok');
++  if (local.status === 'ok') assert.deepEqual(local.doc, base);
++  broker.resetExternalAgentBrokerForTest();
++  console.log('mantur-save-fallback-http: repeated 503/disconnect/bootstrap failure, dirty leave guard, durable retry/reopen, owner fencing and standalone local passed');
++} finally {
++  globalThis.fetch = originalFetch;
++  if (previousLocation) Object.defineProperty(globalThis, 'location', previousLocation);
++  else Reflect.deleteProperty(globalThis, 'location');
++  server.closeAllConnections();
++  if (server.listening) await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
++  if (previousDataDir === undefined) delete process.env.OPENCHATCUT_DATA_DIR;
++  else process.env.OPENCHATCUT_DATA_DIR = previousDataDir;
++  await rm(root, { recursive: true, force: true });
++}
 diff --git a/server/plugins/mantur-shutdown.ts b/server/plugins/mantur-shutdown.ts
 new file mode 100644
 index 0000000..6b0cf21
@@ -6054,7 +6287,7 @@ index 7d6bf0d..4bd0c76 100644
    assert.equal(browserProjectOwnership('project-race')?.baseRevision, 'v7-next');
    clearBrowserProjectOwnership(installedOwnership);
 diff --git a/src/persist/sharedKv.ts b/src/persist/sharedKv.ts
-index d39b548..95dea61 100644
+index d39b548..3eea79a 100644
 --- a/src/persist/sharedKv.ts
 +++ b/src/persist/sharedKv.ts
 @@ -1,6 +1,8 @@
@@ -6066,7 +6299,25 @@ index d39b548..95dea61 100644
    projectStoreRemoteAvailable,
    projectStoreWriteCredential,
    requestProjectStore,
-@@ -447,6 +449,7 @@ async function setProjectDocument(key: string, value: unknown): Promise<void> {
+@@ -431,15 +433,8 @@ async function setProjectDocument(key: string, value: unknown): Promise<void> {
+     if (!injectedBackend) await markPendingKey(key);
+     return;
+   }
+-  if (!remoteCache) {
+-    // The remote bootstrap failed (desktop IPC / server briefly unreachable).
+-    // Fall back to a local write marked as pending so a later successful
+-    // bootstrap merge carries it into the shared store — the same offline
+-    // semantics as kvGet's local read fallback. Never hard-fail the editor.
+-    await localSet(key, value);
+-    await markPendingKey(key);
+-    return;
+-  }
++  // Transport availability identifies the persistence destination; an empty
++  // read cache after a failed request does not make this a standalone store.
+   const projectId = key.slice('project:'.length);
+   let ownership = browserProjectOwnership(projectId);
+   const local = await localGet<unknown>(key);
+@@ -447,6 +442,7 @@ async function setProjectDocument(key: string, value: unknown): Promise<void> {
      ownership = await waitForBrowserProjectOwnership(projectId);
      if (!ownership) throw new Error('工程编辑权尚未注册，工程未保存');
    }
@@ -6074,7 +6325,7 @@ index d39b548..95dea61 100644
    const request: ProjectDocumentWriteRequest = ownership
      ? {
        operation: 'project-document-write',
-@@ -475,7 +478,9 @@ async function setProjectDocument(key: string, value: unknown): Promise<void> {
+@@ -475,7 +471,9 @@ async function setProjectDocument(key: string, value: unknown): Promise<void> {
      if (result.ownershipEpoch !== ownership.epoch) {
        throw new Error('project ownership epoch changed during save');
      }
@@ -6085,3 +6336,61 @@ index d39b548..95dea61 100644
    }
    await cacheMutation(key, result);
  }
+diff --git a/src/persist/sharedKv.verify.ts b/src/persist/sharedKv.verify.ts
+index b099895..85223ea 100644
+--- a/src/persist/sharedKv.verify.ts
++++ b/src/persist/sharedKv.verify.ts
+@@ -1,4 +1,5 @@
+ import assert from 'node:assert/strict';
++import { browserProjectBase, initializeBrowserProjectBase, installBrowserProjectOwnership } from './projectStoreTransport';
+ import { kvDel, kvGet, kvGetFresh, kvRemoteMode, kvSet, resetSharedKvMemory } from './sharedKv';
+
+ const MIGRATION_KEY = '__openchatcut_shared_store_v1__';
+@@ -229,26 +230,36 @@ try {
+   assert.equal(local.get('authorized-setting'), 'shared', 'authorized remote write updates IndexedDB');
+   assert.equal(remoteEntries['authorized-setting'], 'shared', 'authorized remote write reaches the shared store');
+
+-  // Desktop IPC bridge exists but the store keeps failing (issue #63):
+-  // bootstrap fails, yet reads and project-document writes must degrade to
+-  // local copies instead of hard-failing hydration and saves.
++  // A configured desktop store remains authoritative after bootstrap failure.
++  let desktopWrites = 0;
+   installGlobal('window', {
+     openChatCutDesktop: {
+-      projectStore: async () => { throw new Error('project store lock guard is busy'); },
++      projectStore: async (request: { operation: string }) => {
++        if (request.operation === 'project-document-write') desktopWrites += 1;
++        throw new Error('project store lock guard is busy');
++      },
+     },
+   });
+   local.clear();
+   resetSharedKvMemory();
++  const cachedProject = { name: 'acknowledged', version: 1 };
++  local.set('project:issue-63', cachedProject);
++  initializeBrowserProjectBase('issue-63', 'persisted-revision');
++  assert.equal(installBrowserProjectOwnership({
++    projectId: 'issue-63', ownerId: 'desktop-owner', epoch: 1,
++    baseRevision: 'persisted-revision', registrationCapability: 'test-capability',
++  }, browserProjectBase('issue-63')), true);
+   assert.equal(await kvGetFresh('projects'), undefined,
+-    'a failing desktop store degrades fresh reads to the local copy');
+-  await kvSet('project:issue-63', { name: 'resilient', version: 1 });
+-  assert.deepEqual(local.get('project:issue-63'), { name: 'resilient', version: 1 },
+-    'a failing desktop store degrades project saves to local instead of throwing');
+-  assert.deepEqual(await kvGet('project:issue-63'), { name: 'resilient', version: 1 },
+-    'the degraded local save stays readable');
++    'a failing desktop store may still serve local reads');
++  for (let attempt = 0; attempt < 2; attempt += 1) {
++    await assert.rejects(kvSet('project:issue-63', { name: 'resilient', version: 1 }), /lock guard is busy/);
++    assert.deepEqual(local.get('project:issue-63'), cachedProject, 'failed desktop writes retain the previous local cache');
++    assert.equal(browserProjectBase('issue-63').revision, 'persisted-revision');
++  }
++  assert.equal(desktopWrites, 2, 'desktop retries keep using the configured store');
+
+   await kvSet('pending-setting', 'local-new');
+-  assert.deepEqual(local.get(PENDING_KEYS_KEY), ['project:issue-63', 'pending-setting'],
++  assert.deepEqual(local.get(PENDING_KEYS_KEY), ['pending-setting'],
+     'offline writes persist their pending keys');
+   local.set(MIGRATION_KEY, true);
+   remoteEntries['pending-setting'] = 'remote-old';

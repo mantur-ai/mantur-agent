@@ -33,7 +33,7 @@ Agent 可在原生剪辑工具挂载前调用 `open_editing_workbench`。调用�
 
 每个会话使用 `<cwd>/剪辑/<session-id>/`：`工程/` 保存工程和运行状态，`素材/` 保存导入媒体，`导出/` 是默认成片目录。Host 从已解析 Agent 的 Session header 读取 `cwd`，浏览器不能指定其他目录。会话目录拒绝路径穿越和符号链接，重新打开保留已有文件。同一项目内的不同会话也使用独立编辑进程和工具作用域。
 
-浏览器重连使用最后确认的工程版本，并保留未保存编辑。版本陈旧或另一活跃编辑器会阻止保存；编辑器不会采用服务端较新版本来覆盖其文档。保存失败继续阻止返回工程列表。参见[保存基线决策](../../../.agents/notes/implemented/bug-fix/2026-10-24-mantur-cut-persisted-save-base.zh.md)。
+浏览器重连使用最后确认的工程版本，并保留未保存编辑。版本陈旧或另一活跃编辑器会阻止保存；编辑器不会采用服务端较新版本来覆盖其文档。使用 HTTP 或桌面存储时，保存失败会保留未保存编辑并阻止返回工程列表；即使本地缓存可用，重试仍需服务端确认。独立本地存储模式继续受支持。参见[保存失败决策](../../../.agents/notes/implemented/bug-fix/2026-10-24-mantur-cut-save-fallback.zh.md)与[保存基线决策](../../../.agents/notes/implemented/bug-fix/2026-10-24-mantur-cut-persisted-save-base.zh.md)。
 
 工作台标题栏、按钮与对话分隔线使用漫途的 0.5px 中性边框。
 
