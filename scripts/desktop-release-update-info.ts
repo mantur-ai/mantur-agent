@@ -66,7 +66,7 @@ function zipForArch(info: MacUpdateInfo, arch: 'arm64' | 'x64', source: string):
  * Combine native macOS update metadata into the one channel file consumed by electron-updater.
  * @param arm64Path - Metadata emitted by the native Apple Silicon build.
  * @param x64Path - Metadata emitted by the native Intel build.
- * @param outputPath - Destination for the combined latest-mac.yml file.
+ * @param outputPath - Destination for the combined channel metadata file.
  * @returns the combined update metadata written to outputPath.
  */
 export function mergeMacUpdateInfo(arm64Path: string, x64Path: string, outputPath: string): MacUpdateInfo {
@@ -96,7 +96,7 @@ export function mergeMacUpdateInfo(arm64Path: string, x64Path: string, outputPat
 if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const [arm64Path, x64Path, outputPath] = process.argv.slice(2)
   if (arm64Path === undefined || x64Path === undefined || outputPath === undefined) {
-    throw new TypeError('usage: desktop-release-update-info <arm64 latest-mac.yml> <x64 latest-mac.yml> <output latest-mac.yml>')
+    throw new TypeError('usage: desktop-release-update-info <arm64 metadata.yml> <x64 metadata.yml> <output metadata.yml>')
   }
   mergeMacUpdateInfo(arm64Path, x64Path, outputPath)
 }

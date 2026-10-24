@@ -37,6 +37,7 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       matrix: ${{ steps.version.outputs.matrix }}
+      metadata: ${{ steps.version.outputs.metadata }}
       mantur_cut_distribution: ${{ steps.version.outputs.mantur_cut_distribution }}
     steps:
       - uses: actions/checkout@v6
@@ -64,6 +65,14 @@ jobs:
           process.stdout.write(`matrix=${JSON.stringify({ include })}\n`)
           NODE
           version="$(node -p "require('./apps/desktop/package.json').version")"
+          if [[ "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-rc\.(0|[1-9][0-9]*))?$ ]]; then
+            metadata=latest
+            if [[ "$version" == *-rc.* ]]; then metadata=rc; fi
+          else
+            echo "::error::A stable or numbered rc version is required."
+            exit 1
+          fi
+          printf 'metadata=%s\n' "$metadata" >> "$GITHUB_OUTPUT"
           mantur_cut_distribution="$(sha256sum apps/desktop/mantur-cut/source.json | cut -d ' ' -f1)"
           printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
           printf 'mantur_cut_distribution=%s\n' "$mantur_cut_distribution" >> "$GITHUB_OUTPUT"
@@ -163,7 +172,7 @@ jobs:
             apps/desktop/dist/Mantur-Agent-macOS-${{ matrix.arch }}.dmg.blockmap
             apps/desktop/dist/Mantur-Agent-macOS-${{ matrix.arch }}.zip
             apps/desktop/dist/Mantur-Agent-macOS-${{ matrix.arch }}.zip.blockmap
-            apps/desktop/dist/latest-mac.yml
+            apps/desktop/dist/${{ needs.validate.outputs.metadata }}-mac.yml
           if-no-files-found: error
           retention-days: 7
 
@@ -250,7 +259,7 @@ jobs:
           path: |
             apps/desktop/dist/Mantur-Agent-Windows-x64.exe
             apps/desktop/dist/Mantur-Agent-Windows-x64.exe.blockmap
-            apps/desktop/dist/latest.yml
+            apps/desktop/dist/${{ needs.validate.outputs.metadata }}.yml
           if-no-files-found: error
           retention-days: 7
 
@@ -299,6 +308,7 @@ jobs:
         env:
           ARCHITECTURES: ${{ inputs.architectures }}
           WINDOWS: ${{ inputs.windows }}
+          METADATA: ${{ needs.validate.outputs.metadata }}
         run: |
           set -euo pipefail
           mkdir release
@@ -306,12 +316,13 @@ jobs:
           if [ "$ARCHITECTURES" = both ]; then arches+=(x64); fi
           required_artifacts=()
           for arch in "${arches[@]}"; do
+            required_artifacts+=("release-input/desktop-macos-$arch/$METADATA-mac.yml")
             for extension in dmg dmg.blockmap zip zip.blockmap; do
               required_artifacts+=("release-input/desktop-macos-$arch/Mantur-Agent-macOS-$arch.$extension")
             done
           done
           if [ "$WINDOWS" = true ]; then
-            for filename in Mantur-Agent-Windows-x64.exe Mantur-Agent-Windows-x64.exe.blockmap latest.yml; do
+            for filename in Mantur-Agent-Windows-x64.exe Mantur-Agent-Windows-x64.exe.blockmap "$METADATA.yml"; do
               required_artifacts+=("release-input/desktop-windows-x64/$filename")
             done
           fi
@@ -322,15 +333,22 @@ jobs:
             }
           done
           for artifact in "${required_artifacts[@]}"; do
-            cp "$artifact" "release/$(basename "$artifact")"
+            if [[ "$artifact" != *"/$METADATA-mac.yml" ]]; then
+              cp "$artifact" "release/$(basename "$artifact")"
+            fi
           done
           if [ "$ARCHITECTURES" = both ]; then
             pnpm exec tsx scripts/desktop-release-update-info.ts \
-              release-input/desktop-macos-arm64/latest-mac.yml \
-              release-input/desktop-macos-x64/latest-mac.yml \
-              release/latest-mac.yml
+              "release-input/desktop-macos-arm64/$METADATA-mac.yml" \
+              "release-input/desktop-macos-x64/$METADATA-mac.yml" \
+              "release/$METADATA-mac.yml"
           else
-            cp release-input/desktop-macos-arm64/latest-mac.yml release/latest-mac.yml
+            cp "release-input/desktop-macos-arm64/$METADATA-mac.yml" "release/$METADATA-mac.yml"
+          fi
+          if [ "$WINDOWS" = true ]; then
+            echo 'Windows: signed x64 installer and update metadata included.' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'Windows: NOT INCLUDED; no Windows signing or release evidence is claimed.' >> "$GITHUB_STEP_SUMMARY"
           fi
           find release -maxdepth 1 -type f ! -name SHA256SUMS -exec sha256sum {} \; \
             | sed 's#  release/#  #' \
@@ -377,6 +395,27 @@ jobs:
             exit 1
           }
 
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install TOS publisher dependencies
+        run: |
+          python -m pip install boto3==1.42.97 PyYAML==6.0.3
+          python -m unittest discover -s scripts -p test_desktop_publish_tos.py
+
+      - name: Preflight release publication without remote writes
+        env:
+          TOS_ACCESS_KEY: ${{ secrets.TOS_ACCESS_KEY }}
+          TOS_SECRET_KEY: ${{ secrets.TOS_SECRET_KEY }}
+          TOS_REGION: ap-southeast-1
+          TOS_ENDPOINT: https://tos-s3-ap-southeast-1.volces.com
+          TOS_BUCKET: mantur-pro
+          TOS_PREFIX: mantur-agent
+          TOS_PUBLIC_URL: https://mantur-pro.tos-accelerate.volces.com/mantur-agent
+          RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+        run: python scripts/desktop-publish-tos.py release "$RELEASE_VERSION" --check ${{ inputs.windows && '--require-windows' || '' }}
+
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -388,25 +427,15 @@ jobs:
             echo "::error::Release $TAG already exists; published desktop assets are never replaced."
             exit 1
           fi
-          prerelease=()
+          release_flags=(--verify-tag)
           case "$VERSION" in
-            *-*) prerelease=(--prerelease) ;;
+            *-rc.*) release_flags+=(--prerelease --latest=false) ;;
           esac
           gh release create "$TAG" release/* \
             --repo "$GITHUB_REPOSITORY" \
-            --verify-tag \
             --title "ManTur Agent" \
             --generate-notes \
-            "${prerelease[@]}"
-
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-
-      - name: Install TOS publisher dependencies
-        run: |
-          python -m pip install boto3==1.42.97 PyYAML==6.0.3
-          python -m unittest discover -s scripts -p test_desktop_publish_tos.py
+            "${release_flags[@]}"
 
       - name: Publish installers and update channel to TOS
         env:
@@ -418,4 +447,4 @@ jobs:
           TOS_PREFIX: mantur-agent
           TOS_PUBLIC_URL: https://mantur-pro.tos-accelerate.volces.com/mantur-agent
           RELEASE_VERSION: ${{ needs.validate.outputs.version }}
-        run: python scripts/desktop-publish-tos.py release "$RELEASE_VERSION"
+        run: python scripts/desktop-publish-tos.py release "$RELEASE_VERSION" ${{ inputs.windows && '--require-windows' || '' }}

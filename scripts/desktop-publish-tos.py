@@ -21,10 +21,24 @@ def digest(path, algorithm):
     return h.digest()
 
 
-def prepare(directory, version, public_url):
+def release_channel(version):
+    """Accept stable or numbered RC versions and return the isolated channel."""
+    if not re.fullmatch(r'(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-rc\.(0|[1-9]\d*))?', version):
+        raise ValueError('A stable or numbered rc release version is required')
+    return 'rc' if '-rc.' in version else 'stable'
+
+
+def version_key(version):
+    """Order admitted versions numerically, with stable after its RCs."""
+    release_channel(version)
+    core, _, rc = version.partition('-rc.')
+    return (*map(int, core.split('.')), int(rc) if rc else float('inf'))
+
+
+def prepare(directory, version, public_url, require_windows=False):
     """Reject incomplete releases and unsafe names before any remote mutation."""
-    if not re.fullmatch(r'\d+\.\d+\.\d+', version):
-        raise ValueError('A stable release version is required')
+    channel = release_channel(version)
+    metadata = 'rc' if channel == 'rc' else 'latest'
     files = {}
     for manifest in ('SHA256SUMS', 'SHA256SUMS-Windows.txt'):
         path = directory / manifest
@@ -39,10 +53,14 @@ def prepare(directory, version, public_url):
                 raise ValueError('Release SHA256 mismatch: ' + name)
             files[name] = artifact
         files[manifest] = path
-    if 'latest-mac.yml' not in files:
+    if any(name in files for name in (('latest-mac.yml', 'latest.yml') if channel == 'rc' else ('rc-mac.yml', 'rc.yml'))):
+        raise ValueError('Update metadata belongs to a different release channel')
+    if require_windows and not all(name in files for name in ('Mantur-Agent-Windows-x64.exe', 'Mantur-Agent-Windows-x64.exe.blockmap', metadata + '.yml')):
+        raise ValueError('Required verified Windows release artifacts are missing')
+    if metadata + '-mac.yml' not in files:
         raise ValueError('Verified Mac update metadata is required')
     channels = {}
-    for name in ('latest-mac.yml', 'latest.yml'):
+    for name in (metadata + '-mac.yml', metadata + '.yml'):
         if name not in files:
             continue
         info = yaml.safe_load(files[name].read_text())
@@ -59,39 +77,46 @@ def prepare(directory, version, public_url):
     return files, channels
 
 
-def publish_installers(client, bucket, prefix, base, files, version):
+def publish_installers(client, bucket, prefix, base, files, version, check_only=False):
     """Advance no-cache manual downloads without changing immutable update artifacts."""
+    channel = release_channel(version)
     installers = [name for name in ('Mantur-Agent-macOS-arm64.dmg', 'Mantur-Agent-Windows-x64.exe') if name in files]
     for name in installers:
         try:
-            current = client.head_object(Bucket=bucket, Key=prefix + '/stable/' + name)
+            current = client.head_object(Bucket=bucket, Key=prefix + '/' + channel + '/' + name)
         except ClientError as error:
             if error.response['ResponseMetadata']['HTTPStatusCode'] != 404:
                 raise
         else:
             previous = current['Metadata']['version']
-            if tuple(map(int, previous.split('.'))) > tuple(map(int, version.split('.'))):
+            if release_channel(previous) != channel or version_key(previous) > version_key(version):
                 raise ValueError('Refusing to downgrade a manual installer')
+    if check_only:
+        return
     for name in installers:
         sha = digest(files[name], 'sha256').hex()
-        client.copy_object(Bucket=bucket, Key=prefix + '/stable/' + name,
+        client.copy_object(Bucket=bucket, Key=prefix + '/' + channel + '/' + name,
                            CopySource={'Bucket': bucket, 'Key': prefix + '/releases/' + version + '/' + name},
                            ACL='public-read', MetadataDirective='REPLACE',
                            Metadata={'version': version, 'sha256': sha}, ContentType='application/octet-stream',
                            ContentDisposition='attachment; filename="' + name + '"',
                            CacheControl='no-cache, max-age=0, must-revalidate')
-        with urlopen(Request(base + '/stable/' + name, headers={'Range': 'bytes=0-0'}), timeout=60) as response:
+        with urlopen(Request(base + '/' + channel + '/' + name, headers={'Range': 'bytes=0-0'}), timeout=60) as response:
             if (response.status != 206 or response.headers.get('Content-Range') != 'bytes 0-0/' + str(files[name].stat().st_size)
                     or response.headers.get('x-tos-meta-sha256') != sha):
                 raise ValueError('Public manual installer did not refresh: ' + name)
         print('Published manual installer:', name, flush=True)
 
 
-def publish(directory, version):
+def publish(directory, version, check_only=False, require_windows=False):
+    channel = release_channel(version)
+    for name in ('TOS_PUBLIC_URL', 'TOS_BUCKET', 'TOS_PREFIX', 'TOS_ENDPOINT', 'TOS_REGION', 'TOS_ACCESS_KEY', 'TOS_SECRET_KEY'):
+        if not os.environ.get(name):
+            raise ValueError('Required publisher configuration is missing: ' + name)
     base = os.environ['TOS_PUBLIC_URL'].rstrip('/')
     if not base.startswith('https://'):
         raise ValueError('Public HTTPS URL required')
-    files, channels = prepare(directory, version, base)
+    files, channels = prepare(directory, version, base, require_windows)
     bucket = os.environ['TOS_BUCKET']
     prefix = os.environ['TOS_PREFIX'].strip('/')
     client = boto3.client('s3', endpoint_url=os.environ['TOS_ENDPOINT'], region_name=os.environ['TOS_REGION'],
@@ -100,15 +125,17 @@ def publish(directory, version):
                                         request_checksum_calculation='when_required', response_checksum_validation='when_required'))
     for name in channels:
         try:
-            current = client.get_object(Bucket=bucket, Key=prefix + '/stable/' + name)
+            current = client.get_object(Bucket=bucket, Key=prefix + '/' + channel + '/' + name)
         except ClientError as error:
             if error.response['ResponseMetadata']['HTTPStatusCode'] != 404:
                 raise
         else:
             with current['Body'] as stream:
                 current_version = yaml.safe_load(stream.read())['version']
-            if tuple(map(int, current_version.split('.'))) > tuple(map(int, version.split('.'))):
+            if release_channel(current_version) != channel or version_key(current_version) > version_key(version):
                 raise ValueError('Refusing to downgrade the public update channel')
+    publish_installers(client, bucket, prefix, base, files, version, check_only=True)
+    missing = set()
     for name, path in files.items():
         key = prefix + '/releases/' + version + '/' + name
         sha = digest(path, 'sha256').hex()
@@ -122,6 +149,14 @@ def publish(directory, version):
             if head.get('Metadata', {}).get('sha256') != sha or head['ContentLength'] != path.stat().st_size:
                 raise ValueError('Refusing to replace existing release: ' + key)
         else:
+            missing.add(name)
+    if check_only:
+        print('Release preflight passed; no remote objects written', flush=True)
+        return
+    for name, path in files.items():
+        key = prefix + '/releases/' + version + '/' + name
+        sha = digest(path, 'sha256').hex()
+        if name in missing:
             client.upload_file(str(path), bucket, key, ExtraArgs={'ACL': 'public-read', 'Metadata': {'sha256': sha},
                                'ContentType': 'application/octet-stream', 'CacheControl': 'public, max-age=31536000, immutable'})
         with urlopen(Request(base + '/releases/' + version + '/' + name, headers={'Range': 'bytes=0-0'}), timeout=60) as response:
@@ -130,9 +165,9 @@ def publish(directory, version):
         print('Verified public artifact:', name, flush=True)
     publish_installers(client, bucket, prefix, base, files, version)
     for name, body in channels.items():
-        client.put_object(Bucket=bucket, Key=prefix + '/stable/' + name, Body=body, ACL='public-read',
+        client.put_object(Bucket=bucket, Key=prefix + '/' + channel + '/' + name, Body=body, ACL='public-read',
                           ContentType='text/yaml', CacheControl='no-cache, max-age=0, must-revalidate')
-        with urlopen(base + '/stable/' + name, timeout=60) as response:
+        with urlopen(base + '/' + channel + '/' + name, timeout=60) as response:
             if response.read() != body:
                 raise ValueError('Public update channel did not refresh')
         print('Published update channel:', name, flush=True)
@@ -142,5 +177,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('directory', type=Path)
     parser.add_argument('version')
+    parser.add_argument('--check', action='store_true', help='Validate files, configuration and remote state without writing')
+    parser.add_argument('--require-windows', action='store_true', help='Require verified Windows installer, blockmap and update metadata')
     args = parser.parse_args()
-    publish(args.directory, args.version)
+    publish(args.directory, args.version, args.check, args.require_windows)

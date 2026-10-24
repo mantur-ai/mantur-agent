@@ -1,7 +1,10 @@
-import { execFileSync } from 'node:child_process'
-import { readFileSync, realpathSync } from 'node:fs'
+import { execFileSync, spawnSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
+import { createHash } from 'node:crypto'
+import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import * as yaml from 'js-yaml'
 import { describe, expect, it } from 'vitest'
 
@@ -678,19 +681,24 @@ releaseDate: '2026-09-03T00:00:00.000Z'
       mergeArtifacts.run.indexOf('arches=(arm64)'),
       mergeArtifacts.run.indexOf('for artifact in'),
     )
-    for (const architectures of ['arm64', 'both']) {
-      for (const includeWindows of ['false', 'true']) {
-        const selected = execFileSync('bash', ['-c', `${artifactLoop}printf '%s\\n' "\${required_artifacts[@]}"`], {
-          env: { ...process.env, ARCHITECTURES: architectures, WINDOWS: includeWindows }, encoding: 'utf8',
-        }).trim().split('\n')
-        const expected = (architectures === 'both' ? ['arm64', 'x64'] : ['arm64']).flatMap(arch =>
-          ['dmg', 'dmg.blockmap', 'zip', 'zip.blockmap'].map(extension =>
-            `release-input/desktop-macos-${arch}/Mantur-Agent-macOS-${arch}.${extension}`))
-        if (includeWindows === 'true') {
-          expected.push(...['Mantur-Agent-Windows-x64.exe', 'Mantur-Agent-Windows-x64.exe.blockmap', 'latest.yml']
-            .map(filename => `release-input/desktop-windows-x64/${filename}`))
+    for (const metadata of ['latest', 'rc']) {
+      for (const architectures of ['arm64', 'both']) {
+        for (const includeWindows of ['false', 'true']) {
+          const selected = execFileSync('bash', ['-c', `${artifactLoop}printf '%s\\n' "\${required_artifacts[@]}"`], {
+            env: { ...process.env, ARCHITECTURES: architectures, WINDOWS: includeWindows, METADATA: metadata },
+            encoding: 'utf8',
+          }).trim().split('\n')
+          const expected = (architectures === 'both' ? ['arm64', 'x64'] : ['arm64']).flatMap(arch => [
+            `release-input/desktop-macos-${arch}/${metadata}-mac.yml`,
+            ...['dmg', 'dmg.blockmap', 'zip', 'zip.blockmap'].map(extension =>
+              `release-input/desktop-macos-${arch}/Mantur-Agent-macOS-${arch}.${extension}`),
+          ])
+          if (includeWindows === 'true') {
+            expected.push(...['Mantur-Agent-Windows-x64.exe', 'Mantur-Agent-Windows-x64.exe.blockmap', `${metadata}.yml`]
+              .map(filename => `release-input/desktop-windows-x64/${filename}`))
+          }
+          expect(selected).toEqual(expected)
         }
-        expect(selected).toEqual(expected)
       }
     }
     expect(mergeArtifacts.run).toContain('[ -f "$artifact" ] || {')
@@ -715,6 +723,92 @@ releaseDate: '2026-09-03T00:00:00.000Z'
     expect(publishSteps).toContain('published desktop assets are never replaced')
     expect(publishSteps).toContain('gh release create')
     expect(publishSteps).toContain('--verify-tag')
+  })
+})
+
+describe('desktop release artifact assembly', () => {
+  const cases = ['latest', 'rc'].flatMap(metadata => ['arm64', 'both'].flatMap(architectures =>
+    [false, true].map(windows => ({ metadata, architectures, windows }))))
+
+  it.each(cases)('assembles $metadata / $architectures / windows=$windows', ({ metadata, architectures, windows }) => {
+    const workflow = loadWorkflow('.github/workflows/desktop-release.yml')
+    const assemble = workflowJob(workflow, 'assemble')
+    if (!Array.isArray(assemble.steps)) throw new TypeError('Assembly steps are required')
+    const step = assemble.steps.filter(isRecord).find(value => value.name === 'Merge native artifacts and update metadata')
+    if (typeof step?.run !== 'string') throw new TypeError('Assembly command is required')
+    const temp = mkdtempSync(resolve(tmpdir(), 'desktop-release-assembly-'))
+    try {
+      const version = metadata === 'rc' ? '0.1.22-rc.2' : '0.1.22'
+      const arches = architectures === 'both' ? ['arm64', 'x64'] : ['arm64']
+      for (const arch of arches) {
+        const dir = resolve(temp, `release-input/desktop-macos-${arch}`)
+        mkdirSync(dir, { recursive: true })
+        const filename = `Mantur-Agent-macOS-${arch}.zip`
+        const bytes = Buffer.from(arch)
+        for (const extension of ['dmg', 'dmg.blockmap', 'zip', 'zip.blockmap']) {
+          writeFileSync(resolve(dir, `Mantur-Agent-macOS-${arch}.${extension}`), bytes)
+        }
+        const sha512 = createHash('sha512').update(bytes).digest('base64')
+        writeFileSync(resolve(dir, `${metadata}-mac.yml`), yaml.dump({
+          version, path: filename, sha512, files: [{ url: filename, sha512, size: bytes.length }],
+        }))
+      }
+      const windowsFiles = ['Mantur-Agent-Windows-x64.exe', 'Mantur-Agent-Windows-x64.exe.blockmap', `${metadata}.yml`]
+      if (windows) {
+        const dir = resolve(temp, 'release-input/desktop-windows-x64')
+        mkdirSync(dir, { recursive: true })
+        for (const filename of windowsFiles) writeFileSync(resolve(dir, filename), filename)
+      }
+      const require = createRequire(import.meta.url)
+      const merge = [process.execPath, '--import', pathToFileURL(require.resolve('tsx/esm')).href, resolve(root, 'scripts/desktop-release-update-info.ts')]
+        .map(value => `'${value.replaceAll('\\', '/').replaceAll("'", "'\\''")}'`).join(' ')
+      const script = step.run.replace('pnpm exec tsx scripts/desktop-release-update-info.ts', merge)
+      const env = { ...process.env, ARCHITECTURES: architectures, WINDOWS: String(windows), METADATA: metadata,
+        GITHUB_STEP_SUMMARY: resolve(temp, 'summary').replaceAll('\\', '/') }
+      const run = () => spawnSync('bash', ['-c', script], { cwd: temp, env, encoding: 'utf8' })
+      const result = run()
+      expect(result.signal).toBeNull()
+      expect(result.status, result.stderr).toBe(0)
+      const files = readdirSync(resolve(temp, 'release'))
+      expect(files).toEqual(expect.arrayContaining([`${metadata}-mac.yml`, 'SHA256SUMS']))
+      expect(files).not.toContain(`${metadata === 'rc' ? 'latest' : 'rc'}-mac.yml`)
+      for (const filename of windowsFiles) expect(files.includes(filename)).toBe(windows)
+      const info: unknown = yaml.load(readFileSync(resolve(temp, 'release', `${metadata}-mac.yml`), 'utf8'))
+      expect(info).toMatchObject({ version, files: [...arches].reverse().map(arch => ({
+        url: `Mantur-Agent-macOS-${arch}.zip`, size: arch.length,
+        sha512: createHash('sha512').update(arch).digest('base64'),
+      })) })
+      const summary = readFileSync(resolve(temp, 'summary'), 'utf8')
+      expect(summary).toContain(windows ? 'signed x64 installer and update metadata included' : 'NOT INCLUDED')
+      const checksums = readFileSync(resolve(temp, 'release/SHA256SUMS'), 'utf8').trim().split('\n')
+      expect(checksums).toHaveLength(files.length - 1)
+      for (const line of checksums) {
+        const [digest, filename] = line.split('  ')
+        expect(filename).toBeDefined()
+        expect(createHash('sha256').update(readFileSync(resolve(temp, 'release', filename!))).digest('hex')).toBe(digest)
+      }
+      for (const missing of [
+        ...arches.flatMap(arch => [
+          `release-input/desktop-macos-${arch}/${metadata}-mac.yml`,
+          ...['dmg', 'dmg.blockmap', 'zip', 'zip.blockmap'].map(extension =>
+            `release-input/desktop-macos-${arch}/Mantur-Agent-macOS-${arch}.${extension}`),
+        ]),
+        ...(windows ? windowsFiles.map(filename => `release-input/desktop-windows-x64/${filename}`) : []),
+      ]) {
+        const path = resolve(temp, missing)
+        const bytes = readFileSync(path)
+        rmSync(path)
+        rmSync(resolve(temp, 'release'), { recursive: true })
+        const rejected = run()
+        expect(rejected.signal).toBeNull()
+        expect(rejected.status).toBe(1)
+        expect(rejected.stdout).toContain(`Required desktop release artifact is missing: ${missing}`)
+        expect(readdirSync(resolve(temp, 'release'))).toEqual([])
+        writeFileSync(path, bytes)
+      }
+    } finally {
+      rmSync(temp, { recursive: true, force: true })
+    }
   })
 })
 
