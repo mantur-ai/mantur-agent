@@ -82,6 +82,8 @@ Local `/api/extract-frames` requests retain FFmpeg, FFprobe, optional Python lab
 
 Isolated-profile POST and PUT requests to `/upload` retain their request body, storage work and file-stream close result. Other upload routes and default profiles remain unconfirmed. The [local upload decision](../../../.agents/notes/implemented/bug-fix/2026-09-08-mantur-local-upload-shutdown.md) records supported paths and validation limits.
 
+Offline edit checkpoints preserve an optional original document after project migration and require its revision to match the checkpoint base. A supplied invalid or mismatched original rejects the checkpoint; older v1 checkpoints may omit it and recover from the revision-matched stored project. See the [checkpoint decision](../../../.agents/notes/implemented/bug-fix/2026-10-24-mantur-cut-offline-checkpoint.md).
+
 The shutdown patch digest and result tree are fixed by the [desktop source configuration](../../../apps/desktop/mantur-cut/source.json).
 
 The Host Remote resolves the Agent, coalesces concurrent opens, and launches `adapters/mantur-runtime.mjs`. It mounts the existing MCP client inside that Agent's scope. All mounted MCP clients resolve the same peer instance, preserving Agent-scoped server-name reservations. The MCP bearer remains in Host memory and the child environment. Disposal drains both connection and subprocess. The Client ignores startup responses from a Session that is no longer selected. No invariant companion is published: subprocess exit state belongs to the child handle; connection and tool-generation invariants belong to the MCP client.

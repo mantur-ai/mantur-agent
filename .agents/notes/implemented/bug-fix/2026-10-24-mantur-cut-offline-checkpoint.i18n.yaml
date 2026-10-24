@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-10-24-mantur-cut-offline-checkpoint.md
+2026-10-24-mantur-cut-offline-checkpoint.md: 7e34f806ef977141503429d1c1b036547bda24f2
+2026-10-24-mantur-cut-offline-checkpoint.zh.md: 9a6a57d8cc9431dec35bc64e146d024c9d97e57b

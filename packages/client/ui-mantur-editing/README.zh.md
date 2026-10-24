@@ -82,6 +82,8 @@ Agent 导入本地文件在手动模式下保留单次确认，素材先加入�
 
 隔离配置下 `/upload` 的 POST 和 PUT 请求保留请求体、存储工作及文件流关闭结果。其他上传路由和默认配置仍未确认。[本地上传决策](../../../.agents/notes/implemented/bug-fix/2026-09-08-mantur-local-upload-shutdown.zh.md)记录支持路径与验证限制。
 
+离线编辑检查点在工程迁移后保留可选的原始文档，并要求其版本摘要与检查点基准一致。传入无效或不匹配的原始文档会拒绝整个检查点；旧 v1 检查点可以省略该字段，并从版本匹配的已保存工程恢复。见[检查点决策](../../../.agents/notes/implemented/bug-fix/2026-10-24-mantur-cut-offline-checkpoint.zh.md)。
+
 退出补丁摘要和结果树由[桌面源码配置](../../../apps/desktop/mantur-cut/source.json)固定。
 
 Host Remote 解析 Agent，合并并发打开请求，并启动 `adapters/mantur-runtime.mjs`。既有 MCP 客户端挂载于该 Agent 作用域。所有挂载的 MCP 客户端解析到同一 peer 实例，保留 Agent 作用域内的服务器名称预留。MCP bearer 只存在于 Host 内存和子进程环境。卸载等待连接与子进程退出。Client 忽略已切走会话的启动结果。本包不发布 invariant companion：退出状态由子进程句柄直接持有，连接和工具版本约束由 MCP 客户端负责。
