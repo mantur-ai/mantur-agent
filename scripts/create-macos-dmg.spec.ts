@@ -74,6 +74,6 @@ describe('macOS DMG compression', () => {
 
   it('stops before blockmap generation when compression fails', () => {
     vi.mocked(spawnSync).mockReturnValue({ pid: 1, output: [], stdout: '', stderr: '', status: 1, signal: null })
-    expect(() => compressMacImage('/staging/input.dmg', '/staging/output.dmg')).toThrow('hdiutil exited with 1')
+    expect(() => { compressMacImage('/staging/input.dmg', '/staging/output.dmg') }).toThrow('hdiutil exited with 1')
   })
 })

@@ -701,7 +701,7 @@ releaseDate: '2026-09-03T00:00:00.000Z'
     expect(mergeArtifacts.run).not.toContain('Mantur-Agent-macOS-x64.*')
     expect(mergeArtifacts.run).toContain('scripts/desktop-release-update-info.ts')
     expect(publish).toMatchObject({
-      if: 'inputs.publish',
+      if: "${{ !cancelled() && inputs.publish && needs.validate.result == 'success' && needs.assemble.result == 'success' }}",
       needs: ['validate', 'assemble'],
       environment: 'macos-release',
       permissions: { contents: 'write' },

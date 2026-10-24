@@ -6,9 +6,12 @@ import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { COVERAGE_TEST_TIMEOUT_ENV, coverageTestTimeoutConfig } from './coverage-partitions.ts'
 import { compositorInstallName, copyRuntimeDependencies, relocateMacCompositor } from './mantur-cut-resources.ts'
 
 const directories: string[] = []
+// Native compilation, signing and executable launches share the existing per-command allowance.
+const nativeFixtureTimeout = Math.max(30_000, coverageTestTimeoutConfig(process.env[COVERAGE_TEST_TIMEOUT_ENV]).testTimeout ?? 0)
 
 async function temporaryDirectory(): Promise<string> {
   const directory = await mkdtemp(join(tmpdir(), 'mantur-staging-'))
@@ -23,7 +26,7 @@ async function file(root: string, path: string): Promise<void> {
 
 afterEach(async () => {
   await Promise.all(directories.splice(0).map(directory => rm(directory, { recursive: true, force: true })))
-})
+}, process.platform === 'darwin' ? nativeFixtureTimeout : undefined)
 
 describe('editor resource staging', () => {
   it.each(['darwin-arm64', 'darwin-x64', 'win32-x64'] as const)('copies only %s ONNX binaries and preserves other cache content and licenses', async (target) => {
@@ -73,7 +76,7 @@ describe('editor resource staging', () => {
   })
 
   // Mach-O install names, ad-hoc signing and hardened runtime are owned by macOS.
-  it.skipIf(process.platform !== 'darwin')('loads recursive sibling dylibs after relocation and hardened-runtime signing', async () => {
+  it.skipIf(process.platform !== 'darwin')('loads recursive sibling dylibs after relocation and hardened-runtime signing', { timeout: nativeFixtureTimeout }, async () => {
     const directory = await temporaryDirectory()
     const desktopRequire = createRequire(new URL('../apps/desktop/package.json', import.meta.url))
     const builderRequire = createRequire(desktopRequire.resolve('electron-builder'))

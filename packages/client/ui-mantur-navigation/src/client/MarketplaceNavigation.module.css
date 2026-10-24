@@ -169,7 +169,7 @@
 .installedCount {
   flex: none;
   padding: 8px 14px;
-  border: 1px solid var(--dsw-alias-border-l1);
+  border: 0.5px solid var(--dsw-alias-border-l1);
   border-radius: 10px;
   background: var(--dsw-alias-bg-raised);
   cursor: pointer;
@@ -304,7 +304,7 @@
   place-items: center;
   padding: 6px;
   overflow: hidden;
-  border: 1px solid var(--dsw-alias-border-l3);
+  border: 0.5px solid var(--dsw-alias-border-l3);
   border-radius: 12px;
   background: var(--dsw-alias-bg-base);
 }
@@ -951,7 +951,7 @@
   align-items: center;
   gap: 14px;
   padding: 20px;
-  border: 1px solid var(--dsw-alias-border-l1);
+  border: 0.5px solid var(--dsw-alias-border-l1);
   border-radius: 16px;
 }
 .skillSwitch {
@@ -970,6 +970,7 @@
   width: 14px;
   height: 14px;
   border-radius: 50%;
+  corner-shape: round;
   background: white;
   transition: transform 120ms ease;
 }

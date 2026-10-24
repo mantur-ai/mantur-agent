@@ -67,7 +67,7 @@
 .sectionTitle:not(:first-child) {
   margin-top: 8px;
   padding-top: 10px;
-  border-top: 1px solid var(--dsw-alias-border-l1);
+  border-top: 0.5px solid var(--dsw-alias-border-l1);
 }
 
 .itemIcon {

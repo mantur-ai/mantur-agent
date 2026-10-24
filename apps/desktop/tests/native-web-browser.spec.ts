@@ -12,8 +12,13 @@ function fixture() {
     getContentBounds: vi.fn(() => ({ width: 800, height: 600 })), contentView: { addChildView: vi.fn(), removeChildView: vi.fn() } }
   const event = { sender: window.webContents, senderFrame: frame } as unknown as IpcMainInvokeEvent
   const page = Object.assign(new EventEmitter(), { isDestroyed: vi.fn(() => false), close: vi.fn(),
-    loadURL: vi.fn(async (_url: string) => {}), setWindowOpenHandler: vi.fn(),
-    session: Object.assign(new EventEmitter(), { setPermissionCheckHandler: vi.fn(), setPermissionRequestHandler: vi.fn() }) })
+    loadURL: vi.fn(async (_url: string) => {}), setWindowOpenHandler: vi.fn<(handler: () => { action: 'deny' }) => void>(),
+    session: Object.assign(new EventEmitter(), {
+      setPermissionCheckHandler: vi.fn<(handler: () => boolean) => void>(),
+      setPermissionRequestHandler: vi.fn<(handler: (
+        contents: unknown, permission: string, callback: (granted: boolean) => void,
+      ) => void) => void>(),
+    }) })
   const view = { webContents: page, setVisible: vi.fn(), setBounds: vi.fn() }
   const createView = vi.fn(() => view as unknown as WebContentsView)
   const bridge = installNativeWebBrowser({
@@ -39,7 +44,7 @@ describe('native workbench browser', () => {
     const subject = fixture()
     await subject.show()
     expect(subject.createView).toHaveBeenCalledWith({ webPreferences: {
-      partition: expect.stringMatching(/^mantur-workbench-/u), sandbox: true, contextIsolation: true,
+      partition: expect.stringMatching(/^mantur-workbench-/u) as unknown, sandbox: true, contextIsolation: true,
       nodeIntegration: false, webviewTag: false, navigateOnDragDrop: false,
     } })
     expect(subject.view.setBounds).toHaveBeenLastCalledWith({ x: 500, y: 100, width: 300, height: 500 })

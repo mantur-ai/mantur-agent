@@ -9,6 +9,8 @@ English | [中文](README.zh.md)
 
 Skill cards display the published logo URL; the name initial is used only when the catalog provides no logo.
 
+Marketplace borders and circular switch thumbs follow the shared [Web UI style rules](../../../docs/web-styling.md).
+
 The Skill marketplace links to Installed skills, where users search local and bundled skills and persist individual switches. The UI updates a switch only after Host persistence succeeds and reports read or save failures. Disabled skills disappear from refreshed invocation catalogs and homepage recommendations.
 
 ## Summary

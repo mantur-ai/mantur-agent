@@ -5,8 +5,8 @@ import { z } from 'zod'
 
 const requestSchema = z.object({
   url: z.string(),
-  bounds: z.object({ x: z.number().finite().nonnegative(), y: z.number().finite().nonnegative(),
-    width: z.number().finite().positive(), height: z.number().finite().positive() }),
+  bounds: z.object({ x: z.number().nonnegative(), y: z.number().nonnegative(),
+    width: z.number().positive(), height: z.number().positive() }),
 })
 
 /**
@@ -102,10 +102,11 @@ export function installNativeWebBrowser(options: NativeWebBrowserOptions): { inv
       throw error
     }
   })
-  options.ipc.handle('mantur:web-browser:hide', async (event): Promise<void> => {
+  options.ipc.handle('mantur:web-browser:hide', (event): Promise<void> => new Promise<void>((resolve) => {
     authorize(event)
     generation += 1
     if (current && !current.view.webContents.isDestroyed()) current.view.setVisible(false)
-  })
+    resolve()
+  }))
   return { invalidate, resize }
 }

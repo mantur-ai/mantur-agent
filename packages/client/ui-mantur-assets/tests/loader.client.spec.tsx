@@ -9,6 +9,7 @@ import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
+import { UiConversation } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { useSyncExternalStore, type ComponentProps, type ComponentType } from 'react'
 import { expect, it, vi } from 'vitest'
@@ -34,12 +35,16 @@ it('loads asset slots before their shell, resolves Chinese copy, mounts on click
     locale.setLocale('zh')
     ctx.provide('locale', locale)
     ctx.provide('layout', { closeWorkbench: vi.fn() } as unknown as Context['layout'])
-    ctx.provide('uiConversation', {} as Context['uiConversation'])
     const session = 'asset-loader-session' as SessionId
     const sessionState = { current: session, byId: {} }
     const send = vi.fn(async (_text: string) => {})
     let bound = true
-    ctx.provide('sessions', { list: { getSnapshot: () => sessionState }, binding: () => bound ? { ctx: { get: () => ({ send }) } } : undefined } as unknown as Context['sessions'])
+    const sessions = {
+      list: { getSnapshot: () => sessionState, subscribe: () => () => {} },
+      binding: () => bound ? { ctx: { get: () => ({ send }) } } : undefined,
+    }
+    ctx.provide('sessions', sessions as unknown as Context['sessions'])
+    new UiConversation(ctx, sessions as unknown as Context['sessions'])
     const disposeRemote = vi.fn(async () => {})
     const snapshot: AssetSnapshot = { source: { path: '/project/assets.json', version: 'v1' as never, sha256: 'hash' }, stateVersion: null, state: { format: 1, path: '/project/assets.json', drafts: [], proposals: [], history: [], pending: null }, rows: [], projectState: null }
     const remote = {
