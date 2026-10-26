@@ -160,16 +160,21 @@ runpy.run_path(sys.argv.pop(1), run_name='__main__')
         workflow = yaml.safe_load((Path(__file__).parent.parent / '.github/workflows/desktop-release.yml').read_text())
         script = next(step['run'] for step in workflow['jobs']['publish']['steps'] if step.get('name') == 'Create GitHub release')
         gh = self.root / 'gh'
-        gh.write_text('#!/bin/sh\nif [ "$2" = view ]; then exit 1; fi\nprintf "%s\\n" "$@" > "$GH_CALL_LOG"\n')
+        gh.write_text('#!/bin/sh\nif [ "$2" = view ]; then exit 1; fi\nprintf "%s\\n" "$@" > "$GH_CALL_LOG"\nwhile [ "$#" -gt 0 ]; do\nif [ "$1" = --notes-file ]; then cp "$2" "$NOTES_LOG"; fi\nshift\ndone\n')
         gh.chmod(0o755)
+        notes = 'Release notes\nLiteral $HOME, `false`, and $(false) stay in this text.\n'
         for version in ('0.1.22', '0.1.22-rc.2'):
             log = self.root / 'gh-create'
-            result = subprocess.run(['bash', '-c', script], cwd=self.root, env={'PATH': str(self.root) + os.pathsep + os.defpath, 'VERSION': version, 'TAG': 'v' + version, 'GITHUB_REPOSITORY': 'fixture/repo', 'GH_CALL_LOG': str(log)}, capture_output=True, text=True)
+            notes_log = self.root / 'notes-captured'
+            result = subprocess.run(['bash', '-c', script], cwd=self.root, env={'PATH': str(self.root) + os.pathsep + os.defpath, 'VERSION': version, 'TAG': 'v' + version, 'GITHUB_REPOSITORY': 'fixture/repo', 'GH_CALL_LOG': str(log), 'RUNNER_TEMP': str(self.root), 'RELEASE_NOTES': notes, 'NOTES_LOG': str(notes_log)}, capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             args = log.read_text().splitlines()
             self.assertEqual(args[:3], ['release', 'create', 'v' + version])
             self.assertEqual('--latest=false' in args, '-rc.' in version)
             self.assertEqual('--prerelease' in args, '-rc.' in version)
+            self.assertEqual(notes_log.read_text(), notes + '\n')
+            self.assertNotIn('--generate-notes', args)
+            self.assertFalse(list(self.root.glob('desktop-release-notes.*')))
 
     def test_release_jobs_checkout_before_build_or_publish(self):
         workflow = yaml.safe_load((Path(__file__).parent.parent / '.github/workflows/desktop-release.yml').read_text())

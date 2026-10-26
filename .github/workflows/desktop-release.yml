@@ -21,6 +21,11 @@ on:
         required: true
         type: boolean
         default: false
+      release_notes:
+        description: User-facing release notes, required when publishing
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -51,6 +56,7 @@ jobs:
           PUBLISH: ${{ inputs.publish }}
           REF_NAME: ${{ github.ref_name }}
           REF_TYPE: ${{ github.ref_type }}
+          RELEASE_NOTES: ${{ inputs.release_notes }}
         run: |
           set -euo pipefail
           case "$ARCHITECTURES" in
@@ -77,6 +83,10 @@ jobs:
           printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
           printf 'mantur_cut_distribution=%s\n' "$mantur_cut_distribution" >> "$GITHUB_OUTPUT"
           if [ "$PUBLISH" = true ]; then
+            [ -n "${RELEASE_NOTES//[[:space:]]/}" ] || {
+              echo "::error::User-facing release notes are required for publication."
+              exit 1
+            }
             [ "$REF_TYPE" = tag ] && [ "$REF_NAME" = "v$version" ] || {
               echo "::error::Publication must run from tag v$version."
               exit 1
@@ -354,6 +364,19 @@ jobs:
             | sed 's#  release/#  #' \
             | sort -k2 > release/SHA256SUMS
 
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Archive verified desktop sources
+        run: |
+          set -euo pipefail
+          python -m unittest discover -s scripts -p test_desktop_release_sources.py
+          python scripts/desktop-release-sources.py release
+          find release -maxdepth 1 -type f ! -name SHA256SUMS -exec sha256sum {} \; \
+            | sed 's#  release/#  #' \
+            | sort -k2 > release/SHA256SUMS
+
       - uses: actions/upload-artifact@v7
         with:
           name: desktop-release-${{ needs.validate.outputs.version }}
@@ -421,6 +444,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
           VERSION: ${{ needs.validate.outputs.version }}
+          RELEASE_NOTES: ${{ inputs.release_notes }}
         run: |
           set -euo pipefail
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
@@ -431,10 +455,13 @@ jobs:
           case "$VERSION" in
             *-rc.*) release_flags+=(--prerelease --latest=false) ;;
           esac
+          notes_file="$(mktemp "$RUNNER_TEMP/desktop-release-notes.XXXXXX")"
+          trap 'rm -f "$notes_file"' EXIT
+          printf '%s\n' "$RELEASE_NOTES" > "$notes_file"
           gh release create "$TAG" release/* \
             --repo "$GITHUB_REPOSITORY" \
             --title "ManTur Agent" \
-            --generate-notes \
+            --notes-file "$notes_file" \
             "${release_flags[@]}"
 
       - name: Publish installers and update channel to TOS

@@ -94,6 +94,10 @@ smoke 还会检查内置 CLI 的固定来源记录、包版本、许可证和依
 
 工作流会把选中的原生 `<channel>-mac.yml` 合并为一份可区分架构的更新通道，并把完整候选产物与 `SHA256SUMS` 保留七天。必须从精确匹配 `v<apps/desktop 版本>` 的 tag 运行；tag 必须匹配打包版本。`publish=false` 会在组装候选产物后停止。`publish=true` 还要求审批变量指向完整固定源码配置的 SHA-256 摘要，之后才会创建 GitHub release，并同时上传 DMG、更新 ZIP、blockmap、更新元数据与哈希。工作流会拒绝使用已有 release 的 tag，不会替换已发布文件；仓库级 Release Immutability 则会继续阻止之后修改 tag 或产物。
 
+发布组装会把完整 Harness、上游 Cut、补丁后 Cut 和 Whisper Git 源码归档、`DESKTOP-SOURCES.json` 及 `DESKTOP-SOURCE-BUILD.txt` 加入同一校验清单和公开资产。[源码归档器](../../scripts/desktop-release-sources.py) 将它们绑定到发布 commit 和分发 ID，检查每层补丁及生成的 tree，并将每个归档文件与 Git 对照。受跟踪的工作树修改、不完整归档或已有源码输出都会阻止组装。源码交付与分发审批及私有的 90 天调试符号产物分别管理；参见[源码交付决策](../../.agents/notes/implemented/process/2026-10-26-desktop-release-sources.zh.md)。
+
+正式发布要求在工作流输入 `release_notes` 中提供非空白的用户 Markdown 说明。工作流通过说明文件把文本作为数据交给 GitHub，保留 shell 字符的字面值。`publish=false` 的候选构建不要求说明。开始发布前应说明改进、修复、升级步骤、支持的平台和已知限制。
+
 客户端通过 `https://mantur-pro.tos-accelerate.volces.com/mantur-agent/stable/` 通用 HTTPS 更新源检查版本。稳定版发布任务将文件保存到 TOS 的 `mantur-agent/releases/<version>/`，匿名分段下载验证通过后才更新 `stable/latest-mac.yml`。发布脚本校验 SHA-256 清单及更新文件的 SHA-512、大小，拒绝覆盖不同内容或降级更新源；仅安装包对象设为公开读。`macos-release` 受保护环境保存 `TOS_ACCESS_KEY` 和 `TOS_SECRET_KEY`，凭据不进入客户端。`Sync desktop release to TOS` 工作流可同步已公开的稳定版及手动附加的 Windows 安装包；GitHub 发布不可变且 Windows 包已单独发布到 TOS 时，手动同步选择 `windows_from_tos`，验证并发布该版本的 Windows 文件。未签名 Windows 不提供 `latest.yml`。官网手动下载使用 `stable/Mantur-Agent-macOS-arm64.dmg` 和 `stable/Mantur-Agent-Windows-x64.exe`；发布流程将已验证的安装包复制到禁止缓存的固定地址，并拒绝降级。未包含的平台保留该平台最后发布的安装包。自动更新元数据继续引用不可变的版本文件。0.1.18 及更早版本在 GitHub 不可达时需手动安装一次新版。现有资源域名连接新加坡桶，国内各地域的网络性能仍需验收。
 
 稳定版本使用 `latest[-mac].yml` 清单及 TOS 的 `stable/` 目录；带编号的 `-rc.N` 版本使用 `rc[-mac].yml` 和 `rc/`，手动安装包地址也互相隔离。RC 发布不会推进稳定版下载或 GitHub Latest。发布脚本的 `--check` 在不写入的情况下验证本地文件、必需配置、远端版本及不可变对象哈希；工作流完成此预检后才创建 GitHub release。选中 Windows 时必须包含已验证的安装包、blockmap 和清单。仅发布 Mac 不表示 Windows 已通过签名。同步工作流仍仅支持稳定版本。预检不能保证后续网络操作成功，也不能让 GitHub 与 TOS 发布成为原子操作；发布开始后失败仍需维护者核对并处理。打包客户端保留配置的稳定版更新源；发布 RC 对象不会让客户端自动订阅 RC 更新。

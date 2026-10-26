@@ -544,6 +544,7 @@ describe('Desktop release workflow', () => {
 
     expect(dispatch.inputs.publish).toMatchObject({ type: 'boolean', default: false })
     expect(dispatch.inputs.windows).toMatchObject({ type: 'boolean', default: false })
+    expect(dispatch.inputs.release_notes).toMatchObject({ type: 'string', required: false, default: '' })
     expect(windows).toMatchObject({
       if: 'inputs.windows',
       needs: 'validate',
@@ -580,6 +581,7 @@ describe('Desktop release workflow', () => {
         PUBLISH: '${{ inputs.publish }}',
         REF_NAME: '${{ github.ref_name }}',
         REF_TYPE: '${{ github.ref_type }}',
+        RELEASE_NOTES: '${{ inputs.release_notes }}',
       },
     })
     const authorizeScript = (authorize as { run?: string }).run
@@ -723,6 +725,41 @@ releaseDate: '2026-09-03T00:00:00.000Z'
     expect(publishSteps).toContain('published desktop assets are never replaced')
     expect(publishSteps).toContain('gh release create')
     expect(publishSteps).toContain('--verify-tag')
+    expect(publishSteps).toContain('--notes-file')
+    expect(publishSteps).not.toContain('--generate-notes')
+    const archiveSources = assembleSteps.find(step => step.name === 'Archive verified desktop sources')
+    expect(archiveSources?.run).toContain('python -m unittest discover -s scripts -p test_desktop_release_sources.py')
+    expect(archiveSources?.run).toContain('python scripts/desktop-release-sources.py release')
+    expect(archiveSources?.run).toContain('sort -k2 > release/SHA256SUMS')
+    expect(assembleSteps.indexOf(archiveSources!)).toBeLessThan(
+      assembleSteps.findIndex(step => step.uses === 'actions/upload-artifact@v7'),
+    )
+  })
+
+  it('requires nonblank user notes only when publication is selected', () => {
+    const validate = workflowJob(loadWorkflow('.github/workflows/desktop-release.yml'), 'validate')
+    if (!Array.isArray(validate.steps)) throw new TypeError('Release validation steps are required')
+    const authorize = validate.steps.filter(isRecord).find(step => step.name === 'Resolve and authorize desktop version')
+    if (typeof authorize?.run !== 'string') throw new TypeError('Release validation script is required')
+    const temp = mkdtempSync(resolve(tmpdir(), 'desktop-release-notes-'))
+    try {
+      mkdirSync(resolve(temp, 'apps/desktop/mantur-cut'), { recursive: true })
+      writeFileSync(resolve(temp, 'apps/desktop/package.json'), JSON.stringify({ version: '0.1.22' }))
+      writeFileSync(resolve(temp, 'apps/desktop/mantur-cut/source.json'), '{}\n')
+      for (const [publish, notes, status] of [['false', '', 0], ['true', '', 1], ['true', ' \n\t', 1], ['true', 'User-visible fixes', 0]] as const) {
+        const result = spawnSync('bash', ['-c', authorize.run], {
+          cwd: temp,
+          env: { ...process.env, ARCHITECTURES: 'arm64', PUBLISH: publish, REF_NAME: 'v0.1.22', REF_TYPE: 'tag',
+            RELEASE_NOTES: notes, GITHUB_OUTPUT: resolve(temp, 'output').replaceAll('\\', '/') },
+          encoding: 'utf8',
+        })
+        expect(result.signal).toBeNull()
+        expect(result.status, result.stderr).toBe(status)
+        if (status === 1) expect(result.stdout).toContain('User-facing release notes are required')
+      }
+    } finally {
+      rmSync(temp, { recursive: true, force: true })
+    }
   })
 })
 
