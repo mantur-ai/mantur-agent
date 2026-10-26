@@ -24,6 +24,11 @@ export interface ConversationDrafts {
   /** Browser-owned editor and attachments; not a fabricated Session. */
   readonly input: SessionInput
   /**
+   * Wait for native restoration before editing the resident draft.
+   * @returns completion of restoration; persistence or teardown failures reject without changing input.
+   */
+  waitForDraft(): Promise<void>
+  /**
    * Retain a retry identity until the complete unassigned draft transfers.
    * @returns a stable identity, persisted only when the native checkpoint capability is composed.
    */

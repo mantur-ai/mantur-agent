@@ -379,200 +379,152 @@ describe('Mantur marketplace store', () => {
     })
   })
 
-  it('opens a default-named Session with the installed Skill reference as an unsent draft', async () => {
+  it('appends to the selected Session without creating or opening another Session', async () => {
     const appendReference = vi.fn(() => true)
-    const send = vi.fn()
-    const inputFor = vi.fn(() => ({ appendReference }))
-    const bindingCtx = { get: (name: string) => name === 'conversation' ? { input: { for: inputFor }, send } : undefined }
+    const waitForDraft = vi.fn(async () => {})
+    const conversation = { input: { for: vi.fn(() => ({ appendReference })), waitForDraft }, send: vi.fn() }
+    const binding = { ctx: { get: () => conversation } }
     const sessions = {
       list: { getSnapshot: () => ({ current: 'session-current' }) },
-      create: vi.fn().mockResolvedValue('session-skill'),
-      binding: vi.fn(() => ({ ctx: bindingCtx })),
-      open: vi.fn(),
+      create: vi.fn(), binding: vi.fn(() => binding), open: vi.fn(),
     }
     const store = new ManturMarketplaceStore({
-      remote: {},
-      get: (name: string) => name === 'sessions'
-        ? sessions
-        : name === 'workspaces'
-          ? { list: { getSnapshot: () => ({ items: [{ workspaceId: 'workspace-1', sessionIds: ['session-current'] }] }) } }
-          : undefined,
+      get: (name: string) => name === 'sessions' ? sessions : undefined,
     } as unknown as Context)
-    store.store.set({
-      phase: 'ready', catalog: { skills: [{ ...listed, installed: true }], installedCount: 1, signedIn: true },
-    })
-
+    store.store.set({ phase: 'ready', catalog: { skills: [{ ...listed, installed: true }], installedCount: 1, signedIn: true } })
     await expect(store.startSkill(listed.slug)).resolves.toBe(true)
-
-    expect(sessions.create).toHaveBeenCalledWith({ workspaceId: 'workspace-1' })
-    expect(inputFor).toHaveBeenCalledWith(bindingCtx)
+    expect(waitForDraft).toHaveBeenCalledWith('session-current')
+    expect(conversation.input.for).toHaveBeenCalledWith(binding.ctx)
     expect(appendReference).toHaveBeenCalledWith({ source: 'skill', ref: listed.slug, label: listed.name, clipboardText: '/story-director' })
-    expect(send).not.toHaveBeenCalled()
-    expect(sessions.open).toHaveBeenCalledWith('session-skill')
+    expect(conversation.send).not.toHaveBeenCalled()
+    expect(sessions.create).not.toHaveBeenCalled()
+    expect(sessions.open).not.toHaveBeenCalled()
     expect(store.store.getSnapshot()).toMatchObject({ using: undefined, useError: undefined })
   })
 
   it('rejects Skill launches without an installed selection or required services', async () => {
-    const idle = new ManturMarketplaceStore({ remote: {}, get: () => undefined } as unknown as Context)
+    const idle = new ManturMarketplaceStore({ get: () => undefined } as unknown as Context)
     await expect(idle.startSkill(listed.slug)).resolves.toBe(false)
     idle.store.set({ phase: 'ready', catalog: { skills: [listed], installedCount: 0, signedIn: true } })
     await expect(idle.startSkill(listed.slug)).resolves.toBe(false)
     idle.store.set({
-      phase: 'ready', catalog: { skills: [{ ...listed, installed: true }], installedCount: 1, signedIn: true },
-      using: listed.slug,
+      phase: 'ready', catalog: { skills: [{ ...listed, installed: true }], installedCount: 1, signedIn: true }, using: listed.slug,
     })
     await expect(idle.startSkill(listed.slug)).resolves.toBe(false)
     idle.store.set({ ...idle.store.getSnapshot() as Extract<ReturnType<typeof idle.store.getSnapshot>, { phase: 'ready' }>, using: undefined })
     await expect(idle.startSkill(listed.slug)).rejects.toThrow('Skill launch services are unavailable')
-
-    const sessionsOnly = new ManturMarketplaceStore({
-      remote: {}, get: (name: string) => name === 'sessions' ? {} : undefined,
+    const noDraft = new ManturMarketplaceStore({
+      get: (name: string) => name === 'sessions' ? { list: { getSnapshot: () => ({ current: undefined }) } } : undefined,
     } as unknown as Context)
-    sessionsOnly.store.set({
-      phase: 'ready', catalog: { skills: [{ ...listed, installed: true }], installedCount: 1, signedIn: true },
-    })
-    await expect(sessionsOnly.startSkill(listed.slug)).rejects.toThrow('Skill launch services are unavailable')
-
-    const noProject = new ManturMarketplaceStore({
-      remote: {},
-      get: (name: string) => name === 'sessions'
-        ? { list: { getSnapshot: () => ({ current: undefined }) } }
-        : name === 'workspaces'
-          ? { list: { getSnapshot: () => ({ items: [] }) } }
-          : undefined,
-    } as unknown as Context)
-    noProject.store.set({
-      phase: 'ready', catalog: { skills: [{ ...listed, installed: true }], installedCount: 1, signedIn: true },
-    })
-    await expect(noProject.startSkill(listed.slug)).resolves.toBe(false)
-    expect(noProject.store.getSnapshot()).toMatchObject({ useError: 'failed' })
+    noDraft.store.set({ phase: 'ready', catalog: { skills: [{ ...listed, installed: true }], installedCount: 1, signedIn: true } })
+    await expect(noDraft.startSkill(listed.slug)).resolves.toBe(false)
+    expect(noDraft.store.getSnapshot()).toMatchObject({ useError: 'failed' })
   })
 
-  it('adds a structured Skill to the resident homepage draft without creating or sending a Session', async () => {
+  it('adds to the restored homepage draft without creating, sending or clearing selection', async () => {
+    const restored = Promise.withResolvers<undefined>()
     const appendReference = vi.fn(() => true)
     const sessions = { list: { getSnapshot: () => ({ current: undefined }) }, clear: vi.fn(), create: vi.fn(), open: vi.fn() }
-    const drafts = { enabled: { getSnapshot: () => true }, input: { appendReference } }
+    const drafts = { enabled: { getSnapshot: () => true }, input: { appendReference }, waitForDraft: () => restored.promise }
     const store = new ManturMarketplaceStore({
-      remote: {}, get: (name: string) => name === 'sessions' ? sessions
-        : name === 'workspaces' ? { list: { getSnapshot: () => ({ items: [] }) } }
-          : name === 'conversationDrafts' ? drafts : undefined,
+      get: (name: string) => name === 'sessions' ? sessions : name === 'conversationDrafts' ? drafts : undefined,
     } as unknown as Context)
     store.store.set({ phase: 'ready', catalog: { skills: [{ ...listed, installed: true }], installedCount: 1, signedIn: true } })
-    await expect(store.startSkill(listed.slug)).resolves.toBe(true)
+    const pending = store.startSkill(listed.slug)
+    expect(appendReference).not.toHaveBeenCalled()
+    await expect(store.startSkill(listed.slug)).resolves.toBe(false)
+    restored.resolve(undefined)
+    await expect(pending).resolves.toBe(true)
     expect(appendReference).toHaveBeenCalledWith({ source: 'skill', ref: listed.slug, label: listed.name, clipboardText: `/${listed.slug}` })
-    expect(sessions.clear).toHaveBeenCalledOnce()
+    expect(sessions.clear).not.toHaveBeenCalled()
     expect(sessions.create).not.toHaveBeenCalled()
     expect(sessions.open).not.toHaveBeenCalled()
     appendReference.mockReturnValue(false)
     await expect(store.startSkill(listed.slug)).resolves.toBe(false)
     expect(store.store.getSnapshot()).toMatchObject({ useError: 'failed' })
-    expect(sessions.clear).toHaveBeenCalledOnce()
   })
 
-  it('reuses a failed Skill Session and archives it when the selected Project changes', async () => {
-    const selection = { current: 'session-current-1' }
-    const items = [
-      { workspaceId: 'workspace-1', sessionIds: ['session-current-1'] },
-      { workspaceId: 'workspace-2', sessionIds: ['session-current-2'] },
-    ]
-    const archiveSession = vi.fn().mockResolvedValue(undefined)
-    const appendReference = vi.fn(() => true)
-    let bindingMode: 'missing-binding' | 'missing-conversation' | 'ready' = 'missing-binding'
+  it.each(['binding', 'conversation', 'locked'] as const)('retains selection when the Skill target is unavailable: %s', async (failure) => {
+    const appendReference = vi.fn(() => false)
+    const conversation = { input: { for: () => ({ appendReference }), waitForDraft: async () => {} } }
+    const binding = { ctx: { get: () => failure === 'conversation' ? undefined : conversation } }
     const sessions = {
-      list: { getSnapshot: () => selection },
-      create: vi.fn()
-        .mockResolvedValueOnce('session-skill-1')
-        .mockResolvedValueOnce('session-skill-2'),
-      binding: () => bindingMode === 'missing-binding'
-        ? undefined
-        : {
-          ctx: {
-            get: () => bindingMode === 'missing-conversation'
-              ? undefined
-              : { input: { for: () => ({ appendReference }) } },
-          },
-        },
-      open: vi.fn(),
+      list: { getSnapshot: () => ({ current: 'current' }) },
+      binding: () => failure === 'binding' ? undefined : binding,
+      create: vi.fn(), open: vi.fn(),
     }
-    const store = new ManturMarketplaceStore({
-      remote: {},
-      get: (name: string) => name === 'sessions'
-        ? sessions
-        : name === 'workspaces'
-          ? { list: { getSnapshot: () => ({ items }) }, archiveSession }
-          : undefined,
-    } as unknown as Context)
-    const ready = {
-      phase: 'ready' as const,
-      catalog: { skills: [{ ...listed, installed: true }], installedCount: 1, signedIn: true },
-    }
-
-    store.store.set(ready)
+    const store = new ManturMarketplaceStore({ get: () => sessions } as unknown as Context)
+    store.store.set({ phase: 'ready', catalog: { skills: [{ ...listed, installed: true }], installedCount: 1, signedIn: true } })
     await expect(store.startSkill(listed.slug)).resolves.toBe(false)
     expect(store.store.getSnapshot()).toMatchObject({ using: undefined, useError: 'failed' })
-
-    bindingMode = 'missing-conversation'
-    store.store.set(ready)
-    await expect(store.startSkill(listed.slug)).resolves.toBe(false)
-    expect(sessions.create).toHaveBeenCalledTimes(1)
-
-    bindingMode = 'ready'
-    appendReference.mockReturnValueOnce(false)
-    await expect(store.startSkill(listed.slug)).resolves.toBe(false)
-    expect(store.store.getSnapshot()).toMatchObject({ using: undefined, useError: 'failed' })
+    expect(sessions.create).not.toHaveBeenCalled()
     expect(sessions.open).not.toHaveBeenCalled()
-    expect(sessions.create).toHaveBeenCalledTimes(1)
-
-    selection.current = 'session-current-2'
-    bindingMode = 'ready'
-    store.store.set(ready)
-    await expect(store.startSkill(listed.slug)).resolves.toBe(true)
-    expect(archiveSession).toHaveBeenCalledWith('session-skill-1')
-    expect(sessions.create).toHaveBeenCalledTimes(2)
-    expect(appendReference).toHaveBeenCalledWith({ source: 'skill', ref: listed.slug, label: listed.name, clipboardText: '/story-director' })
-    expect(sessions.open).toHaveBeenCalledWith('session-skill-2')
   })
 
-  it('does not overwrite Skill state changed while Session creation settles', async () => {
-    const ready = {
-      phase: 'ready' as const,
-      catalog: { skills: [{ ...listed, installed: true }], installedCount: 1, signedIn: true },
-    }
-    const makeStore = (create: ReturnType<typeof vi.fn>) => {
-      const bindingCtx = { get: () => ({ input: { for: () => ({ appendReference: vi.fn(() => true) }) } }) }
-      const sessions = {
-        list: { getSnapshot: () => ({ current: 'session-current' }) },
-        create,
-        binding: () => ({ ctx: bindingCtx }),
-        open: vi.fn(),
-      }
-      const store = new ManturMarketplaceStore({
-        remote: {},
-        get: (name: string) => name === 'sessions'
-          ? sessions
-          : name === 'workspaces'
-            ? { list: { getSnapshot: () => ({ items: [{ workspaceId: 'workspace-1', sessionIds: ['session-current'] }] }) } }
-            : undefined,
-      } as unknown as Context)
-      store.store.set(ready)
-      return store
-    }
+  it.each(['selection', 'binding', 'conversation', 'dispose', 'load-failure'] as const)('rejects a pending Skill insertion after %s', async (change) => {
+    const restored = Promise.withResolvers<undefined>()
+    const appendReference = vi.fn(() => true)
+    const originalConversation = { input: { for: () => ({ appendReference }), waitForDraft: () => restored.promise } }
+    let conversation: typeof originalConversation | undefined = originalConversation
+    const originalBinding = { ctx: { get: () => conversation } }
+    let binding: typeof originalBinding | undefined = originalBinding
+    const selection = { current: 'current' }
+    const sessions = { list: { getSnapshot: () => selection }, binding: () => binding, open: vi.fn() }
+    const store = new ManturMarketplaceStore({ get: () => sessions } as unknown as Context)
+    store.store.set({ phase: 'ready', catalog: { skills: [{ ...listed, installed: true }], installedCount: 1, signedIn: true } })
+    const pending = store.startSkill(listed.slug)
+    if (change === 'selection') selection.current = 'other'
+    if (change === 'binding') binding = undefined
+    if (change === 'conversation') conversation = undefined
+    if (change === 'dispose') store.dispose()
+    if (change === 'load-failure') restored.reject(new Error('checkpoint unreadable'))
+    else restored.resolve(undefined)
+    await expect(pending).resolves.toBe(false)
+    expect(appendReference).not.toHaveBeenCalled()
+    expect(sessions.open).not.toHaveBeenCalled()
+  })
 
-    const successfulCreation = Promise.withResolvers<string>()
-    const successful = makeStore(vi.fn(() => successfulCreation.promise))
-    const successfulLaunch = successful.startSkill(listed.slug)
-    successful.store.set({ phase: 'failed' })
-    successfulCreation.resolve('session-skill')
-    await expect(successfulLaunch).resolves.toBe(true)
-    expect(successful.store.getSnapshot()).toEqual({ phase: 'failed' })
+  it('keeps a newer Skill insertion pending when a closed detail invalidates an older wait', async () => {
+    const older = Promise.withResolvers<undefined>()
+    const newer = Promise.withResolvers<undefined>()
+    const appendReference = vi.fn(() => true)
+    const drafts = {
+      enabled: { getSnapshot: () => true }, input: { appendReference },
+      waitForDraft: vi.fn().mockReturnValueOnce(older.promise).mockReturnValueOnce(newer.promise),
+    }
+    const sessions = { list: { getSnapshot: () => ({ current: undefined }) } }
+    const store = new ManturMarketplaceStore({
+      get: (name: string) => name === 'sessions' ? sessions : drafts,
+    } as unknown as Context)
+    store.store.set({ phase: 'ready', catalog: { skills: [{ ...listed, installed: true }], installedCount: 1, signedIn: true } })
+    const oldAction = store.startSkill(listed.slug)
+    store.closeDetail()
+    const newAction = store.startSkill(listed.slug)
+    const pendingState = store.store.getSnapshot()
+    older.resolve(undefined)
+    await expect(oldAction).resolves.toBe(false)
+    expect(store.store.getSnapshot()).toBe(pendingState)
+    expect(appendReference).not.toHaveBeenCalled()
+    newer.resolve(undefined)
+    await expect(newAction).resolves.toBe(true)
+    expect(appendReference).toHaveBeenCalledOnce()
+  })
 
-    const failedCreation = Promise.withResolvers<string>()
-    const failed = makeStore(vi.fn(() => failedCreation.promise))
-    const failedLaunch = failed.startSkill(listed.slug)
-    failed.store.set({ phase: 'failed' })
-    failedCreation.reject(new Error('failed'))
-    await expect(failedLaunch).resolves.toBe(false)
-    expect(failed.store.getSnapshot()).toEqual({ phase: 'failed' })
+  it('does not overwrite a catalog failure while native restoration settles', async () => {
+    const restored = Promise.withResolvers<undefined>()
+    const drafts = {
+      enabled: { getSnapshot: () => true }, input: { appendReference: vi.fn(() => true) }, waitForDraft: () => restored.promise,
+    }
+    const sessions = { list: { getSnapshot: () => ({ current: undefined }) } }
+    const store = new ManturMarketplaceStore({
+      get: (name: string) => name === 'sessions' ? sessions : drafts,
+    } as unknown as Context)
+    store.store.set({ phase: 'ready', catalog: { skills: [{ ...listed, installed: true }], installedCount: 1, signedIn: true } })
+    const pending = store.startSkill(listed.slug)
+    store.store.set({ phase: 'failed' })
+    restored.reject(new Error('checkpoint unreadable'))
+    await expect(pending).resolves.toBe(false)
+    expect(store.store.getSnapshot()).toEqual({ phase: 'failed' })
   })
 
   it('keeps local conflicts distinct from generic installation failures', async () => {

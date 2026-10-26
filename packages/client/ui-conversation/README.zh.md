@@ -42,7 +42,7 @@ target package 通过 declaration merge 扩展 snapshot 与 Location data map，
 
 View 选择规则固定：有效且已注册的持久化选择优先，其次是已注册的 `chat`，否则不渲染 View；绝不选择第一个已注册 View。Shell phase 只组合 Session lifecycle 与 active-target set，不读取任何 target-specific snapshot。
 
-产品插件可以占用空对话标题下方的 `conversation.hero.modes` 与常驻输入框上方的 `conversation.composer.guide`。两个 slot 都不拥有编辑器。Session input facade 的 `appendReference` 在文档末尾追加引用，按 source 与引用标识去重，并聚焦编辑器而不提交；输入处于 adjudicating 或 submitting 时拒绝该操作。
+产品插件可以占用空对话标题下方的 `conversation.hero.modes` 与常驻输入框上方的 `conversation.composer.guide`。两个 slot 都不拥有编辑器。Session input facade 的 `appendReference` 在文档末尾追加引用，按 source 与引用标识去重，并聚焦编辑器而不提交；输入处于 adjudicating 或 submitting 时拒绝该操作。程序写入方在编辑前等待 `conversation.input.waitForDraft(sessionId)` 或 `conversationDrafts.waitForDraft()`。恢复失败会拒绝等待且不替换草稿；等待成功不锁定输入，调用方仍需验证目标和修改结果。
 
 `conversation.composer.layout` 接收所有者创建的标题、工作区与内容节点。默认顺序把工作区放在编辑器之前；产品 occupant 可以重排这些节点，而不替换控件或状态。内容节点必须在 hero 与 active 阶段保持相同的 React 位置，以保留常驻编辑器。
 

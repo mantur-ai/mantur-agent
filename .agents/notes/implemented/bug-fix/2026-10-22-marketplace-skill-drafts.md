@@ -10,7 +10,7 @@ The marketplace rejected installed Skill use without a selected Project. Install
 
 ## Decision
 
-The Mantur navigation plugin appends the existing structured `skill` reference and returns to conversation. With a selected Project it opens a new Session in that Project; without one it uses the resident unassigned draft. The existing first-send policy owns Project and Session preparation. Text and attachments in that draft remain intact, and repeated selection of the same reference is idempotent. Installed labels and green use actions distinguish installed Skills from neutral installation actions.
+The Mantur navigation plugin appends the existing structured `skill` reference and returns to conversation. The selected-Project new-Session branch is partially superseded by [preserving the selected draft](2026-10-26-preserve-marketplace-skill-drafts.md). Without a selected Session it uses the resident unassigned draft. The existing first-send policy owns Project and Session preparation. Text and attachments in that draft remain intact, and repeated selection of the same reference is idempotent. Installed labels and green use actions distinguish installed Skills from neutral installation actions.
 
 ## Alternatives considered
 

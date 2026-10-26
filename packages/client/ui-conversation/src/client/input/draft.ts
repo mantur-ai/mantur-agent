@@ -80,6 +80,10 @@ export class ConversationDraftController extends Service implements Conversation
     }), 'conversation: cancel unassigned preparation on navigation')
   }
 
+  waitForDraft(): Promise<void> {
+    return this.ready
+  }
+
   async prepareIdentity(): Promise<ConversationDraftId> {
     await this.ready
     if (this.hub.persistence !== undefined) return await this.hub.persistence.prepareIdentity() as ConversationDraftId

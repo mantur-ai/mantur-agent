@@ -79,7 +79,6 @@ export class ManturMarketplaceStore {
   private recipeGeneration = 0
   private loginGeneration = 0
   private loginTimer: number | undefined
-  private pendingSkillSession: { readonly workspaceId: WorkspaceId; readonly sessionId: SessionId } | undefined
   private pendingRecipeSession: { readonly workspaceId: WorkspaceId; readonly sessionId: SessionId } | undefined
 
   /** @param ctx - client context carrying the generated marketplace Remote. */
@@ -311,7 +310,7 @@ export class ManturMarketplaceStore {
   }
 
   /**
-   * Open an installed Skill reference in a new project Session or the resident unassigned draft.
+   * Append an installed Skill reference to the selected Session or resident unassigned draft.
    * @param slug - Installed Skill selected by the user.
    * @returns whether the unsent reference is ready in the conversation editor.
    */
@@ -322,45 +321,41 @@ export class ManturMarketplaceStore {
       : undefined
     if (current.phase !== 'ready' || skill?.installed !== true || current.using !== undefined) return false
     const sessions = this.ctx.get('sessions')
-    const workspaces = this.ctx.get('workspaces')
-    if (sessions === undefined || workspaces === undefined) throw new Error('Skill launch services are unavailable')
+    if (sessions === undefined) throw new Error('Skill launch services are unavailable')
     const currentSessionId = sessions.list.getSnapshot().current
-    const workspace = currentSessionId === undefined
-      ? undefined
-      : workspaces.list.getSnapshot().items.find(item => item.sessionIds.includes(currentSessionId))
+    const generation = this.generation
     const reference = { source: 'skill', ref: slug, label: skill.name, clipboardText: `/${slug}` }
     this.store.set({ ...current, using: slug, useError: undefined })
     try {
-      if (workspace === undefined) {
+      if (currentSessionId === undefined) {
         const drafts = this.ctx.get('conversationDrafts')
-        if (drafts === undefined || !drafts.enabled.getSnapshot() || !drafts.input.appendReference(reference)) {
+        if (drafts === undefined) throw new Error('Skill draft is unavailable')
+        await drafts.waitForDraft()
+        if (generation !== this.generation || sessions.list.getSnapshot().current !== undefined
+          || this.ctx.get('conversationDrafts')?.input !== drafts.input || !drafts.enabled.getSnapshot()
+          || !drafts.input.appendReference(reference)) {
           throw new Error('Skill draft is unavailable')
         }
-        sessions.clear()
-        this.store.set({ ...current, using: undefined, useError: undefined })
-        return true
+      } else {
+        const binding = sessions.binding(currentSessionId)
+        if (binding === undefined) throw new Error(`Skill session "${currentSessionId}" resolved no binding`)
+        const conversation = binding.ctx.get('conversation')
+        if (conversation === undefined) throw new Error('Skill conversation service is unavailable')
+        await conversation.input.waitForDraft(currentSessionId)
+        if (generation !== this.generation || sessions.list.getSnapshot().current !== currentSessionId
+          || sessions.binding(currentSessionId) !== binding || binding.ctx.get('conversation')?.input !== conversation.input
+          || !conversation.input.for(binding.ctx).appendReference(reference)) {
+          throw new Error('Skill draft is unavailable')
+        }
       }
-      if (this.pendingSkillSession !== undefined
-        && this.pendingSkillSession.workspaceId !== workspace.workspaceId) {
-        await workspaces.archiveSession(this.pendingSkillSession.sessionId)
-        this.pendingSkillSession = undefined
-      }
-      const sessionId = this.pendingSkillSession?.sessionId
-        ?? await sessions.create({ workspaceId: workspace.workspaceId })
-      this.pendingSkillSession = { workspaceId: workspace.workspaceId, sessionId }
-      const binding = sessions.binding(sessionId)
-      if (binding === undefined) throw new Error(`Skill session "${sessionId}" resolved no binding`)
-      const conversation = binding.ctx.get('conversation')
-      if (conversation === undefined) throw new Error('Skill conversation service is unavailable')
-      if (!conversation.input.for(binding.ctx).appendReference(reference)) throw new Error('Skill draft is unavailable')
-      sessions.open(sessionId)
-      this.pendingSkillSession = undefined
       const latest = this.store.getSnapshot()
       if (latest.phase === 'ready') this.store.set({ ...latest, using: undefined, useError: undefined })
       return true
     } catch {
       const latest = this.store.getSnapshot()
-      if (latest.phase === 'ready') this.store.set({ ...latest, using: undefined, useError: 'failed' })
+      if (generation === this.generation && latest.phase === 'ready') {
+        this.store.set({ ...latest, using: undefined, useError: 'failed' })
+      }
       return false
     }
   }
