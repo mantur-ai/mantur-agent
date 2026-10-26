@@ -23,6 +23,7 @@ const native = vi.hoisted(() => ({
   contextBridge: { exposeInMainWorld: vi.fn<(name: string, value: unknown) => void>() },
   dialog: { showOpenDialog: vi.fn(), showMessageBox: vi.fn() },
   drafts: { prepare: vi.fn(async () => 0), release: vi.fn() },
+  cutExport: { isPending: () => false, invalidate: vi.fn(async () => {}) },
   account: { close: vi.fn(async () => {}) },
   service: { child: { once: vi.fn() }, ready: Promise.resolve('http://127.0.0.1:40001/'),
     stopAndVerifyExit: vi.fn(async () => {}), stop: vi.fn(), closed: Promise.resolve() },
@@ -49,6 +50,7 @@ vi.mock('../src/desktop-state.ts', () => ({
 }))
 vi.mock('../src/draft-storage.ts', () => ({ DesktopDraftStorage: vi.fn(function () {}) }))
 vi.mock('../src/draft-bridge.ts', () => ({ installDraftBridge: () => native.drafts }))
+vi.mock('../src/cut-export-bridge.ts', () => ({ installCutExportBridge: () => native.cutExport }))
 vi.mock('../src/auth/host.ts', () => ({ NativeAccountHost: vi.fn(function () { return native.account }) }))
 vi.mock('../src/auth/ipc.ts', () => ({ installNativeAccountBridge: () => ({ publish: vi.fn() }) }))
 vi.mock('../src/update-bridge.ts', () => ({ installUpdateBridge: () => ({ publish: vi.fn() }) }))
@@ -108,6 +110,20 @@ async function startup() {
 }
 
 describe('desktop directory picker wiring', () => {
+  it('rechecks export cleanup after a renderer retry before preparing an update', async () => {
+    const subject = await startup()
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    native.cutExport.invalidate.mockRejectedValueOnce(new Error('temporary unlink failure'))
+    const navigate = native.window.webContents.on.mock.calls.find(([name]) => name === 'did-start-navigation')![1] as
+      (event: unknown, url: string, inPlace: boolean, mainFrame: boolean) => void
+    navigate({}, 'http://127.0.0.1:40001/', false, true)
+    await vi.waitFor(() => { expect(console.error).toHaveBeenCalled() })
+    await native.cutExport.invalidate()
+    await subject.beforeInstall()
+    expect(native.cutExport.invalidate).toHaveBeenCalledTimes(3)
+    expect(native.service.stopAndVerifyExit).toHaveBeenCalledOnce()
+  })
+
   it('waits for old connection cookies to be removed before loading the new Host', async () => {
     const cleared = Promise.withResolvers<never[]>()
     native.window.webContents.session.cookies.get.mockReturnValueOnce(cleared.promise)
@@ -243,7 +259,7 @@ describe('native draft wiring', () => {
     const preventDefault = vi.fn()
     quit({ preventDefault })
     quit({ preventDefault })
-    expect(native.drafts.prepare).toHaveBeenCalledOnce()
+    await vi.waitFor(() => { expect(native.drafts.prepare).toHaveBeenCalledOnce() })
     expect(native.service.stop).not.toHaveBeenCalled()
     expect(native.app.quit).not.toHaveBeenCalled()
     receipt.resolve(7)
@@ -283,7 +299,7 @@ describe('native draft wiring', () => {
     const quit = native.app.on.mock.calls.find(([name]) => name === 'before-quit')![1] as
       (event: { preventDefault(): void }) => void
     quit({ preventDefault: vi.fn() })
-    expect(native.drafts.prepare).toHaveBeenCalledOnce()
+    await vi.waitFor(() => { expect(native.drafts.prepare).toHaveBeenCalledOnce() })
     receipt.resolve(1)
     await installation
     expect(native.service.stopAndVerifyExit).toHaveBeenCalledOnce()

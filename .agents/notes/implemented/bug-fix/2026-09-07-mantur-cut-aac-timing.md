@@ -18,6 +18,8 @@ Each export owns a temporary directory beside its destination. The helper render
 
 The patch changes editor render orchestration and its server export caller, not the Harness core, Agent loop, MCP protocol, dependency installations, or lock versions. Its source commit, result tree and patch digest remain recorded in the [editing package README](../../../../packages/client/ui-mantur-editing/README.md#understand-the-implementation).
 
+The [embedded export decision](2026-10-26-mantur-cut-embedded-export.md) requires H.264 browser callers to select this server path because the pinned browser encoder also loses AAC priming. Its reproduced delay is distinct from the ADTS defect described here.
+
 ## Fixed audio presence semantics
 
 Remotion 4.0.509 records an asset container for every successfully rendered frame, including empty containers. Its audio-presence decision checks the nonempty frame-container array. A legal ordinary, non-muted H.264 render therefore produces audio even for pure pictures, silence, or zero-volume sources. PCM separation retains that existing behavior. The editor rejects empty frame ranges; at least one frame reaches a successful stitch. Explicit mute follows the original video-only path, because requesting separate audio there would fail.

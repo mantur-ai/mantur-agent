@@ -59,3 +59,14 @@ contextBridge.exposeInMainWorld('manturWebBrowser', {
   show: (request: unknown) => ipcRenderer.invoke('mantur:web-browser:show', request),
   hide: () => ipcRenderer.invoke('mantur:web-browser:hide'),
 })
+
+const cutActivation = navigator.userActivation
+contextBridge.exposeInMainWorld('manturCutExport', {
+  attach: (owner: string) => ipcRenderer.invoke('mantur:cut-export:attach', owner),
+  release: (owner: string) => ipcRenderer.invoke('mantur:cut-export:release', owner),
+  invoke: (request: unknown) => {
+    if (request && typeof request === 'object' && 'op' in request && request.op === 'pick'
+      && !cutActivation.isActive) return Promise.reject(new Error('Choose an export file from a user action'))
+    return ipcRenderer.invoke('mantur:cut-export:invoke', request)
+  },
+})
