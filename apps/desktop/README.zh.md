@@ -142,6 +142,8 @@ macOS 桌面端从所选用户数据目录下的私有检查点恢复完整编�
 
 导入项以文件或文件夹引用标签显示原始名称，按 Backspace/Delete 可移除标签而不删除已复制文件。添加文件与添加文件夹沿用输入框现有图标按钮样式。提交时，标签转为包含保存路径的文件引用（必要时加引号），经普通用户消息记录入日志。路径含双引号或控制字符时会明确提示重命名。切换 Session 后，导入结果不会加入其他 Session。文档解读使用 Agent 文件工具，导入本身不承诺提取 Word 正文。图片保留预览和图片提交路径。纯浏览器部署保留图片接收能力。[原生导入决策](../../.agents/notes/implemented/feature/2026-09-11-desktop-file-import.zh.md)记录存储与测试范围。
 
+Cut 的导出文件选择使用仅限主 frame 的桥接与活跃编辑器的已校验消息通道。隔离 preload 在打开原生保存对话框前要求用户激活。Main 保留选定路径，通过不透明文件 grant 接受有大小限制的顺序写入；渲染器不能指定写入路径。导航、编辑器替换和退出会撤销 grant 并清理未完成的临时文件。[剪辑包](../../packages/client/ui-mantur-editing/README.zh.md#use-this-package)说明默认目标与浏览器行为。
+
 ## 已知限制
 
 - 主应用依赖固定版本及其验证范围见[桌面依赖安全决策](../../.agents/notes/implemented/bug-fix/2026-09-08-mantur-main-app-security.zh.md)。

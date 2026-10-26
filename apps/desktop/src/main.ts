@@ -13,6 +13,7 @@ import { DesktopDraftStorage } from './draft-storage.ts'
 import { installDraftBridge } from './draft-bridge.ts'
 import { installUpdateBridge } from './update-bridge.ts'
 import { installFileImportBridge } from './file-import-bridge.ts'
+import { installCutExportBridge } from './cut-export-bridge.ts'
 import { installDirectoryPickerBridge } from './directory-picker-bridge.ts'
 import { installNativeWebBrowser } from './native-web-browser.ts'
 import { NativeAccountHost } from './auth/host.ts'
@@ -76,6 +77,15 @@ const directoryPicker = installDirectoryPickerBridge({ ipc: ipcMain, window: () 
   showOpenDialog: (window, options) => dialog.showOpenDialog(window, options),
   unavailable: () => preparingUpdate || preparingQuit || quitting, copy: () => desktopCopy(app.getLocale()),
 })
+
+const cutExport = installCutExportBridge({ ipc: ipcMain, window: () => mainWindow,
+  origin: () => serviceUrl === undefined ? undefined : new URL(serviceUrl).origin,
+  showSaveDialog: (window, options) => dialog.showSaveDialog(window, options),
+  unavailable: () => preparingUpdate || preparingQuit || quitting,
+})
+const invalidateCutExport = (): void => {
+  void cutExport.invalidate().catch((error: unknown) => { console.error(error) })
+}
 
 const webBrowser = installNativeWebBrowser({ ipc: ipcMain, window: () => mainWindow,
   origin: () => serviceUrl === undefined ? undefined : new URL(serviceUrl).origin,
@@ -159,11 +169,11 @@ function createWindow(target = STARTUP_PAGE): BrowserWindow {
     openExternal(target)
   })
   window.webContents.on('did-start-navigation', (_event, _url, _isInPlace, isMainFrame) => {
-    if (isMainFrame) { drafts?.release(); directoryPicker.invalidate(); webBrowser.invalidate() }
+    if (isMainFrame) { drafts?.release(); directoryPicker.invalidate(); invalidateCutExport(); webBrowser.invalidate() }
   })
   window.on('resize', () => { webBrowser.resize() })
   window.once('ready-to-show', () => { window.show() })
-  window.on('closed', () => { drafts?.release(); directoryPicker.invalidate(); webBrowser.invalidate(); mainWindow = undefined })
+  window.on('closed', () => { drafts?.release(); directoryPicker.invalidate(); invalidateCutExport(); webBrowser.invalidate(); mainWindow = undefined })
   if (target === STARTUP_PAGE) void window.loadFile(target)
   else void window.loadURL(target)
   mainWindow = window
@@ -293,23 +303,26 @@ function startUpdates(): void {
       showUpdateFeedback(state)
     },
     beforeInstall: async () => {
-      if (directoryPicker.isPending()) throw new Error(copy.updateDirectoryPickerPending)
+      if (directoryPicker.isPending() || cutExport.isPending()) throw new Error(copy.updateDirectoryPickerPending)
       const active = service
       if (active === undefined) throw new Error(copy.updateShutdownUnavailable)
       const window = mainWindow
       if (window === undefined || window.isDestroyed()) throw new Error(copy.updateShutdownUnavailable)
       preparingUpdate = true
-      try { await prepareDesktopUpdate({
-        saveDrafts: async () => { await drafts?.prepare() },
-        releaseDrafts: () => { drafts?.release() },
-        saveHost: () => requestUpdateSave({ child: active.child, timeoutMs: 30_000 }),
-        closeAccount: async () => { await accountHost?.close(); accountHost = undefined },
-        stopHost: async () => {
-          await active.stopAndVerifyExit()
-          if (service === active) service = undefined
-        },
-        cancelled: () => quitting || preparingQuit,
-      }) } finally { preparingUpdate = false }
+      try {
+        await cutExport.invalidate()
+        await prepareDesktopUpdate({
+          saveDrafts: async () => { await drafts?.prepare() },
+          releaseDrafts: () => { drafts?.release() },
+          saveHost: () => requestUpdateSave({ child: active.child, timeoutMs: 30_000 }),
+          closeAccount: async () => { await accountHost?.close(); accountHost = undefined },
+          stopHost: async () => {
+            await active.stopAndVerifyExit()
+            if (service === active) service = undefined
+          },
+          cancelled: () => quitting || preparingQuit,
+        })
+      } finally { preparingUpdate = false }
     },
     prompts: {
       confirmInstall: async (version) => {
@@ -369,12 +382,13 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', (event) => {
   if (quitting) { if (service !== undefined) event.preventDefault(); return }
-  if (service === undefined) { quitting = true; return }
+  if (service === undefined && !cutExport.isPending()) { quitting = true; return }
   event.preventDefault()
   if (preparingQuit || preparingUpdate) return
   preparingQuit = true
   directoryPicker.invalidate()
   void (async () => {
+    await cutExport.invalidate()
     if (mainWindow !== undefined && serviceUrl !== undefined) {
       await drafts?.prepare()
     }

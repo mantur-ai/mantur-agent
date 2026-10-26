@@ -18,6 +18,8 @@ Remotion 4.0.509 的普通单次 H.264 导出先将 AAC 编入 ADTS，再把音�
 
 补丁修改编辑器的渲染编排及服务端导出调用方，不修改 Harness 核心、Agent loop、MCP 协议、已安装依赖或锁定版本。源码提交、结果树和补丁摘要记录在[剪辑包 README](../../../../packages/client/ui-mantur-editing/README.zh.md#understand-the-implementation)。
 
+[嵌入导出决策](2026-10-26-mantur-cut-embedded-export.zh.md)要求 H.264 浏览器调用方选择此服务端路径，因为固定版本的浏览器编码器也会丢失 AAC 预延迟信息。其复现延迟与本文描述的 ADTS 缺陷不同。
+
 ## Fixed audio presence semantics
 
 Remotion 4.0.509 为每个成功渲染的帧记录素材容器，包括空容器。其音频存在判定检查非空的帧容器数组。因此，合法、普通、非 muted 的 H.264 渲染即使只有画面、静音或零音量素材，也会生成音频。PCM 分离保留该既有行为。编辑器拒绝空帧范围；成功合成至少处理一帧。显式静音保留原有仅视频路径，因为在那里请求分离音频会失败。

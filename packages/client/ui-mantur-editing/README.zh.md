@@ -33,6 +33,10 @@ Agent 可在原生剪辑工具挂载前调用 `open_editing_workbench`。调用�
 
 每个会话使用 `<cwd>/剪辑/<session-id>/`：`工程/` 保存工程和运行状态，`素材/` 保存导入媒体，`导出/` 是默认成片目录。Host 从已解析 Agent 的 Session header 读取 `cwd`，浏览器不能指定其他目录。会话目录拒绝路径穿越和符号链接，重新打开保留已有文件。同一项目内的不同会话也使用独立编辑进程和工具作用域。
 
+打包编辑器向页面注入会话导出目录及其既有服务端 grant。选择其他输出文件时，经校验 origin 和 frame 的中继调用桌面窗口的原生保存对话框。选择操作要求当前用户手势；取消会保留当前目标。写入仅限选定文件；替换或重新加载编辑器会撤销其选择。浏览器部署使用顶层页面支持的文件选择器；没有该 API 时保留默认导出目标或浏览器下载。参见[嵌入导出决策](../../../.agents/notes/implemented/bug-fix/2026-10-26-mantur-cut-embedded-export.zh.md)。
+
+H.264 导出使用本机渲染器的 PCM→AAC 收尾，因为固定版本的浏览器渲染器会丢失 AAC 编码预延迟信息。导出不会移动时间线片段来补偿。VP8/Opus 保留浏览器能力路由。本机渲染器需要打包媒体工具，并使用临时视频和 PCM 文件；参见 [AAC 时序决策](../../../.agents/notes/implemented/bug-fix/2026-09-07-mantur-cut-aac-timing.zh.md)。
+
 浏览器重连使用最后确认的工程版本，并保留未保存编辑。版本陈旧或另一活跃编辑器会阻止保存；编辑器不会采用服务端较新版本来覆盖其文档。使用 HTTP 或桌面存储时，保存失败会保留未保存编辑并阻止返回工程列表；即使本地缓存可用，重试仍需服务端确认。独立本地存储模式继续受支持。参见[保存失败决策](../../../.agents/notes/implemented/bug-fix/2026-10-24-mantur-cut-save-fallback.zh.md)与[保存基线决策](../../../.agents/notes/implemented/bug-fix/2026-10-24-mantur-cut-persisted-save-base.zh.md)。
 
 工作台标题栏、按钮与对话分隔线使用漫途的 0.5px 中性边框。

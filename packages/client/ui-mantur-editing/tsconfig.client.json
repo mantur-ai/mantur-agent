@@ -47,12 +47,16 @@
     },
     {
       "path": "../ui-mantur-script/tsconfig.client.json"
+    },
+    {
+      "path": "../../util/crypto"
     }
   ],
   "files": [
     "src/client/index.ts",
     "src/client/agent-opening.ts",
     "src/client/Workbench.tsx",
+    "src/client/export-bridge.ts",
     "src/client/locales.ts",
     "src/types.ts",
     "src/settings.ts",

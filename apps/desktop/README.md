@@ -142,6 +142,8 @@ The desktop composer accepts native file and folder drops and provides Add files
 
 Imported entries appear as file or folder reference chips with their original names. Backspace/Delete removes the chip without deleting the copied file. The composer uses its existing icon-button style for Add files and Add folder. At submission, chips serialize to quoted file mentions containing the saved paths and travel through ordinary user-message logging. Paths with double quotes or control characters are rejected with a rename instruction. Import completion cannot append to another Session after navigation. Document interpretation uses the Agent’s file tools; import does not claim to extract Word text. Images retain their preview and image submission path. Browser-only deployments retain image intake. The [native import decision](../../.agents/notes/implemented/feature/2026-09-11-desktop-file-import.md) records the storage and testing scope.
 
+Cut’s export file selection uses a main-frame-only bridge and the active editor’s checked message channel. The isolated preload requires user activation before opening the native save dialog. Main retains the selected path and accepts bounded, sequential writes using an opaque file grant; renderers cannot supply a write path. Navigation, editor replacement and shutdown revoke grants and clean unfinished temporary files. The [editing package](../../packages/client/ui-mantur-editing/README.md#use-this-package) owns default destinations and browser behavior.
+
 ## Known limitations
 
 - Main-application dependency pins and their verification scope are recorded in the [desktop dependency security decision](../../.agents/notes/implemented/bug-fix/2026-09-08-mantur-main-app-security.md).

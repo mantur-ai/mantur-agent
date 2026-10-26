@@ -6,6 +6,7 @@ import type { WorkbenchInjection, WorkbenchToggleInjection } from './index.ts'
 import { localEditorUrl } from '../settings.ts'
 import type { EditingWorkspace } from '../types.ts'
 import css from './Workbench.module.css'
+import { installExportBridge } from './export-bridge.ts'
 
 /**
  * Observe live editing opens and retain explicit same-Session dismissal.
@@ -54,13 +55,13 @@ export function Workbench({
       <button type="button" title={t('reload')} onClick={() => { setRevision(value => value + 1) }}>{t('reload')}</button>
     </header>
     {error !== undefined ? <p role="alert">{t('failed')}: {error}</p> : workspace !== undefined
-      ? <ThemedEditor key={`${sessionId}:${revision}`} url={workspace.editorUrl} title={t('title')} getColorScheme={getColorScheme} subscribeTheme={subscribeTheme} getLocale={getLocale} subscribeLocale={subscribeLocale} />
+      ? <ThemedEditor key={`${sessionId}:${revision}`} url={workspace.editorUrl} directory={`${workspace.directory}/导出`} title={t('title')} getColorScheme={getColorScheme} subscribeTheme={subscribeTheme} getLocale={getLocale} subscribeLocale={subscribeLocale} />
       : <p role="status">{sessionId === undefined ? t('selectSession') : t('loading')}</p>}
   </section>
 }
 
 /** The initial URL stays fixed while later theme changes use the frame message channel. */
-function ThemedEditor({ url, title, getColorScheme, subscribeTheme, getLocale, subscribeLocale }: Pick<WorkbenchInjection, 'getColorScheme' | 'subscribeTheme' | 'getLocale' | 'subscribeLocale'> & { url: string; title: string }) {
+function ThemedEditor({ url, directory, title, getColorScheme, subscribeTheme, getLocale, subscribeLocale }: Pick<WorkbenchInjection, 'getColorScheme' | 'subscribeTheme' | 'getLocale' | 'subscribeLocale'> & { url: string; directory: string; title: string }) {
   const scheme = useSyncExternalStore(subscribeTheme, getColorScheme)
   const locale = useSyncExternalStore(subscribeLocale, getLocale)
   const frame = useRef<HTMLIFrameElement>(null)
@@ -68,8 +69,12 @@ function ThemedEditor({ url, title, getColorScheme, subscribeTheme, getLocale, s
     const address = new URL(url)
     address.searchParams.set('manturTheme', scheme)
     address.searchParams.set('manturLocale', locale)
+    address.searchParams.set('manturParentOrigin', window.location.origin)
     return address.href
   })
+  useEffect(() => {
+    if (frame.current) return installExportBridge(frame.current, url, directory)
+  }, [url, directory])
   const sendTheme = useCallback(() => {
     frame.current?.contentWindow?.postMessage({ type: 'mantur:theme', version: 1, scheme }, new URL(url).origin)
     frame.current?.contentWindow?.postMessage({ type: 'mantur:locale', version: 1, locale }, new URL(url).origin)

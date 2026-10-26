@@ -66,7 +66,7 @@ describe('Session editor workbench', () => {
     const { getByTitle, findByTitle, getByRole, props } = await mount()
     expect(props.openWorkspace).toHaveBeenCalledWith('session-a')
     const frame = getByTitle(en.title)
-    expect(frame.getAttribute('src')).toBe('http://127.0.0.1:5299/?manturTheme=light&manturLocale=en')
+    expect(frame.getAttribute('src')).toBe('http://127.0.0.1:5299/?manturTheme=light&manturLocale=en&manturParentOrigin=http%3A%2F%2Flocalhost%3A3000')
     fireEvent.click(getByRole('button', { name: en.reload }))
     expect(await findByTitle(en.title)).not.toBe(frame)
     expect(props.openWorkspace).toHaveBeenCalledTimes(2)
