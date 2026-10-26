@@ -1,0 +1,31 @@
+# Mantur media build
+
+This recipe builds the desktop's external FFmpeg and FFprobe plus separate Remotion decoder libraries for native macOS arm64 from the archives in [the source lock](mantur-media-build.lock.json). FFmpeg 6.1.6 retains the existing external tool's 6.x major version and includes the 6.1 maintenance fixes. The `lib/` output contains the GPL CLI libraries. `compositor/` contains independently built LGPL FFmpeg 7.1.5 libraries with the ABI required by Remotion; do not mix these library directories.
+
+## Build
+
+Use Python 3.9 or newer, Apple Command Line Tools, a macOS SDK supporting arm64, and at least 5 GiB of free disk space. The recipe downloads a pinned CMake executable and builds the remaining tools from pinned source; it does not use Homebrew. The validated host uses Apple clang 21.0.0 and SDK 26.4.1; deployment targets macOS 11.0. The deployment target is not evidence of a runtime test on every supported macOS version.
+
+```sh
+python3 scripts/mantur-media-build.py --task /absolute/path/to/new-task --jobs 8
+python3 scripts/mantur-media-build.test.py
+python3 scripts/mantur-media-build.verify.py --candidate /absolute/path/to/new-task/artifacts/candidate --output /absolute/path/to/new-task/evidence/media-verification --av1-fixture /absolute/path/to/av1-input.mkv
+```
+
+The task directory may contain spaces or non-ASCII characters. Each invocation creates a new `sources/build-<id>` tree and a private temporary symlink to give upstream configure scripts a path without spaces. Sources, logs and outputs remain inside the task directory. The symlink is recorded in `evidence/build-run-*.json`; it is not needed to run the packaged binaries. Existing `artifacts/candidate` output is rejected. Rebuild into a new task directory, optionally copying its pinned `sources/archives` first. Downloaded archives are SHA256-checked before extraction. Only the explicit build environment is passed to subprocesses; caller credentials, compiler flags and dynamic-loader variables are not inherited.
+
+`artifacts/candidate/bin/{ffmpeg,ffprobe}` use the seven libraries under `artifacts/candidate/lib`. Each dylib refers to siblings with `@loader_path`; executables use `@loader_path/../lib`. The CLI library filenames retain their ABI major, for example `libavutil.58.dylib`. This prevents Remotion's `DYLD_LIBRARY_PATH=compositor` from loading its unversioned 7.1 libraries into a 6.1 executable. Third-party codec libraries are statically linked into these FFmpeg dylibs. The only remaining dynamic dependencies are macOS libraries and frameworks. `compositor/ffmpeg` and `compositor/ffprobe` are copies of the GPL tools and load `../lib`; the seven adjacent LGPL libraries serve the native Remotion executable copied by the release owner. Packaging applies an ad-hoc signature after relocation; the release owner applies distribution signing and records the resulting hashes separately.
+
+## Included capabilities and sources
+
+The recipe enables libx264 software H.264, VideoToolbox, native AAC, PCM, VP8/VP9 including alpha through libvpx, Opus, LAME MP3, JPEG/PNG, ProRes, AV1 decoding through libaom, FreeType/HarfBuzz drawtext, zimg HDR color conversion, and the built-in filters, formats and protocols. External library autodetection, nonfree components and FDK AAC are disabled. SecureTransport, AudioToolbox, VideoToolbox, zlib and bzip2 are explicit Apple system dependencies. The LGPL compositor set disables GPL code, libx264, nonfree and FDK AAC, and does not build programs. libaom's encoder is disabled; the product's supported exports do not require AV1 encoding.
+
+The fixed [FFmpeg license](https://github.com/FFmpeg/FFmpeg/blob/n6.1.6/LICENSE.md) and configure checks govern this combination. libx264 makes the FFmpeg candidate GPL-2.0-or-later. FreeType's GPL alternative is selected for the GPL CLI because its separate FreeType License is incompatible with GPLv2. The LGPL compositor set uses FreeType's permissive FreeType License and includes the required attribution. The packaged `NOTICE.txt` and `licenses/` retain the library licenses, patent grants and attribution notices. The candidate does not include Remotion's `fdk-aac-free` fork; it uses native AAC in the GPL CLI and no AAC encoder is required in the compositor's shared-only set. The lack of separately verified GPL-compatible permission for that fork is recorded in the release evidence, not inferred only from an encoder's name.
+
+The corresponding-source delivery consists of every archive in `SOURCE-LOCK.json`, this recipe, the source lock, its tests, and the actual configure/build evidence. Preserve the complete archives, not only their URLs. No upstream patches are applied. `evidence/build-commands.jsonl` records every shell-free command, exit code and complete log path; failed attempts remain available. `build-run-*.json` records recipe/lock hashes and host details, while `build-ffmpeg-*` captures generated configuration. Builds are regenerable from fixed inputs; bit-identical output across toolchains or build paths is not promised.
+
+## Release integration
+
+Copy the entire candidate into a new dedicated media resource directory and point the release's managed FFmpeg/FFprobe paths there. Replacing only the legacy `ffmpeg-static/ffmpeg` file breaks its relative library layout. Use this candidate's `compositor/` for Remotion's media set, then copy only the separately audited native `remotion` executable and required package metadata. Exclude its old FFmpeg executables and seven dylibs. FFmpeg 6.x libraries cannot replace Remotion's 7.1 ABI libraries. Verify that the existing Cut PCM intermediate/native-AAC finalization route is used; a separate Remotion invocation selecting `libfdk_aac` must be changed before it can use this candidate. Update final pins, resource copying, signature inputs, source-artifact links and distribution notices in the release-owned integration change. This recipe does not edit Cut's source manifest or patches, publish artifacts, or change an update feed.
+
+The release owner must rerun media verification on the staged and signed package, including full decode, frame transitions and decoded PCM synchronization, then perform the Cut GUI retest. A successful `-L` check alone does not establish complete distribution obligations.

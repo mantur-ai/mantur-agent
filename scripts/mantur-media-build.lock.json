@@ -1,0 +1,207 @@
+{
+  "formatVersion": 1,
+  "target": "darwin-arm64",
+  "sources": [
+    {
+      "name": "ffmpeg",
+      "version": "6.1.6",
+      "url": "https://ffmpeg.org/releases/ffmpeg-6.1.6.tar.xz",
+      "archive": "ffmpeg-6.1.6.tar.xz",
+      "sha256": "d4fcb164028dd3beee5d92c0ac72e46aac6973c75ea12dc14de07bf8f407370a",
+      "bytes": 10497884,
+      "directory": "ffmpeg-6.1.6"
+    },
+    {
+      "name": "ffmpegCompositor",
+      "version": "7.1.5",
+      "url": "https://ffmpeg.org/releases/ffmpeg-7.1.5.tar.xz",
+      "archive": "ffmpeg-7.1.5.tar.xz",
+      "sha256": "de668509caf9e35e3cd162473441fdb29538c6d96ed080292b3cf9e6fc5d558f",
+      "bytes": 11050340,
+      "directory": "ffmpeg-7.1.5"
+    },
+    {
+      "name": "zimg",
+      "version": "3.0.6",
+      "url": "https://github.com/sekrit-twc/zimg/archive/refs/tags/release-3.0.6.tar.gz",
+      "archive": "zimg-3.0.6.tar.gz",
+      "sha256": "be89390f13a5c9b2388ce0f44a5e89364a20c1c57ce46d382b1fcc3967057577",
+      "bytes": 326725,
+      "directory": "zimg-release-3.0.6"
+    },
+    {
+      "name": "autoconf",
+      "version": "2.72",
+      "url": "https://ftp.gnu.org/gnu/autoconf/autoconf-2.72.tar.xz",
+      "archive": "autoconf-2.72.tar.xz",
+      "sha256": "ba885c1319578d6c94d46e9b0dceb4014caafe2490e437a0dbca3f270a223f5a",
+      "bytes": 1389680,
+      "directory": "autoconf-2.72"
+    },
+    {
+      "name": "automake",
+      "version": "1.17",
+      "url": "https://ftp.gnu.org/gnu/automake/automake-1.17.tar.xz",
+      "archive": "automake-1.17.tar.xz",
+      "sha256": "8920c1fc411e13b90bf704ef9db6f29d540e76d232cb3b2c9f4dc4cc599bd990",
+      "bytes": 1652632,
+      "directory": "automake-1.17"
+    },
+    {
+      "name": "libtool",
+      "version": "2.5.4",
+      "url": "https://ftp.gnu.org/gnu/libtool/libtool-2.5.4.tar.xz",
+      "archive": "libtool-2.5.4.tar.xz",
+      "sha256": "f81f5860666b0bc7d84baddefa60d1cb9fa6fceb2398cc3baca6afaa60266675",
+      "bytes": 1056924,
+      "directory": "libtool-2.5.4"
+    },
+    {
+      "name": "x264",
+      "version": "b35605ace3ddf7c1a5d67a2eb553f034aef41d55",
+      "url": "https://code.videolan.org/videolan/x264/-/archive/b35605ace3ddf7c1a5d67a2eb553f034aef41d55/x264-b35605ace3ddf7c1a5d67a2eb553f034aef41d55.tar.gz",
+      "archive": "x264-b35605ace3ddf7c1a5d67a2eb553f034aef41d55.tar.gz",
+      "sha256": "cd71a7515b0e9a012e1ac9b1f8415bebcaf6fc97d4db32286642ac4c0fbe24f9",
+      "bytes": 1040327,
+      "directory": "x264-b35605ace3ddf7c1a5d67a2eb553f034aef41d55"
+    },
+    {
+      "name": "vpx",
+      "version": "1.15.2",
+      "url": "https://github.com/webmproject/libvpx/archive/refs/tags/v1.15.2.tar.gz",
+      "archive": "libvpx-1.15.2.tar.gz",
+      "sha256": "26fcd3db88045dee380e581862a6ef106f49b74b6396ee95c2993a260b4636aa",
+      "bytes": 5630368,
+      "directory": "libvpx-1.15.2"
+    },
+    {
+      "name": "opus",
+      "version": "1.5.2",
+      "url": "https://downloads.xiph.org/releases/opus/opus-1.5.2.tar.gz",
+      "archive": "opus-1.5.2.tar.gz",
+      "sha256": "65c1d2f78b9f2fb20082c38cbe47c951ad5839345876e46941612ee87f9a7ce1",
+      "bytes": 7839412,
+      "directory": "opus-1.5.2"
+    },
+    {
+      "name": "lame",
+      "version": "3.100",
+      "url": "https://downloads.sourceforge.net/project/lame/lame/3.100/lame-3.100.tar.gz",
+      "archive": "lame-3.100.tar.gz",
+      "sha256": "ddfe36cab873794038ae2c1210557ad34857a4b6bdc515785d1da9e175b1da1e",
+      "bytes": 1524133,
+      "directory": "lame-3.100"
+    },
+    {
+      "name": "freetype",
+      "version": "2.13.3",
+      "url": "https://downloads.sourceforge.net/project/freetype/freetype2/2.13.3/freetype-2.13.3.tar.xz",
+      "archive": "freetype-2.13.3.tar.xz",
+      "sha256": "0550350666d427c74daeb85d5ac7bb353acba5f76956395995311a9c6f063289",
+      "bytes": 2617564,
+      "directory": "freetype-2.13.3"
+    },
+    {
+      "name": "harfbuzz",
+      "version": "10.4.0",
+      "url": "https://github.com/harfbuzz/harfbuzz/releases/download/10.4.0/harfbuzz-10.4.0.tar.xz",
+      "archive": "harfbuzz-10.4.0.tar.xz",
+      "sha256": "480b6d25014169300669aa1fc39fb356c142d5028324ea52b3a27648b9beaad8",
+      "bytes": 18120656,
+      "directory": "harfbuzz-10.4.0"
+    },
+    {
+      "name": "pkgconf",
+      "version": "2.3.0",
+      "url": "https://distfiles.ariadne.space/pkgconf/pkgconf-2.3.0.tar.xz",
+      "archive": "pkgconf-2.3.0.tar.xz",
+      "sha256": "3a9080ac51d03615e7c1910a0a2a8df08424892b5f13b0628a204d3fcce0ea8b",
+      "bytes": 316160,
+      "directory": "pkgconf-2.3.0"
+    },
+    {
+      "name": "cmake",
+      "version": "3.31.6",
+      "url": "https://github.com/Kitware/CMake/releases/download/v3.31.6/cmake-3.31.6-macos-universal.tar.gz",
+      "archive": "cmake-3.31.6-macos-universal.tar.gz",
+      "sha256": "330b9514f5112e5ed4fb08b8b05803b776fd9b539a6ae12927d14dcc0ee2ba8d",
+      "bytes": 78374480,
+      "directory": "cmake-3.31.6-macos-universal"
+    },
+    {
+      "name": "aom",
+      "version": "3.12.1",
+      "url": "https://storage.googleapis.com/aom-releases/libaom-3.12.1.tar.gz",
+      "archive": "libaom-3.12.1.tar.gz",
+      "sha256": "9e9775180dec7dfd61a79e00bda3809d43891aee6b2e331ff7f26986207ea22e",
+      "bytes": 5497367,
+      "directory": "libaom-3.12.1"
+    },
+    {
+      "name": "m4",
+      "version": "1.4.20",
+      "url": "https://ftp.gnu.org/gnu/m4/m4-1.4.20.tar.xz",
+      "archive": "m4-1.4.20.tar.xz",
+      "sha256": "e236ea3a1ccf5f6c270b1c4bb60726f371fa49459a8eaaebc90b216b328daf2b",
+      "bytes": 2044756,
+      "directory": "m4-1.4.20"
+    }
+  ],
+  "ffmpegConfigure": [
+    "--enable-gpl",
+    "--disable-nonfree",
+    "--disable-autodetect",
+    "--disable-libfdk-aac",
+    "--disable-static",
+    "--enable-shared",
+    "--disable-debug",
+    "--disable-doc",
+    "--disable-ffplay",
+    "--disable-postproc",
+    "--enable-pic",
+    "--enable-libx264",
+    "--enable-libvpx",
+    "--enable-libopus",
+    "--enable-libmp3lame",
+    "--enable-libfreetype",
+    "--enable-libharfbuzz",
+    "--enable-libaom",
+    "--enable-videotoolbox",
+    "--enable-audiotoolbox",
+    "--enable-securetransport",
+    "--enable-zlib",
+    "--enable-bzlib",
+    "--pkg-config-flags=--static",
+    "--enable-libzimg",
+    "--disable-encoder=libaom_av1"
+  ],
+  "compositorConfigure": [
+    "--disable-nonfree",
+    "--disable-autodetect",
+    "--disable-libfdk-aac",
+    "--disable-static",
+    "--enable-shared",
+    "--disable-debug",
+    "--disable-doc",
+    "--disable-postproc",
+    "--enable-pic",
+    "--enable-libvpx",
+    "--enable-libopus",
+    "--enable-libmp3lame",
+    "--enable-libfreetype",
+    "--enable-libharfbuzz",
+    "--enable-libaom",
+    "--enable-videotoolbox",
+    "--enable-audiotoolbox",
+    "--enable-securetransport",
+    "--enable-zlib",
+    "--enable-bzlib",
+    "--pkg-config-flags=--static",
+    "--enable-libzimg",
+    "--disable-encoder=libaom_av1",
+    "--disable-gpl",
+    "--disable-version3",
+    "--disable-libx264",
+    "--disable-programs"
+  ]
+}
