@@ -8,7 +8,7 @@ import {
   MANTUR_MARKET_PAGES, MarketplaceNavigation, MarketplacePage,
   ProjectsHeading,
 } from '../src/client/MarketplaceNavigation.tsx'
-import { zh } from '../src/client/locales.ts'
+import { en, zh } from '../src/client/locales.ts'
 import type {
   ManturMarketplaceState, ManturMarketplaceStore, ManturRecipeMarketplaceState,
 } from '../src/client/store.ts'
@@ -183,7 +183,11 @@ describe('Mantur marketplace navigation', () => {
     expect(closePage).toHaveBeenCalledOnce()
   })
 
-  it('renders real Recipe cards and opens the inline detail', () => {
+  it.each([
+    { locale: 'zh', dictionary: zh, recreation: '复刻同款' },
+    { locale: 'en', dictionary: en, recreation: 'Recreate' },
+  ])('keeps the Recipe recreation entry and opens details without sending in $locale', ({ dictionary, recreation }) => {
+    const translate = makeTranslate(dictionary)
     const recipeState: ManturRecipeMarketplaceState = {
       phase: 'ready',
       catalog: { recipes: [recipe], total: 1, page: 1, pageSize: 15, totalPages: 1, availableTags: recipe.tags },
@@ -196,19 +200,20 @@ describe('Mantur marketplace navigation', () => {
         {...props}
         activePage={MANTUR_MARKET_PAGES.recipes}
         closePage={vi.fn()}
-        t={t}
+        t={translate}
       />,
     )
 
-    expect(screen.getByRole('heading', { name: '配方广场' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: translate('recipes.title') })).toBeTruthy()
     expect(screen.getByText('电影感旅行 Vlog')).toBeTruthy()
     expect(screen.queryByText(recipe.summary)).toBeNull()
     expect(screen.queryByText('旅行')).toBeNull()
     expect(screen.queryByText('约 0.16 元')).toBeNull()
-    expect(screen.getByRole('textbox', { name: '搜索想复刻的画面、风格或用途' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: '全部' }).getAttribute('aria-pressed')).toBe('true')
-    fireEvent.click(screen.getByRole('button', { name: '复刻同款' }))
+    expect(screen.getByRole('textbox', { name: translate('recipes.search') })).toBeTruthy()
+    expect(screen.getByRole('button', { name: translate('recipes.all') }).getAttribute('aria-pressed')).toBe('true')
+    fireEvent.click(screen.getByRole('button', { name: recreation }))
     expect(props.controllerMocks.openRecipeDetail).toHaveBeenCalledWith(recipe.slug)
+    expect(props.controllerMocks.startRecipe).not.toHaveBeenCalled()
   })
 
   it('starts a Recipe in a new conversation from its reproduction guide', async () => {
@@ -551,7 +556,7 @@ describe('Mantur marketplace navigation', () => {
         {...globalProps} {...pending} activePage={MANTUR_MARKET_PAGES.skills} closePage={vi.fn()} t={t}
       />,
     )
-    expect(screen.getAllByRole('button', { name: '正在创建…' })
+    expect(screen.getAllByRole('button', { name: '正在添加…' })
       .every(button => button.hasAttribute('disabled'))).toBe(true)
 
     const failedDetail = marketplaceProps({
@@ -563,7 +568,7 @@ describe('Mantur marketplace navigation', () => {
         {...globalProps} {...failedDetail} activePage={MANTUR_MARKET_PAGES.skills} closePage={vi.fn()} t={t}
       />,
     )
-    expect(screen.getByRole('alert').textContent).toContain('新对话没有创建成功')
+    expect(screen.getByRole('alert').textContent).toContain('未能将技能加入草稿')
   })
 
   it('filters the catalog, opens details, and presents detail outcomes', () => {
@@ -932,6 +937,10 @@ it('keeps gateway recipes previewable without inventing prices, counts or launch
   expect(props.controllerMocks.startRecipe).not.toHaveBeenCalled()
   expect(view.container.querySelector('video')?.getAttribute('src')).toBe(recipe.sampleUrl)
   await expect(view.container.textContent).toMatchFileSnapshot('./recipe-preview-only.expected.txt')
+  view.rerender(<MarketplacePage {...globalProps} {...props}
+    activePage={MANTUR_MARKET_PAGES.recipes} closePage={vi.fn()} t={makeTranslate(en)} />)
+  expect(screen.getByText(en['recipes.instructionsUnavailable'])).toBeTruthy()
+  expect(screen.getByRole('button', { name: en['recipes.launch'] }).hasAttribute('disabled')).toBe(true)
 })
 
 

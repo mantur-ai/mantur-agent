@@ -40,3 +40,21 @@
   - img
   - text: 选择工作区
   - img
+
+# Existing Session draft after Skill use
+
+- button "访问模式，当前：工作区内修改": 工作区内修改
+- group "待发送图片":
+  - button "next-reference.png":
+    - img "next-reference.png"
+  - button "移除图片 next-reference.png":
+    - img
+- textbox "发消息或做任务… / 调用指令 @ 文件或对话":
+  - paragraph: 已有会话的下一条草稿 原有script引用 原有drama引用 原有assets引用 爽文短剧剧本创作
+- button "指令":
+  - img
+- button "选择模型，当前 DeepSeek-V4-Flash":
+  - text: DeepSeek-V4-Flash
+  - img
+- button "上下文已用 0%"
+- button "发送消息"

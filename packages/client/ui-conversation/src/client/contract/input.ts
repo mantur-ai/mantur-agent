@@ -9,6 +9,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { ObservableSnapshot, SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { Branded } from '@deepseek-ai/dsh-brand'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { LexicalEditor } from 'lexical'
 import type { QueueRow } from './queue.ts'
 import type { InputSubmitMode } from './composer-submission.ts'
@@ -212,6 +213,12 @@ export interface SessionInput extends InputTarget {
 export interface SessionInputResolver {
   /** Resolve the facade for one session-scope ctx. */
   for(actx: Context): SessionInput
+  /**
+   * Wait for the Session's native draft restoration before programmatic editing.
+   * @param id - A materialized Session id.
+   * @returns completion of restoration; persistence or teardown failures reject without changing input.
+   */
+  waitForDraft(id: SessionId): Promise<void>
 }
 
 /**

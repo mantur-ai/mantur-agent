@@ -24,6 +24,7 @@ const skill = {
   slug: 'short-drama', name: '爽文短剧剧本创作', description: '提供从创意构思到分集剧本的创作支持。',
   category: '剧本创作', version: '1.0.0', triggers: ['创作短剧剧本'], uses_operators: [], kind: 'skill', assets: null,
 }
+const priorSkills = ['script', 'drama', 'assets'].map(name => ({ ...skill, slug: `draft-${name}`, name: `原有${name}引用` }))
 const reply = 'Automatic project fixture received the first message.'
 const replay: ReplayOverrideDoc = [{
   kind: 'chunks', chunks: [
@@ -40,10 +41,14 @@ it.skipIf(webSnapshotMode() === 'record' || process.platform === 'win32')('resum
   const fixtureRoot = await mkdtemp(join(tmpdir(), 'mantur-first-send-'))
   const storage = new DesktopDraftStorage(fixtureRoot)
   const checkpoints: DraftCheckpoint[] = []
+  const catalogSkills = [skill]
   const server = createServer((request, response) => {
     response.writeHead(200, { 'content-type': 'application/json' })
     response.end(JSON.stringify(request.url?.startsWith('/api/public/agent/v1/skills?') === true
-      ? { code: 0, data: { records: [{ ...skill, code: skill.slug, skillVersion: skill.version }], total: 1, pageNum: 1, pages: 1 } }
+      ? { code: 0, data: {
+        records: catalogSkills.map(item => ({ ...item, code: item.slug, skillVersion: item.version })),
+        total: catalogSkills.length, pageNum: 1, pages: 1,
+      } }
       : { skill }))
   })
   let scaffold: WebScaffold | undefined
@@ -67,9 +72,11 @@ it.skipIf(webSnapshotMode() === 'record' || process.platform === 'win32')('resum
     const initialRoot = join(scaffold.workspaceCwd, 'initial-projects')
     await scaffold.ctx.manturProjects.setRoot(initialRoot)
     await prepareBundledSkills(fileURLToPath(new URL('../../desktop/mantur-skills/source.json', import.meta.url)), join(scaffold.workspaceCwd, '.bundled-skills'))
-    const skillRoot = join(scaffold.harnessHome, 'skills', skill.slug)
-    await mkdir(skillRoot, { recursive: true })
-    await writeFile(join(skillRoot, 'SKILL.md'), `---\nname: ${skill.slug}\ntitle: ${skill.name}\ndescription: ${skill.description}\n---\nHelp write a script.\n`)
+    for (const installed of [skill, ...priorSkills]) {
+      const skillRoot = join(scaffold.harnessHome, 'skills', installed.slug)
+      await mkdir(skillRoot, { recursive: true })
+      await writeFile(join(skillRoot, 'SKILL.md'), `---\nname: ${installed.slug}\ntitle: ${installed.name}\ndescription: ${installed.description}\n---\nHelp write a script.\n`)
+    }
     browser = await chromium.launch()
     const page = await browser.newPage({ viewport: { width: 1280, height: 820 }, locale: ZH_BROWSER_LOCALE })
     await page.exposeFunction('testDraftLoad', () => storage.committed())
@@ -139,6 +146,17 @@ it.skipIf(webSnapshotMode() === 'record' || process.platform === 'win32')('resum
     const locationAria = await captureStableAria(page, '[role="group"][aria-label="默认项目路径"]', scaffold.workspaceCwd)
     await settings.getByRole('button', { name: '关闭', exact: true }).click()
     await editor.fill('根据参考图编写第一集 ')
+    for (const [tab, label] of [['剧本创作', '出海短剧剧本创编'], ['漫剧生产', '全自动漫剧生产线'], ['素材生产', '短剧素材智能剪辑']] as const) {
+      await page.getByRole('tab', { name: tab, exact: true }).click()
+      await page.getByRole('button', { name: label, exact: true }).click()
+    }
+    expect(await editor.locator('[data-composer-chip="mantur-bundled-skill"]').count()).toBe(3)
+    await editor.evaluate((element, bytes) => {
+      const transfer = new DataTransfer()
+      transfer.items.add(new File([new Uint8Array(bytes)], 'reference.png', { type: 'image/png' }))
+      element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }))
+    }, [...await readFile(referenceImage)])
+    await page.getByRole('img', { name: 'reference.png', exact: true }).waitFor()
     await page.getByRole('button', { name: '技能广场', exact: true }).click()
     await page.getByText('已安装', { exact: true }).waitFor()
     const marketplaceAria = await captureStableAria(page, 'main[aria-labelledby="mantur-marketplace-title"]', scaffold.workspaceCwd)
@@ -147,11 +165,7 @@ it.skipIf(webSnapshotMode() === 'record' || process.platform === 'win32')('resum
     expect(await editor.innerText()).toContain('根据参考图编写第一集')
     expect(scaffold.ctx.workspaceRegistry.list()).toHaveLength(0)
     expect(prompts).toBe(0)
-    await editor.evaluate((element, bytes) => {
-      const transfer = new DataTransfer()
-      transfer.items.add(new File([new Uint8Array(bytes)], 'reference.png', { type: 'image/png' }))
-      element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }))
-    }, [...await readFile(referenceImage)])
+    expect(await editor.locator('[data-composer-chip="mantur-bundled-skill"]').count()).toBe(3)
     await page.getByRole('img', { name: 'reference.png', exact: true }).waitFor()
     expect(existsSync(projectRoot)).toBe(false)
     expect(scaffold.ctx.workspaceRegistry.list()).toHaveLength(0)
@@ -246,9 +260,38 @@ it.skipIf(webSnapshotMode() === 'record' || process.platform === 'win32')('resum
     expect(text?.type === 'text' && text.text).toContain('根据参考图编写第一集')
     expect(text?.type === 'text' && text.text).toContain('/short-drama')
     expect(JSON.stringify(events)).not.toContain('data:image')
+
+    catalogSkills.push(...priorSkills)
+    await page.reload()
+    await editor.waitFor()
+    await page.getByText(reply, { exact: true }).waitFor()
+    await editor.fill('已有会话的下一条草稿 ')
+    await editor.evaluate((element, bytes) => {
+      const transfer = new DataTransfer()
+      transfer.items.add(new File([new Uint8Array(bytes)], 'next-reference.png', { type: 'image/png' }))
+      element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }))
+    }, [...await readFile(referenceImage)])
+    await page.getByRole('img', { name: 'next-reference.png', exact: true }).waitFor()
+    for (const existing of priorSkills) {
+      await page.getByRole('button', { name: '技能广场', exact: true }).click()
+      await page.getByRole('article').filter({ has: page.getByText(existing.name, { exact: true }) }).getByRole('button', { name: '使用技能', exact: true }).click()
+      await expect.poll(() => editor.innerText()).toContain(existing.name)
+    }
+    expect(await editor.locator('[data-composer-chip="skill"]').count()).toBe(3)
+    await page.getByRole('button', { name: '技能广场', exact: true }).click()
+    await page.getByRole('article').filter({ has: page.getByText(skill.name, { exact: true }) }).getByRole('button', { name: '使用技能', exact: true }).click()
+    await expect.poll(() => editor.innerText()).toContain(skill.name)
+    expect(await editor.innerText()).toContain('已有会话的下一条草稿')
+    expect(await editor.locator('[data-composer-chip="skill"]').count()).toBe(4)
+    for (const existing of priorSkills) expect(await editor.innerText()).toContain(existing.name)
+    await page.getByRole('img', { name: 'next-reference.png', exact: true }).waitFor()
+    await page.getByText(reply, { exact: true }).waitFor()
+    expect(scaffold.ctx.workspaceRegistry.list()[0]!.sessionIds).toEqual([sessionId])
+    expect(prompts).toBe(1)
+    const selectedDraftAria = await captureStableAria(page, '[data-composer-card]', scaffold.workspaceCwd)
     expect(console.pageErrors).toEqual([])
     expect(console.warnings).toEqual([])
-    await compareOrRefreshGolden(expected, `# Unassigned home\n\n${homeAria}\n\n# Installed Skill marketplace\n\n${marketplaceAria}\n\n# Default project location in General settings\n\n${locationAria}\n\n# Lost response, retained draft\n\n${failureAria}`, webSnapshotMode())
+    await compareOrRefreshGolden(expected, `# Unassigned home\n\n${homeAria}\n\n# Installed Skill marketplace\n\n${marketplaceAria}\n\n# Default project location in General settings\n\n${locationAria}\n\n# Lost response, retained draft\n\n${failureAria}\n\n# Existing Session draft after Skill use\n\n${selectedDraftAria}`, webSnapshotMode())
   } catch (error) {
     failures.push(error)
     const page = browser?.contexts()[0]?.pages()[0]
