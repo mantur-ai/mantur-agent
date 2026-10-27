@@ -155,7 +155,7 @@ index 0000000..fed4548
 +  await rm(root, { recursive: true, force: true });
 +}
 diff --git a/package-lock.json b/package-lock.json
-index 0e72452..75e2253 100644
+index 0e72452..3ca9695 100644
 --- a/package-lock.json
 +++ b/package-lock.json
 @@ -7,6 +7,7 @@
@@ -781,8 +781,21 @@ index 0e72452..75e2253 100644
        }
      },
      "node_modules/sharp/node_modules/semver": {
+@@ -12327,9 +12378,9 @@
+       "license": "MIT"
+     },
+     "node_modules/undici": {
+-      "version": "7.29.0",
+-      "resolved": "https://registry.npmjs.org/undici/-/undici-7.29.0.tgz",
+-      "integrity": "sha512-IDxfleLmmbSskfWSUATiN1nfn2rDuvnMOqb5CWR92iIfojA0Ud+ulOAAEQ57LPr9rWmsreUyf5lwyao+7GNNVw==",
++      "version": "7.30.1",
++      "resolved": "https://registry.npmjs.org/undici/-/undici-7.30.1.tgz",
++      "integrity": "sha512-03KrMbjIFDWQR5RNPrSw3bd1r12JpyFQl9/yxjUbJtqkjmllqC5lFjZh6ujeuJCKr8EOQvRW872Oy/az+nLYxg==",
+       "license": "MIT",
+       "engines": {
+         "node": ">=20.18.1"
 diff --git a/package.json b/package.json
-index 69a1f6b..d257cf7 100644
+index 69a1f6b..bb99988 100644
 --- a/package.json
 +++ b/package.json
 @@ -12,6 +12,7 @@
@@ -843,7 +856,7 @@ index 69a1f6b..d257cf7 100644
    },
    "dependencies": {
      "@ai-sdk/alibaba": "^2.0.16",
-@@ -149,6 +153,12 @@
+@@ -149,6 +153,13 @@
      "vite": "^8.1.1"
    },
    "overrides": {
@@ -854,7 +867,8 @@ index 69a1f6b..d257cf7 100644
 +    },
 +    "@huggingface/transformers": {
 +      "sharp": "0.35.4"
-+    }
++    },
++    "undici@7": "7.30.1"
    }
  }
 diff --git a/remotion/render-shutdown-browser.verify.mjs b/remotion/render-shutdown-browser.verify.mjs

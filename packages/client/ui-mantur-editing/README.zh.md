@@ -78,6 +78,8 @@ Agent 导入本地文件在手动模式下保留单次确认，素材先加入�
 
 编辑器固定修复后的图像与归档依赖，保留模型及语音提供方；范围与原生验证限制见[依赖安全决策](../../../.agents/notes/implemented/bug-fix/2026-09-08-mantur-editor-security-dependencies.zh.md)。
 
+编辑器将 Undici 7.x 固定为 7.30.1，防止过多响应编码使下载进程终止。6.x 构建依赖保持独立解析；验证与打包发布限制见 [HTTP 依赖决策](../../../.agents/notes/implemented/bug-fix/2026-10-26-mantur-undici-response-errors.zh.md)。
+
 浏览器工具结果会在完成 MCP 调用前同步权威项目版本。同步失败仍返回错误，取消或注册替换不能恢复成功状态；见[结果版本决策](../../../.agents/notes/implemented/bug-fix/2026-09-09-mantur-editor-result-revision.zh.md)。
 
 编辑器通过工程存储通道确认实际语义向量可用性后才执行索引操作；检查失败或响应无效仍然报错。已接受的修改纳入浏览器退出等待。扩展与模型目录的指定 GET 请求保留原始完成 Promise；下载及安装请求仍须具备自己的退出管理。

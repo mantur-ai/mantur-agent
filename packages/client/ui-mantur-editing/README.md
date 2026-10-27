@@ -78,6 +78,8 @@ After applying [the packaged patch](adapters/mantur-cut-packaged.patch), apply [
 
 The editor pins patched image and archive dependencies without changing model or speech providers; see the [dependency security decision](../../../.agents/notes/implemented/bug-fix/2026-09-08-mantur-editor-security-dependencies.md) for scope and native verification limits.
 
+The editor fixes Undici 7.x at 7.30.1 to prevent excessive response encodings from terminating its download process. The 6.x build dependency remains separately resolved; see the [HTTP dependency decision](../../../.agents/notes/implemented/bug-fix/2026-10-26-mantur-undici-response-errors.md) for verification and packaged-release limits.
+
 Browser tool results synchronize the authoritative project revision before completing the MCP call. Synchronization failure remains an error, and cancellation or a replaced registration cannot revive success; see the [result revision decision](../../../.agents/notes/implemented/bug-fix/2026-09-09-mantur-editor-result-revision.md).
 
 The editor checks actual semantic-vector availability through the project-store transport before index operations. Failed or malformed checks remain errors. Accepted mutations remain part of browser shutdown. Exact extension and model catalog GET requests retain their original completion promises; download and installation requests still require their own shutdown ownership.

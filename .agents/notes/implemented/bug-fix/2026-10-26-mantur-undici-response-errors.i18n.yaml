@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-10-26-mantur-undici-response-errors.md
+2026-10-26-mantur-undici-response-errors.md: e874199c869de443b1918940ea37f60166a5ac1a
+2026-10-26-mantur-undici-response-errors.zh.md: 2f9e182d6d2ff135aff8b477b808f20eaf6bcc44
