@@ -795,7 +795,7 @@ index 0e72452..3ca9695 100644
        "engines": {
          "node": ">=20.18.1"
 diff --git a/package.json b/package.json
-index 69a1f6b..bb99988 100644
+index 69a1f6b..f5b597f 100644
 --- a/package.json
 +++ b/package.json
 @@ -12,6 +12,7 @@
@@ -845,18 +845,19 @@ index 69a1f6b..bb99988 100644
      "lint": "oxlint -c config/.oxlintrc.json",
      "preview": "vite preview --config config/vite.config.ts",
      "desktop:build:main": "esbuild desktop/main.ts --bundle --platform=node --format=esm --packages=external --sourcemap --outfile=desktop-dist/main.mjs && esbuild desktop/native-asr-worker.ts --bundle --platform=node --format=esm --packages=external --sourcemap --outfile=desktop-dist/native-asr-worker.mjs && esbuild desktop/native-semantic-worker.ts --bundle --platform=node --format=esm --packages=external --sourcemap --outfile=desktop-dist/native-semantic-worker.mjs && esbuild desktop/native-clap-worker.ts --bundle --platform=node --format=esm --packages=external --sourcemap --outfile=desktop-dist/native-clap-worker.mjs && esbuild desktop/native-rhythm-worker.ts --bundle --platform=node --format=esm --packages=external --sourcemap --outfile=desktop-dist/native-rhythm-worker.mjs && esbuild desktop/preload.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=desktop-dist/preload.cjs",
-@@ -80,7 +82,9 @@
+@@ -80,7 +82,10 @@
      "verify:export-gl": "tsx src/export/export-reliability.verify.ts && tsx src/export/exportMediaPlan.verify.ts && tsx src/export/range.verify.ts && tsx src/gl/customTransitions.verify.ts && tsx src/gl/fx/chroma-key.verify.ts && tsx src/gl/fx/cube.verify.ts && tsx src/gl/fx/fx.verify.ts && tsx src/gl/shader-contract.verify.ts && tsx src/generate/media-export.geometry.verify.ts && tsx src/generate/video.verify.ts && tsx src/plugins/export.verify.ts && tsx src/plugins/resourcePreview.verify.ts && tsx src/plugins/validate.verify.ts && tsx src/multicam/align.verify.ts && tsx src/multicam/sync.verify.ts && tsx src/reframe/detect.verify.ts && tsx src/script/script.verify.ts && tsx --tsconfig tsconfig.app.json src/fonts/notoSansOffline.verify.ts",
      "verify:server-extra": "tsx server/media-process.verify.ts && tsx server/media-references.verify.ts && tsx server/media-normalization-reason.verify.ts && tsx server/media-normalization-reference.verify.ts && tsx server/media-normalization-admission.verify.ts && tsx server/plugins/upload-multipart-meta.verify.ts && tsx server/plugins/firecrawl.verify.ts && tsx server/plugins/request-shape-gate.verify.ts && tsx server/plugins/isolate-voice.verify.ts && tsx server/plugins/project-store-merge.verify.ts && tsx server/plugins/render-clip-cancellation.verify.ts && tsx server/plugins/storage-lifecycle.verify.ts && tsx server/plugins/video-reference.verify.ts && tsx server/safe-public-fetch.verify.ts && tsx shared/timeline-geometry.verify.ts && tsx remotion/render-timeout.verify.mjs && tsx server/plugins/stock-check.verify.ts",
      "verify:sqlite-migration": "tsx server/storage/sqlite-store.verify.ts && tsx server/storage/sqlite-migration-http.verify.ts && tsx server/plugins/project-store-export-recovery-sqlite.verify.ts && tsx src/export/serverExportRecovery.verify.ts",
 -    "verify:extract-audio": "tsx server/plugins/extract-audio.verify.ts"
 +    "verify:extract-audio": "tsx server/plugins/extract-audio.verify.ts",
 +    "verify:mantur-shutdown": "node scripts/patch-remotion-shutdown.verify.mjs && node --import tsx server/media-process-shutdown.verify.ts && node --import tsx server/plugins/generation-shutdown.verify.ts && node --import tsx server/plugins/project-shutdown.verify.ts && node --import tsx server/external-agent/broker-shutdown.verify.ts && node --import tsx server/plugins/mantur-shutdown.verify.ts && node --import tsx src/agent/external-shutdown.verify.ts && node remotion/render-shutdown.verify.mjs && node --import tsx src/media/semantic-search/vectorCapability.verify.ts && node --import tsx server/plugins/mcp-transport-shutdown.verify.ts && node --import tsx server/plugins/extract-frames-shutdown.verify.ts && node --import tsx server/plugins/local-upload-shutdown.verify.ts",
-+    "verify:mantur-export": "tsx desktop/mantur-export.verify.ts"
++    "verify:mantur-export": "tsx desktop/mantur-export.verify.ts",
++    "verify:mantur-export-recovery": "node --import tsx src/export/manturExportRecovery.integration.verify.mjs"
    },
    "dependencies": {
      "@ai-sdk/alibaba": "^2.0.16",
-@@ -149,6 +153,13 @@
+@@ -149,6 +154,13 @@
      "vite": "^8.1.1"
    },
    "overrides": {
@@ -6188,14 +6189,22 @@ index d0326cb..6c1c657 100644
      const selected = suggestedFilename
 diff --git a/src/export/manturExportDestination.ts b/src/export/manturExportDestination.ts
 new file mode 100644
-index 0000000..c73eb50
+index 0000000..b740289
 --- /dev/null
 +++ b/src/export/manturExportDestination.ts
-@@ -0,0 +1,72 @@
+@@ -0,0 +1,82 @@
 +/** File selection and streamed writes through the embedding Mantur window. */
 +import type { BrowserExportFileHandle } from './exportDestination';
 +
 +const parentOrigin = typeof location === 'undefined' ? null : new URLSearchParams(location.search).get('manturParentOrigin');
++const temporaryHandles = new WeakSet<BrowserExportFileHandle>();
++
++/** Mantur grants are valid only in the selecting document and cannot be cloned. */
++export function isManturExportFileHandle(handle: unknown): handle is BrowserExportFileHandle {
++  return typeof handle === 'object' && handle !== null
++    && temporaryHandles.has(handle as BrowserExportFileHandle);
++}
++
 +const pending = new Map<string, { resolve(value: unknown): void; reject(error: Error): void }>();
 +if (typeof window !== 'undefined') {
 +  window.addEventListener('message', (event: MessageEvent<unknown>) => {
@@ -6236,7 +6245,7 @@ index 0000000..c73eb50
 +  if (!result || typeof result !== 'object' || !('id' in result) || typeof result.id !== 'string'
 +    || !('name' in result) || typeof result.name !== 'string') throw new Error('Invalid Mantur export selection');
 +  const id = result.id;
-+  return {
++  const handle: BrowserExportFileHandle = {
 +    kind: 'file', name: result.name,
 +    queryPermission: async () => 'granted', requestPermission: async () => 'granted',
 +    createWritable: async () => {
@@ -6263,6 +6272,297 @@ index 0000000..c73eb50
 +      };
 +    },
 +  };
++  temporaryHandles.add(handle);
++  return handle;
++}
+diff --git a/src/export/manturExportRecovery.browser.verify.ts b/src/export/manturExportRecovery.browser.verify.ts
+new file mode 100644
+index 0000000..0eaf982
+--- /dev/null
++++ b/src/export/manturExportRecovery.browser.verify.ts
+@@ -0,0 +1,187 @@
++/** Real IndexedDB regression for document-bound Mantur save selections. */
++import { chooseManturExportFile } from './manturExportDestination';
++import {
++  claimServerExportDelivery,
++  hasServerExportDestinationAuthority,
++  listServerExportJobs,
++  markServerExportOutputReady,
++  markServerExportTargetCommitted,
++  persistServerExportJob,
++  rebindServerExportJob,
++  releaseServerExportDelivery,
++  retireServerExportJob,
++  type PersistedServerExportJob,
++} from './serverExportRecovery';
++import { readLocalRecord, removeLocalRecord, writeLocalRecord } from './serverExportRecoveryStore';
++import type { BrowserExportFileHandle, ExportDestination } from './exportDestination';
++
++function check(value: unknown, message: string): asserts value {
++  if (!value) throw new Error(message);
++}
++
++function record(renderId: string, destination: ExportDestination): PersistedServerExportJob {
++  return {
++    version: 1, renderId, projectId: 'mantur-saveas-test', label: renderId,
++    targetPath: null, createdAt: 1, updatedAt: 1, format: 'video', codec: 'h264',
++    base: '', fps: 30,
++    state: { fps: 30, width: 1280, height: 720, items: [], selectedId: null },
++    destination, autoQaEnabled: false, stage: 'polling',
++  };
++}
++
++async function rawRecord(renderId: string): Promise<PersistedServerExportJob | undefined> {
++  const database = await new Promise<IDBDatabase>((resolve, reject) => {
++    const request = indexedDB.open('openchatcut-server-export-recovery', 1);
++    request.onsuccess = () => resolve(request.result);
++    request.onerror = () => reject(request.error);
++  });
++  try {
++    return await new Promise((resolve, reject) => {
++      const request = database.transaction('jobs').objectStore('jobs').get(renderId);
++      request.onsuccess = () => resolve(request.result);
++      request.onerror = () => reject(request.error);
++    });
++  } finally {
++    database.close();
++  }
++}
++
++async function rejected(operation: () => Promise<unknown>, message: string): Promise<void> {
++  let failed = false;
++  try { await operation(); } catch { failed = true; }
++  check(failed, message);
++}
++
++const writes: string[] = [];
++let nextSelection = 0;
++Object.defineProperty(navigator, 'userActivation', { configurable: true, value: { isActive: true } });
++window.addEventListener('message', (event: MessageEvent<unknown>) => {
++  const data = event.data as { type?: string; requestId: string; request?: { op: string; name?: string } };
++  if (event.source !== window || data.type !== 'mantur:cut-export' || !data.request) return;
++  const request = data.request;
++  writes.push(request.op);
++  const result = request.op === 'ready' ? true
++    : request.op === 'pick' ? { id: `test-selection-${++nextSelection}`, name: request.name }
++      : undefined;
++  window.postMessage({ type: 'mantur:cut-export-result', version: 1, requestId: data.requestId, result }, location.origin);
++});
++
++async function selection(name: string): Promise<Extract<ExportDestination, { type: 'browser-file' }>> {
++  const handle = await chooseManturExportFile(name);
++  check(handle, 'the test relay returns a file selection');
++  return { type: 'browser-file', label: name, handle };
++}
++
++async function firstDocument(): Promise<string[]> {
++  await writeLocalRecord(record('initialize', { type: 'downloads', label: 'downloads' }));
++  const first = await selection('中文另存.mp4');
++  const native = record('native', first);
++  check((await rawRecord('initialize'))?.destination.type === 'downloads', 'default export persists');
++  await rejected(async () => {
++    const database = await new Promise<IDBDatabase>((resolve) => {
++      const request = indexedDB.open('openchatcut-server-export-recovery', 1);
++      request.onsuccess = () => resolve(request.result);
++    });
++    try {
++      database.transaction('jobs', 'readwrite').objectStore('jobs').put(native);
++    } catch (error) {
++      check(error instanceof DOMException && error.name === 'DataCloneError', 'old raw put must fail with DataCloneError');
++      throw error;
++    } finally { database.close(); }
++  }, 'old unsanitized native handle must fail real IndexedDB cloning');
++  await persistServerExportJob(native);
++  const stored = await rawRecord('native');
++  check(stored?.destination.type === 'browser-file' && stored.destination.handle === null,
++    'native functions and grants never enter IndexedDB');
++  const current = (await listServerExportJobs(native.projectId)).find((job) => job.renderId === 'native');
++  check(current?.destination.type === 'browser-file' && current.destination.handle === first.handle,
++    'current document recovers the exact active handle');
++  await markServerExportOutputReady('native');
++  const claim = await claimServerExportDelivery('native');
++  check(claim, 'durable output is claimable');
++  const second = await selection('重新选择.mp4');
++
++  const originalPut = IDBObjectStore.prototype.put;
++  IDBObjectStore.prototype.put = function (...args: Parameters<IDBObjectStore['put']>) {
++    const result = originalPut.apply(this, args);
++    this.transaction.abort();
++    return result;
++  };
++  try {
++    await rejected(() => writeLocalRecord({ ...native, destination: second }), 'aborted transaction rejects');
++  } finally { IDBObjectStore.prototype.put = originalPut; }
++  const afterAbort = await readLocalRecord('native');
++  check(afterAbort?.destination.type === 'browser-file' && afterAbort.destination.handle === first.handle,
++    'failed replacement cannot publish a new handle');
++
++  const rebound = await rebindServerExportJob('native', second, second.label, claim);
++  check(rebound.destination.type === 'browser-file' && rebound.destination.handle === second.handle,
++    'successful rebind publishes the new handle');
++  const writable = await second.handle.createWritable();
++  await writable.write(new Blob(['native bytes']));
++  await writable.close();
++  check(writes.includes('start') && writes.includes('write') && writes.includes('finish'),
++    'active handle still streams to the native relay');
++  await markServerExportTargetCommitted('native', claim);
++  await releaseServerExportDelivery('native', claim);
++  check((await readLocalRecord('native'))?.stage === 'target-committed', 'all local stages remain writable');
++
++  const originalDelete = IDBObjectStore.prototype.delete;
++  IDBObjectStore.prototype.delete = function (...args: Parameters<IDBObjectStore['delete']>) {
++    const result = originalDelete.apply(this, args);
++    this.transaction.abort();
++    return result;
++  };
++  try {
++    await rejected(() => removeLocalRecord('native'), 'aborted deletion rejects');
++  } finally { IDBObjectStore.prototype.delete = originalDelete; }
++  check(hasServerExportDestinationAuthority((await readLocalRecord('native'))!.destination),
++    'failed deletion preserves existing authority');
++  check(await retireServerExportJob('native'), 'retirement succeeds');
++  await writeLocalRecord({ ...native, destination: { ...first, handle: null } });
++  check(!hasServerExportDestinationAuthority((await readLocalRecord('native'))!.destination),
++    'retirement clears transient authority even for a reused id and label');
++
++  await persistServerExportJob(record('native-refresh', await selection('刷新后重选.mp4')));
++  const directory = await navigator.storage.getDirectory();
++  const browserHandle = await directory.getFileHandle('browser.mp4', { create: true });
++  const browserDestination: ExportDestination = {
++    type: 'browser-file', label: browserHandle.name,
++    handle: browserHandle as unknown as BrowserExportFileHandle,
++  };
++  await persistServerExportJob(record('browser-refresh', browserDestination));
++  const browserStored = await rawRecord('browser-refresh');
++  check(browserStored?.destination.type === 'browser-file'
++    && browserStored.destination.handle instanceof FileSystemFileHandle,
++  'genuine FileSystemFileHandle survives real IndexedDB cloning');
++  return ['old-put-DataCloneError', 'native-durable-descriptor', 'same-document-authority',
++    'transaction-abort', 'rebind', 'stream-write', 'stage-transitions', 'delete-abort',
++    'retirement', 'genuine-browser-handle'];
++}
++
++async function secondDocument(): Promise<string[]> {
++  const records = await listServerExportJobs('mantur-saveas-test');
++  const native = records.find((job) => job.renderId === 'native-refresh');
++  check(native && !hasServerExportDestinationAuthority(native.destination),
++    'a new document cannot recover Mantur grant authority from IndexedDB');
++  const browser = records.find((job) => job.renderId === 'browser-refresh');
++  check(browser && hasServerExportDestinationAuthority(browser.destination),
++    'a genuine browser handle remains available in a new document');
++  const claim = await claimServerExportDelivery('native-refresh');
++  check(claim, 'restored output can be claimed for reselection');
++  const selected = await selection('重新授权.mp4');
++  const rebound = await rebindServerExportJob('native-refresh', selected, selected.label, claim);
++  check(hasServerExportDestinationAuthority(rebound.destination), 'explicit reselection restores authority');
++  await releaseServerExportDelivery('native-refresh', claim);
++  await removeLocalRecord('native-refresh');
++  await removeLocalRecord('browser-refresh');
++  return ['new-document-no-native-authority', 'new-document-browser-authority', 'explicit-reselection'];
++}
++
++void (new URLSearchParams(location.search).get('phase') === 'reload' ? secondDocument() : firstDocument())
++  .then((checks) => ({ ok: true, checks }))
++  .catch((error: unknown) => ({ ok: false, error: String(error), stack: error instanceof Error ? error.stack : '' }))
++  .then((result) => {
++    document.documentElement.dataset.result = encodeURIComponent(JSON.stringify(result));
++    document.body.textContent = JSON.stringify(result);
++  });
+diff --git a/src/export/manturExportRecovery.integration.verify.mjs b/src/export/manturExportRecovery.integration.verify.mjs
+new file mode 100644
+index 0000000..befe64a
+--- /dev/null
++++ b/src/export/manturExportRecovery.integration.verify.mjs
+@@ -0,0 +1,90 @@
++/** Isolated Chromium/IndexedDB regression. Set CC_EXPORT_RECOVERY_BROWSER to an installed browser. */
++import assert from 'node:assert/strict';
++import http from 'node:http';
++import { fileURLToPath } from 'node:url';
++import { build } from 'esbuild';
++import { openBrowser } from '@remotion/renderer';
++import { createExportRecoveryLeaseOperation } from '../../server/plugins/project-store-export-recovery.ts';
++
++const browser = process.env.CC_EXPORT_RECOVERY_BROWSER;
++assert(browser, 'CC_EXPORT_RECOVERY_BROWSER must name an installed Chromium executable');
++const bundle = await build({
++  entryPoints: [fileURLToPath(new URL('./manturExportRecovery.browser.verify.ts', import.meta.url))],
++  bundle: true, platform: 'browser', format: 'esm', write: false,
++});
++const entries = new Map();
++const store = {
++  readEntry: async (key) => entries.has(key) ? { found: true, value: entries.get(key) } : { found: false },
++  writeEntry: async (key, value) => { entries.set(key, value); },
++  writeAgentRuntimeExact: async (key, value) => { entries.set(key, value); },
++  writeEntryExact: async (key, value) => { entries.set(key, value); },
++  removeEntry: async (key) => { entries.delete(key); },
++};
++let serialized = Promise.resolve();
++const mutate = createExportRecoveryLeaseOperation((work) => {
++  const result = serialized.then(() => work(store));
++  serialized = result.then(() => undefined, () => undefined);
++  return result;
++});
++const server = http.createServer((request, response) => {
++  if (request.url?.startsWith('/api/project-store')) {
++    void (async () => {
++      const url = new URL(request.url, 'http://127.0.0.1');
++      let result;
++      if (url.pathname === '/api/project-store/export-recovery/lease') {
++        let body = '';
++        for await (const chunk of request) body += chunk;
++        result = await mutate(JSON.parse(body));
++      } else if (url.pathname === '/api/project-store/entry') {
++        result = await store.readEntry(url.searchParams.get('key'));
++      } else {
++        result = { version: 1, entries: Object.fromEntries(entries) };
++      }
++      response.setHeader('content-type', 'application/json');
++      response.end(JSON.stringify(result));
++    })().catch((error) => { response.statusCode = 500; response.end(String(error)); });
++    return;
++  }
++
++  if (request.url?.startsWith('/fixture.js')) {
++    response.setHeader('content-type', 'text/javascript');
++    response.end(bundle.outputFiles[0].text);
++  } else {
++    response.setHeader('content-type', 'text/html');
++    response.end('<!doctype html><html><body>pending<script type="module" src="/fixture.js"></script></body></html>');
++  }
++});
++const chromium = await openBrowser('chrome', { browserExecutable: browser, logLevel: 'error' });
++try {
++  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
++  const origin = `http://127.0.0.1:${server.address().port}`;
++  const results = [];
++  const page = await chromium.newPage({
++    context: () => null, logLevel: 'error', indent: false, pageIndex: 0,
++    onBrowserLog: null, onLog: null,
++  });
++  for (const phase of ['initial', 'reload']) {
++    await page.goto({ url: `${origin}/?phase=${phase}&manturParentOrigin=${encodeURIComponent(origin)}`, timeout: 30000 });
++    const encoded = await page.evaluate(() => new Promise((resolve, reject) => {
++      const deadline = Date.now() + 30000;
++      const poll = () => {
++        const value = document.documentElement.dataset.result;
++        if (value) resolve(value);
++        else if (Date.now() >= deadline) reject(new Error('IndexedDB fixture did not complete'));
++        else setTimeout(poll, 20);
++      };
++      poll();
++    }));
++    const result = JSON.parse(decodeURIComponent(encoded));
++    assert.equal(result.ok, true, JSON.stringify(result));
++    results.push({ phase, ...result });
++  }
++  console.log(JSON.stringify({ ok: true, results }));
++} finally {
++  try {
++    await chromium.close({ silent: true });
++  } finally {
++    server.closeAllConnections();
++    await new Promise((resolve) => server.close(resolve));
++  }
 +}
 diff --git a/src/export/serverExportOperation.ts b/src/export/serverExportOperation.ts
 index 75b4f16..eaa3334 100644
@@ -6358,6 +6658,135 @@ index 75b4f16..eaa3334 100644
      throw error;
    }
    return exportJobs.start({
+diff --git a/src/export/serverExportRecoveryStore.ts b/src/export/serverExportRecoveryStore.ts
+index 210c100..126e706 100644
+--- a/src/export/serverExportRecoveryStore.ts
++++ b/src/export/serverExportRecoveryStore.ts
+@@ -1,3 +1,4 @@
++import { isManturExportFileHandle } from './manturExportDestination';
+ import type { TimelineState } from '../editor/types';
+ import type {
+   BrowserExportDirectoryHandle,
+@@ -8,6 +9,7 @@ import type {
+ const DATABASE_NAME = 'openchatcut-server-export-recovery';
+ const STORE_NAME = 'jobs';
+ const memoryJobs = new Map<string, PersistedServerExportJob>();
++const temporaryDestinations = new Map<string, Extract<ExportDestination, { readonly type: 'browser-file' }>>();
+
+ export type ServerExportRecoveryStage =
+   | 'polling'
+@@ -168,22 +170,33 @@ export function remoteSafeRecord(record: PersistedServerExportJob): PersistedSer
+   };
+ }
+
++function withTemporaryDestination(record: PersistedServerExportJob): PersistedServerExportJob {
++  const destination = temporaryDestinations.get(record.renderId);
++  return record.destination.type === 'browser-file' && record.destination.handle === null
++    && destination && destination.label === record.destination.label
++    ? { ...record, destination }
++    : record;
++}
++
+ export async function readLocalRecords(): Promise<PersistedServerExportJob[]> {
+-  if (!hasIndexedDb()) return [...memoryJobs.values()];
++  if (!hasIndexedDb()) return [...memoryJobs.values()].map(withTemporaryDestination);
+   const database = await openDatabase();
+   try {
+     return await new Promise<unknown[]>((resolve, reject) => {
+       const request = database.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).getAll();
+       request.onsuccess = () => resolve(request.result as unknown[]);
+       request.onerror = () => reject(request.error ?? new Error('无法读取导出恢复记录'));
+-    }).then((values) => values.filter(validRecord));
++    }).then((values) => values.filter(validRecord).map(withTemporaryDestination));
+   } finally {
+     database.close();
+   }
+ }
+
+ export async function readLocalRecord(renderId: string): Promise<PersistedServerExportJob | null> {
+-  if (!hasIndexedDb()) return memoryJobs.get(renderId) ?? null;
++  if (!hasIndexedDb()) {
++    const record = memoryJobs.get(renderId);
++    return record ? withTemporaryDestination(record) : null;
++  }
+   const database = await openDatabase();
+   try {
+     const value = await new Promise<unknown>((resolve, reject) => {
+@@ -191,34 +204,45 @@ export async function readLocalRecord(renderId: string): Promise<PersistedServer
+       request.onsuccess = () => resolve(request.result);
+       request.onerror = () => reject(request.error ?? new Error('无法读取导出恢复记录'));
+     });
+-    return validRecord(value) ? value : null;
++    return validRecord(value) ? withTemporaryDestination(value) : null;
+   } finally {
+     database.close();
+   }
+ }
+
+ export async function writeLocalRecord(record: PersistedServerExportJob): Promise<void> {
++  const destination = record.destination;
++  const temporary = destination.type === 'browser-file' && isManturExportFileHandle(destination.handle)
++    ? { ...destination, handle: destination.handle }
++    : null;
++  const durableRecord = temporary
++    ? { ...record, destination: { ...temporary, handle: null } }
++    : record;
+   if (!hasIndexedDb()) {
+-    memoryJobs.set(record.renderId, record);
+-    return;
+-  }
+-  const database = await openDatabase();
+-  try {
+-    await new Promise<void>((resolve, reject) => {
+-      const transaction = database.transaction(STORE_NAME, 'readwrite');
+-      transaction.objectStore(STORE_NAME).put(record);
+-      transaction.oncomplete = () => resolve();
+-      transaction.onerror = () => reject(transaction.error ?? new Error('无法保存导出恢复记录'));
+-      transaction.onabort = () => reject(transaction.error ?? new Error('导出恢复记录写入已取消'));
+-    });
+-  } finally {
+-    database.close();
++    memoryJobs.set(record.renderId, durableRecord);
++  } else {
++    const database = await openDatabase();
++    try {
++      await new Promise<void>((resolve, reject) => {
++        const transaction = database.transaction(STORE_NAME, 'readwrite');
++        transaction.objectStore(STORE_NAME).put(durableRecord);
++        transaction.oncomplete = () => resolve();
++        transaction.onerror = () => reject(transaction.error ?? new Error('无法保存导出恢复记录'));
++        transaction.onabort = () => reject(transaction.error ?? new Error('导出恢复记录写入已取消'));
++      });
++    } finally {
++      database.close();
++    }
+   }
++  // Publish current-document authority only after the durable row commits.
++  if (temporary) temporaryDestinations.set(record.renderId, temporary);
++  else temporaryDestinations.delete(record.renderId);
+ }
+
+ export async function removeLocalRecord(renderId: string): Promise<void> {
+   if (!hasIndexedDb()) {
+     memoryJobs.delete(renderId);
++    temporaryDestinations.delete(renderId);
+     return;
+   }
+   const database = await openDatabase();
+@@ -230,6 +254,7 @@ export async function removeLocalRecord(renderId: string): Promise<void> {
+       transaction.onerror = () => reject(transaction.error ?? new Error('无法删除导出恢复记录'));
+       transaction.onabort = () => reject(transaction.error ?? new Error('导出恢复记录删除已取消'));
+     });
++    temporaryDestinations.delete(renderId);
+   } finally {
+     database.close();
+   }
+@@ -238,4 +263,5 @@ export async function removeLocalRecord(renderId: string): Promise<void> {
+ /** Test helper for the Node fallback store. */
+ export function resetServerExportRecoveryMemory(): void {
+   memoryJobs.clear();
++  temporaryDestinations.clear();
+ }
 diff --git a/src/media/ProjectMediaPanel.tsx b/src/media/ProjectMediaPanel.tsx
 index 7b971ee..9325983 100644
 --- a/src/media/ProjectMediaPanel.tsx

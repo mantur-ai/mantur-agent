@@ -76,6 +76,8 @@ Agent 导入本地文件在手动模式下保留单次确认，素材先加入�
 
 应用[打包补丁](adapters/mantur-cut-packaged.patch)得到编辑器树 `2a5be55239826a9e74bde5a5a5484a0f033d4da0` 后，再应用[退出补丁](adapters/mantur-cut-shutdown.patch)。退出补丁不增加公开 MCP 工具，也不修改固定的音频收尾流程。受管理的渲染路径传播 `browser.close()` 失败，但 Remotion 4.0.509 没有提供受支持的子进程及管道完整关闭确认；实际取得渲染浏览器的实例因此拒绝退出确认。使用过尚未接入排空的工作来源，或保留有保存及任务错误时，也拒绝确认。该增量不代表完整安装许可；[退出决策](../../../.agents/notes/implemented/bug-fix/2026-09-08-mantur-editing-owned-shutdown.zh.md)记录验证限制。
 
+原生保存选择的写入授权仅保留在选择文件的编辑器文档中。恢复记录保留文件名，重新加载后的编辑器需要重新选择；真正的浏览器文件句柄仍由浏览器持久化。详见[原生导出恢复决策](../../../.agents/notes/implemented/bug-fix/2026-10-27-mantur-native-export-recovery.zh.md)。
+
 编辑器固定修复后的图像与归档依赖，保留模型及语音提供方；范围与原生验证限制见[依赖安全决策](../../../.agents/notes/implemented/bug-fix/2026-09-08-mantur-editor-security-dependencies.zh.md)。
 
 编辑器将 Undici 7.x 固定为 7.30.1，防止过多响应编码使下载进程终止。6.x 构建依赖保持独立解析；验证与打包发布限制见 [HTTP 依赖决策](../../../.agents/notes/implemented/bug-fix/2026-10-26-mantur-undici-response-errors.zh.md)。
