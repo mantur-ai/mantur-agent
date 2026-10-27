@@ -79,6 +79,7 @@ async function builderConfiguration(version: string, platform: 'darwin' | 'win32
 
 describe('TOS update distribution', () => {
   it.each([
+    [manifest.version, 'darwin', 'arm64'],
     ['0.1.22', 'darwin', 'arm64'], ['0.1.22', 'darwin', 'x64'], ['0.1.22', 'win32', 'x64'],
     ['0.1.22-rc.2', 'darwin', 'arm64'], ['0.1.22-rc.2', 'darwin', 'x64'], ['0.1.22-rc.2', 'win32', 'x64'],
   ] as const)('uses builder %s / %s / %s config with the stable runtime route (offline platform model)', async (version, platform, arch) => {
@@ -147,6 +148,20 @@ describe('TOS update distribution', () => {
     for (const [version, expected] of [['0.1.21', false], ['0.1.22-rc.1', false], ['0.1.22-rc.2', false], ['0.1.22-rc.3', true], ['0.1.22', true], ['0.1.23', true]] as const) {
       expect(await Updater.prototype.isUpdateAvailable.call(context, { version }), version).toBe(expected)
     }
+  })
+
+  it.each([
+    ['0.1.21', '1.0.0', true],
+    ['0.1.22-rc.3', '1.0.0', true],
+    ['1.0.0', '1.0.0', false],
+    ['1.0.0', '0.1.22', false],
+    ['1.0.0', '0.1.21', false],
+  ] as const)('selects %s to %s with downgrades disabled', async (currentVersion, version, expected) => {
+    const context = {
+      currentVersion, allowPrerelease: false, allowDowngrade: false,
+      isUpdateSupported: () => true, isUserWithinRollout: () => true,
+    }
+    expect(await Updater.prototype.isUpdateAvailable.call(context, { version })).toBe(expected)
   })
 
   it('proves the real channel setter enables a forbidden downgrade unless reset afterward', async () => {

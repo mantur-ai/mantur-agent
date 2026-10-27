@@ -475,7 +475,7 @@ jobs:
           printf '%s\n' "$RELEASE_NOTES" > "$notes_file"
           gh release create "$TAG" release/* \
             --repo "$GITHUB_REPOSITORY" \
-            --title "ManTur Agent" \
+            --title "ManTur Agent $VERSION" \
             --notes-file "$notes_file" \
             "${release_flags[@]}"
 
