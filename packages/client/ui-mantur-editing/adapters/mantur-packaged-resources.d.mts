@@ -7,6 +7,7 @@ export interface PackagedResources {
   ffmpeg: string
   ffprobe: string
   compositor: string
+  nativeMedia: string
   whisperCli: string
   whisperServer: string
 }

@@ -43,19 +43,20 @@ startup = (async () => {
   await mkdir(home, { mode: 0o700 })
   await mkdir(temp, { mode: 0o700 })
   const renderBundle = join(temporary, 'remotion-bundle')
-  const compositor = join(temporary, 'compositor')
+  const nativeMedia = join(temporary, 'native-media')
+  const compositor = join(nativeMedia, 'compositor')
   const copyOptions = { recursive: true, dereference: true, filter: async source => {
     const local = relative(resourceRoot, await realpath(source))
     if (isAbsolute(local) || local === '..' || local.startsWith(`..${sep}`)) throw new Error('Packaged render resource link escapes its installation')
     return true
   } }
   await cp(resources.remotionBundle, renderBundle, copyOptions)
-  await cp(resources.compositor, compositor, copyOptions)
+  await cp(resources.nativeMedia, nativeMedia, copyOptions)
   Object.assign(process.env, {
     HOME: home, USERPROFILE: home, TMPDIR: temp, TEMP: temp, TMP: temp,
     CC_REMOTION_BUNDLE: renderBundle, CC_REMOTION_BINARIES_DIR: compositor,
     CC_BROWSER_EXECUTABLE: resources.browserExecutable,
-    OPENCHATCUT_FFMPEG: resources.ffmpeg, OPENCHATCUT_FFPROBE: resources.ffprobe,
+    OPENCHATCUT_FFMPEG: join(nativeMedia, 'bin/ffmpeg'), OPENCHATCUT_FFPROBE: join(nativeMedia, 'bin/ffprobe'),
     OPENCHATCUT_WHISPER_CLI: resources.whisperCli,
   })
   const { startEmbeddedServer } = await import(pathToFileURL(resources.server).href)

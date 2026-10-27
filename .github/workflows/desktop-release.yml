@@ -7,7 +7,7 @@ on:
         description: Native macOS architectures included in this release
         required: true
         type: choice
-        default: both
+        default: arm64
         options:
           - both
           - arm64
@@ -57,12 +57,17 @@ jobs:
           REF_NAME: ${{ github.ref_name }}
           REF_TYPE: ${{ github.ref_type }}
           RELEASE_NOTES: ${{ inputs.release_notes }}
+          WINDOWS: ${{ inputs.windows }}
         run: |
           set -euo pipefail
           case "$ARCHITECTURES" in
             both|arm64) ;;
             *) echo "::error::Select both or arm64 architectures."; exit 1 ;;
           esac
+          [ "$ARCHITECTURES" = arm64 ] && [ "$WINDOWS" = false ] || {
+            echo "::error::The reviewed media input supports macOS arm64 only."
+            exit 1
+          }
           node --input-type=module <<'NODE' >> "$GITHUB_OUTPUT"
           const include = [
             { arch: 'arm64', runner: 'macos-15', script: 'desktop:dist:mac:arm64', app: 'apps/desktop/dist/mac-arm64/ManTur Agent.app' },
@@ -144,7 +149,16 @@ jobs:
         uses: actions/cache@v5
         with:
           path: .cache/mantur-cut
-          key: mantur-cut-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('apps/desktop/mantur-cut/source.json', 'packages/client/ui-mantur-editing/adapters/mantur-cut.patch', 'packages/client/ui-mantur-editing/adapters/mantur-cut-packaged.patch') }}
+          key: mantur-cut-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('apps/desktop/mantur-cut/source.json', 'apps/desktop/mantur-cut/*media*.json', 'scripts/mantur-media-build*', 'scripts/mantur-media-inputs.py', 'packages/client/ui-mantur-editing/adapters/mantur-cut*.patch') }}
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Verify and prepare pinned media candidate
+        run: |
+          python3 -m unittest discover -s scripts -p test_mantur_media_inputs.py
+          python3 scripts/mantur-media-inputs.py --prepare-candidate --cache-dir .cache/mantur-cut/native-media
 
       - name: Require native compiler
         run: xcrun clang --version
@@ -372,6 +386,7 @@ jobs:
         run: |
           set -euo pipefail
           python -m unittest discover -s scripts -p test_desktop_release_sources.py
+          python -m unittest discover -s scripts -p test_mantur_media_inputs.py
           python scripts/desktop-release-sources.py release
           find release -maxdepth 1 -type f ! -name SHA256SUMS -exec sha256sum {} \; \
             | sed 's#  release/#  #' \

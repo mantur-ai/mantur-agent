@@ -47,11 +47,11 @@ pnpm run desktop:dist:mac:arm64
 pnpm run desktop:smoke
 ```
 
-每条 `desktop:dist:*` 命令都会先从固定的 OpenChatCut 与 whisper.cpp commit 准备对应的 Mantur Cut 资源树。该步骤会校验基础、打包运行时与退出三层补丁的摘要及结果 Git tree、package-lock integrity、下载归档哈希以及请求的原生目标。源码配置与运行资源清单要求格式版本 2，旧的两层资源会被拒绝。清单记录三层补丁摘要与应用退出补丁后的最终树。安装包会携带内嵌服务端、已构建编辑器、Remotion bundle 与 compositor、Chrome Headless Shell、FFmpeg、ffprobe、Whisper CLI 与 server、含全部三层补丁的精确源码记录、保留的许可证文件和生产依赖审计。打包运行时不会下载缺失可执行文件，也不会回退到开发检出。
+每条 `desktop:dist:*` 命令都会先从固定的 OpenChatCut 与 whisper.cpp commit 准备对应的 Mantur Cut 资源树。该步骤会校验基础、打包运行时与退出三层补丁的摘要及结果 Git tree、package-lock integrity、下载归档哈希以及请求的原生目标。源码配置与运行资源清单要求格式版本 3，并绑定完整原生媒体输入；旧资源会被拒绝。清单记录三层补丁摘要与应用退出补丁后的最终树。安装包会携带内嵌服务端、已构建编辑器、Remotion bundle 与 compositor、Chrome Headless Shell、FFmpeg、ffprobe、Whisper CLI 与 server、含全部三层补丁的精确源码记录、保留的许可证文件和生产依赖审计。打包运行时不会下载缺失可执行文件，也不会回退到开发检出。
 
 Chrome for Testing 下载 URL 将版本号放在目录中，并使用 `chrome-headless-shell-<platform>.zip` 作为归档文件名。本地缓存文件名还会包含固定版本号。
 
-编辑器打包暂存仅排除 webpack 构建缓存、重复的 `.remotion/chrome-headless-shell` 缓存和非目标平台的 ONNX 原生目录。清单指定的浏览器、目标绑定、其他缓存内容和许可证均保留。macOS 暂存阶段在签名前将 compositor 可执行文件及相邻 dylib 的引用改为 `@loader_path`；无法解析的非系统库会阻止打包。签名选项和权限配置保持不变。见[资源暂存决策](../../.agents/notes/implemented/bug-fix/2026-09-09-mantur-native-resource-staging.zh.md)。
+编辑器打包暂存排除 webpack 构建缓存、重复的 `.remotion/chrome-headless-shell` 缓存、非目标平台的 ONNX 原生目录、全部 npm compositor 平台目录及 npm FFmpeg/ffprobe 可执行文件。已审查的原生媒体输入替换这些媒体文件，受限相对别名保留默认 npm 查找路径。清单指定的浏览器、目标 ONNX 绑定、其他缓存内容和保留的许可证均保留。arm64 媒体输入保留 `bin`、`lib`、`compositor` 和许可证目录。FFmpeg 6.1.6 CLI 库保留 ABI 主版本文件名，Remotion compositor 使用另一组无版本后缀的 FFmpeg 7.1.5 库。打包会在签名前校验固定文件及受限的 `@loader_path` 依赖；缺失或外部库会阻止打包。签名选项和权限配置保持不变。见[资源暂存决策](../../.agents/notes/implemented/bug-fix/2026-09-09-mantur-native-resource-staging.zh.md)。
 
 编辑器的固定版本渲染器补丁公开每个浏览器子进程及管道关闭的完成证据。安装准备同时等待该证据和公开浏览器关闭操作；缺失证据或清理失败仍会阻止安装。见[渲染浏览器关闭](../../.agents/notes/implemented/bug-fix/2026-09-09-mantur-render-browser-close.zh.md)。
 
@@ -61,7 +61,7 @@ macOS 命令先由 electron-builder 完成签名并生成更新 ZIP，再用 App
 
 在没有 Developer ID 凭据的情况下进行本地 Apple Silicon 验收时，请在独立、干净的构建副本中运行 `pnpm run desktop:dist:mac:arm64:local`。该命令明确选择 electron-builder 的 ad-hoc 身份，关闭证书自动发现及公证，并要求严格签名校验。标准签名器在生成 ZIP 前封装已装配的应用；创建 DMG 前还必须通过 `codesign --verify --deep --strict`。签名后不得修改应用内容。这种本地身份只证明应用包完整性，不表示 Apple 认可、已公证、通过 Gatekeeper 或适用于公开更新。正式发行工作流及证书要求保持不变；见[本地签名决策](../../.agents/notes/implemented/bug-fix/2026-09-09-local-macos-bundle-signing.zh.md)。
 
-macOS x64 命令必须在 Intel Mac 上运行，Windows 命令必须在 x64 Windows 上运行。手动触发的 `Desktop package` GitHub Actions 工作流会在三个原生 runner 上检出同一个 commit、运行打包 smoke，并将以下文件、生成的 blockmap 和各平台的更新清单（`latest-mac.yml` 或 `latest.yml`）保留七天。这些 CI 附件不会发布正式更新源：
+已审查的媒体输入支持 macOS arm64。Intel macOS 和 Windows 打包命令会拒绝此源码清单，因为这些目标没有已审查的媒体候选。手动 `Desktop package` 工作流保留三个 runner 的矩阵，因此不支持的任务会明确失败。成功的 CI 附件会将以下文件、生成的 blockmap 和更新元数据保留七天，不会发布更新源：
 
 | Runner | 命令 | 产物 |
 |---|---|---|
@@ -77,7 +77,7 @@ smoke 还会检查内置 CLI 的固定来源记录、包版本、许可证和依
 
 ## 发布已签名的桌面 release
 
-手动触发的 `Desktop release` 工作流默认选择 `architectures=both`，也可明确选择 `arm64`，在对应原生 macOS runner 上构建。每个选中任务都会先在进程文件描述符上限为 64 时验证有界签名扫描，再使用 Developer ID Application 身份签名应用、提交 Apple notarization，并验证签名、Gatekeeper 评估与 stapled ticket；它们还会在产物进入组装步骤前运行 packaged smoke。
+手动触发的 `Desktop release` 工作流默认选择 `architectures=arm64`，并要求 `windows=false`；其他选择会在原生任务启动前失败，因为已审查的媒体输入仅覆盖 macOS arm64。每个选中任务都会先在进程文件描述符上限为 64 时验证有界签名扫描，再使用 Developer ID Application 身份签名应用、提交 Apple notarization，并验证签名、Gatekeeper 评估与 stapled ticket；它们还会在产物进入组装步骤前运行 packaged smoke。
 
 对外发布前，先在仓库设置中启用 Release Immutability。然后在 GitHub 的 `macos-release` 环境中配置两个变量和四个加密 secret：
 
@@ -90,11 +90,13 @@ smoke 还会检查内置 CLI 的固定来源记录、包版本、许可证和依
 | Secret | `APPLE_ID` | 用于 notarization 的 Apple ID |
 | Secret | `APPLE_APP_SPECIFIC_PASSWORD` | 该 Apple ID 的 App 专用密码 |
 
-设置 `windows=true` 可在同一 release 中包含 Windows x64。请在受保护的 `windows-release` 环境中配置加密 secret：`WINDOWS_CERTIFICATE`（包含私钥的签名 `.pfx` 文件的 Base64 内容）和 `WINDOWS_CERTIFICATE_PASSWORD`。原生 Windows 任务要求这两个 secret 均已配置，且应用程序和安装包的 Authenticode 签名有效，才能上传产物。缺少凭证、签名无效或选中的任一平台失败，都会阻止组装和发布；只有明确未选中 Windows 时才会排除它。组装的 Windows 文件包含 EXE、对应 blockmap 及用于自动更新的 `<channel>.yml`。
+保留的 Windows 签名任务需要先有已审查的 Windows 媒体输入，发布校验才会接受 `windows=true`。它要求在受保护的 `windows-release` 环境中配置加密 secret：`WINDOWS_CERTIFICATE`（包含私钥的签名 `.pfx` 文件的 Base64 内容）和 `WINDOWS_CERTIFICATE_PASSWORD`。原生 Windows 任务要求这两个 secret 均已配置，且应用程序和安装包的 Authenticode 签名有效，才能上传产物。缺少凭证、签名无效或选中的任一平台失败，都会阻止组装和发布；只有明确未选中 Windows 时才会排除它。组装的 Windows 文件包含 EXE、对应 blockmap 及用于自动更新的 `<channel>.yml`。
 
 工作流会把选中的原生 `<channel>-mac.yml` 合并为一份可区分架构的更新通道，并把完整候选产物与 `SHA256SUMS` 保留七天。必须从精确匹配 `v<apps/desktop 版本>` 的 tag 运行；tag 必须匹配打包版本。`publish=false` 会在组装候选产物后停止。`publish=true` 还要求审批变量指向完整固定源码配置的 SHA-256 摘要，之后才会创建 GitHub release，并同时上传 DMG、更新 ZIP、blockmap、更新元数据与哈希。工作流会拒绝使用已有 release 的 tag，不会替换已发布文件；仓库级 Release Immutability 则会继续阻止之后修改 tag 或产物。
 
-发布组装会把完整 Harness、上游 Cut、补丁后 Cut 和 Whisper Git 源码归档、`DESKTOP-SOURCES.json` 及 `DESKTOP-SOURCE-BUILD.txt` 加入同一校验清单和公开资产。[源码归档器](../../scripts/desktop-release-sources.py) 将它们绑定到发布 commit 和分发 ID，检查每层补丁及生成的 tree，并将每个归档文件与 Git 对照。受跟踪的工作树修改、不完整归档或已有源码输出都会阻止组装。源码交付与分发审批及私有的 90 天调试符号产物分别管理；参见[源码交付决策](../../.agents/notes/implemented/process/2026-10-26-desktop-release-sources.zh.md)。
+发布组装会把完整 Harness、上游 Cut、补丁后 Cut 和 Whisper Git 源码归档、`Mantur-Media-corresponding-source.tar.gz`、`DESKTOP-SOURCES.json` 及 `DESKTOP-SOURCE-BUILD.txt` 加入同一校验清单和公开资产。[源码归档器](../../scripts/desktop-release-sources.py) 将它们绑定到发布 commit 和分发 ID，检查每层补丁及生成的 tree，并将每个归档文件与 Git 对照。媒体源码包包含 18 份源码归档、精确构建配方与来源锁、配置、原始构建日志、Remotion 纯源码派生记录，以及 Electron/Chromium FFmpeg 源码和通知。完整文件清单和内含源码归档索引必须匹配，配方也必须匹配仓库固定值。受跟踪的工作树修改、不完整归档或已有源码输出都会阻止组装。源码交付与分发审批及私有的 90 天调试符号产物分别管理；参见[源码交付决策](../../.agents/notes/implemented/process/2026-10-26-desktop-release-sources.zh.md)。
+
+[媒体输入校验器](../../scripts/mantur-media-inputs.py) 从 `source.json` 指定的独立不可变媒体输入 release 获取精确候选和对应源码归档，校验字节数、归档 SHA256、安全成员路径与完整文件清单。设置 `MANTUR_MEDIA_INPUT_DIR` 可在本机复用这些精确归档；本地输入缺失或改变时直接失败，不回退到网络。签名会改变二进制摘要，因此输入归档身份与已签名应用库存分别记录。
 
 正式发布要求在工作流输入 `release_notes` 中提供非空白的用户 Markdown 说明。工作流通过说明文件把文本作为数据交给 GitHub，保留 shell 字符的字面值。`publish=false` 的候选构建不要求说明。开始发布前应说明改进、修复、升级步骤、支持的平台和已知限制。
 
@@ -152,5 +154,5 @@ Cut 的导出文件选择使用仅限主 frame 的桥接与活跃编辑器的已
 - 本地回调、加密存储、模拟 preload 和内置 CLI 测试不能证明真实网站授权。CLI 余额夹具使用受控本地响应。macOS 和 Windows 原生账号存储、浏览器返回、安装包资源、PostgreSQL 16 与经授权的测试站检查仍需分别验收；参见[浏览器授权决策](../../.agents/notes/implemented/architecture/2026-09-08-browser-account-authorization.zh.md)。
 - `Desktop package` 产物仍是未签名的内部安装包。macOS Gatekeeper 与 Windows SmartScreen 可能对这些文件显示警告；对外分发 macOS 客户端时只能使用 `Desktop release` 产物。
 - 原生图标源是 1024 像素 RGBA PNG，带透明圆角和居中的蓝色无限环徽记。Web 客户端单独使用透明徽标。macOS 和 Windows 安装包在原生构建时生成各自平台的图标格式；尚无矢量源文件。
-- 已签名的 release 工作流只发布 macOS。Windows 在具备代码签名身份与受保护的发布路径之前不支持外部更新。
+- 已签名的 release 工作流只发布 macOS arm64。Windows 在具备代码签名身份与受保护的发布路径之前不支持外部更新。
 - 每个目标只在其原生 runner 同时完成打包和 smoke 后有效。一个架构上的构建不能作为另一目标的证据。

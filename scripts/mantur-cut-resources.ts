@@ -22,6 +22,9 @@ export async function copyRuntimeDependencies(source: string, destination: strin
     filter: (path) => {
       const name = relative(source, path).split(sep).join('/')
       if (name === '.cache/webpack' || name === '.remotion/chrome-headless-shell') return false
+      if (/(?:^|\/)@remotion\/compositor-[^/]+$/.test(name)
+        || /(?:^|\/)ffmpeg-static\/ffmpeg(?:\.exe)?$/.test(name)
+        || /(?:^|\/)@ffprobe-installer\/[^/]+\/ffprobe(?:\.exe)?$/.test(name)) return false
       const native = /(?:^|\/)node_modules\/onnxruntime-node\/bin\/napi-v6\/([^/]+)(?:\/([^/]+))?/.exec(`node_modules/${name}`)
       return native === null || (native[1] === platform && (native[2] === undefined || native[2] === arch))
     },

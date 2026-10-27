@@ -6,7 +6,8 @@ import { tmpdir } from 'node:os'
 import { delimiter, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { copyRuntimeDependencies, relocateMacCompositor } from './mantur-cut-resources.ts'
+import { copyRuntimeDependencies } from './mantur-cut-resources.ts'
+import { installNativeMedia, verifyNativeMedia, verifyNativeMediaDefaults } from './mantur-cut-native-media.ts'
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const sourceConfigPath = resolve(root, 'apps/desktop/mantur-cut/source.json')
@@ -43,8 +44,30 @@ interface TargetSource {
   whisperArchiveSha256: string | null
 }
 
+interface MediaArchive {
+  url: string
+  sha256: string
+  bytes: number
+  prefix: string
+}
+
+interface MediaFile {
+  file: string
+  sha256: string
+}
+
+interface NativeMediaSource {
+  target: 'darwin-arm64'
+  candidate: MediaArchive
+  correspondingSource: MediaArchive
+  inventory: MediaFile
+  sourceLock: MediaFile
+  recipes: MediaFile[]
+}
+
 interface SourceConfig {
-  formatVersion: 2
+  formatVersion: 3
+  nativeMedia: NativeMediaSource
   repository: string
   version: string
   upstreamCommit: string
@@ -66,7 +89,7 @@ interface SourceConfig {
 }
 
 export interface ProgramManifest {
-  formatVersion: 2
+  formatVersion: 3
   platform: TargetSource['platform']
   arch: TargetSource['arch']
   source: {
@@ -75,6 +98,7 @@ export interface ProgramManifest {
     basePatchSha256: string
     runtimePatchSha256: string
     shutdownPatchSha256: string
+    nativeMediaSha256: string
   }
   paths: {
     server: string
@@ -84,6 +108,7 @@ export interface ProgramManifest {
     ffmpeg: string
     ffprobe: string
     compositor: string
+    nativeMedia: string
     whisperCli: string
     whisperServer: string
   }
@@ -93,23 +118,24 @@ export interface ProgramManifest {
 export function parseProgramManifest(value: unknown): ProgramManifest {
   const manifest = object(value, 'Mantur Cut program manifest')
   exactKeys(manifest, ['arch', 'formatVersion', 'paths', 'platform', 'source'], 'Mantur Cut program manifest')
-  if (manifest.formatVersion !== 2) throw new Error('Mantur Cut program manifest formatVersion must be 2')
+  if (manifest.formatVersion !== 3) throw new Error('Mantur Cut program manifest formatVersion must be 3')
   const platform = string(manifest.platform, 'Mantur Cut program manifest platform')
   const arch = string(manifest.arch, 'Mantur Cut program manifest arch')
   if (platform !== 'darwin' && platform !== 'win32') throw new Error('Mantur Cut program manifest platform is unsupported')
   if (arch !== 'arm64' && arch !== 'x64') throw new Error('Mantur Cut program manifest arch is unsupported')
   const source = object(manifest.source, 'Mantur Cut program manifest source')
-  exactKeys(source, ['basePatchSha256', 'patchedTree', 'runtimePatchSha256', 'shutdownPatchSha256', 'upstreamCommit'], 'Mantur Cut program manifest source')
+  exactKeys(source, ['basePatchSha256', 'nativeMediaSha256', 'patchedTree', 'runtimePatchSha256', 'shutdownPatchSha256', 'upstreamCommit'], 'Mantur Cut program manifest source')
   const paths = object(manifest.paths, 'Mantur Cut program manifest paths')
-  exactKeys(paths, ['browserExecutable', 'compositor', 'ffmpeg', 'ffprobe', 'remotionBundle', 'server', 'web', 'whisperCli', 'whisperServer'], 'Mantur Cut program manifest paths')
+  exactKeys(paths, ['browserExecutable', 'compositor', 'ffmpeg', 'ffprobe', 'nativeMedia', 'remotionBundle', 'server', 'web', 'whisperCli', 'whisperServer'], 'Mantur Cut program manifest paths')
   return {
-    formatVersion: 2, platform, arch,
+    formatVersion: 3, platform, arch,
     source: {
       upstreamCommit: gitObject(source.upstreamCommit, 'Mantur Cut program manifest upstreamCommit'),
       patchedTree: gitObject(source.patchedTree, 'Mantur Cut program manifest patchedTree'),
       basePatchSha256: digest(source.basePatchSha256, 'Mantur Cut program manifest basePatchSha256'),
       runtimePatchSha256: digest(source.runtimePatchSha256, 'Mantur Cut program manifest runtimePatchSha256'),
       shutdownPatchSha256: digest(source.shutdownPatchSha256, 'Mantur Cut program manifest shutdownPatchSha256'),
+      nativeMediaSha256: digest(source.nativeMediaSha256, 'Mantur Cut program manifest nativeMediaSha256'),
     },
     paths: {
       server: string(paths.server, 'Mantur Cut program manifest server'),
@@ -119,6 +145,7 @@ export function parseProgramManifest(value: unknown): ProgramManifest {
       ffmpeg: string(paths.ffmpeg, 'Mantur Cut program manifest ffmpeg'),
       ffprobe: string(paths.ffprobe, 'Mantur Cut program manifest ffprobe'),
       compositor: string(paths.compositor, 'Mantur Cut program manifest compositor'),
+      nativeMedia: string(paths.nativeMedia, 'Mantur Cut program manifest nativeMedia'),
       whisperCli: string(paths.whisperCli, 'Mantur Cut program manifest whisperCli'),
       whisperServer: string(paths.whisperServer, 'Mantur Cut program manifest whisperServer'),
     },
@@ -167,6 +194,46 @@ function patchSource(value: unknown, subject: string): PatchSource {
   return { file: string(row.file, `${subject}.file`), sha256: digest(row.sha256, `${subject}.sha256`), resultTree: gitObject(row.resultTree, `${subject}.resultTree`) }
 }
 
+function mediaFile(value: unknown, subject: string): MediaFile {
+  const row = object(value, subject)
+  exactKeys(row, ['file', 'sha256'], subject)
+  const file = string(row.file, `${subject}.file`)
+  if (isAbsolute(file) || file.includes('\\') || file.split('/').some(part => !part || part === '..' || part === '.')) {
+    throw new Error(`${subject}.file must be a repository-relative path`)
+  }
+  return { file, sha256: digest(row.sha256, `${subject}.sha256`) }
+}
+
+function mediaArchive(value: unknown, subject: string): MediaArchive {
+  const row = object(value, subject)
+  exactKeys(row, ['bytes', 'prefix', 'sha256', 'url'], subject)
+  const url = string(row.url, `${subject}.url`)
+  const parsed = new URL(url)
+  if (parsed.protocol !== 'https:' || parsed.username || parsed.password || parsed.hash) throw new Error(`${subject}.url must be an HTTPS archive URL`)
+  const prefix = string(row.prefix, `${subject}.prefix`)
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(prefix)) throw new Error(`${subject}.prefix must be one archive directory`)
+  if (typeof row.bytes !== 'number' || !Number.isSafeInteger(row.bytes) || row.bytes <= 0) throw new Error(`${subject}.bytes must be a positive integer`)
+  return { url, sha256: digest(row.sha256, `${subject}.sha256`), bytes: row.bytes, prefix }
+}
+
+function nativeMediaSource(value: unknown): NativeMediaSource {
+  const subject = 'Mantur Cut nativeMedia'
+  const row = object(value, subject)
+  exactKeys(row, ['candidate', 'correspondingSource', 'inventory', 'recipes', 'sourceLock', 'target'], subject)
+  if (row.target !== 'darwin-arm64') throw new Error(`${subject}.target has no reviewed media build`)
+  if (!Array.isArray(row.recipes) || row.recipes.length === 0) throw new Error(`${subject}.recipes must pin the build files`)
+  const recipes = row.recipes.map((recipe, index) => mediaFile(recipe, `${subject}.recipes[${index}]`))
+  if (new Set(recipes.map(recipe => recipe.file)).size !== recipes.length) throw new Error(`${subject}.recipes contains duplicate files`)
+  return {
+    target: row.target,
+    candidate: mediaArchive(row.candidate, `${subject}.candidate`),
+    correspondingSource: mediaArchive(row.correspondingSource, `${subject}.correspondingSource`),
+    inventory: mediaFile(row.inventory, `${subject}.inventory`),
+    sourceLock: mediaFile(row.sourceLock, `${subject}.sourceLock`),
+    recipes,
+  }
+}
+
 function targetSource(value: unknown, subject: string): TargetSource {
   const row = object(value, subject)
   exactKeys(row, ['arch', 'browserExecutable', 'chromePlatform', 'chromeSha256', 'chromeVersion', 'compositor', 'compositorIntegrity', 'compositorPackage', 'ffmpeg', 'ffmpegSha256', 'ffprobe', 'ffprobeIntegrity', 'ffprobeLicense', 'ffprobePackage', 'platform', 'whisperArchive', 'whisperArchiveSha256'], subject)
@@ -202,13 +269,14 @@ function targetSource(value: unknown, subject: string): TargetSource {
 /** Parse the committed source and target pins used by the distribution build. */
 export function parseSourceConfig(value: unknown): SourceConfig {
   const config = object(value, 'Mantur Cut source config')
-  exactKeys(config, ['cmakeMacArchiveSha256', 'cmakeVersion', 'electronVersion', 'embeddedNodeVersion', 'ffmpegStaticIntegrity', 'ffmpegStaticVersion', 'formatVersion', 'patches', 'remotionRendererIntegrity', 'remotionVersion', 'repository', 'targets', 'upstreamCommit', 'upstreamTree', 'version', 'whisperCommit', 'whisperRepository', 'whisperTree', 'whisperVersion'], 'Mantur Cut source config')
-  if (config.formatVersion !== 2) throw new Error('Mantur Cut source config formatVersion must be 2')
+  exactKeys(config, ['cmakeMacArchiveSha256', 'cmakeVersion', 'electronVersion', 'embeddedNodeVersion', 'ffmpegStaticIntegrity', 'ffmpegStaticVersion', 'formatVersion', 'nativeMedia', 'patches', 'remotionRendererIntegrity', 'remotionVersion', 'repository', 'targets', 'upstreamCommit', 'upstreamTree', 'version', 'whisperCommit', 'whisperRepository', 'whisperTree', 'whisperVersion'], 'Mantur Cut source config')
+  if (config.formatVersion !== 3) throw new Error('Mantur Cut source config formatVersion must be 3')
   if (!Array.isArray(config.patches) || config.patches.length !== 3) throw new Error('Mantur Cut source config must pin the base, runtime and shutdown patches')
   const targetRows = object(config.targets, 'Mantur Cut source config targets')
   exactKeys(targetRows, ['darwin-arm64', 'darwin-x64', 'win32-x64'], 'Mantur Cut source config targets')
   return {
-    formatVersion: 2,
+    formatVersion: 3,
+    nativeMedia: nativeMediaSource(config.nativeMedia),
     repository: string(config.repository, 'Mantur Cut source config repository'),
     version: string(config.version, 'Mantur Cut source config version'),
     upstreamCommit: gitObject(config.upstreamCommit, 'Mantur Cut source config upstreamCommit'),
@@ -259,6 +327,7 @@ export function sourceBuildEnvironment(
       || name === 'APPLE_ID'
       || name === 'APPLE_TEAM_ID'
       || name === 'CSC_LINK'
+      || name === 'FFMPEG_BIN'
       || name.startsWith('OPENCHATCUT_')
       || name.toUpperCase() === 'PATH')
   )))
@@ -450,11 +519,15 @@ export async function verifyProgramManifest(resourceRoot: string, manifest: Prog
   await requireResource(resourceRoot, manifest.paths.ffmpeg, 'file')
   await requireResource(resourceRoot, manifest.paths.ffprobe, 'file')
   await requireResource(resourceRoot, manifest.paths.compositor, 'directory')
+  await requireResource(resourceRoot, manifest.paths.nativeMedia, 'directory')
+  for (const [name, path] of [['ffmpeg', 'bin/ffmpeg'], ['ffprobe', 'bin/ffprobe'], ['compositor', 'compositor']] as const) {
+    if (manifest.paths[name] !== `${manifest.paths.nativeMedia}/${path}`) throw new Error(`Mantur Cut ${name} must belong to nativeMedia`)
+  }
   await requireResource(resourceRoot, manifest.paths.whisperCli, 'file')
   await requireResource(resourceRoot, manifest.paths.whisperServer, 'file')
 }
 
-async function copyProductionProgram(source: string, staging: string, auditReport: string, targetKey: ManturCutTarget, target: TargetSource): Promise<ProgramManifest['paths']> {
+async function copyProductionProgram(source: string, staging: string, auditReport: string, targetKey: ManturCutTarget, target: TargetSource, candidate: string, mediaInventory: Readonly<Record<string, string>>): Promise<ProgramManifest['paths']> {
   const whisperExecutable = target.platform === 'win32' ? 'whisper-cli.exe' : 'whisper-cli'
   const whisperServer = target.platform === 'win32' ? 'whisper-server.exe' : 'whisper-server'
   const paths: ProgramManifest['paths'] = {
@@ -465,6 +538,7 @@ async function copyProductionProgram(source: string, staging: string, auditRepor
     ffmpeg: target.ffmpeg,
     ffprobe: target.ffprobe,
     compositor: target.compositor,
+    nativeMedia: 'runtime/native-media',
     whisperCli: `whisper-cli/${targetKey}/${whisperExecutable}`,
     whisperServer: `whisper-cli/${targetKey}/${whisperServer}`,
   }
@@ -477,7 +551,8 @@ async function copyProductionProgram(source: string, staging: string, auditRepor
   await cp(join(source, '.cache/whisper-cli/whisper.cpp/LICENSE'), join(staging, 'whisper-cli/LICENSE.whisper.cpp'))
   await copyRuntimeDependencies(join(source, 'node_modules'), join(staging, 'runtime/node_modules'), targetKey)
   await removePackageRuntimeResidue(join(staging, 'runtime/node_modules'))
-  if (target.platform === 'darwin') await relocateMacCompositor(join(staging, paths.compositor))
+  await installNativeMedia(candidate, join(staging, 'runtime'), mediaInventory)
+  await verifyNativeMediaDefaults(join(staging, 'runtime'))
   await cp(join(source, 'package.json'), join(staging, 'package.json'))
   await cp(join(source, 'package-lock.json'), join(staging, 'package-lock.json'))
   await cp(join(source, 'LICENSE'), join(staging, 'LICENSE'))
@@ -506,8 +581,9 @@ async function writeDependencyInventory(resourceRoot: string): Promise<void> {
   const packages: Array<{ path: string; name: string; version: string; license: string | null; licenseFiles: string[] }> = []
   async function visit(directory: string): Promise<void> {
     for (const entry of await readdir(directory, { withFileTypes: true })) {
-      if (!entry.isDirectory()) continue
+      if (!entry.isDirectory() && !entry.isSymbolicLink()) continue
       const child = join(directory, entry.name)
+      if (!inside(await realpath(resourceRoot), await realpath(child))) throw new Error(`Runtime package resolves outside its installation: ${child}`)
       if (entry.name.startsWith('@')) { await visit(child); continue }
       const packagePath = join(child, 'package.json')
       try {
@@ -578,8 +654,14 @@ async function writeBuildInformation(
     runtime: { electronVersion: config.electronVersion, embeddedNodeVersion: config.embeddedNodeVersion, nodeLaunch: 'ELECTRON_RUN_AS_NODE=1' },
     dependencies: {
       remotion: { version: config.remotionVersion, license: 'SEE LICENSE IN LICENSE.md' },
-      ffmpegStatic: { version: config.ffmpegStaticVersion, license: 'GPL-3.0-or-later' },
-      ffprobe: { package: target.ffprobePackage, license: target.ffprobeLicense },
+      ffmpegStatic: { version: config.ffmpegStaticVersion, license: 'GPL-3.0-or-later', role: 'npm wrapper; its downloaded executable is excluded' },
+      ffprobe: { package: target.ffprobePackage, license: target.ffprobeLicense, role: 'npm wrapper; its downloaded executable is excluded' },
+      nativeMedia: {
+        ...config.nativeMedia,
+        cli: { version: '6.1.6', license: 'GPL-2.0-or-later' },
+        compositorLibraries: { version: '7.1.5', license: 'LGPL-2.1-or-later' },
+        notice: `${paths.nativeMedia}/NOTICE.txt`,
+      },
       chromeHeadlessShell: { version: target.chromeVersion, licenseFile: `chrome-headless-shell/${target.chromePlatform}/chrome-headless-shell-${target.chromePlatform}/LICENSE.headless_shell` },
       whisper: { repository: config.whisperRepository, version: config.whisperVersion, commit: config.whisperCommit, license: 'MIT', licenseFile: 'whisper-cli/LICENSE.whisper.cpp' },
     },
@@ -591,13 +673,19 @@ async function writeBuildInformation(
       ffmpeg: await fileSha256(join(resourceRoot, paths.ffmpeg)),
       ffprobe: await fileSha256(join(resourceRoot, paths.ffprobe)),
       compositor: await directorySha256(join(resourceRoot, paths.compositor)),
+      nativeMedia: await verifyNativeMedia(join(resourceRoot, paths.nativeMedia)),
       whisperCli: await fileSha256(join(resourceRoot, paths.whisperCli)),
       whisperServer: await fileSha256(join(resourceRoot, paths.whisperServer)),
       packageLock: await fileSha256(join(resourceRoot, 'package-lock.json')),
     },
   }
   await writeFile(join(resourceRoot, 'BUILD_INFO.json'), `${JSON.stringify(information, null, 2)}\n`)
-  const review = `Mantur Cut distribution review\n\nThis resource contains modified OpenChatCut ${config.version} from ${config.repository} at ${config.upstreamCommit}. OpenChatCut declares AGPL-3.0-or-later. SOURCE/source.json and SOURCE/patches contain the exact source identity and all three applied patches. A public distribution must make the complete corresponding source and build instructions available to every recipient under the applicable license terms.\n\nRemotion ${config.remotionVersion} uses its own LICENSE.md terms. The distributor must confirm that the legal entity is eligible for the free license or obtain the required company license, and must confirm that this embedded modified editor is an allowed use. This build does not accept either outcome.\n\nThe runtime includes ffmpeg-static ${config.ffmpegStaticVersion} under GPL-3.0-or-later, ${target.ffprobePackage} under ${target.ffprobeLicense}, whisper.cpp ${config.whisperVersion} at ${config.whisperCommit} under MIT, and Chrome Headless Shell ${target.chromeVersion} with its bundled LICENSE.headless_shell. THIRD_PARTY_PACKAGES.json inventories installed production packages and the license files retained beside them. SECURITY/npm-audit.json records the production dependency audit used for this build. Public release remains blocked until the source-delivery method, Remotion eligibility, GPL/LGPL obligations, notices, security findings, and binary redistribution terms are approved for this exact patched tree.\n`
+  for (const pin of [config.nativeMedia.inventory, config.nativeMedia.sourceLock, ...config.nativeMedia.recipes]) {
+    const destination = join(resourceRoot, 'SOURCE', pin.file)
+    await mkdir(dirname(destination), { recursive: true })
+    await cp(resolve(root, pin.file), destination)
+  }
+  const review = `Mantur Cut distribution review\n\nThis resource contains modified OpenChatCut ${config.version} from ${config.repository} at ${config.upstreamCommit}. OpenChatCut declares AGPL-3.0-or-later. SOURCE/source.json and SOURCE/patches contain the exact source identity and all three applied patches. A public distribution must make the complete corresponding source and build instructions available to every recipient under the applicable license terms.\n\nRemotion ${config.remotionVersion} uses its own LICENSE.md terms. The distributor must confirm that the legal entity is eligible for the free license or obtain the required company license, and must confirm that this embedded modified editor is an allowed use. This build does not accept either outcome.\n\nThe runtime replaces the downloaded ffmpeg-static and ffprobe-installer executables with FFmpeg/FFprobe 6.1.6 under GPL-2.0-or-later and preserves separate FFmpeg 7.1.5 compositor libraries under LGPL-2.1-or-later. runtime/native-media/NOTICE.txt and licenses retain their notices; SOURCE/source.json binds the complete media archive, file inventory, corresponding source archive, source lock and recipes. The npm wrapper metadata remains inventoried separately. The runtime also includes whisper.cpp ${config.whisperVersion} at ${config.whisperCommit} under MIT, and Chrome Headless Shell ${target.chromeVersion} with its bundled LICENSE.headless_shell. THIRD_PARTY_PACKAGES.json inventories installed production packages and the license files retained beside them. SECURITY/npm-audit.json records the production dependency audit used for this build. Public release remains blocked until the source-delivery method, Remotion eligibility, GPL/LGPL obligations, notices, security findings, and binary redistribution terms are approved for this exact patched tree.\n`
   await writeFile(join(resourceRoot, 'SOURCE_OFFER_REVIEW.txt'), review)
 }
 
@@ -633,12 +721,16 @@ async function prepare(targetKey: ManturCutTarget, cacheDir: string, outputDir: 
   const config = parseSourceConfig(JSON.parse(await readFile(sourceConfigPath, 'utf8')) as unknown)
   if (process.versions.node.split('.', 1)[0] !== '24') throw new Error(`Mantur Cut distribution requires Node 24; current Node is ${process.versions.node}`)
   const target = config.targets[targetKey]
+  if (targetKey !== config.nativeMedia.target) throw new Error(`Mantur Cut ${targetKey} has no reviewed native media candidate`)
   if (`${target.platform}-${target.arch}` !== targetKey) throw new Error(`Mantur Cut target metadata does not match ${targetKey}`)
   const desktopPackage = object(JSON.parse(await readFile(resolve(root, 'apps/desktop/package.json'), 'utf8')) as unknown, 'desktop package')
   const devDependencies = object(desktopPackage.devDependencies, 'desktop devDependencies')
   if (devDependencies.electron !== config.electronVersion) throw new Error('Mantur Cut Electron pin must match apps/desktop')
 
   await mkdir(cacheDir, { recursive: true })
+  const candidate = capture('python3', [join(root, 'scripts/mantur-media-inputs.py'), '--prepare-candidate', '--cache-dir', join(cacheDir, 'native-media')], root)
+  const mediaInventory = object(JSON.parse(await readFile(resolve(root, config.nativeMedia.inventory.file), 'utf8')) as unknown, 'Mantur Cut native media inventory')
+  for (const value of Object.values(mediaInventory)) digest(value, 'Mantur Cut native media inventory entry')
   const mirror = await preparePinnedMirror(cacheDir, 'openchatcut.git', config.repository, config.upstreamCommit)
   const temporary = await mkdtemp(join(tmpdir(), 'mantur-cut-distribution-'))
   const source = join(temporary, 'source')
@@ -659,7 +751,9 @@ async function prepare(targetKey: ManturCutTarget, cacheDir: string, outputDir: 
     await verifyRuntimePins(source, config, target)
     const cmakeDirectory = target.platform === 'darwin' ? await prepareCmake(cacheDir, config) : null
     const environment = sourceBuildEnvironment(cacheDir, process.env, cmakeDirectory === null ? [] : [cmakeDirectory])
-    run('npm', ['ci'], source, environment)
+    // ffmpeg-static's pinned installer accepts an existing FFMPEG_BIN and skips its download.
+    const installEnvironment = { ...environment, FFMPEG_BIN: join(candidate, 'bin/ffmpeg') }
+    run('npm', ['ci'], source, installEnvironment)
     const auditReport = await auditProductionDependencies(source, targetKey, environment)
     await prepareWhisper(source, cacheDir, config, targetKey, target, environment)
     run('npm', ['run', 'build'], source, environment)
@@ -673,12 +767,14 @@ async function prepare(targetKey: ManturCutTarget, cacheDir: string, outputDir: 
     await cp(cachedChrome, join(source, 'desktop-dist', `chs-${target.chromePlatform}-${target.chromeVersion}.zip`))
     run('npm', ['run', 'desktop:prepare', '--', targetKey], source, environment)
     run('npm', ['exec', '--offline', '--no', '--', 'esbuild', 'desktop/embedded-server.ts', '--bundle', '--platform=node', '--format=esm', '--packages=external', '--outfile=desktop-dist/mantur-embedded-server.mjs'], source, environment)
-    run('npm', ['prune', '--omit=dev'], source, environment)
+    run('npm', ['prune', '--omit=dev'], source, installEnvironment)
     await mkdir(staging, { recursive: true })
-    const paths = await copyProductionProgram(source, staging, auditReport, targetKey, target)
+    const paths = await copyProductionProgram(
+      source, staging, auditReport, targetKey, target, candidate, mediaInventory as Record<string, string>,
+    )
     if (await fileSha256(join(staging, paths.ffmpeg)) !== target.ffmpegSha256) throw new Error(`Mantur Cut FFmpeg binary does not match ${targetKey}`)
     const manifest: ProgramManifest = {
-      formatVersion: 2,
+      formatVersion: 3,
       platform: target.platform,
       arch: target.arch,
       source: {
@@ -687,6 +783,7 @@ async function prepare(targetKey: ManturCutTarget, cacheDir: string, outputDir: 
         basePatchSha256: config.patches[0].sha256,
         runtimePatchSha256: config.patches[1].sha256,
         shutdownPatchSha256: config.patches[2].sha256,
+        nativeMediaSha256: config.nativeMedia.candidate.sha256,
       },
       paths,
     }

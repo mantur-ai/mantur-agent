@@ -36,7 +36,8 @@ function sourceConfig(): unknown {
     whisperArchiveSha256: platform === 'win32' ? digest : null,
   })
   return {
-    formatVersion: 2, repository: 'https://example.invalid/source.git', version: '1.0.0',
+    nativeMedia: { target: 'darwin-arm64', candidate: { url: 'https://example.invalid/media.tar.gz', sha256: digest, bytes: 1, prefix: 'media' }, correspondingSource: { url: 'https://example.invalid/source.tar.gz', sha256: digest, bytes: 1, prefix: 'source' }, inventory: { file: 'inventory.json', sha256: digest }, sourceLock: { file: 'lock.json', sha256: digest }, recipes: [{ file: 'recipe.py', sha256: digest }] },
+    formatVersion: 3, repository: 'https://example.invalid/source.git', version: '1.0.0',
     upstreamCommit: tree, upstreamTree: tree, electronVersion: '43.4.0', embeddedNodeVersion: '24.18.1',
     cmakeVersion: '4.3.3', cmakeMacArchiveSha256: digest,
     whisperRepository: 'https://example.invalid/whisper.git', whisperVersion: 'v1', whisperCommit: tree, whisperTree: tree,
@@ -77,7 +78,19 @@ describe('Mantur Cut distribution', () => {
     const config = parseSourceConfig(sourceConfig())
     expect(config.patches[2].file).toBe('shutdown.patch')
     expect(() => parseSourceConfig({ ...config, patches: config.patches.slice(0, 2) })).toThrow('base, runtime and shutdown patches')
-    expect(() => parseSourceConfig({ ...config, formatVersion: 1 })).toThrow('formatVersion must be 2')
+    for (const formatVersion of [1, 2]) expect(() => parseSourceConfig({ ...config, formatVersion })).toThrow('formatVersion must be 3')
+  })
+
+  it('requires the reviewed media target, source archive and contained build pins', () => {
+    const config = parseSourceConfig(sourceConfig())
+    const media = config.nativeMedia
+    const parse = (nativeMedia: unknown) => parseSourceConfig({ ...config, nativeMedia })
+    expect(() => parse({ ...media, target: 'darwin-x64' })).toThrow('no reviewed media build')
+    expect(() => parse({ ...media, recipes: [] })).toThrow('pin the build files')
+    expect(() => parse({ ...media, recipes: [media.recipes[0], media.recipes[0]] })).toThrow('duplicate files')
+    expect(() => parse({ ...media, inventory: { ...media.inventory, file: '../inventory' } })).toThrow('repository-relative')
+    expect(() => parse({ ...media, sourceLock: { ...media.sourceLock, sha256: 'invalid' } })).toThrow('SHA-256 digest')
+    expect(() => parse({ ...media, correspondingSource: { ...media.correspondingSource, url: 'file:///source.tar.gz' } })).toThrow('HTTPS archive URL')
   })
 
   it('hashes exact file bytes', async () => {
@@ -105,16 +118,17 @@ describe('Mantur Cut distribution', () => {
 
   it('requires every declared program resource inside its root', async () => {
     const root = await temporaryDirectory('mantur-cut-manifest-')
-    for (const directory of ['dist', 'remotion', 'compositor', 'server']) await mkdir(join(root, directory))
-    for (const file of ['server/entry.mjs', 'browser', 'ffmpeg', 'ffprobe', 'whisper-cli', 'whisper-server']) await writeFile(join(root, file), '')
+    for (const directory of ['dist', 'remotion', 'media/compositor', 'media/bin', 'server']) await mkdir(join(root, directory), { recursive: true })
+    for (const file of ['server/entry.mjs', 'browser', 'media/bin/ffmpeg', 'media/bin/ffprobe', 'whisper-cli', 'whisper-server']) await writeFile(join(root, file), '')
     const manifest = {
-      formatVersion: 2 as const, platform: 'darwin' as const, arch: 'arm64' as const,
-      source: { upstreamCommit: tree, patchedTree: tree, basePatchSha256: digest, runtimePatchSha256: digest, shutdownPatchSha256: digest },
-      paths: { server: 'server/entry.mjs', web: 'dist', remotionBundle: 'remotion', browserExecutable: 'browser', ffmpeg: 'ffmpeg', ffprobe: 'ffprobe', compositor: 'compositor', whisperCli: 'whisper-cli', whisperServer: 'whisper-server' },
+      formatVersion: 3 as const, platform: 'darwin' as const, arch: 'arm64' as const,
+      source: { upstreamCommit: tree, patchedTree: tree, basePatchSha256: digest,
+        runtimePatchSha256: digest, shutdownPatchSha256: digest, nativeMediaSha256: digest },
+      paths: { server: 'server/entry.mjs', web: 'dist', remotionBundle: 'remotion', browserExecutable: 'browser', ffmpeg: 'media/bin/ffmpeg', ffprobe: 'media/bin/ffprobe', compositor: 'media/compositor', nativeMedia: 'media', whisperCli: 'whisper-cli', whisperServer: 'whisper-server' },
     }
     await expect(verifyProgramManifest(root, manifest)).resolves.toBeUndefined()
     expect(parseProgramManifest(manifest)).toEqual(manifest)
-    expect(() => parseProgramManifest({ ...manifest, formatVersion: 1 })).toThrow('formatVersion must be 2')
+    for (const formatVersion of [1, 2]) expect(() => parseProgramManifest({ ...manifest, formatVersion })).toThrow('formatVersion must be 3')
     const { shutdownPatchSha256: _removed, ...twoLayerSource } = manifest.source
     expect(() => parseProgramManifest({ ...manifest, source: twoLayerSource })).toThrow('shutdownPatchSha256')
     expect(() => parseProgramManifest({ ...manifest, source: { ...manifest.source, shutdownPatchSha256: 'invalid' } })).toThrow('lowercase SHA-256 digest')
@@ -123,15 +137,16 @@ describe('Mantur Cut distribution', () => {
 
   it.skipIf(process.platform === 'win32')('rejects a manifest resource symlink that escapes its root', async () => {
     const root = await temporaryDirectory('mantur-cut-manifest-link-')
-    for (const directory of ['dist', 'remotion', 'compositor', 'server']) await mkdir(join(root, directory))
-    for (const file of ['server/entry.mjs', 'browser', 'ffmpeg', 'ffprobe', 'whisper-cli', 'whisper-server']) await writeFile(join(root, file), '')
+    for (const directory of ['dist', 'remotion', 'media/compositor', 'media/bin', 'server']) await mkdir(join(root, directory), { recursive: true })
+    for (const file of ['server/entry.mjs', 'browser', 'media/bin/ffmpeg', 'media/bin/ffprobe', 'whisper-cli', 'whisper-server']) await writeFile(join(root, file), '')
     const outside = await temporaryDirectory('mantur-cut-outside-')
     await writeFile(join(outside, 'binary'), '')
     await symlink(join(outside, 'binary'), join(root, 'linked'))
     const manifest = {
-      formatVersion: 2 as const, platform: 'darwin' as const, arch: 'arm64' as const,
-      source: { upstreamCommit: tree, patchedTree: tree, basePatchSha256: digest, runtimePatchSha256: digest, shutdownPatchSha256: digest },
-      paths: { server: 'server/entry.mjs', web: 'dist', remotionBundle: 'remotion', browserExecutable: 'browser', ffmpeg: 'linked', ffprobe: 'ffprobe', compositor: 'compositor', whisperCli: 'whisper-cli', whisperServer: 'whisper-server' },
+      formatVersion: 3 as const, platform: 'darwin' as const, arch: 'arm64' as const,
+      source: { upstreamCommit: tree, patchedTree: tree, basePatchSha256: digest,
+        runtimePatchSha256: digest, shutdownPatchSha256: digest, nativeMediaSha256: digest },
+      paths: { server: 'server/entry.mjs', web: 'dist', remotionBundle: 'remotion', browserExecutable: 'browser', ffmpeg: 'linked', ffprobe: 'media/bin/ffprobe', compositor: 'media/compositor', nativeMedia: 'media', whisperCli: 'whisper-cli', whisperServer: 'whisper-server' },
     }
     await expect(verifyProgramManifest(root, manifest)).rejects.toThrow('outside its root')
   })

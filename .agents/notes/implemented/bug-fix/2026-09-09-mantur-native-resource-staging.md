@@ -12,7 +12,7 @@ The embedded editor copies build caches, a second identical Chrome Headless Shel
 
 The distribution copy excludes the exact webpack cache and duplicate browser cache directories. It retains the manifest-selected top-level browser and its license. Both ONNX installations keep their selected platform and architecture under `bin/napi-v6`; missing target bindings stop staging. Other dependencies, caches and notices remain untouched. Runtime browser calls use the existing explicit manifest path, whose absence remains an error rather than a download request.
 
-Before signing, macOS staging rewrites the compositor's ffmpeg, ffprobe, remotion and every adjacent dylib to loader-relative sibling references. Only system library paths and present same-directory dylibs are accepted. Reinspection rejects any unresolved or unrelocated reference. The packager signs the resulting files through the existing signing command; frozen applications and source binaries are not edited.
+For the same-directory compositor layout, macOS staging rewrites ffmpeg, ffprobe, remotion and every adjacent dylib to loader-relative sibling references before signing. Only system library paths and present same-directory dylibs are accepted. Reinspection rejects any unresolved or unrelocated reference. The [source-locked media layout](2026-10-27-mantur-source-locked-media.md) separately preserves and verifies two FFmpeg ABIs within a complete media directory. The packager signs the resulting files through the existing signing command; frozen applications and source binaries are not edited.
 
 ## Alternatives considered
 

@@ -43,10 +43,10 @@ async function fixture(platform = process.platform, arch = process.arch) {
   const root = await temporary()
   const suffix = platform === 'win32' ? '.exe' : ''
   const paths = { server: 'server/embedded-server.mjs', web: 'dist', remotionBundle: 'remotion-bundle',
-    browserExecutable: 'bin/browser', ffmpeg: 'bin/ffmpeg', ffprobe: 'bin/ffprobe', compositor: 'compositor',
+    browserExecutable: 'bin/browser', ffmpeg: 'native-media/bin/ffmpeg', ffprobe: 'native-media/bin/ffprobe', compositor: 'native-media/compositor', nativeMedia: 'native-media',
     whisperCli: `bin/whisper-cli${suffix}`, whisperServer: `bin/whisper-server${suffix}` }
-  for (const directory of ['server', 'dist', 'remotion-bundle', 'bin', 'compositor']) await mkdir(join(root, directory))
-  for (const file of ['dist/index.html', 'dist/mantur-theme.mjs', 'remotion-bundle/index.html', 'compositor/program', 'bin/browser', 'bin/ffmpeg', 'bin/ffprobe', paths.whisperCli, paths.whisperServer]) {
+  for (const directory of ['server', 'dist', 'remotion-bundle', 'bin', 'native-media/compositor', 'native-media/bin', 'native-media/lib']) await mkdir(join(root, directory), { recursive: true })
+  for (const file of ['dist/index.html', 'dist/mantur-theme.mjs', 'remotion-bundle/index.html', 'native-media/compositor/program', 'native-media/lib/libavutil.58.dylib', 'bin/browser', 'native-media/bin/ffmpeg', 'native-media/bin/ffprobe', paths.whisperCli, paths.whisperServer]) {
     await writeFile(join(root, file), file)
   }
   await writeFile(join(root, paths.server), `import assert from 'node:assert/strict';
@@ -72,7 +72,7 @@ export async function startEmbeddedServer(dist, options) {
   });
   return {server, port: server.address().port};
 }`)
-  const manifest = { formatVersion: 2, platform, arch, paths }
+  const manifest = { formatVersion: 3, platform, arch, paths }
   await writeFile(join(root, 'manifest.json'), JSON.stringify(manifest))
   return { root, manifest }
 }
@@ -117,7 +117,7 @@ describe('packaged editor manifest', () => {
       await writeFile(join(root, 'manifest.json'), JSON.stringify({ ...manifest, paths: { ...manifest.paths, [name]: undefined } }))
       expect(check).toThrow('contained relative path')
     }
-    await writeFile(join(root, 'manifest.json'), JSON.stringify({ ...manifest, paths: { ...manifest.paths, whisperServer: 'bin/ffmpeg' } }))
+    await writeFile(join(root, 'manifest.json'), JSON.stringify({ ...manifest, paths: { ...manifest.paths, whisperServer: 'native-media/bin/ffmpeg' } }))
     expect(check).toThrow('declared sibling')
     await writeFile(join(root, 'manifest.json'), JSON.stringify(manifest))
     expect(check().whisperServer).toBe(join(root, 'bin/whisper-server'))
@@ -133,13 +133,25 @@ describe('packaged editor manifest', () => {
     await symlink(join(outside, 'index.html'), join(root, 'dist/index.html'), 'file')
     expect(() => resolvePackagedResources(root, 'darwin', 'arm64')).toThrow('escapes its installation')
   })
+
+  it('requires the complete media directory and preserves its CLI sibling paths', async () => {
+    const { root, manifest } = await fixture('darwin', 'arm64')
+    const check = () => resolvePackagedResources(root, 'darwin', 'arm64')
+    await writeFile(join(root, 'manifest.json'), JSON.stringify({ ...manifest, formatVersion: 2 }))
+    expect(check).toThrow('platform and format')
+    await writeFile(join(root, 'manifest.json'), JSON.stringify({ ...manifest, paths: { ...manifest.paths, ffmpeg: 'bin/browser' } }))
+    expect(check).toThrow('must belong to nativeMedia')
+    await writeFile(join(root, 'manifest.json'), JSON.stringify(manifest))
+    await rm(join(root, 'native-media/lib'), { recursive: true })
+    expect(check).toThrow('ENOENT')
+  })
 })
 
 // The release supports these three desktop targets, not a Linux production editor.
 describe.skipIf(!['darwin-arm64', 'darwin-x64', 'win32-x64'].includes(`${process.platform}-${process.arch}`))('packaged editor process', () => {
   it('uses separate writable Session directories and drains HTTP before child close', async () => {
     const { root } = await fixture()
-    const before = await readFile(join(root, 'compositor/program'), 'utf8')
+    const before = await readFile(join(root, 'native-media/compositor/program'), 'utf8')
     const config: RuntimeConfig = { runtimeMode: 'packaged', editorRoot: root, nodeExecutable: process.execPath,
       startupTimeoutMs: 5000, stopTimeoutMs: 3000, toolCallTimeoutMs: 1000 }
     const project = await temporary()
@@ -155,8 +167,9 @@ describe.skipIf(!['darwin-arm64', 'darwin-x64', 'win32-x64'].includes(`${process
       expect(state.electronMode).toBe('1')
       expect(state.parentOrigin).toBe('http://127.0.0.1:5298')
       expect(state.dist).toBe(join(root, 'dist'))
-      expect(state.ffmpeg).toBe(join(root, 'bin/ffmpeg'))
-      expect(state.ffprobe).toBe(join(root, 'bin/ffprobe'))
+      expect(state.ffmpeg).toBe(join(state.compositor as string, '../bin/ffmpeg'))
+      expect(await readFile(join(state.compositor as string, '../lib/libavutil.58.dylib'), 'utf8')).toBe('native-media/lib/libavutil.58.dylib')
+      expect(state.ffprobe).toBe(join(state.compositor as string, '../bin/ffprobe'))
       expect(state.whisperCli).toBe(join(root, `bin/whisper-cli${process.platform === 'win32' ? '.exe' : ''}`))
       expect(state.temp).toContain(join(runtime.workspace.directory, '工程', '.mantur-runtime-'))
       expect(state.compositor).not.toContain(root)
@@ -166,8 +179,8 @@ describe.skipIf(!['darwin-arm64', 'darwin-x64', 'win32-x64'].includes(`${process
       await expect(fetch(runtime.workspace.editorUrl)).rejects.toThrow()
       expect(() => process.kill(state.pid as number, 0)).toThrow()
     }
-    expect(await readFile(join(root, 'compositor/program'), 'utf8')).toBe(before)
-    expect((await readdir(root)).sort()).toEqual(['bin', 'compositor', 'dist', 'manifest.json', 'remotion-bundle', 'server'])
+    expect(await readFile(join(root, 'native-media/compositor/program'), 'utf8')).toBe(before)
+    expect((await readdir(root)).sort()).toEqual(['bin', 'dist', 'manifest.json', 'native-media', 'remotion-bundle', 'server'])
   })
 
   it('rejects an incomplete installation before creating Session data', async () => {

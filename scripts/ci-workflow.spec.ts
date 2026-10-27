@@ -515,7 +515,9 @@ describe('Desktop release workflow', () => {
         uses: 'actions/cache@v5',
         with: {
           path: '.cache/mantur-cut',
-          key: "mantur-cut-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('apps/desktop/mantur-cut/source.json', 'packages/client/ui-mantur-editing/adapters/mantur-cut.patch', 'packages/client/ui-mantur-editing/adapters/mantur-cut-packaged.patch') }}",
+          key: file.endsWith('desktop-release.yml')
+            ? "mantur-cut-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('apps/desktop/mantur-cut/source.json', 'apps/desktop/mantur-cut/*media*.json', 'scripts/mantur-media-build*', 'scripts/mantur-media-inputs.py', 'packages/client/ui-mantur-editing/adapters/mantur-cut*.patch') }}"
+            : "mantur-cut-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('apps/desktop/mantur-cut/source.json', 'packages/client/ui-mantur-editing/adapters/mantur-cut.patch', 'packages/client/ui-mantur-editing/adapters/mantur-cut-packaged.patch') }}",
         },
       })
       const compiler = job.steps.filter(isRecord).find(step => step.name === 'Require native compiler')
@@ -729,10 +731,16 @@ releaseDate: '2026-09-03T00:00:00.000Z'
     expect(publishSteps).not.toContain('--generate-notes')
     const archiveSources = assembleSteps.find(step => step.name === 'Archive verified desktop sources')
     expect(archiveSources?.run).toContain('python -m unittest discover -s scripts -p test_desktop_release_sources.py')
+    expect(archiveSources?.run).toContain('python -m unittest discover -s scripts -p test_mantur_media_inputs.py')
     expect(archiveSources?.run).toContain('python scripts/desktop-release-sources.py release')
     expect(archiveSources?.run).toContain('sort -k2 > release/SHA256SUMS')
     expect(assembleSteps.indexOf(archiveSources!)).toBeLessThan(
       assembleSteps.findIndex(step => step.uses === 'actions/upload-artifact@v7'),
+    )
+    const mediaCandidate = macos.steps.filter(isRecord).find(step => step.name === 'Verify and prepare pinned media candidate')
+    expect(mediaCandidate?.run).toContain('python3 scripts/mantur-media-inputs.py --prepare-candidate --cache-dir .cache/mantur-cut/native-media')
+    expect(macos.steps.indexOf(mediaCandidate!)).toBeLessThan(
+      macos.steps.findIndex(step => isRecord(step) && step.name === 'Build, sign, and notarize native installer'),
     )
   })
 
@@ -749,7 +757,7 @@ releaseDate: '2026-09-03T00:00:00.000Z'
       for (const [publish, notes, status] of [['false', '', 0], ['true', '', 1], ['true', ' \n\t', 1], ['true', 'User-visible fixes', 0]] as const) {
         const result = spawnSync('bash', ['-c', authorize.run], {
           cwd: temp,
-          env: { ...process.env, ARCHITECTURES: 'arm64', PUBLISH: publish, REF_NAME: 'v0.1.22', REF_TYPE: 'tag',
+          env: { ...process.env, ARCHITECTURES: 'arm64', WINDOWS: 'false', PUBLISH: publish, REF_NAME: 'v0.1.22', REF_TYPE: 'tag',
             RELEASE_NOTES: notes, GITHUB_OUTPUT: resolve(temp, 'output').replaceAll('\\', '/') },
           encoding: 'utf8',
         })
@@ -760,6 +768,21 @@ releaseDate: '2026-09-03T00:00:00.000Z'
     } finally {
       rmSync(temp, { recursive: true, force: true })
     }
+  })
+
+  it.each([['both', 'false'], ['arm64', 'true']])('rejects media targets without reviewed inputs: %s / Windows %s', (architectures, windows) => {
+    const validate = workflowJob(loadWorkflow('.github/workflows/desktop-release.yml'), 'validate')
+    if (!Array.isArray(validate.steps)) throw new TypeError('Release validation steps are required')
+    const authorize = validate.steps.filter(isRecord).find(step => step.name === 'Resolve and authorize desktop version')
+    if (typeof authorize?.run !== 'string') throw new TypeError('Release validation script is required')
+    const result = spawnSync('bash', ['-c', authorize.run], {
+      cwd: root,
+      env: { ...process.env, ARCHITECTURES: architectures, WINDOWS: windows },
+      encoding: 'utf8',
+    })
+    expect(result.signal).toBeNull()
+    expect(result.status, result.stderr).toBe(1)
+    expect(result.stdout).toContain('The reviewed media input supports macOS arm64 only')
   })
 })
 

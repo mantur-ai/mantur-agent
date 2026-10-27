@@ -2,6 +2,7 @@
 
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { createRequire } from 'node:module'
+import { createHash } from 'node:crypto'
 import { pathToFileURL } from 'node:url'
 import type { startAutoUpdates } from '../src/updater.ts'
 import { verifyDesktopUpdateRoute } from './update-route-smoke.ts'
@@ -12,6 +13,7 @@ import { startDesktopService } from '../src/runtime.ts'
 import { requestUpdateSave } from '../src/update-save.ts'
 import { NativeAccountHost } from '../src/auth/host.ts'
 import { parseProgramManifest, verifyProgramManifest } from '../../../scripts/mantur-cut-distribution.ts'
+import { verifyNativeMedia, verifyNativeMediaDefaults } from '../../../scripts/mantur-cut-native-media.ts'
 import { smokeEmbeddedCli } from '../../../scripts/desktop-embedded-cli-smoke.ts'
 
 const desktopRoot = resolve(import.meta.dirname, '..')
@@ -52,6 +54,15 @@ if (manturCutManifest.platform !== process.platform || manturCutManifest.arch !=
   throw new Error(`packaged Mantur Cut target is ${manturCutManifest.platform}-${manturCutManifest.arch}, expected ${process.platform}-${process.arch}`)
 }
 await verifyProgramManifest(manturCutRoot, manturCutManifest)
+const signedMediaInventory = await verifyNativeMedia(join(manturCutRoot, manturCutManifest.paths.nativeMedia))
+await verifyNativeMediaDefaults(join(manturCutRoot, 'runtime'))
+console.log(JSON.stringify({
+  check: 'desktop-signed-native-media',
+  manifest: manturCutManifest,
+  sourceSha256: createHash('sha256').update(readFileSync(join(manturCutRoot, 'SOURCE/source.json'))).digest('hex'),
+  buildInfoSha256: createHash('sha256').update(readFileSync(join(manturCutRoot, 'BUILD_INFO.json'))).digest('hex'),
+  files: signedMediaInventory,
+}))
 for (const file of ['BUILD_INFO.json', 'THIRD_PARTY_PACKAGES.json', 'SECURITY/npm-audit.json', 'SOURCE/source.json', 'SOURCE/patches/mantur-cut.patch', 'SOURCE/patches/mantur-cut-packaged.patch', 'SOURCE/patches/mantur-cut-shutdown.patch', 'SOURCE_OFFER_REVIEW.txt', 'whisper-cli/LICENSE.whisper.cpp']) {
   if (!existsSync(join(manturCutRoot, file))) throw new Error(`packaged Mantur Cut source or license record is missing: ${file}`)
 }

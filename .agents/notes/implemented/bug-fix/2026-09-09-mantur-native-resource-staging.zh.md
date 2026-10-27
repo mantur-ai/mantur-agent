@@ -12,7 +12,7 @@ Status: implemented
 
 分发复制排除精确的 webpack 缓存和重复浏览器缓存目录，保留清单指定的顶层浏览器及其许可证。两份 ONNX 安装仅保留 `bin/napi-v6` 下选定的平台与架构；缺少目标绑定会阻止暂存。其他依赖、缓存和 notice 不变。运行时浏览器调用继续使用既有的明确清单路径，缺失时仍报错，不请求下载。
 
-macOS 暂存在签名前，将 compositor 的 ffmpeg、ffprobe、remotion 及每个相邻 dylib 改为相对于加载器的同目录引用。仅接受系统库路径和确实存在的同目录 dylib；再次检查会拒绝未解析或未改写的引用。打包器通过既有签名命令签署这些文件，不修改冻结应用或源二进制。
+对于同目录 compositor 布局，macOS 暂存在签名前将 ffmpeg、ffprobe、remotion 及每个相邻 dylib 改为相对于加载器的同目录引用。仅接受系统库路径和确实存在的同目录 dylib；再次检查会拒绝未解析或未改写的引用。[固定源码媒体布局](2026-10-27-mantur-source-locked-media.zh.md)另行在完整媒体目录中保留并校验两套 FFmpeg ABI。打包器通过既有签名命令签署这些文件，不修改冻结应用或源二进制。
 
 ## Alternatives considered
 

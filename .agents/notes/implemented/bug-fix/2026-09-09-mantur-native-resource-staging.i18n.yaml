@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-09-mantur-native-resource-staging.md
-2026-09-09-mantur-native-resource-staging.md: b66d968339b43424c0938d09866dc81934521932
-2026-09-09-mantur-native-resource-staging.zh.md: 3bad0418a62a6560d638d9137bbd3fb3d61208b1
+2026-09-09-mantur-native-resource-staging.md: bb8156f888a3aa63474fbc00dddbe4998fa65e42
+2026-09-09-mantur-native-resource-staging.zh.md: 5fbbb14ec1da7c0e4c00fa963c07cb07aac099d6

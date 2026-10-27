@@ -1,5 +1,5 @@
 {
-  "formatVersion": 2,
+  "formatVersion": 3,
   "repository": "https://github.com/0xsline/OpenChatCut.git",
   "version": "0.2.14",
   "upstreamCommit": "19cba6e1a70a3e589545ce02de975f6494c918f6",
@@ -40,11 +40,11 @@
       "chromePlatform": "mac-arm64",
       "chromeVersion": "149.0.7790.0",
       "chromeSha256": "17ef152eba8ffcfebc42e25ab295eb040d8e62455cff7dfcc735b652456d6899",
-      "ffmpegSha256": "a90e3db6a3fd35f6074b013f948b1aa45b31c6375489d39e572bea3f18336584",
+      "ffmpegSha256": "97df91437e8e542a903176afe7a2277802a6a5794e63b9f583ff05f6b7c52da0",
       "browserExecutable": "chrome-headless-shell/mac-arm64/chrome-headless-shell-mac-arm64/chrome-headless-shell",
-      "ffmpeg": "runtime/node_modules/ffmpeg-static/ffmpeg",
-      "ffprobe": "runtime/node_modules/@ffprobe-installer/darwin-arm64/ffprobe",
-      "compositor": "runtime/node_modules/@remotion/compositor-darwin-arm64",
+      "ffmpeg": "runtime/native-media/bin/ffmpeg",
+      "ffprobe": "runtime/native-media/bin/ffprobe",
+      "compositor": "runtime/native-media/compositor",
       "compositorPackage": "@remotion/compositor-darwin-arm64",
       "compositorIntegrity": "sha512-hT64iklPxTJXtPmVtMCSuC9rf5rhKNxQWozdYvHg5cKbO68t1OTWVFIEARyr7Fh19NW8OoNMqXkvZqiPK9AVUA==",
       "ffprobePackage": "@ffprobe-installer/darwin-arm64",
@@ -91,5 +91,46 @@
       "whisperArchive": "whisper-bin-x64.zip",
       "whisperArchiveSha256": "49dcc16de826f20bd53d44f947a1ae49dfa81f86cad67a64d80820cb192d674a"
     }
+  },
+  "nativeMedia": {
+    "target": "darwin-arm64",
+    "candidate": {
+      "url": "https://github.com/mantur-ai/mantur-agent/releases/download/mantur-media-20261026/Mantur-Media-darwin-arm64.tar.gz",
+      "sha256": "31c386d4ffc5cbf4260d8fd3072fb6a319793e776616eaad00ad9b96f92fbd34",
+      "bytes": 26566761,
+      "prefix": "mantur-media-darwin-arm64"
+    },
+    "correspondingSource": {
+      "url": "https://github.com/mantur-ai/mantur-agent/releases/download/mantur-media-20261026/Mantur-Media-corresponding-source.tar.gz",
+      "sha256": "73ee3be91d33991f4ac883746b9fd6d8d00edfacd988613b18923b6bcf181ba0",
+      "bytes": 590253000,
+      "prefix": "mantur-media-source"
+    },
+    "inventory": {
+      "file": "apps/desktop/mantur-cut/media-darwin-arm64.sha256.json",
+      "sha256": "9edcc9cea7594c6a3334d424519bad5daa5d60df53d52df74551bef416d81b90"
+    },
+    "sourceLock": {
+      "file": "scripts/mantur-media-build.lock.json",
+      "sha256": "d124ed1de3c3967f65e4bc7d5750eef77da90d8c0cc633bb1a46bc50de24408f"
+    },
+    "recipes": [
+      {
+        "file": "scripts/mantur-media-build.py",
+        "sha256": "9dc5d2b382219ada76119e67a899c839d0f939f753db5a7da7b67beec0c4d4f5"
+      },
+      {
+        "file": "scripts/mantur-media-build.verify.py",
+        "sha256": "95faacc3a04655d6864df8d15a3499186f36b2a640888d34d5e6b972ad4eb1af"
+      },
+      {
+        "file": "scripts/mantur-media-build.test.py",
+        "sha256": "f3e54e9b8eb31b3e1462a22628f5e3c918c7c225066ff544fc793b4887483c2d"
+      },
+      {
+        "file": "scripts/mantur-media-build.README.md",
+        "sha256": "9bc34b258aafeffc8402d646b9cbafeb509fb1ef2c11ef9678bef376adae5d8c"
+      }
+    ]
   }
 }

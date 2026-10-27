@@ -2,6 +2,7 @@
 import argparse
 import gzip
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -10,6 +11,11 @@ import shutil
 import subprocess
 import tarfile
 import tempfile
+
+
+media_spec = importlib.util.spec_from_file_location('media_inputs', Path(__file__).with_name('mantur-media-inputs.py'))
+media_inputs = importlib.util.module_from_spec(media_spec)
+media_spec.loader.exec_module(media_inputs)
 
 
 def git(repository, *arguments):
@@ -142,8 +148,13 @@ def archive_release(root, output):
     if (root / source_path).read_bytes() != source_bytes:
         raise ValueError('Working source manifest differs from the release commit')
     source = json.loads(source_bytes)
-    if source['formatVersion'] != 2 or len(source['patches']) != 3:
-        raise ValueError('Desktop sources require the three-layer version 2 Cut manifest')
+    if source['formatVersion'] != 3 or len(source['patches']) != 3:
+        raise ValueError('Desktop sources require the three-layer version 3 Cut manifest')
+    media = media_inputs.media_config(root, source)
+    for record in [media['inventory'], media['sourceLock'], *media['recipes']]:
+        content = git(root, 'show', head + ':' + record['file'])
+        if hashlib.sha256(content).hexdigest() != record['sha256']:
+            raise ValueError('Committed media source input does not match its pinned SHA256')
     version = json.loads(git(root, 'show', head + ':apps/desktop/package.json'))['version']
     if not re.fullmatch(r'(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-rc\.(0|[1-9]\d*))?', version):
         raise ValueError('Desktop sources require a stable or numbered RC version')
@@ -173,6 +184,10 @@ def archive_release(root, output):
                 raise ValueError('Cut patch does not produce its pinned tree')
         patched_tree = source['patches'][-1]['resultTree']
         files.append(archive_tree(cut, patched_tree, patched_tree, staged / 'Mantur-Cut-patched-source.tar.gz'))
+        media_archive, media_record = media_inputs.corresponding_source(root, root / '.cache/mantur-media', source)
+        with media_archive.open('rb') as incoming, (staged / media_record['name']).open('xb') as outgoing:
+            shutil.copyfileobj(incoming, outgoing)
+        files.append(media_record)
         (staged / 'DESKTOP-SOURCES.json').write_text(json.dumps({
             'formatVersion': 1, 'desktopVersion': version, 'harnessCommit': head, 'harnessTree': tree,
             'distributionId': distribution, 'cutSource': source, 'files': files,
@@ -180,11 +195,15 @@ def archive_release(root, output):
         (staged / 'DESKTOP-SOURCE-BUILD.txt').write_text(
             f'ManTur Agent {version} source delivery\n\n'
             f'Harness commit: {head}\nHarness tree: {tree}\nCut distribution SHA256: {distribution}\n'
-            'DESKTOP-SOURCES.json binds every source archive to its Git tree and SHA256. '
+            'DESKTOP-SOURCES.json binds Git source archives to their trees and every archive to its SHA256. '
             'The Harness archive contains the source configuration, all three Cut patches, '
             'dependency locks, build scripts, bundled CLI/skill inputs and license notices. '
             'The Cut archives contain the complete upstream and final patched Git trees; '
-            'the Whisper archive contains its complete pinned Git tree.\n\n'
+            'the Whisper archive contains its complete pinned Git tree. '
+            'Mantur-Media-corresponding-source.tar.gz contains the fixed FFmpeg and dependency sources, '
+            'source-only Remotion tree, Electron and Chromium FFmpeg sources, recipes, configurations, '
+            'original build logs and retained notices. Its FILES-SHA256.json covers all other files; '
+            'SOURCE-INDEX.json identifies every included source archive. The recipe files match the Harness source pins.\n\n'
             'Build on the native target with Node 24 and the pnpm version in package.json. '
             'macOS also requires Xcode Command Line Tools. To retain the published Git identity:\n'
             'git clone https://github.com/mantur-ai/mantur-agent.git\n'
@@ -193,10 +212,15 @@ def archive_release(root, output):
             'pnpm install --frozen-lockfile\n'
             'pnpm run build:mantur\n'
             'pnpm run desktop:dist:mac:arm64\n\n'
-            'The final command verifies and rebuilds the pinned Cut source and dependencies. '
+            'The final command verifies and rebuilds the pinned Cut source and dependencies, and downloads '
+            'the separately pinned media candidate from its immutable input release. '
+            'For offline media reuse, set MANTUR_MEDIA_INPUT_DIR to a directory containing the exact media '
+            'archives named by source.json; missing or mismatched files fail instead of downloading substitutes. '
+            'The media source archive REBUILD.md describes regenerating the media candidate from source. '
+            'Its historical recipe identifies the actual reviewed build; final application signing changes binary hashes. '
             'Release signing and notarization require the distributor credentials described in apps/desktop/README.md. '
             'For a local build without Developer ID credentials use pnpm run desktop:dist:mac:arm64:local. '
-            'For Intel macOS use desktop:dist:mac:x64 on Intel macOS; for Windows use desktop:dist:win:x64 on x64 Windows. '
+            'The pinned media candidate supports macOS arm64 only; other packaging targets are rejected. '
             'An archive-only rebuild can initialize a new Git repository from the Harness files and commit them before these commands; '
             'its BUILD_INFO identifies that new commit, not the published commit.\n\n'
             'Read the retained licenses and SOURCE_OFFER_REVIEW.txt in the packaged Cut resources. '

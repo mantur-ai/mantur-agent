@@ -8,6 +8,9 @@ import subprocess
 import tarfile
 import tempfile
 import unittest
+from unittest.mock import patch
+
+from test_mantur_media_inputs import install_media_fixture
 
 
 spec = importlib.util.spec_from_file_location('sources', Path(__file__).with_name('desktop-release-sources.py'))
@@ -31,7 +34,7 @@ class SourceArchiveTests(unittest.TestCase):
         (self.whisper / 'whisper.cpp').write_text('int main() { return 0; }\n')
         self.commit(self.whisper)
         self.config = {
-            'formatVersion': 2, 'repository': str(self.cut),
+            'formatVersion': 3, 'repository': str(self.cut),
             'upstreamCommit': self.capture(self.cut, 'rev-parse', 'HEAD'),
             'upstreamTree': self.capture(self.cut, 'rev-parse', 'HEAD^{tree}'),
             'whisperRepository': str(self.whisper),
@@ -52,6 +55,12 @@ class SourceArchiveTests(unittest.TestCase):
         self.source = self.root / 'apps/desktop/mantur-cut/source.json'
         self.source.parent.mkdir(parents=True)
         (self.root / 'apps/desktop/package.json').write_text('{"version":"0.1.22"}\n')
+        self.media_inputs = self.directory / 'media-inputs'
+        self.media_inputs.mkdir()
+        self.config['nativeMedia'], _, _ = install_media_fixture(self.root, self.media_inputs)
+        environment = patch.dict(os.environ, {'MANTUR_MEDIA_INPUT_DIR': str(self.media_inputs)})
+        environment.start()
+        self.addCleanup(environment.stop)
         self.write_config()
 
     def repository(self, name):
@@ -74,7 +83,7 @@ class SourceArchiveTests(unittest.TestCase):
 
     def test_complete_deterministic_archives_match_committed_sources(self):
         files = sources.archive_release(self.root, self.output)
-        self.assertEqual(len(files), 4)
+        self.assertEqual(len(files), 5)
         manifest = json.loads((self.output / 'DESKTOP-SOURCES.json').read_text())
         self.assertEqual(manifest['harnessCommit'], self.capture(self.root, 'rev-parse', 'HEAD'))
         self.assertEqual(manifest['distributionId'], hashlib.sha256(self.source.read_bytes()).hexdigest())
@@ -88,6 +97,21 @@ class SourceArchiveTests(unittest.TestCase):
         again = sources.archive_release(self.root, self.directory / 'second')
         self.assertEqual(files, again)
         self.assertIn(manifest['harnessCommit'], (self.output / 'DESKTOP-SOURCE-BUILD.txt').read_text())
+        media_record = manifest['files'][-1]
+        self.assertEqual(media_record['sourceArchives'], 1)
+        self.assertEqual(media_record['candidateSha256'], self.config['nativeMedia']['candidate']['sha256'])
+
+    def test_missing_or_modified_media_sources_stop_release_assembly(self):
+        archive = self.media_inputs / 'source.tar.gz'
+        content = archive.read_bytes()
+        archive.unlink()
+        with self.assertRaisesRegex(ValueError, 'byte count'):
+            sources.archive_release(self.root, self.output)
+        self.assertFalse(self.output.exists())
+        archive.write_bytes(bytes([content[0] ^ 1]) + content[1:])
+        with self.assertRaisesRegex(ValueError, 'SHA256 mismatch'):
+            sources.archive_release(self.root, self.output)
+        self.assertFalse(self.output.exists())
 
     def test_wrong_patch_hash_and_tree_never_produce_a_candidate(self):
         for field, value, message in [('sha256', '0' * 64, 'SHA256'), ('resultTree', '0' * 40, 'pinned tree')]:

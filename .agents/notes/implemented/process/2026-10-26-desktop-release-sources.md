@@ -12,7 +12,7 @@ Desktop releases contain modified Cut programs, but source pins and patches alon
 
 The [desktop release workflow](../../../../.github/workflows/desktop-release.yml) assembles full Harness, upstream Cut, patched Cut and Whisper Git archives from the same checkout and source manifest used by native builds. The [archiver](../../../../scripts/desktop-release-sources.py) refuses tracked checkout edits, verifies pinned commits and trees, applies every digest-checked patch, and checks tar file bytes and modes against the resulting Git objects. Fixed tar and gzip timestamps give identical source archives for the same inputs. Only tracked source files enter these archives; untracked build outputs and profiles are excluded.
 
-Source archives, a commit/distribution manifest and build instructions share the installer's checksum list and public release delivery. Assembly fails before publication if source validation fails. [Debugging symbols](2026-10-22-desktop-package-size.md) retain their separate access and expiration rules. The source artifacts do not grant third-party redistribution rights or replace exact distribution review; [TOS publication](2026-10-16-tos-desktop-distribution.md) retains its approval, immutable-object and channel checks.
+Source archives, a commit/distribution manifest and build instructions share the installer's checksum list and public release delivery. The [source-locked media decision](../bug-fix/2026-10-27-mantur-source-locked-media.md) adds the exact media corresponding-source archive, whose inventory, source archives, recipes and lock are checked against the source manifest. Assembly fails before publication if source validation fails. [Debugging symbols](2026-10-22-desktop-package-size.md) retain their separate access and expiration rules. The source artifacts do not grant third-party redistribution rights or replace exact distribution review; [TOS publication](2026-10-16-tos-desktop-distribution.md) retains its approval, immutable-object and channel checks.
 
 Publication requires explicit user-facing notes through the `release_notes` input. Validation rejects blank notes before signing work starts, while nonpublishing builds remain usable without notes. The release creation step writes input text through an environment variable to a temporary file; shell syntax in notes remains data.
 
@@ -20,7 +20,7 @@ Publication requires explicit user-facing notes through the `release_notes` inpu
 
 **Publish source pins and patches only.** Recipients would still need to reconstruct omitted source files. The release instead delivers the complete selected Git trees and records their identities.
 
-**Reuse local candidate source archives.** Those files may identify another commit or patch set. Assembly reconstructs sources for its own release checkout.
+**Reuse local candidate Git source archives.** Those files may identify another commit or patch set. Assembly reconstructs Git sources for its own release checkout; the separately approved media archive is instead bound by its complete content digest and verified inventory.
 
 **Use automatically generated commit notes.** Commit subjects do not reliably explain supported platforms, upgrade steps or user-facing limitations. Publication therefore requires prepared user notes.
 

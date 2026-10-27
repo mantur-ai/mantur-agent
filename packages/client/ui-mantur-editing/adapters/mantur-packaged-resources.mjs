@@ -2,8 +2,8 @@
 import { readFileSync, realpathSync, statSync } from 'node:fs'
 import { dirname, isAbsolute, join, relative, sep } from 'node:path'
 
-const directories = new Set(['web', 'remotionBundle', 'compositor'])
-const names = ['server', 'web', 'remotionBundle', 'browserExecutable', 'ffmpeg', 'ffprobe', 'compositor', 'whisperCli', 'whisperServer']
+const directories = new Set(['web', 'remotionBundle', 'compositor', 'nativeMedia'])
+const names = ['server', 'web', 'remotionBundle', 'browserExecutable', 'ffmpeg', 'ffprobe', 'compositor', 'nativeMedia', 'whisperCli', 'whisperServer']
 
 /**
  * Read the target-specific manifest and reject absent, escaped or wrong-kind resources.
@@ -16,7 +16,7 @@ export function resolvePackagedResources(root, platform = process.platform, arch
   if (!isAbsolute(root)) throw new Error('Packaged editor resource root must be absolute')
   const canonical = realpathSync(root)
   const manifest = JSON.parse(readFileSync(join(canonical, 'manifest.json'), 'utf8'))
-  if (manifest?.formatVersion !== 2 || manifest.platform !== platform || manifest.arch !== arch
+  if (manifest?.formatVersion !== 3 || manifest.platform !== platform || manifest.arch !== arch
     || !['darwin-arm64', 'darwin-x64', 'win32-x64'].includes(`${platform}-${arch}`)) {
     throw new Error('Packaged editor manifest does not match this platform and format')
   }
@@ -38,6 +38,10 @@ export function resolvePackagedResources(root, platform = process.platform, arch
     return target
   }
   for (const name of names) paths[name] = resolveResource(name, manifest.paths?.[name], directories.has(name))
+  for (const [name, child] of [['ffmpeg', 'bin/ffmpeg'], ['ffprobe', 'bin/ffprobe'], ['compositor', 'compositor']]) {
+    if (paths[name] !== join(paths.nativeMedia, child)) throw new Error(`Packaged ${name} must belong to nativeMedia`)
+  }
+  resolveResource('nativeMedia/lib', `${manifest.paths.nativeMedia}/lib`, true)
   if (paths.whisperServer !== join(dirname(paths.whisperCli), `whisper-server${platform === 'win32' ? '.exe' : ''}`)) {
     throw new Error('Packaged whisper-server must be the declared sibling of whisper-cli')
   }

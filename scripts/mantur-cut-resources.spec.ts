@@ -35,8 +35,8 @@ describe('editor resource staging', () => {
     const destination = join(directory, 'staged')
     const targets = ['darwin/arm64', 'darwin/x64', 'win32/x64', 'win32/arm64', 'linux/x64', 'linux/arm64']
     const packages = ['onnxruntime-node', '@huggingface/transformers/node_modules/onnxruntime-node']
-    const preserved = ['.remotion/keep.json', '.cache/other/keep', 'other/bin/linux/runtime', '@remotion/renderer/LICENSE.md']
-    const excluded = ['.cache/webpack/cache.bin', '.remotion/chrome-headless-shell/browser']
+    const preserved = ['.remotion/keep.json', '.cache/other/keep', 'other/bin/linux/runtime', '@remotion/renderer/LICENSE.md', 'ffmpeg-static/package.json', '@ffprobe-installer/darwin-arm64/LICENSE']
+    const excluded = ['.cache/webpack/cache.bin', '.remotion/chrome-headless-shell/browser', 'ffmpeg-static/ffmpeg', '@ffprobe-installer/darwin-arm64/ffprobe', '@remotion/compositor-darwin-arm64/ffmpeg', '@remotion/compositor-darwin-arm64/libavutil.dylib']
     for (const path of [...preserved, ...excluded]) await file(source, path)
     for (const pkg of packages) {
       await file(source, `${pkg}/LICENSE`)
