@@ -90,6 +90,7 @@ describe('Windows unsigned desktop candidate', () => {
         'apps/desktop/mantur-cut/source.win32-x64.json',
         '.github/workflows/desktop-windows-release.yml',
         'scripts/mantur-cut-windows-smoke.mjs',
+        'scripts/mantur-cut-windows-smoke-trace.cjs',
         'apps/desktop/scripts/smoke-installed-windows.ps1',
       ],
     })
