@@ -120,7 +120,7 @@ jobs:
 
       - name: Diagnose only real browser profile cleanup cases
         run: |
-          node scripts/mantur-cut-windows-browser-cleanup-probe.mjs --electron "$env:CLEANUP_PROBE_ELECTRON" --chrome "$env:CLEANUP_PROBE_CHROME" --output "$env:RUNNER_TEMP/windows-cleanup-evidence/browser-probe"
+          node scripts/mantur-cut-windows-browser-cleanup-probe.mjs --electron "$env:CLEANUP_PROBE_ELECTRON" --chrome "$env:CLEANUP_PROBE_CHROME" --cases a1,b1 --output "$env:RUNNER_TEMP/windows-cleanup-evidence/browser-probe"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Retain the small diagnostic evidence
@@ -142,5 +142,5 @@ jobs:
 
       - name: Describe diagnostic scope
         run: |
-          'Four real browser profile cleanup observations only. DIAGNOSTIC_COMPLETE means all cases were recorded, not that every cleanup case passed.' >> $env:GITHUB_STEP_SUMMARY
+          'Two Electron Chinese profile cleanup observations only. DIAGNOSTIC_COMPLETE means all cases were recorded, not that every cleanup case passed.' >> $env:GITHUB_STEP_SUMMARY
           'This workflow does not build an installer, compile media, launch the application or publish any files.' >> $env:GITHUB_STEP_SUMMARY

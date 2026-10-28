@@ -217,11 +217,32 @@ async function identity(file) {
   return { path: file, bytes, sha256: hash.digest('hex') }
 }
 
+/**
+ * Observe absence without launching a shell or signaling the process.
+ * @param {number} pid Browser PID recorded by the owning case.
+ * @returns {boolean} True only when the native process query reports ESRCH.
+ */
+export function browserIsAbsent(pid) {
+  try { process.kill(pid, 0); return false }
+  catch (error) {
+    if (error.code === 'ESRCH') return true
+    throw error
+  }
+}
+
 function verifyAndCleanBrowser(chrome, profile, browserPid, parentPid, environment) {
   if (!Number.isInteger(browserPid)) return { status: 'not-started', absent: true }
+  try {
+    if (browserIsAbsent(browserPid)) return { status: 'absent-native-query', absent: true, browserPid }
+  } catch (error) {
+    return { status: 'native-query-failed', absent: false, error: { code: error.code, message: error.message } }
+  }
   const code = String.raw`
+[Console]::Error.WriteLine('cleanup-script-entered')
 $ErrorActionPreference = 'Stop'
+[Console]::Error.WriteLine('cleanup-cim-query-call')
 $target = Get-CimInstance Win32_Process -Filter "ProcessId = $env:MANTUR_PROBE_BROWSER_PID"
+[Console]::Error.WriteLine('cleanup-cim-query-return')
 if ($null -eq $target) { @{status='absent';absent=$true}|ConvertTo-Json -Compress; exit 0 }
 $pathMatches = [string]::Equals($target.ExecutablePath, $env:MANTUR_PROBE_CHROME, [StringComparison]::OrdinalIgnoreCase)
 $parentMatches = $target.ParentProcessId -eq [int]$env:MANTUR_PROBE_PARENT_PID
@@ -231,11 +252,13 @@ if (!$pathMatches -or !$parentMatches -or !$profileMatches) {
   exit 1
 }
 $ErrorActionPreference = 'Continue'
+[Console]::Error.WriteLine('cleanup-taskkill-call')
 $output = & "$env:SystemRoot\System32\taskkill.exe" /pid $target.ProcessId /T /F 2>&1
 $killCode = $LASTEXITCODE
 $ErrorActionPreference = 'Stop'
 $deadline = [DateTime]::UtcNow.AddSeconds(5)
 do { $remaining = Get-Process -Id $target.ProcessId -ErrorAction SilentlyContinue; if ($null -eq $remaining) { break }; Start-Sleep -Milliseconds 100 } while ([DateTime]::UtcNow -lt $deadline)
+[Console]::Error.WriteLine('cleanup-presence-check-return')
 @{status='verified-cleanup';absent=($null -eq $remaining);taskkillCode=$killCode;pathMatches=$pathMatches;parentMatches=$parentMatches;profileMatches=$profileMatches}|ConvertTo-Json -Compress
 if ($null -ne $remaining) { exit 1 }
 `
@@ -251,7 +274,7 @@ if ($null -ne $remaining) { exit 1 }
     error: result.error ? { code: result.error.code, message: result.error.message } : null }
 }
 
-async function supervise(electron, chrome, requestedRoot) {
+async function supervise(electron, chrome, requestedRoot, selectedCases) {
   assert.equal(process.platform, 'win32')
   assert.equal(process.arch, 'x64')
   assert.equal(process.versions.node, nodeVersion)
@@ -279,7 +302,7 @@ async function supervise(electron, chrome, requestedRoot) {
     source: await identity(fileURLToPath(sourceFile)), script: await identity(script), identities,
     chromeVersionOutput: version.stdout.trim(), remotionVersion: source.remotionVersion,
     rawProfilesRetainedLocallyOnly: true, cases: [] }
-  for (const comparison of comparisons) {
+  for (const comparison of comparisons.filter(value => selectedCases.includes(value.key))) {
     const home = join(root, 'environment', comparison.key)
     await mkdir(home)
     const environment = { ...baseEnvironment, HOME: home, USERPROFILE: home,
@@ -314,7 +337,7 @@ async function supervise(electron, chrome, requestedRoot) {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === script) {
-  const { values } = parseArgs({ options: { electron: { type: 'string' }, chrome: { type: 'string' }, output: { type: 'string' }, case: { type: 'string' }, 'video-threads': { type: 'string' } } })
+  const { values } = parseArgs({ options: { electron: { type: 'string' }, chrome: { type: 'string' }, output: { type: 'string' }, case: { type: 'string' }, cases: { type: 'string' }, 'video-threads': { type: 'string' } } })
   assert(values.output && values.chrome, 'Provide --chrome <pinned executable> --output <fresh directory>')
   if (values.case) {
     const videoThreads = Number(values['video-threads'])
@@ -322,6 +345,9 @@ if (process.argv[1] && resolve(process.argv[1]) === script) {
     await childCase(resolve(values.output), values.chrome, values.case, videoThreads)
   } else {
     assert(values.electron, 'Provide --electron <exact Electron 43.4.0 executable>')
-    await supervise(values.electron, values.chrome, values.output)
+    const selectedCases = values.cases ? values.cases.split(',') : comparisons.map(value => value.key)
+    assert(selectedCases.length > 0 && selectedCases.every(key => comparisons.some(value => value.key === key))
+      && new Set(selectedCases).size === selectedCases.length, 'Choose distinct known comparison cases')
+    await supervise(values.electron, values.chrome, values.output, selectedCases)
   }
 }

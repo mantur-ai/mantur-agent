@@ -1,7 +1,7 @@
 /** Keep taskkill callback and actual browser close separate in the cleanup experiment. */
-import { expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 // @ts-expect-error The native diagnostic is plain JavaScript without a declaration artifact.
-import { exerciseCleanupOrder } from './mantur-cut-windows-browser-cleanup-probe.mjs'
+import { browserIsAbsent, exerciseCleanupOrder } from './mantur-cut-windows-browser-cleanup-probe.mjs'
 
 it('deletes immediately while callback and browser close are still pending', async () => {
   const callback = Promise.withResolvers<undefined>()
@@ -32,4 +32,17 @@ it('retains a deletion exception after observing the owned browser closure', asy
   const failure = new Error('owned directory could not be removed')
   const operation = exerciseCleanupOrder(false, () => Promise.resolve(), Promise.resolve(), () => { throw failure })
   await expect(operation).rejects.toBe(failure)
+})
+
+afterEach(() => vi.restoreAllMocks())
+
+it('records native absence only for ESRCH and never sends a termination signal', () => {
+  const query = vi.spyOn(process, 'kill').mockImplementation(() => true)
+  expect(browserIsAbsent(1234)).toBe(false)
+  expect(query).toHaveBeenCalledWith(1234, 0)
+  query.mockImplementation(() => { throw Object.assign(new Error('absent'), { code: 'ESRCH' }) })
+  expect(browserIsAbsent(1234)).toBe(true)
+  const denied = Object.assign(new Error('denied'), { code: 'EPERM' })
+  query.mockImplementation(() => { throw denied })
+  expect(() => browserIsAbsent(1234)).toThrow(denied)
 })

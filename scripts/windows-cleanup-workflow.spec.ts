@@ -78,6 +78,7 @@ describe('Windows cleanup diagnostic workflow', () => {
     const probe = step('Diagnose only real browser profile cleanup cases')
     expect(probe.run).toContain('node scripts/mantur-cut-windows-browser-cleanup-probe.mjs --electron "$env:CLEANUP_PROBE_ELECTRON"')
     expect(probe.run).toContain('--chrome "$env:CLEANUP_PROBE_CHROME"')
+    expect(probe.run).toContain('--cases a1,b1')
     expect(probe.run).toContain('--output "$env:RUNNER_TEMP/windows-cleanup-evidence/browser-probe"')
     expect(text).not.toContain('node scripts/mantur-cut-windows-cleanup-probe.mjs')
     expect(probe.run).toContain('if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }')
