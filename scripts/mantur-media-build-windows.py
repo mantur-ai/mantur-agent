@@ -154,16 +154,27 @@ class Build:
         return logfile.read_text(errors='replace')
 
     def obtain(self, source):
-        """Download a pinned archive once; reject wrong sizes or hashes before extraction."""
+        """Retry one invalid download; cache and extract only the exact locked bytes."""
         path = self.archives / source['archive']
         if not path.exists():
-            temporary = path.with_suffix(path.suffix + '.part')
-            self.run('download-' + source['archive'], ['curl', '--disable', '--fail', '--location',
-                     '--retry', '2', '--max-time', '240', source['url'], '--output', temporary])
-            helpers.verify_archive(temporary, source['sha256'])
-            if temporary.stat().st_size != source['bytes']:
-                raise ValueError('Source archive size mismatch: ' + source['archive'])
-            temporary.rename(path)
+            for attempt in (1, 2):
+                temporary = path.with_suffix(path.suffix + '.part')
+                self.run(f'download-{source["archive"]}-attempt-{attempt}', ['curl', '--disable', '--fail', '--location',
+                         '--retry', '2', '--max-time', '240', source['url'], '--output', temporary])
+                actual_bytes, actual_sha = temporary.stat().st_size, sha256(temporary)
+                if actual_bytes == source['bytes'] and actual_sha == source['sha256']:
+                    temporary.rename(path)
+                    break
+                rejected = self.evidence / f'download-rejected-{source["archive"]}-attempt-{attempt}'
+                with temporary.open('rb') as response:
+                    rejected.with_suffix(rejected.suffix + '.body-prefix').write_bytes(response.read(16 * 1024))
+                rejected.with_suffix(rejected.suffix + '.json').write_text(json.dumps({
+                    'url': source['url'], 'attempt': attempt, 'expectedBytes': source['bytes'],
+                    'actualBytes': actual_bytes, 'expectedSha256': source['sha256'], 'actualSha256': actual_sha,
+                    'bodyPrefixLimit': 16 * 1024,
+                }, indent=2) + '\n')
+                if attempt == 2:
+                    raise ValueError('Source archive size/SHA256 mismatch after two downloads: ' + source['archive'])
         helpers.verify_archive(path, source['sha256'])
         if path.stat().st_size != source['bytes']:
             raise ValueError('Source archive size mismatch: ' + source['archive'])

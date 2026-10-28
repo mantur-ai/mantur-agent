@@ -1,6 +1,7 @@
 """Check Windows build isolation and rejection paths without compiling third-party code."""
 
 import importlib.util
+import hashlib
 import io
 import json
 import os
@@ -151,6 +152,57 @@ class WindowsMediaBuildTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, 'windres failed'):
                     build.probe_resource_compiler()
             self.assertEqual(run.call_count, 1)
+
+    def test_archive_download_retries_invalid_http_success_then_caches_only_locked_bytes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            build = media.Build(Path(directory), 1)
+            expected = b'locked source archive'
+            source = {'archive': 'source.tar.xz', 'url': 'https://example.invalid/source.tar.xz',
+                      'bytes': len(expected), 'sha256': hashlib.sha256(expected).hexdigest()}
+            responses = iter([b'unexpected HTTP 200 body', expected])
+            def download(_label, command):
+                command[-1].write_bytes(next(responses))
+            with patch.object(build, 'run', side_effect=download) as run:
+                result = build.obtain(source)
+                self.assertEqual(result.read_bytes(), expected)
+                self.assertEqual(run.call_count, 2)
+                self.assertEqual(build.obtain(source), result)
+                self.assertEqual(run.call_count, 2)
+            rejected = json.loads(next(build.evidence.glob('download-rejected-*.json')).read_text())
+            self.assertEqual(rejected['actualSha256'], hashlib.sha256(b'unexpected HTTP 200 body').hexdigest())
+            self.assertEqual(next(build.evidence.glob('*.body-prefix')).read_bytes(), b'unexpected HTTP 200 body')
+
+    def test_archive_download_stops_after_two_mismatches_and_rejects_a_bad_cache(self):
+        with tempfile.TemporaryDirectory() as directory:
+            build = media.Build(Path(directory), 1)
+            expected = b'locked source archive' * 1000
+            source = {'archive': 'source.tar.xz', 'url': 'https://example.invalid/source.tar.xz',
+                      'bytes': len(expected), 'sha256': hashlib.sha256(expected).hexdigest()}
+            # Equal length with a different digest must not enter the validated cache.
+            def download(_label, command):
+                command[-1].write_bytes(b'x' * len(expected))
+            with patch.object(build, 'run', side_effect=download) as run:
+                with self.assertRaisesRegex(ValueError, 'after two downloads'):
+                    build.obtain(source)
+            self.assertEqual(run.call_count, 2)
+            cached = build.archives / source['archive']
+            self.assertFalse(cached.exists())
+            self.assertEqual(len(list(build.evidence.glob('download-rejected-*.json'))), 2)
+            self.assertTrue(all(path.stat().st_size == 16 * 1024 for path in build.evidence.glob('*.body-prefix')))
+            cached.write_bytes(b'invalid existing cache')
+            with patch.object(build, 'run') as run:
+                with self.assertRaisesRegex(ValueError, 'SHA256 mismatch'):
+                    build.obtain(source)
+            run.assert_not_called()
+            # A matching digest with a mismatched locked size must also be rejected.
+            cached.unlink()
+            source['sha256'] = hashlib.sha256(b'x' * len(expected)).hexdigest()
+            source['bytes'] += 1
+            with patch.object(build, 'run', side_effect=download) as run:
+                with self.assertRaisesRegex(ValueError, 'after two downloads'):
+                    build.obtain(source)
+            self.assertEqual(run.call_count, 2)
+            self.assertFalse(cached.exists())
 
     def test_package_excludes_upstream_dlls_and_preserves_static_cli_copies(self):
         with tempfile.TemporaryDirectory() as directory:
