@@ -12,6 +12,7 @@ import platform
 import re
 import shutil
 import subprocess
+import sys
 import tarfile
 import time
 
@@ -48,6 +49,26 @@ The complete compiled-library source archives, original recipe and lock,
 configuration outputs and build evidence accompany the Windows candidate.
 The source offer does not reclassify Remotion's separate license terms.
 """
+
+
+def runtime_identity():
+    """Record the interpreter and kernel identifiers without including the caller's environment."""
+    uname = os.uname() if hasattr(os, 'uname') else None
+    return {'sysPlatform': sys.platform, 'osName': os.name, 'system': platform.system(),
+            'machine': platform.machine(), 'msystem': os.environ.get('MSYSTEM'),
+            'executable': sys.executable,
+            'uname': None if uname is None else {'sysname': uname.sysname, 'machine': uname.machine}}
+
+
+def verify_runtime(identity):
+    """Require MSYS2's POSIX Python in a native Windows x64 UCRT64 shell."""
+    # MSYS2 uname uses MSYSTEM as its prefix, so UCRT64 reports UCRT64_NT-*.
+    if (identity['sysPlatform'] != 'cygwin' or identity['osName'] != 'posix'
+            or identity['msystem'] != 'UCRT64' or not identity['system'].startswith('UCRT64_NT-')
+            or identity['machine'] != 'x86_64' or identity['uname'] is None
+            or identity['uname']['sysname'] != identity['system']
+            or identity['uname']['machine'] != 'x86_64'):
+        raise ValueError('Run with /usr/bin/python3 in native Windows MSYS2 UCRT64')
 
 
 def build_environment(work, prefix):
@@ -337,14 +358,19 @@ def main():
     parser.add_argument('--task', type=Path, required=True)
     parser.add_argument('--jobs', type=int, default=4)
     args = parser.parse_args()
-    if not platform.system().startswith('MSYS_NT') or os.environ.get('MSYSTEM') != 'UCRT64' or platform.machine() != 'x86_64':
-        parser.error('Run with /usr/bin/python3 in native Windows MSYS2 UCRT64')
+    identity = runtime_identity()
+    print(json.dumps({'runtimeIdentity': identity}), flush=True)
+    try:
+        verify_runtime(identity)
+    except ValueError as error:
+        parser.error(str(error))
     if not 1 <= args.jobs <= 32:
         parser.error('--jobs must be between 1 and 32')
     task = args.task.resolve()
     if (task / 'artifacts/candidate').exists():
         parser.error('Candidate already exists; choose a fresh task directory')
     build = Build(task, args.jobs)
+    (build.evidence / 'platform-identity.json').write_text(json.dumps(identity, indent=2) + '\n')
     build.prepare()
     build.dependencies()
     build.ffmpeg()

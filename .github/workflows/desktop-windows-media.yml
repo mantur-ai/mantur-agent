@@ -2,6 +2,11 @@ name: Windows desktop media candidate
 
 on:
   workflow_dispatch:
+    inputs:
+      inspect_baseline:
+        description: Repeat the immutable 0.1.20 updater inspection only when new evidence requires it
+        type: boolean
+        default: false
   push:
     branches:
       - feat/desktop-windows-release-1-0-0-harness
@@ -20,6 +25,7 @@ concurrency:
 jobs:
   baseline:
     name: Inspect published Windows update policy
+    if: inputs.inspect_baseline == true
     runs-on: windows-2025
     timeout-minutes: 15
     defaults:

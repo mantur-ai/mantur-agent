@@ -23,6 +23,7 @@ describe('Windows media candidate publication isolation', () => {
       expect(job.environment).toBeUndefined()
     }
     expect(workflow.permissions).toEqual({ contents: 'read' })
+    expect(record(jobs.baseline).if).toBe('inputs.inspect_baseline == true')
     expect(text).not.toMatch(/secrets\.|contents: write|gh release|desktop-publish-tos|macos-/)
     expect(record(media.defaults).run).toEqual({ shell: 'pwsh' })
   })

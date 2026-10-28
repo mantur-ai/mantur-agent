@@ -18,6 +18,27 @@ spec.loader.exec_module(media)
 class WindowsMediaBuildTests(unittest.TestCase):
     """Keep candidate inputs and imported DLLs within their declared owners."""
 
+    def test_native_ucrt64_uses_the_shell_uname_prefix_and_posix_python(self):
+        identity = {'sysPlatform': 'cygwin', 'osName': 'posix', 'system': 'UCRT64_NT-10.0-26100',
+                    'machine': 'x86_64', 'msystem': 'UCRT64', 'executable': '/usr/bin/python3',
+                    'uname': {'sysname': 'UCRT64_NT-10.0-26100', 'machine': 'x86_64'}}
+        media.verify_runtime(identity)
+        for changed in ({'sysPlatform': 'win32', 'osName': 'nt'},
+                        {'sysPlatform': 'linux', 'system': 'Linux'},
+                        {'sysPlatform': 'darwin', 'system': 'Darwin'},
+                        {'msystem': 'MINGW64', 'system': 'MINGW64_NT-10.0-26100'},
+                        {'system': 'MSYS_NT-10.0-26100'}, {'machine': 'aarch64'},
+                        {'uname': None}, {'uname': {'sysname': 'UCRT64_NT-10.0-26100', 'machine': 'i686'}}):
+            with self.subTest(changed=changed), self.assertRaisesRegex(ValueError, 'MSYS2 UCRT64'):
+                media.verify_runtime({**identity, **changed})
+
+    def test_runtime_diagnostic_records_only_platform_fields(self):
+        identity = media.runtime_identity()
+        self.assertEqual(set(identity), {'sysPlatform', 'osName', 'system', 'machine', 'msystem', 'executable', 'uname'})
+        self.assertEqual(identity['sysPlatform'], media.sys.platform)
+        self.assertEqual(identity['osName'], os.name)
+        self.assertEqual(identity['executable'], media.sys.executable)
+
     def test_build_environment_excludes_credentials_and_caller_library_paths(self):
         with patch.dict(os.environ, {'CSC_LINK': 'secret', 'GITHUB_TOKEN': 'secret',
                                      'PATH': '/unreviewed', 'CFLAGS': '-include injected.h',
