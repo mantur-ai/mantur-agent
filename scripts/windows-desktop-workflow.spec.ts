@@ -118,6 +118,11 @@ describe('Windows unsigned desktop candidate', () => {
   })
 
   it('gates candidate upload on native media, installed-main and unsigned evidence', () => {
+    const probe = step('Probe startup log sampling with native PowerShell')
+    expect(probe.run).toContain("$node.Name -eq 'Get-InstalledReadyUrl'")
+    expect(probe.run).toContain('$probe.cases.empty = $null -eq (Get-InstalledReadyUrl $path)')
+    expect(probe.run).toContain('$probe.cases.ready = $null -ne $ready -and $ready.AbsoluteUri -eq $expected')
+    expect(steps.indexOf(probe)).toBeLessThan(steps.indexOf(step('Validate approved media run and committed source pins')))
     expect(step('Install immutable dependencies').run).toBe('pnpm install --frozen-lockfile')
     expect(step('Build unsigned Windows NSIS installer').run).toContain('pnpm run desktop:dist:win:x64')
     expect(step('Verify exact unsigned Authenticode identities').run).toContain("$signature.Status -ne 'NotSigned'")

@@ -129,6 +129,15 @@ function Wait-OwnedExit([Diagnostics.Process]$Process, [int]$Seconds, [string]$S
     if ($Process.ExitCode -ne 0) { throw "$Stage exited with code $($Process.ExitCode)." }
 }
 
+function Get-InstalledReadyUrl([string]$LogPath) {
+    if (-not (Test-Path -LiteralPath $LogPath)) { return $null }
+    $contents = Get-Content -LiteralPath $LogPath -Raw
+    if ([string]::IsNullOrEmpty($contents)) { return $null }
+    $match = [regex]::Match($contents, '(?m)^dsh web: (http://127\.0\.0\.1:\d+/\?token=[^\s]+)')
+    if ($match.Success) { return [uri]($match.Groups[1].Value) }
+    return $null
+}
+
 Protect-PrivateDirectory $OutputDirectory
 try {
     $existing = @(Get-ExistingInstallations)
@@ -176,11 +185,8 @@ try {
     $readyUrl = $null
     while ([DateTime]::UtcNow -lt $deadline) {
         if ($main.HasExited) { throw "Electron main exited before readiness: $($main.ExitCode)" }
-        if (Test-Path -LiteralPath $logPath) {
-            [string]$log = Get-Content -LiteralPath $logPath -Raw
-            $match = [regex]::Match($log, '(?m)^dsh web: (http://127\.0\.0\.1:\d+/\?token=[^\s]+)')
-            if ($match.Success) { $readyUrl = [uri]$match.Groups[1].Value; break }
-        }
+        $readyUrl = Get-InstalledReadyUrl $logPath
+        if ($null -ne $readyUrl) { break }
         Start-Sleep -Milliseconds 250
     }
     if ($null -eq $readyUrl) { throw 'Installed Host did not report readiness before the deadline.' }
@@ -268,6 +274,11 @@ public static class ManturSmokeWindow {
     $report.status = 'PASS'
 } catch {
     $report.failures += $_.Exception.Message -replace '(?i)(token=)[^\s]+', '$1[redacted]'
+    $report['failureContext'] = @{
+        scriptLineNumber = $_.InvocationInfo.ScriptLineNumber
+        offsetInLine = $_.InvocationInfo.OffsetInLine
+        scriptStackTrace = $_.ScriptStackTrace -replace '(?i)(token=)[^\s]+', '$1[redacted]'
+    }
 } finally {
     try {
         if ($runRootOwned -and (Test-Path -LiteralPath $logPath)) {

@@ -60,6 +60,46 @@ jobs:
           "MANTUR_MEDIA_INPUT_DIR=$(Join-Path $env:RUNNER_TEMP 'windows-media-inputs')" >> $env:GITHUB_ENV
           "WINDOWS_RELEASE_EVIDENCE=$(Join-Path $env:RUNNER_TEMP 'windows-release-evidence')" >> $env:GITHUB_ENV
 
+      - name: Probe startup log sampling with native PowerShell
+        run: |
+          $tokens = $null
+          $parseErrors = $null
+          $ast = [Management.Automation.Language.Parser]::ParseFile((Resolve-Path 'apps/desktop/scripts/smoke-installed-windows.ps1'), [ref]$tokens, [ref]$parseErrors)
+          if ($parseErrors.Count -ne 0) { throw 'Installed smoke PowerShell syntax did not parse.' }
+          $functions = @($ast.FindAll({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Get-InstalledReadyUrl' }, $true))
+          if ($functions.Count -ne 1) { throw 'Expected exactly one installed log sampling function.' }
+          . ([scriptblock]::Create($functions[0].Extent.Text))
+          $probeRoot = Join-Path $env:RUNNER_TEMP ('mantur-log-probe-' + [guid]::NewGuid().ToString('N'))
+          New-Item -ItemType Directory -Path $probeRoot -ErrorAction Stop | Out-Null
+          New-Item -ItemType Directory -Path $env:WINDOWS_RELEASE_EVIDENCE -Force | Out-Null
+          $probe = [ordered]@{ status = 'FAIL'; powershellVersion = [string]$PSVersionTable.PSVersion; cases = @{} }
+          try {
+            $path = Join-Path $probeRoot 'startup.log'
+            $probe.cases.missing = $null -eq (Get-InstalledReadyUrl $path)
+            [IO.File]::WriteAllText($path, '')
+            [string]$legacyLog = Get-Content -LiteralPath $path -Raw
+            $probe['legacyTypedReadIsNull'] = $null -eq $legacyLog
+            try {
+              [void][regex]::Match($legacyLog, '.')
+              $probe['legacyMatchOutcome'] = 'returned'
+            } catch {
+              $probe['legacyMatchOutcome'] = 'threw'
+              $probe['legacyError'] = $_.Exception.Message
+            }
+            $probe.cases.empty = $null -eq (Get-InstalledReadyUrl $path)
+            [IO.File]::WriteAllText($path, "Host starting`n")
+            $probe.cases.notReady = $null -eq (Get-InstalledReadyUrl $path)
+            $expected = 'http://127.0.0.1:43123/?token=fixture-probe-only'
+            [IO.File]::WriteAllText($path, "Host starting`ndsh web: $expected`n")
+            $ready = Get-InstalledReadyUrl $path
+            $probe.cases.ready = $null -ne $ready -and $ready.AbsoluteUri -eq $expected
+            if ($probe.cases.Values -contains $false) { throw 'Installed log sampling did not distinguish missing, empty, pending and ready logs.' }
+            $probe.status = 'PASS'
+          } finally {
+            $probe | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath "$env:WINDOWS_RELEASE_EVIDENCE/startup-log-probe.json" -Encoding utf8
+            Remove-Item -LiteralPath $probeRoot -Recurse -Force
+          }
+
       - name: Validate approved media run and committed source pins
         id: media
         uses: actions/github-script@v8
