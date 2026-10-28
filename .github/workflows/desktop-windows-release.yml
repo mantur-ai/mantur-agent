@@ -219,11 +219,11 @@ jobs:
           pnpm run desktop:smoke 2>&1 | Tee-Object -FilePath "$env:WINDOWS_RELEASE_EVIDENCE/package-closure.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Smoke actual Windows media export
-        run: node scripts/mantur-cut-windows-smoke.mjs --app apps/desktop/dist/win-unpacked --output "$env:WINDOWS_RELEASE_EVIDENCE/media"
-
       - name: Smoke installed unsigned desktop startup and normal exit
         run: ./apps/desktop/scripts/smoke-installed-windows.ps1 -Installer "$env:GITHUB_WORKSPACE/apps/desktop/dist/Mantur-Agent-Windows-x64.exe" -OutputDirectory "$env:WINDOWS_RELEASE_EVIDENCE/installed" -ExpectedVersion 1.0.0
+
+      - name: Smoke actual Windows media export
+        run: node scripts/mantur-cut-windows-smoke.mjs --app apps/desktop/dist/win-unpacked --output "$env:WINDOWS_RELEASE_EVIDENCE/media"
 
       - name: Assemble Windows candidate and corresponding sources
         run: |

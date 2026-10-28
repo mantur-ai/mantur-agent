@@ -7,6 +7,7 @@ import { mkdir, readFile, readdir, realpath, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { dirname, join, resolve } from 'node:path'
 import { finished } from 'node:stream/promises'
+import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
 
 if (process.platform !== 'win32' || process.arch !== 'x64') throw new Error('This media smoke requires native Windows x64')
@@ -98,12 +99,17 @@ const parent = createServer((_request, response) => { response.writeHead(404).en
 await new Promise((resolveListening, reject) => { parent.once('error', reject); parent.listen(0, '127.0.0.1', resolveListening) })
 const parentOrigin = `http://127.0.0.1:${parent.address().port}`
 const token = randomBytes(32).toString('hex')
-const editor = spawn(electron, [launcher], {
+const diagnostics = join(evidence, 'native-diagnostics')
+await mkdir(diagnostics)
+const trace = fileURLToPath(new URL('./mantur-cut-windows-smoke-trace.cjs', import.meta.url))
+report.diagnostics = { directory: diagnostics, traceSha256: hash(await readFile(trace)), environmentExcluded: true }
+const editor = spawn(electron, ['--require', trace, launcher], {
   cwd: engine, env: {
     ...environment, ELECTRON_RUN_AS_NODE: '1', MANTUR_CUT_RESOURCES: editorRoot,
     OPENCHATCUT_DATA_DIR: engine, OPENCHATCUT_MCP_TOKEN: token,
     MANTUR_CUT_MEDIA_DIR: media, MANTUR_CUT_EXPORT_DIR: exports, MANTUR_CUT_PROJECT_DIR: project,
     MANTUR_CUT_PARENT_ORIGIN: parentOrigin, MANTUR_CUT_DRAIN_TIMEOUT_MS: '10000', MANTUR_CUT_STOP_TIMEOUT_MS: '10000',
+    MANTUR_CUT_SMOKE_TRACE_DIRECTORY: diagnostics,
   }, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
 })
 const editorLog = createWriteStream(join(evidence, 'editor.log'), { flags: 'wx' })
@@ -191,6 +197,7 @@ try {
   report.ok = true
 } catch (error) {
   report.error = error.stack ?? String(error)
+  if (error.cause) report.errorCause = { name: error.cause.name, code: error.cause.code, message: String(error.cause.message ?? error.cause).slice(0, 1024) }
   process.exitCode = 1
 } finally {
   let stopTimer
