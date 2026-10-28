@@ -1,0 +1,103 @@
+name: Windows Electron cleanup diagnostic
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/desktop-windows-release-1-0-0-harness
+    paths:
+      - .github/workflows/desktop-windows-cleanup-probe.yml
+      - scripts/mantur-cut-windows-cleanup-probe.mjs
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-cleanup-diagnostic-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    if: github.ref == 'refs/heads/feat/desktop-windows-release-1-0-0-harness'
+    runs-on: windows-2025
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      ELECTRON_VERSION: '43.4.0'
+      ELECTRON_ARCHIVE_SHA256: ef0709cfa719739acce73de6f9b684304baf38c6454376638a70d34a7cecffe0
+      ELECTRON_ARCHIVE_BYTES: '144408141'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24.18.1'
+
+      - name: Require the existing runtime pins
+        run: |
+          $source = Get-Content -LiteralPath 'apps/desktop/mantur-cut/source.win32-x64.json' -Raw | ConvertFrom-Json
+          $desktop = Get-Content -LiteralPath 'apps/desktop/package.json' -Raw | ConvertFrom-Json
+          $repository = Get-Content -LiteralPath 'package.json' -Raw | ConvertFrom-Json
+          if ($source.electronVersion -ne $env:ELECTRON_VERSION -or $desktop.devDependencies.electron -ne $env:ELECTRON_VERSION -or
+              $source.embeddedNodeVersion -ne '24.18.1' -or $repository.packageManager -ne 'pnpm@11.7.0') {
+            throw 'Cleanup diagnostic runtime pins differ from the existing release inputs.'
+          }
+          $nodeVersion = node -p process.versions.node
+          if ($LASTEXITCODE -ne 0 -or $nodeVersion -ne '24.18.1') { throw 'The diagnostic requires native Node 24.18.1.' }
+          New-Item -ItemType Directory -Path "$env:RUNNER_TEMP/windows-cleanup-evidence" -ErrorAction Stop | Out-Null
+
+      - name: Restore only the pinned Electron archive
+        uses: actions/cache@v5
+        with:
+          path: ${{ runner.temp }}/windows-cleanup-inputs
+          key: windows-cleanup-electron-43.4.0-x64-ef0709cfa719739acce73de6f9b684304baf38c6454376638a70d34a7cecffe0
+
+      - name: Verify and prepare the exact Electron runtime
+        run: |
+          $inputs = Join-Path $env:RUNNER_TEMP 'windows-cleanup-inputs'
+          New-Item -ItemType Directory -Path $inputs -Force | Out-Null
+          $name = 'electron-v43.4.0-win32-x64.zip'
+          $base = 'https://github.com/electron/electron/releases/download/v43.4.0'
+          $archive = Join-Path $inputs $name
+          $checksums = Join-Path $env:RUNNER_TEMP 'windows-cleanup-evidence/SHASUMS256.txt'
+          Invoke-WebRequest -Uri "$base/SHASUMS256.txt" -OutFile $checksums
+          $entries = @(Get-Content -LiteralPath $checksums | Where-Object { $_ -match ('^[0-9a-f]{64} \*?' + [regex]::Escape($name) + '$') })
+          if ($entries.Count -ne 1 -or $entries[0].Split(' ')[0] -ne $env:ELECTRON_ARCHIVE_SHA256) {
+            throw 'Official Electron checksum does not match the reviewed Windows archive.'
+          }
+          if (-not (Test-Path -LiteralPath $archive)) { Invoke-WebRequest -Uri "$base/$name" -OutFile $archive }
+          $file = Get-Item -LiteralPath $archive -ErrorAction Stop
+          $sha256 = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($file.Length -ne [long]$env:ELECTRON_ARCHIVE_BYTES -or $sha256 -ne $env:ELECTRON_ARCHIVE_SHA256) {
+            throw 'Electron archive size or SHA256 differs from the reviewed input.'
+          }
+          $runtime = Join-Path $env:RUNNER_TEMP ('cleanup-electron-' + [guid]::NewGuid().ToString('N'))
+          Expand-Archive -LiteralPath $archive -DestinationPath $runtime
+          $electron = (Get-Item -LiteralPath (Join-Path $runtime 'electron.exe') -ErrorAction Stop).FullName
+          "CLEANUP_PROBE_ELECTRON=$electron" >> $env:GITHUB_ENV
+          @{ version = $env:ELECTRON_VERSION; url = "$base/$name"; bytes = $file.Length; sha256 = $sha256
+             nodeVersion = '24.18.1'; scope = 'Standalone runtime diagnostic; no workspace dependencies or application package' } |
+            ConvertTo-Json -Depth 4 | Set-Content -LiteralPath "$env:RUNNER_TEMP/windows-cleanup-evidence/RUNTIME-INPUT.json" -Encoding utf8
+
+      - name: Diagnose only isolated runtime cleanup cases
+        run: |
+          node scripts/mantur-cut-windows-cleanup-probe.mjs --electron "$env:CLEANUP_PROBE_ELECTRON" --output "$env:RUNNER_TEMP/windows-cleanup-evidence/probe"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Retain the small diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-cleanup-probe-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/windows-cleanup-evidence/
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Describe diagnostic scope
+        run: |
+          'Runtime cleanup observations only. DIAGNOSTIC_COMPLETE means all cases were recorded, not that every cleanup case passed.' >> $env:GITHUB_STEP_SUMMARY
+          'This workflow does not build an installer, compile media, launch the application or publish any files.' >> $env:GITHUB_STEP_SUMMARY
