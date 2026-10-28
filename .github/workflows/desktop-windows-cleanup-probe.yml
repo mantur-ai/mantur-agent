@@ -1,4 +1,4 @@
-name: Windows Electron cleanup diagnostic
+name: Windows browser cleanup diagnostic
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ on:
       - feat/desktop-windows-release-1-0-0-harness
     paths:
       - .github/workflows/desktop-windows-cleanup-probe.yml
-      - scripts/mantur-cut-windows-cleanup-probe.mjs
+      - scripts/mantur-cut-windows-browser-cleanup-probe.mjs
 
 permissions:
   contents: read
@@ -28,6 +28,9 @@ jobs:
       ELECTRON_VERSION: '43.4.0'
       ELECTRON_ARCHIVE_SHA256: ef0709cfa719739acce73de6f9b684304baf38c6454376638a70d34a7cecffe0
       ELECTRON_ARCHIVE_BYTES: '144408141'
+      CHROME_VERSION: '149.0.7790.0'
+      CHROME_ARCHIVE_SHA256: 8a112c0e768907ff382ff994dcde35cdbd0e1f5a3a475da93d3a83e3260e78c2
+      CHROME_ARCHIVE_BYTES: '118785025'
     steps:
       - uses: actions/checkout@v6
         with:
@@ -42,9 +45,14 @@ jobs:
           $source = Get-Content -LiteralPath 'apps/desktop/mantur-cut/source.win32-x64.json' -Raw | ConvertFrom-Json
           $desktop = Get-Content -LiteralPath 'apps/desktop/package.json' -Raw | ConvertFrom-Json
           $repository = Get-Content -LiteralPath 'package.json' -Raw | ConvertFrom-Json
+          $browser = $source.targets.'win32-x64'
           if ($source.electronVersion -ne $env:ELECTRON_VERSION -or $desktop.devDependencies.electron -ne $env:ELECTRON_VERSION -or
               $source.embeddedNodeVersion -ne '24.18.1' -or $repository.packageManager -ne 'pnpm@11.7.0') {
             throw 'Cleanup diagnostic runtime pins differ from the existing release inputs.'
+          }
+          if ($browser.chromeVersion -ne $env:CHROME_VERSION -or $browser.chromePlatform -ne 'win64' -or
+              $browser.chromeSha256 -ne $env:CHROME_ARCHIVE_SHA256) {
+            throw 'Browser cleanup diagnostic input differs from the existing Windows source pins.'
           }
           $nodeVersion = node -p process.versions.node
           if ($LASTEXITCODE -ne 0 -or $nodeVersion -ne '24.18.1') { throw 'The diagnostic requires native Node 24.18.1.' }
@@ -83,21 +91,56 @@ jobs:
              nodeVersion = '24.18.1'; scope = 'Standalone runtime diagnostic; no workspace dependencies or application package' } |
             ConvertTo-Json -Depth 4 | Set-Content -LiteralPath "$env:RUNNER_TEMP/windows-cleanup-evidence/RUNTIME-INPUT.json" -Encoding utf8
 
-      - name: Diagnose only isolated runtime cleanup cases
+      - name: Restore only the pinned Chrome archive
+        uses: actions/cache@v5
+        with:
+          path: ${{ runner.temp }}/windows-cleanup-browser-inputs
+          key: windows-cleanup-chrome-149.0.7790.0-win64-8a112c0e768907ff382ff994dcde35cdbd0e1f5a3a475da93d3a83e3260e78c2
+
+      - name: Verify and prepare the exact Chrome runtime
         run: |
-          node scripts/mantur-cut-windows-cleanup-probe.mjs --electron "$env:CLEANUP_PROBE_ELECTRON" --output "$env:RUNNER_TEMP/windows-cleanup-evidence/probe"
+          $inputs = Join-Path $env:RUNNER_TEMP 'windows-cleanup-browser-inputs'
+          New-Item -ItemType Directory -Path $inputs -Force | Out-Null
+          $url = 'https://storage.googleapis.com/chrome-for-testing-public/149.0.7790.0/win64/chrome-headless-shell-win64.zip'
+          $archive = Join-Path $inputs 'chrome-headless-shell-win64.zip'
+          if (-not (Test-Path -LiteralPath $archive)) { Invoke-WebRequest -Uri $url -OutFile $archive }
+          $file = Get-Item -LiteralPath $archive -ErrorAction Stop
+          $sha256 = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($file.Length -ne [long]$env:CHROME_ARCHIVE_BYTES -or $sha256 -ne $env:CHROME_ARCHIVE_SHA256) {
+            throw 'Chrome archive size or SHA256 differs from the reviewed Windows source input.'
+          }
+          $runtime = Join-Path $env:RUNNER_TEMP ('cleanup-chrome-' + [guid]::NewGuid().ToString('N'))
+          Expand-Archive -LiteralPath $archive -DestinationPath $runtime
+          $chrome = Get-Item -LiteralPath (Join-Path $runtime 'chrome-headless-shell-win64/chrome-headless-shell.exe') -ErrorAction Stop
+          "CLEANUP_PROBE_CHROME=$($chrome.FullName)" >> $env:GITHUB_ENV
+          @{ version = $env:CHROME_VERSION; url = $url; bytes = $file.Length; sha256 = $sha256
+             executable = @{ path = $chrome.FullName; bytes = $chrome.Length; fileVersion = $chrome.VersionInfo.FileVersion
+               sha256 = (Get-FileHash -LiteralPath $chrome.FullName -Algorithm SHA256).Hash.ToLowerInvariant() } } |
+            ConvertTo-Json -Depth 4 | Set-Content -LiteralPath "$env:RUNNER_TEMP/windows-cleanup-evidence/CHROME-INPUT.json" -Encoding utf8
+
+      - name: Diagnose only real browser profile cleanup cases
+        run: |
+          node scripts/mantur-cut-windows-browser-cleanup-probe.mjs --electron "$env:CLEANUP_PROBE_ELECTRON" --chrome "$env:CLEANUP_PROBE_CHROME" --output "$env:RUNNER_TEMP/windows-cleanup-evidence/browser-probe"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Retain the small diagnostic evidence
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: windows-cleanup-probe-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/windows-cleanup-evidence/
+          name: windows-browser-cleanup-probe-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/windows-cleanup-evidence/SHASUMS256.txt
+            ${{ runner.temp }}/windows-cleanup-evidence/RUNTIME-INPUT.json
+            ${{ runner.temp }}/windows-cleanup-evidence/CHROME-INPUT.json
+            ${{ runner.temp }}/windows-cleanup-evidence/browser-probe/RESULT.json
+            ${{ runner.temp }}/windows-cleanup-evidence/browser-probe/logs/*.ndjson
+            ${{ runner.temp }}/windows-cleanup-evidence/browser-probe/logs/*.stdout.txt
+            ${{ runner.temp }}/windows-cleanup-evidence/browser-probe/logs/*.stderr.txt
+            ${{ runner.temp }}/windows-cleanup-evidence/browser-probe/metadata/*.json
           if-no-files-found: error
           retention-days: 90
 
       - name: Describe diagnostic scope
         run: |
-          'Runtime cleanup observations only. DIAGNOSTIC_COMPLETE means all cases were recorded, not that every cleanup case passed.' >> $env:GITHUB_STEP_SUMMARY
+          'Four real browser profile cleanup observations only. DIAGNOSTIC_COMPLETE means all cases were recorded, not that every cleanup case passed.' >> $env:GITHUB_STEP_SUMMARY
           'This workflow does not build an installer, compile media, launch the application or publish any files.' >> $env:GITHUB_STEP_SUMMARY
