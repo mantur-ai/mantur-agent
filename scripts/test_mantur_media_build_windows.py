@@ -116,6 +116,42 @@ class WindowsMediaBuildTests(unittest.TestCase):
             self.assertEqual(build.env['PATH'], '/ucrt64/bin:/usr/bin')
             self.assertNotIn('RC', build.env)
 
+    def test_both_ffmpeg_builds_preserve_resources_with_file_preprocessing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            build = media.Build(Path(directory), 4)
+            for compositor, name in ((False, 'ffmpeg'), (True, 'ffmpegCompositor')):
+                with self.subTest(compositor=compositor):
+                    build.sources[name] = build.work / name
+                    with patch.object(build, 'autotools') as compile_library, patch.object(media.shutil, 'copy2'):
+                        build.ffmpeg(compositor=compositor)
+                    actual_name, flags, prefix = compile_library.call_args.args
+                    self.assertEqual(actual_name, name)
+                    self.assertEqual(prefix, build.work / 'compositor-prefix' if compositor else build.prefix)
+                    self.assertEqual([flag for flag in flags if flag.startswith('--windres=')],
+                                     ['--windres=windres --use-temp-file'])
+                    locked = build.lock['compositorConfigure' if compositor else 'ffmpegConfigure']
+                    self.assertEqual(flags[-len(locked):], locked)
+
+    def test_resource_probe_compiles_before_accepting_the_x64_object(self):
+        with tempfile.TemporaryDirectory() as directory:
+            build = media.Build(Path(directory), 4)
+            with patch.object(build, 'run', side_effect=['', 'file format pe-x86-64\n']) as run:
+                build.probe_resource_compiler()
+            source = build.evidence / 'windres-probe.rc'
+            output = build.work / 'windres-probe.o'
+            self.assertIn('#define MANTUR_RESOURCE_ID', source.read_text())
+            self.assertEqual([call.args for call in run.call_args_list], [
+                ('toolchain-windres-probe', ['windres', '--use-temp-file', '-i', source, '-o', output, '-O', 'coff']),
+                ('toolchain-windres-object', ['objdump', '-f', output]),
+            ])
+            with patch.object(build, 'run', side_effect=['', 'file format pe-i386\n']):
+                with self.assertRaisesRegex(ValueError, 'Windows x64 COFF'):
+                    build.probe_resource_compiler()
+            with patch.object(build, 'run', side_effect=RuntimeError('windres failed')) as run:
+                with self.assertRaisesRegex(RuntimeError, 'windres failed'):
+                    build.probe_resource_compiler()
+            self.assertEqual(run.call_count, 1)
+
     def test_package_excludes_upstream_dlls_and_preserves_static_cli_copies(self):
         with tempfile.TemporaryDirectory() as directory:
             build = media.Build(Path(directory), 1)

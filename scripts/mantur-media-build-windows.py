@@ -178,6 +178,7 @@ class Build:
             path = Path(executable).resolve()
             target = self.run('toolchain-target-' + name, [path, '-dumpmachine'])
             verify_compiler(path, target)
+        self.probe_resource_compiler()
         for source in self.lock['sources']:
             helpers.extract_archive(self.obtain(source), self.work)
             self.sources[source['name']] = self.work / source['directory']
@@ -190,6 +191,16 @@ class Build:
                             ('cmake', ['cmake', '--version']), ('make', ['make', '--version']),
                             ('nasm', ['nasm', '-v']), ('packages', ['pacman', '-Q'])]:
             self.run('toolchain-' + label, args)
+
+    def probe_resource_compiler(self):
+        """Compile a preprocessed Windows resource before building the pinned libraries."""
+        source = self.evidence / 'windres-probe.rc'
+        output = self.work / 'windres-probe.o'
+        source.write_text('#define MANTUR_RESOURCE_ID 1\nMANTUR_RESOURCE_ID RCDATA { 0 }\n')
+        self.run('toolchain-windres-probe', ['windres', '--use-temp-file', '-i', source, '-o', output, '-O', 'coff'])
+        header = self.run('toolchain-windres-object', ['objdump', '-f', output])
+        if 'file format pe-x86-64' not in header:
+            raise ValueError('Resource compiler did not produce a Windows x64 COFF object')
 
     def autotools(self, name, flags, destination=None):
         """Build a static dependency or the selected FFmpeg set into its private prefix."""
@@ -246,6 +257,7 @@ class Build:
         if not compositor:
             ldflags += ' -static'
         self.autotools(name, [f'--extra-cflags=-I{self.prefix}/include', f'--extra-ldflags={ldflags}',
+                            '--windres=windres --use-temp-file',
                             '--extra-libs=-Wl,-Bstatic -lstdc++ -lwinpthread -Wl,-Bdynamic', *flags], prefix)
         for filename in ('config.h', 'config_components.h', 'ffbuild/config.mak', 'ffbuild/config.log'):
             shutil.copy2(self.sources[name] / filename, self.evidence / (name + '-' + filename.replace('/', '-')))
