@@ -211,6 +211,10 @@ class Build:
     def dependencies(self):
         """Compile the reviewed codec set plus Windows' separately pinned compression libraries."""
         host = '--host=x86_64-w64-mingw32'
+        # Use file preprocessing instead of windres' native popen path.
+        self.autotools('freetype', [host, 'RC=windres --use-temp-file', '--disable-shared', '--enable-static',
+                                  '--with-zlib=no', '--with-bzip2=no', '--with-png=no',
+                                  '--with-harfbuzz=no', '--with-brotli=no'])
         self.cmake('zlib', ['-DZLIB_BUILD_SHARED=OFF', '-DZLIB_BUILD_STATIC=ON', '-DZLIB_BUILD_TESTING=OFF'])
         # zlib's Windows CMake target installs libzs.a, while zlib.pc and FFmpeg request -lz.
         shutil.copy2(self.prefix / 'lib/libzs.a', self.prefix / 'lib/libz.a')
@@ -225,8 +229,6 @@ class Build:
                              '--disable-examples', '--disable-tools', '--disable-unit-tests', '--disable-docs'])
         self.autotools('opus', [host, '--disable-shared', '--enable-static', '--disable-doc', '--disable-extra-programs'])
         self.autotools('lame', [host, '--disable-shared', '--enable-static', '--disable-frontend'])
-        self.autotools('freetype', [host, '--disable-shared', '--enable-static', '--with-zlib=no',
-                                  '--with-bzip2=no', '--with-png=no', '--with-harfbuzz=no', '--with-brotli=no'])
         self.cmake('harfbuzz', ['-DHB_BUILD_UTILS=OFF', '-DHB_BUILD_TESTS=OFF', '-DHB_BUILD_SUBSET=OFF',
                               '-DHB_HAVE_FREETYPE=ON', '-DHB_HAVE_GLIB=OFF', '-DHB_HAVE_ICU=OFF',
                               '-DHB_HAVE_CAIRO=OFF', '-DHB_HAVE_CORETEXT=OFF'])

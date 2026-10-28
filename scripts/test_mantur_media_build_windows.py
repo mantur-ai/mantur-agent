@@ -84,13 +84,37 @@ class WindowsMediaBuildTests(unittest.TestCase):
             archive.write_bytes(b'compiled pinned zlib static archive')
             build.sources['bzip2'] = build.work
             # Stop at the next dependency; only zlib's installed-archive adaptation runs.
-            with patch.object(build, 'cmake'), patch.object(build, 'run', side_effect=InterruptedError):
+            with patch.object(build, 'autotools'), patch.object(build, 'cmake'), \
+                    patch.object(build, 'run', side_effect=InterruptedError):
                 with self.assertRaises(InterruptedError):
                     build.dependencies()
                 self.assertEqual((libraries / 'libz.a').read_bytes(), archive.read_bytes())
                 archive.unlink()
                 with self.assertRaises(FileNotFoundError):
                     build.dependencies()
+
+    def test_freetype_uses_file_preprocessing_before_the_codec_builds(self):
+        with tempfile.TemporaryDirectory() as directory:
+            build = media.Build(Path(directory), 4)
+            source = build.work / 'freetype'
+            build.sources['freetype'] = source
+            with patch.object(build, 'run') as run, \
+                    patch.object(build, 'cmake', side_effect=InterruptedError) as cmake:
+                with self.assertRaises(InterruptedError):
+                    build.dependencies()
+            commands = [call.args for call in run.call_args_list]
+            self.assertEqual([command[0] for command in commands],
+                             ['freetype-configure', 'freetype-make', 'freetype-install'])
+            self.assertEqual(commands[0], ('freetype-configure', ['bash', './configure',
+                             f'--prefix={build.prefix}', '--host=x86_64-w64-mingw32',
+                             'RC=windres --use-temp-file', '--disable-shared', '--enable-static',
+                             '--with-zlib=no', '--with-bzip2=no', '--with-png=no',
+                             '--with-harfbuzz=no', '--with-brotli=no'], source))
+            self.assertEqual(commands[1], ('freetype-make', ['make', '-j4'], source))
+            self.assertEqual(commands[2], ('freetype-install', ['make', 'install'], source))
+            self.assertEqual(cmake.call_args.args[0], 'zlib')
+            self.assertEqual(build.env['PATH'], '/ucrt64/bin:/usr/bin')
+            self.assertNotIn('RC', build.env)
 
     def test_package_excludes_upstream_dlls_and_preserves_static_cli_copies(self):
         with tempfile.TemporaryDirectory() as directory:
