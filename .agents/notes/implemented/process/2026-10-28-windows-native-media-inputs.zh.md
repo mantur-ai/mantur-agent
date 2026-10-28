@@ -14,6 +14,8 @@ Status: implemented
 
 该工作流只有仓库只读权限，不接触发布凭据。它保留失败证据，不改安装器、tag 或更新渠道。独立原生任务读取精确已发布 Windows 基线的更新配置，不安装或启动它。[源码交付策略](2026-10-26-desktop-release-sources.zh.md)继续管理产品源码归档；[双平台桌面签名](2026-09-15-paired-desktop-signing.zh.md)继续管理对应的独立工作流。
 
+Windows 打包选择独立源码清单，在原生 Windows x64 上验证媒体归档、对应源码和 PE 导入。npm 默认查找路径保存选定文件的已验证副本，不依赖用户创建符号链接的权限。macOS 保留原有相对别名和 Mach-O 验证。Windows 包内媒体探测执行已打包适配器的短 H.264/AAC 导出，以及 Remotion 可执行文件的元数据操作；这些观测不证明交互式剪辑或桌面自动升级。
+
 ## Alternatives considered
 
 **复用 Mac 归档。** Mach-O 二进制不能提供 Windows 运行证据或可执行输入。

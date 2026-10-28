@@ -418,4 +418,181 @@ runpy.run_path(sys.argv.pop(1), run_name='__main__')
         with self.assertRaisesRegex(ValueError, 'required'): publisher.prepare(self.root, '0.1.19', 'https://example.com')
 
 
+class WindowsOnlyReleaseTests(unittest.TestCase):
+    def make_release(self, version='1.0.0'):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        directory = Path(temp.name)
+        installer = directory / 'Mantur-Agent-Windows-x64.exe'
+        installer.write_bytes(b'windows installer')
+        (directory / (installer.name + '.blockmap')).write_bytes(b'blockmap')
+        sha512 = base64.b64encode(hashlib.sha512(installer.read_bytes()).digest()).decode()
+        metadata = 'rc.yml' if '-rc.' in version else 'latest.yml'
+        (directory / metadata).write_text(yaml.safe_dump({
+            'version': version, 'path': installer.name, 'sha512': sha512,
+            'files': [{'url': installer.name, 'size': installer.stat().st_size, 'sha512': sha512}],
+        }))
+        (directory / 'DESKTOP-SOURCES-Windows.json').write_text('{"version": "' + version + '"}\n')
+        for name in (
+            'DESKTOP-SOURCE-BUILD-Windows.txt', 'Mantur-Agent-Windows-source-' + version + '.tar.gz',
+            'Mantur-Cut-Windows-patched-source.tar.gz', 'Mantur-Media-Windows-corresponding-source.tar.gz',
+            'Mantur-Media-Windows-x64.tar.gz',
+            'OpenChatCut-Windows-upstream-source.tar.gz', 'whisper-cpp-Windows-source.tar.gz',
+        ):
+            (directory / name).write_bytes(b'source fixture')
+        self.checksums(directory)
+        return directory
+
+    def checksums(self, directory):
+        manifest = directory / 'SHA256SUMS-Windows.txt'
+        manifest.write_text(''.join(hashlib.sha256(path.read_bytes()).hexdigest() + '  ' + path.name + '\n'
+                                   for path in sorted(directory.iterdir()) if path != manifest))
+
+    def environment(self):
+        return {'TOS_PUBLIC_URL': 'https://example.com/agent', 'TOS_BUCKET': 'bucket',
+                'TOS_PREFIX': 'agent', 'TOS_ENDPOINT': 'https://example.com', 'TOS_REGION': 'region',
+                'TOS_ACCESS_KEY': 'test', 'TOS_SECRET_KEY': 'test'}
+
+    def missing(self):
+        return ClientError({'ResponseMetadata': {'HTTPStatusCode': 404}}, 'GetObject')
+
+    def assert_no_writes(self, client):
+        client.upload_file.assert_not_called()
+        client.copy_object.assert_not_called()
+        client.put_object.assert_not_called()
+
+    def test_publishes_only_windows_objects_media_and_channel(self):
+        for version, channel, metadata in (('1.0.0', 'stable', 'latest.yml'), ('1.0.0-rc.1', 'rc', 'rc.yml')):
+            with self.subTest(version=version):
+                directory = self.make_release(version)
+                files, channels = publisher.prepare(directory, version, 'https://example.com/agent', windows_only=True)
+                self.assertEqual(set(channels), {metadata})
+                self.assertEqual(set(files), {path.name for path in directory.iterdir()})
+                info = yaml.safe_load(channels[metadata])
+                self.assertEqual(info['path'], 'https://example.com/agent/releases/' + version + '/Mantur-Agent-Windows-x64.exe')
+                self.assertEqual(info['files'][0]['url'], info['path'])
+                client = MagicMock()
+                client.get_object.side_effect = self.missing()
+                client.head_object.side_effect = self.missing()
+                def public_response(url, **kwargs):
+                    target = url.full_url if hasattr(url, 'full_url') else url
+                    response = MagicMock()
+                    response.__enter__.return_value = response
+                    response.status = 206
+                    if target.endswith('/' + channel + '/' + metadata):
+                        response.read.return_value = client.put_object.call_args.kwargs['Body']
+                    else:
+                        artifact = directory / target.rsplit('/', 1)[1]
+                        response.headers = {'Content-Range': 'bytes 0-0/' + str(artifact.stat().st_size),
+                                            'x-tos-meta-sha256': hashlib.sha256(artifact.read_bytes()).hexdigest()}
+                    return response
+                with patch.dict(os.environ, self.environment(), clear=True), patch.object(publisher.boto3, 'client', return_value=client), patch.object(publisher, 'urlopen', side_effect=public_response) as request:
+                    publisher.publish(directory, version, check_only=True, windows_only=True)
+                    self.assert_no_writes(client)
+                    request.assert_not_called()
+                    publisher.publish(directory, version, windows_only=True)
+                self.assertEqual(client.upload_file.call_count, len(files))
+                media_key = 'agent/releases/' + version + '/Mantur-Media-Windows-x64.tar.gz'
+                self.assertIn(media_key, [call.args[2] for call in client.upload_file.call_args_list])
+                self.assertEqual(client.copy_object.call_count, 1)
+                self.assertEqual(client.copy_object.call_args.kwargs['Key'], 'agent/' + channel + '/Mantur-Agent-Windows-x64.exe')
+                self.assertEqual([call.kwargs['Key'] for call in client.put_object.call_args_list], ['agent/' + channel + '/' + metadata])
+                self.assertNotIn('macOS', str(client.mock_calls))
+                self.assertNotIn('-mac.yml', str(client.mock_calls))
+
+    def test_requires_windows_installer_blockmap_feed_source_index_and_manifest(self):
+        for name in ('Mantur-Agent-Windows-x64.exe', 'Mantur-Agent-Windows-x64.exe.blockmap', 'latest.yml',
+                     'DESKTOP-SOURCES-Windows.json', 'SHA256SUMS-Windows.txt'):
+            with self.subTest(name=name):
+                directory = self.make_release()
+                (directory / name).unlink()
+                if name != 'SHA256SUMS-Windows.txt':
+                    self.checksums(directory)
+                with self.assertRaisesRegex(ValueError, 'Windows (release artifacts|source index)'):
+                    publisher.prepare(directory, '1.0.0', 'https://example.com', windows_only=True)
+
+    def test_rejects_shared_mac_or_unrelated_files_before_remote_access(self):
+        for name in ('SHA256SUMS', 'DESKTOP-SOURCES.json', 'latest-mac.yml', 'Mantur-Agent-macOS-arm64.dmg',
+                     'Mantur-Agent-source-1.0.0.tar.gz', 'Mantur-Media-corresponding-source.tar.gz',
+                     'Mantur-Media-darwin-arm64.tar.gz', 'Mantur-Media-Windows-unknown.tar.gz', 'unrelated.txt'):
+            for listed in (False, True):
+                with self.subTest(name=name, listed=listed):
+                    directory = self.make_release()
+                    (directory / name).write_bytes(b'unexpected file')
+                    if listed:
+                        self.checksums(directory)
+                    with patch.dict(os.environ, self.environment(), clear=True), patch.object(publisher.boto3, 'client') as client:
+                        with self.assertRaisesRegex(ValueError, '(Unexpected|Unlisted) Windows release file'):
+                            publisher.publish(directory, '1.0.0', windows_only=True)
+                    client.assert_not_called()
+
+    def test_rejects_duplicate_unsafe_and_symlinked_manifest_entries(self):
+        for failure in ('duplicate', 'unsafe', 'symlink'):
+            with self.subTest(failure=failure):
+                directory = self.make_release()
+                manifest = directory / 'SHA256SUMS-Windows.txt'
+                if failure == 'duplicate':
+                    manifest.write_text(manifest.read_text() + manifest.read_text().splitlines()[0] + '\n')
+                elif failure == 'unsafe':
+                    manifest.write_text('0' * 64 + '  ../outside\n')
+                else:
+                    actual = directory / 'saved-manifest.txt'
+                    manifest.rename(actual)
+                    manifest.symlink_to(actual.name)
+                with self.assertRaisesRegex(ValueError, {'duplicate': 'Duplicate', 'unsafe': 'Unsafe', 'symlink': 'symlink'}[failure]):
+                    publisher.prepare(directory, '1.0.0', 'https://example.com', windows_only=True)
+
+    def test_rejects_corrupted_installer_or_inconsistent_feed(self):
+        for failure in ('sha256', 'sha512', 'size', 'legacy-sha512', 'path', 'files', 'version', 'channel'):
+            with self.subTest(failure=failure):
+                directory = self.make_release()
+                metadata = directory / 'latest.yml'
+                if failure == 'sha256':
+                    (directory / 'Mantur-Agent-Windows-x64.exe').write_bytes(b'corrupt')
+                else:
+                    info = yaml.safe_load(metadata.read_text())
+                    if failure == 'sha512': info['files'][0]['sha512'] = 'incorrect'
+                    elif failure == 'size': info['files'][0]['size'] += 1
+                    elif failure == 'legacy-sha512': info['sha512'] = 'incorrect'
+                    elif failure == 'path': info['path'] = 'DESKTOP-SOURCES-Windows.json'
+                    elif failure == 'files': info['files'][0]['url'] = 'DESKTOP-SOURCES-Windows.json'
+                    elif failure == 'version': info['version'] = '1.0.1'
+                    elif failure == 'channel': metadata.rename(directory / 'rc.yml')
+                    if failure != 'channel': metadata.write_text(yaml.safe_dump(info))
+                    self.checksums(directory)
+                with self.assertRaises(ValueError):
+                    publisher.prepare(directory, '1.0.0', 'https://example.com', windows_only=True)
+
+    def test_immutable_windows_conflict_prevents_every_mutation(self):
+        directory = self.make_release()
+        client = MagicMock()
+        client.get_object.side_effect = self.missing()
+        def head(**kwargs):
+            if kwargs['Key'] == 'agent/releases/1.0.0/Mantur-Agent-Windows-x64.exe':
+                return {'Metadata': {'sha256': 'different'}, 'ContentLength': 17}
+            raise self.missing()
+        client.head_object.side_effect = head
+        with patch.dict(os.environ, self.environment(), clear=True), patch.object(publisher.boto3, 'client', return_value=client), patch.object(publisher, 'urlopen') as request:
+            with self.assertRaisesRegex(ValueError, 'replace existing release'):
+                publisher.publish(directory, '1.0.0', windows_only=True)
+        self.assert_no_writes(client)
+        request.assert_not_called()
+
+    def test_newer_windows_feed_or_installer_prevents_every_mutation(self):
+        for target in ('feed', 'installer'):
+            with self.subTest(target=target):
+                directory = self.make_release()
+                client = MagicMock()
+                if target == 'feed':
+                    client.get_object.return_value['Body'].__enter__.return_value.read.return_value = b'version: 1.0.1\n'
+                else:
+                    client.get_object.side_effect = self.missing()
+                    client.head_object.return_value = {'Metadata': {'version': '1.0.1'}}
+                with patch.dict(os.environ, self.environment(), clear=True), patch.object(publisher.boto3, 'client', return_value=client), patch.object(publisher, 'urlopen') as request:
+                    with self.assertRaisesRegex(ValueError, 'downgrade'):
+                        publisher.publish(directory, '1.0.0', windows_only=True)
+                self.assert_no_writes(client)
+                request.assert_not_called()
+
+
 if __name__ == '__main__': unittest.main()

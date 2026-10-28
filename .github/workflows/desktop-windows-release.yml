@@ -1,0 +1,303 @@
+name: Windows desktop unsigned candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      media_run_id:
+        description: Approved native Windows media run ID
+        required: true
+        type: string
+      media_run_attempt:
+        description: Approved native Windows media run attempt
+        required: true
+        type: string
+      media_sha:
+        description: Full commit SHA of the approved native Windows media run
+        required: true
+        type: string
+      publish:
+        description: Must remain false; a separate promotion consumes this exact candidate
+        required: true
+        type: boolean
+        default: false
+  push:
+    branches:
+      - feat/desktop-windows-release-1-0-0-harness
+    paths:
+      - apps/desktop/mantur-cut/source.win32-x64.json
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: windows-desktop-candidate-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    name: Unsigned Windows 1.0.0 / x64
+    runs-on: windows-2025
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      DSH_TELEMETRY_DISABLED: '1'
+      MANTUR_MEDIA_INPUT_DIR: ${{ runner.temp }}/windows-media-inputs
+      WINDOWS_RELEASE_EVIDENCE: ${{ runner.temp }}/windows-release-evidence
+      MAC_BASELINE: cd7d91f370a03d60e713c213b5fb9c70b8f78ea0
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate approved media run and committed source pins
+        id: media
+        uses: actions/github-script@v8
+        env:
+          MEDIA_RUN_ID: ${{ inputs.media_run_id }}
+          MEDIA_RUN_ATTEMPT: ${{ inputs.media_run_attempt }}
+          MEDIA_SHA: ${{ inputs.media_sha }}
+          PUBLISH: ${{ inputs.publish || false }}
+        with:
+          script: |
+            const fs = require('node:fs');
+            const path = require('node:path');
+            const {execFileSync} = require('node:child_process');
+            const env = process.env;
+            const readCommitted = name => {
+              const bytes = fs.readFileSync(name);
+              if (!bytes.equals(execFileSync('git', ['show', `HEAD:${name}`]))) throw new Error(`Uncommitted release input: ${name}`);
+              return JSON.parse(bytes);
+            };
+            if (env.PUBLISH !== 'false') throw new Error('This workflow only accepts publish=false');
+            if (readCommitted('apps/desktop/package.json').version !== '1.0.0') throw new Error('Windows release version must be 1.0.0');
+            const source = readCommitted('apps/desktop/mantur-cut/source.win32-x64.json');
+            if (source.formatVersion !== 3 || source.nativeMedia.target !== 'win32-x64') throw new Error('Expected the Windows native source manifest');
+            const pins = readCommitted('apps/desktop/mantur-cut/windows-media-ci.json');
+            if (pins.formatVersion !== 1 || !/^[1-9][0-9]*$/.test(pins.runId) || !/^[1-9][0-9]*$/.test(pins.runAttempt) || !/^[0-9a-f]{40}$/.test(pins.headSha)) throw new Error('Invalid committed media CI pins');
+            if (context.eventName === 'workflow_dispatch' &&
+                (env.MEDIA_RUN_ID !== String(pins.runId) || env.MEDIA_RUN_ATTEMPT !== String(pins.runAttempt) || env.MEDIA_SHA !== pins.headSha)) throw new Error('Dispatch inputs differ from the approved media CI pins');
+            execFileSync('git', ['merge-base', '--is-ancestor', env.MAC_BASELINE, 'HEAD']);
+            execFileSync('git', ['merge-base', '--is-ancestor', pins.headSha, 'HEAD']);
+            const request = {...context.repo, run_id: Number(pins.runId), attempt_number: Number(pins.runAttempt)};
+            const {data: run} = await github.request('GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}', request);
+            const repository = `${context.repo.owner}/${context.repo.repo}`;
+            if (run.status !== 'completed' || run.conclusion !== 'success' || run.head_sha !== pins.headSha ||
+                String(run.id) !== String(pins.runId) || String(run.run_attempt) !== String(pins.runAttempt) ||
+                run.repository.full_name !== repository || run.head_repository.full_name !== repository ||
+                run.path.split('@')[0] !== '.github/workflows/desktop-windows-media.yml') throw new Error('Native media run identity or successful conclusion mismatch');
+            const artifacts = await github.paginate('GET /repos/{owner}/{repo}/actions/runs/{run_id}/artifacts', {...context.repo, run_id: Number(pins.runId), per_page: 100});
+            const name = `windows-media-candidate-${pins.runId}-${pins.runAttempt}`;
+            const matches = artifacts.filter(artifact => artifact.name === name);
+            if (matches.length !== 1 || matches[0].expired || matches[0].workflow_run?.head_sha !== pins.headSha ||
+                !/^sha256:[0-9a-f]{64}$/.test(matches[0].digest)) throw new Error('Expected one unexpired media artifact from the approved commit');
+            fs.mkdirSync(env.WINDOWS_RELEASE_EVIDENCE, {recursive: true});
+            fs.writeFileSync(path.join(env.WINDOWS_RELEASE_EVIDENCE, 'MEDIA-RUN.json'), JSON.stringify({pins, run, artifact: matches[0]}, null, 2) + '\n');
+            core.setOutput('artifact_id', String(matches[0].id));
+            core.setOutput('run_id', String(pins.runId));
+            core.setOutput('media_sha', pins.headSha);
+
+      - name: Download the exact approved media artifact
+        uses: actions/download-artifact@v8
+        with:
+          artifact-ids: ${{ steps.media.outputs.artifact_id }}
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.media.outputs.run_id }}
+          path: ${{ env.MANTUR_MEDIA_INPUT_DIR }}
+          digest-mismatch: error
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install source metadata tooling
+        run: |
+          python -m pip install --disable-pip-version-check --no-cache-dir PyYAML==6.0.3
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-Command python3 -ErrorAction Stop
+          python3 --version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Verify local media bytes and recipe commit before building
+        env:
+          APPROVED_MEDIA_SHA: ${{ steps.media.outputs.media_sha }}
+        run: |
+          @'
+          import hashlib, importlib.util, json, os
+          from pathlib import Path
+          root = Path.cwd()
+          spec = importlib.util.spec_from_file_location('sources', root / 'scripts/desktop-windows-release-sources.py')
+          sources = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(sources)
+          source = json.loads((root / sources.SOURCE_PATH).read_text(encoding='utf-8'))
+          media = sources.media_inputs.media_config(root, source)
+          inputs = Path(os.environ['MANTUR_MEDIA_INPUT_DIR'])
+          names = {'candidate': 'Mantur-Media-Windows-x64.tar.gz', 'correspondingSource': sources.MEDIA_ARCHIVE}
+          if {path.name for path in inputs.iterdir()} != set(names.values()):
+              raise ValueError('Media artifact must contain only the two approved Windows archives')
+          for field, name in names.items():
+              record = media[field]
+              if record['url'] != 'https://mantur-pro.tos-accelerate.volces.com/mantur-agent/releases/1.0.0/' + name:
+                  raise ValueError('Windows media URL must use its final immutable versioned object')
+              sources.media_inputs.verify_archive_file(inputs / name, record)
+          verified = sources.verify_media(root, source, inputs / sources.MEDIA_ARCHIVE)
+          if verified['recipeCommit'] != os.environ['APPROVED_MEDIA_SHA']:
+              raise ValueError('Media source recipe commit differs from its approved CI run')
+          evidence = {'candidate': media['candidate'], 'correspondingSource': verified,
+                      'sourceConfigSha256': hashlib.sha256((root / sources.SOURCE_PATH).read_bytes()).hexdigest()}
+          (Path(os.environ['WINDOWS_RELEASE_EVIDENCE']) / 'MEDIA-INPUTS.json').write_text(json.dumps(evidence, indent=2) + '\n', encoding='utf-8')
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - uses: pnpm/action-setup@v4
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install Windows PE inspection tool
+        id: msys2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: mingw-w64-ucrt-x86_64-binutils
+
+      - name: Bind the native objdump executable
+        env:
+          MSYS2_LOCATION: ${{ steps.msys2.outputs.msys2-location }}
+        run: |
+          $tool = (Get-Item -LiteralPath (Join-Path $env:MSYS2_LOCATION 'ucrt64/bin/objdump.exe') -ErrorAction Stop).FullName
+          "MANTUR_WINDOWS_OBJDUMP=$tool" >> $env:GITHUB_ENV
+          & $tool --version | Set-Content -LiteralPath "$env:WINDOWS_RELEASE_EVIDENCE/objdump-version.txt"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Install immutable dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Mantur client and desktop carrier
+        run: pnpm run build:mantur
+
+      - name: Verify Windows sandbox startup without a parent console
+        run: pnpm exec vitest run packages/sandbox/sandbox-windows-acl/tests/runner.spec.ts packages/sandbox/sandbox-windows-acl/tests/console.spec.ts
+
+      - name: Restore pinned Windows Cut source cache
+        uses: actions/cache@v5
+        with:
+          path: .cache/mantur-cut
+          key: mantur-cut-windows-${{ runner.arch }}-${{ hashFiles('apps/desktop/mantur-cut/source.win32-x64.json', 'packages/client/ui-mantur-editing/adapters/mantur-cut.patch', 'packages/client/ui-mantur-editing/adapters/mantur-cut-packaged.patch', 'packages/client/ui-mantur-editing/adapters/mantur-cut-shutdown.patch') }}
+
+      - name: Build unsigned Windows NSIS installer
+        run: |
+          pnpm run desktop:dist:win:x64 2>&1 | Tee-Object -FilePath "$env:WINDOWS_RELEASE_EVIDENCE/package.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Verify exact unsigned Authenticode identities
+        run: |
+          $identities = foreach ($path in 'apps/desktop/dist/Mantur-Agent-Windows-x64.exe', 'apps/desktop/dist/win-unpacked/ManTur Agent.exe') {
+            $file = Get-Item -LiteralPath $path -ErrorAction Stop
+            $signature = Get-AuthenticodeSignature -LiteralPath $file.FullName -ErrorAction Stop
+            if ($signature.Status -ne 'NotSigned') { throw "Expected NotSigned for ${path}, got $($signature.Status)" }
+            @{ path = $path; bytes = $file.Length; sha256 = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant(); authenticodeStatus = [string]$signature.Status }
+          }
+          $identities | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath "$env:WINDOWS_RELEASE_EVIDENCE/UNSIGNED-IDENTITIES.json" -Encoding utf8
+
+      - name: Smoke packaged dependency closure
+        run: |
+          pnpm run desktop:smoke 2>&1 | Tee-Object -FilePath "$env:WINDOWS_RELEASE_EVIDENCE/package-closure.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Smoke actual Windows media export
+        run: node scripts/mantur-cut-windows-smoke.mjs --app apps/desktop/dist/win-unpacked --output "$env:WINDOWS_RELEASE_EVIDENCE/media"
+
+      - name: Smoke installed unsigned desktop startup and normal exit
+        run: ./apps/desktop/scripts/smoke-installed-windows.ps1 -Installer "$env:GITHUB_WORKSPACE/apps/desktop/dist/Mantur-Agent-Windows-x64.exe" -OutputDirectory "$env:WINDOWS_RELEASE_EVIDENCE/installed" -ExpectedVersion 1.0.0
+
+      - name: Assemble Windows candidate and corresponding sources
+        run: |
+          $release = Join-Path $env:RUNNER_TEMP 'windows-candidate/release'
+          New-Item -ItemType Directory -Path $release -ErrorAction Stop | Out-Null
+          foreach ($name in 'Mantur-Agent-Windows-x64.exe', 'Mantur-Agent-Windows-x64.exe.blockmap', 'latest.yml') {
+            Copy-Item -LiteralPath "apps/desktop/dist/$name" -Destination (Join-Path $release $name) -ErrorAction Stop
+          }
+          python scripts/desktop-windows-release-sources.py --output $release --baseline $env:MAC_BASELINE --run-id $env:GITHUB_RUN_ID --media-source-archive "$env:MANTUR_MEDIA_INPUT_DIR/Mantur-Media-Windows-corresponding-source.tar.gz" --smoke-report "$env:WINDOWS_RELEASE_EVIDENCE/installed/RESULT.json"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item -LiteralPath "$env:MANTUR_MEDIA_INPUT_DIR/Mantur-Media-Windows-x64.tar.gz" -Destination $release -ErrorAction Stop
+          @'
+          import importlib.util, json, os, shutil
+          from pathlib import Path
+          root = Path.cwd()
+          candidate = Path(os.environ['RUNNER_TEMP']) / 'windows-candidate'
+          release = candidate / 'release'
+          spec = importlib.util.spec_from_file_location('sources', root / 'scripts/desktop-windows-release-sources.py')
+          sources = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(sources)
+          index = json.loads((release / 'DESKTOP-SOURCES-Windows.json').read_text(encoding='utf-8'))
+          sources.media_inputs.verify_archive_file(release / 'Mantur-Media-Windows-x64.tar.gz', index['cutSource']['nativeMedia']['candidate'])
+          expected = {'Mantur-Agent-Windows-x64.exe', 'Mantur-Agent-Windows-x64.exe.blockmap', 'latest.yml',
+                      'Mantur-Agent-Windows-source-1.0.0.tar.gz', 'Mantur-Media-Windows-x64.tar.gz',
+                      'Mantur-Media-Windows-corresponding-source.tar.gz', 'DESKTOP-SOURCES-Windows.json', 'DESKTOP-SOURCE-BUILD-Windows.txt'}
+          if {path.name for path in release.iterdir()} != expected:
+              raise ValueError('Unexpected or missing Windows candidate files')
+          records = [sources.file_record(path) for path in sorted(release.iterdir())]
+          (release / 'SHA256SUMS-Windows.txt').write_text(''.join(row['sha256'] + '  ' + row['name'] + '\n' for row in records), encoding='utf-8')
+          records.append(sources.file_record(release / 'SHA256SUMS-Windows.txt'))
+          evidence = Path(os.environ['WINDOWS_RELEASE_EVIDENCE'])
+          verification = []
+          for name in ['MEDIA-RUN.json', 'MEDIA-INPUTS.json', 'UNSIGNED-IDENTITIES.json', 'installed/RESULT.json', 'media/RESULT.json']:
+              path = evidence / name
+              destination = candidate / 'evidence' / name
+              destination.parent.mkdir(parents=True, exist_ok=True)
+              shutil.copyfile(path, destination)
+              verification.append({**sources.file_record(destination), 'name': name})
+          record = {'formatVersion': 1, 'publish': False, 'desktopVersion': '1.0.0', 'platform': 'win32-x64',
+                    'signing': index['signing'], 'harnessCommit': index['harnessCommit'], 'harnessTree': index['harnessTree'],
+                    'runId': os.environ['GITHUB_RUN_ID'], 'runAttempt': os.environ['GITHUB_RUN_ATTEMPT'],
+                    'mediaCi': json.loads((root / 'apps/desktop/mantur-cut/windows-media-ci.json').read_text(encoding='utf-8')),
+                    'releaseFiles': records, 'verificationFiles': verification,
+                    'promotion': 'Use these exact bytes; do not rebuild or modify the published Mac tag'}
+          content = json.dumps(record, indent=2) + '\n'
+          (evidence / 'CANDIDATE.json').write_text(content, encoding='utf-8')
+          (candidate / 'evidence/CANDIDATE.json').write_text(content, encoding='utf-8')
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Retain exact desktop debugging symbols
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-desktop-symbols-${{ github.run_id }}-${{ github.run_attempt }}
+          path: apps/desktop/dist/symbols/
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Retain candidate evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-desktop-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.WINDOWS_RELEASE_EVIDENCE }}/
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Retain exact candidate for independent promotion
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-desktop-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/windows-candidate/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 90
+
+      - name: Describe completed candidate scope
+        run: |
+          'Windows x64 1.0.0 unsigned candidate; publish=false. No release or update feed was written.' >> $env:GITHUB_STEP_SUMMARY
+          'Native package, media, installation, real main/Host startup and normal exit checks passed; this is not human About or an actual old-version upgrade result.' >> $env:GITHUB_STEP_SUMMARY
+          'Promotion must consume this exact run and attempt artifact after independent approval.' >> $env:GITHUB_STEP_SUMMARY

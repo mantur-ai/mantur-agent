@@ -57,8 +57,8 @@ def media_config(root, source=None):
     """Validate the media source identity before downloading or using its archives."""
     if source is None:
         source = json.loads((root / 'apps/desktop/mantur-cut/source.json').read_text())
-    if source.get('formatVersion') != 3 or source.get('nativeMedia', {}).get('target') != 'darwin-arm64':
-        raise ValueError('Media inputs require a version 3 darwin-arm64 source manifest')
+    if source.get('formatVersion') != 3 or source.get('nativeMedia', {}).get('target') not in ('darwin-arm64', 'win32-x64'):
+        raise ValueError('Media inputs require a version 3 supported native source manifest')
     media = source['nativeMedia']
     for name in ('inventory', 'sourceLock'):
         pinned_file(root, media[name])
@@ -235,5 +235,13 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--prepare-candidate', action='store_true', required=True)
     parser.add_argument('--cache-dir', type=Path, required=True)
+    parser.add_argument('--source-config', type=Path, help='Repository-owned target source manifest; defaults to the Mac manifest')
     arguments = parser.parse_args()
-    print(prepare_candidate(Path(__file__).resolve().parent.parent, arguments.cache_dir.resolve()))
+    root = Path(__file__).resolve().parent.parent
+    source = None
+    if arguments.source_config is not None:
+        path = arguments.source_config.resolve()
+        if not path.is_relative_to(root) or arguments.source_config.is_symlink():
+            raise ValueError('Media source manifest must stay inside the repository')
+        source = json.loads(path.read_text())
+    print(prepare_candidate(root, arguments.cache_dir.resolve(), source))

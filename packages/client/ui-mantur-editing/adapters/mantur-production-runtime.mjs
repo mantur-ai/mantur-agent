@@ -56,7 +56,8 @@ startup = (async () => {
     HOME: home, USERPROFILE: home, TMPDIR: temp, TEMP: temp, TMP: temp,
     CC_REMOTION_BUNDLE: renderBundle, CC_REMOTION_BINARIES_DIR: compositor,
     CC_BROWSER_EXECUTABLE: resources.browserExecutable,
-    OPENCHATCUT_FFMPEG: join(nativeMedia, 'bin/ffmpeg'), OPENCHATCUT_FFPROBE: join(nativeMedia, 'bin/ffprobe'),
+    OPENCHATCUT_FFMPEG: join(nativeMedia, relative(resources.nativeMedia, resources.ffmpeg)),
+    OPENCHATCUT_FFPROBE: join(nativeMedia, relative(resources.nativeMedia, resources.ffprobe)),
     OPENCHATCUT_WHISPER_CLI: resources.whisperCli,
   })
   const { startEmbeddedServer } = await import(pathToFileURL(resources.server).href)

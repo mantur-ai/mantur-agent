@@ -179,6 +179,13 @@ class MediaInputTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'HTTPS URL'):
             media.media_config(self.root, self.source)
 
+    def test_windows_manifest_requires_the_same_complete_source_pins(self):
+        self.source['nativeMedia']['target'] = 'win32-x64'
+        self.assertEqual(media.media_config(self.root, self.source)['target'], 'win32-x64')
+        self.source['nativeMedia']['target'] = 'linux-x64'
+        with self.assertRaisesRegex(ValueError, 'supported native'):
+            media.media_config(self.root, self.source)
+
 
 if __name__ == '__main__':
     unittest.main()

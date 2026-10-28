@@ -38,10 +38,11 @@ export function resolvePackagedResources(root, platform = process.platform, arch
     return target
   }
   for (const name of names) paths[name] = resolveResource(name, manifest.paths?.[name], directories.has(name))
-  for (const [name, child] of [['ffmpeg', 'bin/ffmpeg'], ['ffprobe', 'bin/ffprobe'], ['compositor', 'compositor']]) {
+  const suffix = platform === 'win32' ? '.exe' : ''
+  for (const [name, child] of [['ffmpeg', `bin/ffmpeg${suffix}`], ['ffprobe', `bin/ffprobe${suffix}`], ['compositor', 'compositor']]) {
     if (paths[name] !== join(paths.nativeMedia, child)) throw new Error(`Packaged ${name} must belong to nativeMedia`)
   }
-  resolveResource('nativeMedia/lib', `${manifest.paths.nativeMedia}/lib`, true)
+  if (platform === 'darwin') resolveResource('nativeMedia/lib', `${manifest.paths.nativeMedia}/lib`, true)
   if (paths.whisperServer !== join(dirname(paths.whisperCli), `whisper-server${platform === 'win32' ? '.exe' : ''}`)) {
     throw new Error('Packaged whisper-server must be the declared sibling of whisper-cli')
   }

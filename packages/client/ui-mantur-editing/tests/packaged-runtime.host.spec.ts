@@ -43,10 +43,10 @@ async function fixture(platform = process.platform, arch = process.arch) {
   const root = await temporary()
   const suffix = platform === 'win32' ? '.exe' : ''
   const paths = { server: 'server/embedded-server.mjs', web: 'dist', remotionBundle: 'remotion-bundle',
-    browserExecutable: 'bin/browser', ffmpeg: 'native-media/bin/ffmpeg', ffprobe: 'native-media/bin/ffprobe', compositor: 'native-media/compositor', nativeMedia: 'native-media',
+    browserExecutable: 'bin/browser', ffmpeg: `native-media/bin/ffmpeg${suffix}`, ffprobe: `native-media/bin/ffprobe${suffix}`, compositor: 'native-media/compositor', nativeMedia: 'native-media',
     whisperCli: `bin/whisper-cli${suffix}`, whisperServer: `bin/whisper-server${suffix}` }
   for (const directory of ['server', 'dist', 'remotion-bundle', 'bin', 'native-media/compositor', 'native-media/bin', 'native-media/lib']) await mkdir(join(root, directory), { recursive: true })
-  for (const file of ['dist/index.html', 'dist/mantur-theme.mjs', 'remotion-bundle/index.html', 'native-media/compositor/program', 'native-media/lib/libavutil.58.dylib', 'bin/browser', 'native-media/bin/ffmpeg', 'native-media/bin/ffprobe', paths.whisperCli, paths.whisperServer]) {
+  for (const file of ['dist/index.html', 'dist/mantur-theme.mjs', 'remotion-bundle/index.html', 'native-media/compositor/program', 'native-media/lib/libavutil.58.dylib', 'bin/browser', paths.ffmpeg, paths.ffprobe, paths.whisperCli, paths.whisperServer]) {
     await writeFile(join(root, file), file)
   }
   await writeFile(join(root, paths.server), `import assert from 'node:assert/strict';
@@ -145,6 +145,17 @@ describe('packaged editor manifest', () => {
     await rm(join(root, 'native-media/lib'), { recursive: true })
     expect(check).toThrow('ENOENT')
   })
+
+  it('uses Windows executable names and does not require the Mac dylib directory', async () => {
+    const { root, manifest } = await fixture('win32', 'x64')
+    const check = () => resolvePackagedResources(root, 'win32', 'x64')
+    await rm(join(root, 'native-media/lib'), { recursive: true })
+    expect(check().ffmpeg).toBe(join(root, 'native-media/bin/ffmpeg.exe'))
+    expect(check().ffprobe).toBe(join(root, 'native-media/bin/ffprobe.exe'))
+    await writeFile(join(root, 'native-media/bin/ffmpeg'), 'wrong platform')
+    await writeFile(join(root, 'manifest.json'), JSON.stringify({ ...manifest, paths: { ...manifest.paths, ffmpeg: 'native-media/bin/ffmpeg' } }))
+    expect(check).toThrow('must belong to nativeMedia')
+  })
 })
 
 // The release supports these three desktop targets, not a Linux production editor.
@@ -167,9 +178,10 @@ describe.skipIf(!['darwin-arm64', 'darwin-x64', 'win32-x64'].includes(`${process
       expect(state.electronMode).toBe('1')
       expect(state.parentOrigin).toBe('http://127.0.0.1:5298')
       expect(state.dist).toBe(join(root, 'dist'))
-      expect(state.ffmpeg).toBe(join(state.compositor as string, '../bin/ffmpeg'))
+      const suffix = process.platform === 'win32' ? '.exe' : ''
+      expect(state.ffmpeg).toBe(join(state.compositor as string, `../bin/ffmpeg${suffix}`))
       expect(await readFile(join(state.compositor as string, '../lib/libavutil.58.dylib'), 'utf8')).toBe('native-media/lib/libavutil.58.dylib')
-      expect(state.ffprobe).toBe(join(state.compositor as string, '../bin/ffprobe'))
+      expect(state.ffprobe).toBe(join(state.compositor as string, `../bin/ffprobe${suffix}`))
       expect(state.whisperCli).toBe(join(root, `bin/whisper-cli${process.platform === 'win32' ? '.exe' : ''}`))
       expect(state.temp).toContain(join(runtime.workspace.directory, '工程', '.mantur-runtime-'))
       expect(state.compositor).not.toContain(root)

@@ -85,6 +85,7 @@ describe('Mantur Cut distribution', () => {
     const config = parseSourceConfig(sourceConfig())
     const media = config.nativeMedia
     const parse = (nativeMedia: unknown) => parseSourceConfig({ ...config, nativeMedia })
+    expect(parse({ ...media, target: 'win32-x64' }).nativeMedia.target).toBe('win32-x64')
     expect(() => parse({ ...media, target: 'darwin-x64' })).toThrow('no reviewed media build')
     expect(() => parse({ ...media, recipes: [] })).toThrow('pin the build files')
     expect(() => parse({ ...media, recipes: [media.recipes[0], media.recipes[0]] })).toThrow('duplicate files')
@@ -116,15 +117,16 @@ describe('Mantur Cut distribution', () => {
     await expect(access(join(packageDirectory, 'package.json'))).resolves.toBeUndefined()
   })
 
-  it('requires every declared program resource inside its root', async () => {
+  it.each(['darwin', 'win32'] as const)('requires every declared %s program resource inside its root', async (platform) => {
     const root = await temporaryDirectory('mantur-cut-manifest-')
+    const suffix = platform === 'win32' ? '.exe' : ''
     for (const directory of ['dist', 'remotion', 'media/compositor', 'media/bin', 'server']) await mkdir(join(root, directory), { recursive: true })
-    for (const file of ['server/entry.mjs', 'browser', 'media/bin/ffmpeg', 'media/bin/ffprobe', 'whisper-cli', 'whisper-server']) await writeFile(join(root, file), '')
+    for (const file of ['server/entry.mjs', 'browser', `media/bin/ffmpeg${suffix}`, `media/bin/ffprobe${suffix}`, `whisper-cli${suffix}`, `whisper-server${suffix}`]) await writeFile(join(root, file), '')
     const manifest = {
-      formatVersion: 3 as const, platform: 'darwin' as const, arch: 'arm64' as const,
+      formatVersion: 3 as const, platform, arch: platform === 'win32' ? 'x64' as const : 'arm64' as const,
       source: { upstreamCommit: tree, patchedTree: tree, basePatchSha256: digest,
         runtimePatchSha256: digest, shutdownPatchSha256: digest, nativeMediaSha256: digest },
-      paths: { server: 'server/entry.mjs', web: 'dist', remotionBundle: 'remotion', browserExecutable: 'browser', ffmpeg: 'media/bin/ffmpeg', ffprobe: 'media/bin/ffprobe', compositor: 'media/compositor', nativeMedia: 'media', whisperCli: 'whisper-cli', whisperServer: 'whisper-server' },
+      paths: { server: 'server/entry.mjs', web: 'dist', remotionBundle: 'remotion', browserExecutable: 'browser', ffmpeg: `media/bin/ffmpeg${suffix}`, ffprobe: `media/bin/ffprobe${suffix}`, compositor: 'media/compositor', nativeMedia: 'media', whisperCli: `whisper-cli${suffix}`, whisperServer: `whisper-server${suffix}` },
     }
     await expect(verifyProgramManifest(root, manifest)).resolves.toBeUndefined()
     expect(parseProgramManifest(manifest)).toEqual(manifest)
@@ -133,6 +135,7 @@ describe('Mantur Cut distribution', () => {
     expect(() => parseProgramManifest({ ...manifest, source: twoLayerSource })).toThrow('shutdownPatchSha256')
     expect(() => parseProgramManifest({ ...manifest, source: { ...manifest.source, shutdownPatchSha256: 'invalid' } })).toThrow('lowercase SHA-256 digest')
     await expect(verifyProgramManifest(root, { ...manifest, paths: { ...manifest.paths, ffmpeg: '../ffmpeg' } })).rejects.toThrow('must stay relative')
+    await expect(verifyProgramManifest(root, { ...manifest, paths: { ...manifest.paths, ffmpeg: 'browser' } })).rejects.toThrow('must belong to nativeMedia')
   })
 
   it.skipIf(process.platform === 'win32')('rejects a manifest resource symlink that escapes its root', async () => {

@@ -35,19 +35,36 @@ def version_key(version):
     return (*map(int, core.split('.')), int(rc) if rc else float('inf'))
 
 
-def prepare(directory, version, public_url, require_windows=False):
+def prepare(directory, version, public_url, require_windows=False, windows_only=False):
     """Reject incomplete releases and unsafe names before any remote mutation."""
     channel = release_channel(version)
     metadata = 'rc' if channel == 'rc' else 'latest'
+    windows_installer = 'Mantur-Agent-Windows-x64.exe'
+    windows_required = {windows_installer, windows_installer + '.blockmap', metadata + '.yml'}
+    windows_names = windows_required | {
+        'DESKTOP-SOURCES-Windows.json', 'DESKTOP-SOURCE-BUILD-Windows.txt',
+        'Mantur-Agent-Windows-source-' + version + '.tar.gz',
+        'Mantur-Cut-Windows-patched-source.tar.gz',
+        'Mantur-Media-Windows-corresponding-source.tar.gz',
+        'Mantur-Media-Windows-x64.tar.gz',
+        'OpenChatCut-Windows-upstream-source.tar.gz', 'whisper-cpp-Windows-source.tar.gz',
+    }
     files = {}
-    for manifest in ('SHA256SUMS', 'SHA256SUMS-Windows.txt'):
+    manifests = ('SHA256SUMS-Windows.txt',) if windows_only else ('SHA256SUMS', 'SHA256SUMS-Windows.txt')
+    for manifest in manifests:
         path = directory / manifest
+        if windows_only and path.is_symlink():
+            raise ValueError('Windows release manifest must not be a symlink')
         if not path.exists():
             continue
         for line in path.read_text().splitlines():
             expected, name = line.split('  ', 1)
             if not re.fullmatch(r'[A-Za-z0-9_.-]+', name):
                 raise ValueError('Unsafe release filename')
+            if windows_only and name not in windows_names:
+                raise ValueError('Unexpected Windows release filename: ' + name)
+            if windows_only and name in files:
+                raise ValueError('Duplicate Windows release filename: ' + name)
             artifact = directory / name
             if artifact.is_symlink() or digest(artifact, 'sha256').hex() != expected:
                 raise ValueError('Release SHA256 mismatch: ' + name)
@@ -55,9 +72,15 @@ def prepare(directory, version, public_url, require_windows=False):
         files[manifest] = path
     if any(name in files for name in (('latest-mac.yml', 'latest.yml') if channel == 'rc' else ('rc-mac.yml', 'rc.yml'))):
         raise ValueError('Update metadata belongs to a different release channel')
-    if require_windows and not all(name in files for name in ('Mantur-Agent-Windows-x64.exe', 'Mantur-Agent-Windows-x64.exe.blockmap', metadata + '.yml')):
+    if (require_windows or windows_only) and not windows_required.issubset(files):
         raise ValueError('Required verified Windows release artifacts are missing')
-    if metadata + '-mac.yml' not in files:
+    if windows_only:
+        if 'DESKTOP-SOURCES-Windows.json' not in files:
+            raise ValueError('Verified Windows source index is required')
+        unlisted = sorted(path.name for path in directory.iterdir() if path.name not in files)
+        if unlisted:
+            raise ValueError('Unlisted Windows release files: ' + ', '.join(unlisted))
+    elif metadata + '-mac.yml' not in files:
         raise ValueError('Verified Mac update metadata is required')
     channels = {}
     for name in (metadata + '-mac.yml', metadata + '.yml'):
@@ -66,10 +89,18 @@ def prepare(directory, version, public_url, require_windows=False):
         info = yaml.safe_load(files[name].read_text())
         if info['version'] != version:
             raise ValueError('Update version mismatch')
+        if windows_only and (info.get('path') != windows_installer
+                             or not isinstance(info.get('files'), list)
+                             or len(info['files']) != 1
+                             or not isinstance(info['files'][0], dict)
+                             or info['files'][0].get('url') != windows_installer):
+            raise ValueError('Windows update metadata must reference only the x64 installer')
         for item in info['files']:
             artifact = files[item['url']]
             if artifact.stat().st_size != item['size'] or base64.b64encode(digest(artifact, 'sha512')).decode() != item['sha512']:
                 raise ValueError('Update artifact mismatch')
+            if windows_only and 'sha512' in info and info['sha512'] != item['sha512']:
+                raise ValueError('Windows update SHA512 fields disagree')
             item['url'] = public_url + '/releases/' + version + '/' + artifact.name
         if info.get('path'):
             info['path'] = public_url + '/releases/' + version + '/' + files[info['path']].name
@@ -108,7 +139,7 @@ def publish_installers(client, bucket, prefix, base, files, version, check_only=
         print('Published manual installer:', name, flush=True)
 
 
-def publish(directory, version, check_only=False, require_windows=False):
+def publish(directory, version, check_only=False, require_windows=False, windows_only=False):
     channel = release_channel(version)
     for name in ('TOS_PUBLIC_URL', 'TOS_BUCKET', 'TOS_PREFIX', 'TOS_ENDPOINT', 'TOS_REGION', 'TOS_ACCESS_KEY', 'TOS_SECRET_KEY'):
         if not os.environ.get(name):
@@ -116,7 +147,7 @@ def publish(directory, version, check_only=False, require_windows=False):
     base = os.environ['TOS_PUBLIC_URL'].rstrip('/')
     if not base.startswith('https://'):
         raise ValueError('Public HTTPS URL required')
-    files, channels = prepare(directory, version, base, require_windows)
+    files, channels = prepare(directory, version, base, require_windows, windows_only)
     bucket = os.environ['TOS_BUCKET']
     prefix = os.environ['TOS_PREFIX'].strip('/')
     client = boto3.client('s3', endpoint_url=os.environ['TOS_ENDPOINT'], region_name=os.environ['TOS_REGION'],
@@ -179,5 +210,6 @@ if __name__ == '__main__':
     parser.add_argument('version')
     parser.add_argument('--check', action='store_true', help='Validate files, configuration and remote state without writing')
     parser.add_argument('--require-windows', action='store_true', help='Require verified Windows installer, blockmap and update metadata')
+    parser.add_argument('--windows-only', action='store_true', help='Publish only the Windows manifest, installer, update metadata and separate source files')
     args = parser.parse_args()
-    publish(args.directory, args.version, args.check, args.require_windows)
+    publish(args.directory, args.version, args.check, args.require_windows, args.windows_only)

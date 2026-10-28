@@ -10,7 +10,6 @@ import { copyRuntimeDependencies } from './mantur-cut-resources.ts'
 import { installNativeMedia, verifyNativeMedia, verifyNativeMediaDefaults } from './mantur-cut-native-media.ts'
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)))
-const sourceConfigPath = resolve(root, 'apps/desktop/mantur-cut/source.json')
 const defaultCacheDir = resolve(root, '.cache/mantur-cut')
 const defaultOutputDir = resolve(root, 'apps/desktop/.generated/mantur-cut')
 const patchRoot = resolve(root, 'packages/client/ui-mantur-editing/adapters')
@@ -57,7 +56,7 @@ interface MediaFile {
 }
 
 interface NativeMediaSource {
-  target: 'darwin-arm64'
+  target: 'darwin-arm64' | 'win32-x64'
   candidate: MediaArchive
   correspondingSource: MediaArchive
   inventory: MediaFile
@@ -220,7 +219,7 @@ function nativeMediaSource(value: unknown): NativeMediaSource {
   const subject = 'Mantur Cut nativeMedia'
   const row = object(value, subject)
   exactKeys(row, ['candidate', 'correspondingSource', 'inventory', 'recipes', 'sourceLock', 'target'], subject)
-  if (row.target !== 'darwin-arm64') throw new Error(`${subject}.target has no reviewed media build`)
+  if (row.target !== 'darwin-arm64' && row.target !== 'win32-x64') throw new Error(`${subject}.target has no reviewed media build`)
   if (!Array.isArray(row.recipes) || row.recipes.length === 0) throw new Error(`${subject}.recipes must pin the build files`)
   const recipes = row.recipes.map((recipe, index) => mediaFile(recipe, `${subject}.recipes[${index}]`))
   if (new Set(recipes.map(recipe => recipe.file)).size !== recipes.length) throw new Error(`${subject}.recipes contains duplicate files`)
@@ -520,14 +519,15 @@ export async function verifyProgramManifest(resourceRoot: string, manifest: Prog
   await requireResource(resourceRoot, manifest.paths.ffprobe, 'file')
   await requireResource(resourceRoot, manifest.paths.compositor, 'directory')
   await requireResource(resourceRoot, manifest.paths.nativeMedia, 'directory')
-  for (const [name, path] of [['ffmpeg', 'bin/ffmpeg'], ['ffprobe', 'bin/ffprobe'], ['compositor', 'compositor']] as const) {
+  const suffix = manifest.platform === 'win32' ? '.exe' : ''
+  for (const [name, path] of [['ffmpeg', `bin/ffmpeg${suffix}`], ['ffprobe', `bin/ffprobe${suffix}`], ['compositor', 'compositor']] as const) {
     if (manifest.paths[name] !== `${manifest.paths.nativeMedia}/${path}`) throw new Error(`Mantur Cut ${name} must belong to nativeMedia`)
   }
   await requireResource(resourceRoot, manifest.paths.whisperCli, 'file')
   await requireResource(resourceRoot, manifest.paths.whisperServer, 'file')
 }
 
-async function copyProductionProgram(source: string, staging: string, auditReport: string, targetKey: ManturCutTarget, target: TargetSource, candidate: string, mediaInventory: Readonly<Record<string, string>>): Promise<ProgramManifest['paths']> {
+async function copyProductionProgram(source: string, staging: string, auditReport: string, targetKey: ManturCutTarget, target: TargetSource, candidate: string, mediaInventory: Readonly<Record<string, string>>, sourceConfigPath: string): Promise<ProgramManifest['paths']> {
   const whisperExecutable = target.platform === 'win32' ? 'whisper-cli.exe' : 'whisper-cli'
   const whisperServer = target.platform === 'win32' ? 'whisper-server.exe' : 'whisper-server'
   const paths: ProgramManifest['paths'] = {
@@ -551,8 +551,9 @@ async function copyProductionProgram(source: string, staging: string, auditRepor
   await cp(join(source, '.cache/whisper-cli/whisper.cpp/LICENSE'), join(staging, 'whisper-cli/LICENSE.whisper.cpp'))
   await copyRuntimeDependencies(join(source, 'node_modules'), join(staging, 'runtime/node_modules'), targetKey)
   await removePackageRuntimeResidue(join(staging, 'runtime/node_modules'))
-  await installNativeMedia(candidate, join(staging, 'runtime'), mediaInventory)
-  await verifyNativeMediaDefaults(join(staging, 'runtime'))
+  const mediaTarget = targetKey === 'win32-x64' ? 'win32-x64' : 'darwin-arm64'
+  await installNativeMedia(candidate, join(staging, 'runtime'), mediaInventory, mediaTarget)
+  await verifyNativeMediaDefaults(join(staging, 'runtime'), mediaTarget)
   await cp(join(source, 'package.json'), join(staging, 'package.json'))
   await cp(join(source, 'package-lock.json'), join(staging, 'package-lock.json'))
   await cp(join(source, 'LICENSE'), join(staging, 'LICENSE'))
@@ -629,6 +630,7 @@ async function writeBuildInformation(
   target: TargetSource,
   paths: ProgramManifest['paths'],
   environment: NodeJS.ProcessEnv,
+  sourceConfigPath: string,
 ): Promise<void> {
   const harnessCommit = capture('git', ['rev-parse', 'HEAD'], root)
   const information = {
@@ -718,6 +720,7 @@ async function prepare(targetKey: ManturCutTarget, cacheDir: string, outputDir: 
   const currentHost = hostTarget()
   if (targetKey !== currentHost) throw new Error(`Mantur Cut ${targetKey} must build on a matching native runner; current host is ${currentHost}`)
   if (outputDir === root || !inside(root, outputDir)) throw new Error('Mantur Cut output directory must stay inside the repository')
+  const sourceConfigPath = resolve(root, 'apps/desktop/mantur-cut', targetKey === 'win32-x64' ? 'source.win32-x64.json' : 'source.json')
   const config = parseSourceConfig(JSON.parse(await readFile(sourceConfigPath, 'utf8')) as unknown)
   if (process.versions.node.split('.', 1)[0] !== '24') throw new Error(`Mantur Cut distribution requires Node 24; current Node is ${process.versions.node}`)
   const target = config.targets[targetKey]
@@ -728,7 +731,7 @@ async function prepare(targetKey: ManturCutTarget, cacheDir: string, outputDir: 
   if (devDependencies.electron !== config.electronVersion) throw new Error('Mantur Cut Electron pin must match apps/desktop')
 
   await mkdir(cacheDir, { recursive: true })
-  const candidate = capture('python3', [join(root, 'scripts/mantur-media-inputs.py'), '--prepare-candidate', '--cache-dir', join(cacheDir, 'native-media')], root)
+  const candidate = capture('python3', [join(root, 'scripts/mantur-media-inputs.py'), '--prepare-candidate', '--source-config', sourceConfigPath, '--cache-dir', join(cacheDir, 'native-media')], root)
   const mediaInventory = object(JSON.parse(await readFile(resolve(root, config.nativeMedia.inventory.file), 'utf8')) as unknown, 'Mantur Cut native media inventory')
   for (const value of Object.values(mediaInventory)) digest(value, 'Mantur Cut native media inventory entry')
   const mirror = await preparePinnedMirror(cacheDir, 'openchatcut.git', config.repository, config.upstreamCommit)
@@ -752,7 +755,7 @@ async function prepare(targetKey: ManturCutTarget, cacheDir: string, outputDir: 
     const cmakeDirectory = target.platform === 'darwin' ? await prepareCmake(cacheDir, config) : null
     const environment = sourceBuildEnvironment(cacheDir, process.env, cmakeDirectory === null ? [] : [cmakeDirectory])
     // ffmpeg-static's pinned installer accepts an existing FFMPEG_BIN and skips its download.
-    const installEnvironment = { ...environment, FFMPEG_BIN: join(candidate, 'bin/ffmpeg') }
+    const installEnvironment = { ...environment, FFMPEG_BIN: join(candidate, target.platform === 'win32' ? 'bin/ffmpeg.exe' : 'bin/ffmpeg') }
     run('npm', ['ci'], source, installEnvironment)
     const auditReport = await auditProductionDependencies(source, targetKey, environment)
     await prepareWhisper(source, cacheDir, config, targetKey, target, environment)
@@ -770,7 +773,7 @@ async function prepare(targetKey: ManturCutTarget, cacheDir: string, outputDir: 
     run('npm', ['prune', '--omit=dev'], source, installEnvironment)
     await mkdir(staging, { recursive: true })
     const paths = await copyProductionProgram(
-      source, staging, auditReport, targetKey, target, candidate, mediaInventory as Record<string, string>,
+      source, staging, auditReport, targetKey, target, candidate, mediaInventory as Record<string, string>, sourceConfigPath,
     )
     if (await fileSha256(join(staging, paths.ffmpeg)) !== target.ffmpegSha256) throw new Error(`Mantur Cut FFmpeg binary does not match ${targetKey}`)
     const manifest: ProgramManifest = {
@@ -789,7 +792,7 @@ async function prepare(targetKey: ManturCutTarget, cacheDir: string, outputDir: 
     }
     await verifyProgramManifest(staging, manifest)
     await writeDependencyInventory(staging)
-    await writeBuildInformation(staging, config, targetKey, target, paths, environment)
+    await writeBuildInformation(staging, config, targetKey, target, paths, environment, sourceConfigPath)
     await writeFile(join(staging, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
     await replaceDirectory(staging, outputDir)
   } finally {

@@ -51,7 +51,11 @@ pnpm run desktop:smoke
 
 Chrome for Testing 下载 URL 将版本号放在目录中，并使用 `chrome-headless-shell-<platform>.zip` 作为归档文件名。本地缓存文件名还会包含固定版本号。
 
-编辑器打包暂存排除 webpack 构建缓存、重复的 `.remotion/chrome-headless-shell` 缓存、非目标平台的 ONNX 原生目录、全部 npm compositor 平台目录及 npm FFmpeg/ffprobe 可执行文件。已审查的原生媒体输入替换这些媒体文件，受限相对别名保留默认 npm 查找路径。清单指定的浏览器、目标 ONNX 绑定、其他缓存内容和保留的许可证均保留。arm64 媒体输入保留 `bin`、`lib`、`compositor` 和许可证目录。FFmpeg 6.1.6 CLI 库保留 ABI 主版本文件名，Remotion compositor 使用另一组无版本后缀的 FFmpeg 7.1.5 库。打包会在签名前校验固定文件及受限的 `@loader_path` 依赖；缺失或外部库会阻止打包。签名选项和权限配置保持不变。见[资源暂存决策](../../.agents/notes/implemented/bug-fix/2026-09-09-mantur-native-resource-staging.zh.md)。
+编辑器打包暂存排除 webpack 构建缓存、重复的 `.remotion/chrome-headless-shell` 缓存、非目标平台的 ONNX 原生目录、全部 npm compositor 平台目录及 npm FFmpeg/ffprobe 可执行文件。经过审核的 native-media 输入替换这些媒体文件。清单指定的浏览器、目标 ONNX 绑定、其他缓存内容与许可证文件保持保留。
+
+macOS arm64 输入保留 `bin`、`lib`、`compositor` 和许可证目录，并通过受限相对别名维持 npm 默认查找路径。FFmpeg 6.1.6 CLI 库保留 ABI 主版本文件名，Remotion compositor 使用独立的无版本文件名 FFmpeg 7.1.5 库。打包会在签名前检查固定文件及受限的 `@loader_path` 依赖；缺失或外部库会阻止打包。签名选项和权限配置保持不变。参见[资源暂存决策](../../.agents/notes/implemented/bug-fix/2026-09-09-mantur-native-resource-staging.zh.md)。
+
+Windows x64 使用静态链接的 GPL FFmpeg/ffprobe 6.1.6 EXE，以及独立的 LGPL FFmpeg 7.1.5 compositor DLL。npm 默认查找路径使用运行时内完整且逐字节核验的副本，因此安装不需要符号链接权限。[原生媒体验证](../../scripts/mantur-cut-native-media.ts)要求构建与验包环境通过 `MANTUR_WINDOWS_OBJDUMP` 提供 UCRT64 GNU objdump 可执行文件的绝对路径。它检查十二个 x64 PE 文件、同目录或 Windows 系统导入，以及实际 CLI 启动。该检查工具不属于用户运行时依赖。
 
 编辑器的固定版本渲染器补丁公开每个浏览器子进程及管道关闭的完成证据。安装准备同时等待该证据和公开浏览器关闭操作；缺失证据或清理失败仍会阻止安装。见[渲染浏览器关闭](../../.agents/notes/implemented/bug-fix/2026-09-09-mantur-render-browser-close.zh.md)。
 
@@ -61,7 +65,7 @@ macOS 命令先由 electron-builder 完成签名并生成更新 ZIP，再用 App
 
 在没有 Developer ID 凭据的情况下进行本地 Apple Silicon 验收时，请在独立、干净的构建副本中运行 `pnpm run desktop:dist:mac:arm64:local`。该命令明确选择 electron-builder 的 ad-hoc 身份，关闭证书自动发现及公证，并要求严格签名校验。标准签名器在生成 ZIP 前封装已装配的应用；创建 DMG 前还必须通过 `codesign --verify --deep --strict`。签名后不得修改应用内容。这种本地身份只证明应用包完整性，不表示 Apple 认可、已公证、通过 Gatekeeper 或适用于公开更新。正式发行工作流及证书要求保持不变；见[本地签名决策](../../.agents/notes/implemented/bug-fix/2026-09-09-local-macos-bundle-signing.zh.md)。
 
-已审查的媒体输入支持 macOS arm64。Intel macOS 和 Windows 打包命令会拒绝此源码清单，因为这些目标没有已审查的媒体候选。手动 `Desktop package` 工作流保留三个 runner 的矩阵，因此不支持的任务会明确失败。成功的 CI 附件会将以下文件、生成的 blockmap 和更新元数据保留七天，不会发布更新源：
+[资源构建器](../../scripts/mantur-cut-distribution.ts)为 macOS arm64 选择 `mantur-cut/source.json`，为 Windows x64 要求独立审查的 `mantur-cut/source.win32-x64.json`。每份清单绑定该目标的完整媒体归档、文件清单、对应源码与配方；输入缺失或不匹配会阻止打包。macOS Intel 尚无已审查的媒体候选。手动 `Desktop package` 工作流保留三 runner 矩阵，不支持的目标会明确失败。成功的原生任务会将以下文件、生成的 blockmap 与更新元数据保留七天，但不发布更新源：
 
 | Runner | 命令 | 产物 |
 |---|---|---|
@@ -73,11 +77,13 @@ smoke 会从解包应用自己的依赖目录启动 `dsh`，把打印出的进�
 
 smoke 还会检查内置 CLI 的固定来源记录、包版本、许可证和依赖入口，创建真实的配置目录内启动脚本，并要求 `manturhub --version` 使用包内 Electron 可执行文件返回 `1.2.10`。启动脚本关闭 CLI 和技能更新检查。缺少资源直接失败，不搜索全局 CLI。该检查不会创建账号授权尝试，也不验证浏览器授权、Main 的操作系统存储，或以 macOS 结果证明 Windows 行为。
 
+Windows 候选工作流还会运行[安装后应用冒烟](scripts/smoke-installed-windows.ps1)和[原生媒体冒烟](../../scripts/mantur-cut-windows-smoke.mjs)。前者使用全新 NSIS 安装、独立 profile、真实 Electron Main 与 Host 进程，检查原生窗口归属和正常退出。后者通过包内编辑器导出一秒合成 H.264/AAC 视频，解码产物并调用包内 Remotion compositor。Windows CI 负责提供实际执行结果；这些检查不代表人工 About/菜单验收或真实旧版更新链通过。
+
 打包时将 CLI 来源记录和 `node_modules` 目录分别作为资源输入。Electron Builder 在复制目录时排除其顶层 `node_modules` 子目录；直接选择模块目录本身，才能保留内置 CLI 及其依赖。
 
 ## 发布已签名的桌面 release
 
-手动触发的 `Desktop release` 工作流默认选择 `architectures=arm64`，并要求 `windows=false`；其他选择会在原生任务启动前失败，因为已审查的媒体输入仅覆盖 macOS arm64。每个选中任务都会先在进程文件描述符上限为 64 时验证有界签名扫描，再使用 Developer ID Application 身份签名应用、提交 Apple notarization，并验证签名、Gatekeeper 评估与 stapled ticket；它们还会在产物进入组装步骤前运行 packaged smoke。
+手动触发的 `Desktop release` 工作流默认选择 `architectures=arm64`，并要求 `windows=false`，负责发布 macOS arm64。其他选择会在原生任务启动前失败。选中的 macOS 任务先在进程文件描述符上限为 64 时验证有界签名扫描，再使用 Developer ID Application 身份签名应用、提交 Apple notarization，并验证签名、Gatekeeper 评估与 stapled ticket；它们还会在产物进入组装步骤前运行 packaged smoke。
 
 对外发布前，先在仓库设置中启用 Release Immutability。然后在 GitHub 的 `macos-release` 环境中配置两个变量和四个加密 secret：
 
@@ -90,17 +96,19 @@ smoke 还会检查内置 CLI 的固定来源记录、包版本、许可证和依
 | Secret | `APPLE_ID` | 用于 notarization 的 Apple ID |
 | Secret | `APPLE_APP_SPECIFIC_PASSWORD` | 该 Apple ID 的 App 专用密码 |
 
-保留的 Windows 签名任务需要先有已审查的 Windows 媒体输入，发布校验才会接受 `windows=true`。它要求在受保护的 `windows-release` 环境中配置加密 secret：`WINDOWS_CERTIFICATE`（包含私钥的签名 `.pfx` 文件的 Base64 内容）和 `WINDOWS_CERTIFICATE_PASSWORD`。原生 Windows 任务要求这两个 secret 均已配置，且应用程序和安装包的 Authenticode 签名有效，才能上传产物。缺少凭证、签名无效或选中的任一平台失败，都会阻止组装和发布；只有明确未选中 Windows 时才会排除它。组装的 Windows 文件包含 EXE、对应 blockmap 及用于自动更新的 `<channel>.yml`。
+Windows 1.0.0 使用独立的 [Windows 候选工作流](../../.github/workflows/desktop-windows-release.yml)。它将成功的原生媒体 run 绑定到已提交的 Windows 来源清单，构建 NSIS EXE 和 blockmap，要求应用与安装包的 Authenticode 状态为 `NotSigned`，并将 `latest.yml` 与精确候选一同保留。工作流只接受 `publish=false`；独立发布步骤在审核后使用这批原始字节。这次明确的未签名交付不改变 macOS 签名或公证要求，不移动已公开的 `v1.0.0` tag，也不替换其 Mac 资产。
 
 工作流会把选中的原生 `<channel>-mac.yml` 合并为一份可区分架构的更新通道，并把完整候选产物与 `SHA256SUMS` 保留七天。必须从精确匹配 `v<apps/desktop 版本>` 的 tag 运行；tag 必须匹配打包版本。`publish=false` 会在组装候选产物后停止。`publish=true` 还要求审批变量指向完整固定源码配置的 SHA-256 摘要，之后才会创建 GitHub release，并同时上传 DMG、更新 ZIP、blockmap、更新元数据与哈希。工作流会拒绝使用已有 release 的 tag，不会替换已发布文件；仓库级 Release Immutability 则会继续阻止之后修改 tag 或产物。
 
 发布组装会把完整 Harness、上游 Cut、补丁后 Cut 和 Whisper Git 源码归档、`Mantur-Media-corresponding-source.tar.gz`、`DESKTOP-SOURCES.json` 及 `DESKTOP-SOURCE-BUILD.txt` 加入同一校验清单和公开资产。[源码归档器](../../scripts/desktop-release-sources.py) 将它们绑定到发布 commit 和分发 ID，检查每层补丁及生成的 tree，并将每个归档文件与 Git 对照。媒体源码包包含 18 份源码归档、精确构建配方与来源锁、配置、原始构建日志、Remotion 纯源码派生记录，以及 Electron/Chromium FFmpeg 源码和通知。完整文件清单和内含源码归档索引必须匹配，配方也必须匹配仓库固定值。受跟踪的工作树修改、不完整归档或已有源码输出都会阻止组装。源码交付与分发审批及私有的 90 天调试符号产物分别管理；参见[源码交付决策](../../.agents/notes/implemented/process/2026-10-26-desktop-release-sources.zh.md)。
 
-[媒体输入校验器](../../scripts/mantur-media-inputs.py) 从 `source.json` 指定的独立不可变媒体输入 release 获取精确候选和对应源码归档，校验字节数、归档 SHA256、安全成员路径与完整文件清单。设置 `MANTUR_MEDIA_INPUT_DIR` 可在本机复用这些精确归档；本地输入缺失或改变时直接失败，不回退到网络。签名会改变二进制摘要，因此输入归档身份与已签名应用库存分别记录。
+[媒体输入校验器](../../scripts/mantur-media-inputs.py)读取所选目标清单，验证归档字节数、SHA256、安全成员路径与完整文件清单。设置 `MANTUR_MEDIA_INPUT_DIR` 可在本机复用这些精确归档；本地输入缺失或改变时直接失败，不回退到网络。签名会改变二进制摘要，因此输入归档身份与已签名应用库存分别记录。
+
+[Windows 源码归档器](../../scripts/desktop-windows-release-sources.py)在 `DESKTOP-SOURCES-Windows.json` 中绑定 Windows 适配 commit 与媒体配方 commit。它核验独立的 Windows 媒体源码归档，并按精确身份引用内容相同、已经公开的 Cut、Whisper 与共用上游源码归档。Windows 发布使用独立校验清单和源码对象；Mac 源码索引与归档保持不变。
 
 正式发布要求在工作流输入 `release_notes` 中提供非空白的用户 Markdown 说明。工作流通过说明文件把文本作为数据交给 GitHub，保留 shell 字符的字面值。`publish=false` 的候选构建不要求说明。开始发布前应说明改进、修复、升级步骤、支持的平台和已知限制。
 
-客户端通过 `https://mantur-pro.tos-accelerate.volces.com/mantur-agent/stable/` 通用 HTTPS 更新源检查版本。稳定版发布任务将文件保存到 TOS 的 `mantur-agent/releases/<version>/`，匿名分段下载验证通过后才更新 `stable/latest-mac.yml`。发布脚本校验 SHA-256 清单及更新文件的 SHA-512、大小，拒绝覆盖不同内容或降级更新源；仅安装包对象设为公开读。`macos-release` 受保护环境保存 `TOS_ACCESS_KEY` 和 `TOS_SECRET_KEY`，凭据不进入客户端。`Sync desktop release to TOS` 工作流可同步已公开的稳定版及手动附加的 Windows 安装包；GitHub 发布不可变且 Windows 包已单独发布到 TOS 时，手动同步选择 `windows_from_tos`，验证并发布该版本的 Windows 文件。未签名 Windows 不提供 `latest.yml`。官网手动下载使用 `stable/Mantur-Agent-macOS-arm64.dmg` 和 `stable/Mantur-Agent-Windows-x64.exe`；发布流程将已验证的安装包复制到禁止缓存的固定地址，并拒绝降级。未包含的平台保留该平台最后发布的安装包。自动更新元数据继续引用不可变的版本文件。0.1.18 及更早版本在 GitHub 不可达时需手动安装一次新版。现有资源域名连接新加坡桶，国内各地域的网络性能仍需验收。
+稳定版发布任务将已核验产物保存到 TOS 的 `mantur-agent/releases/<version>/`，匿名分段下载验证通过后才更新 `stable/latest-mac.yml`。[TOS 发布脚本](../../scripts/desktop-publish-tos.py)校验 SHA-256 清单及更新文件的 SHA-512、大小，拒绝覆盖不同内容或降级更新源，并使用对象级公开读权限。受保护的发布环境保存 `TOS_ACCESS_KEY` 和 `TOS_SECRET_KEY`，凭据不进入客户端。`Sync desktop release to TOS` 工作流可同步已有公开 release 资产；当 GitHub release 不可变时，`windows_from_tos` 选择单独发布的 Windows 安装包。仅 Windows 发布读取 `SHA256SUMS-Windows.txt`，只上传 Windows 版本对象、`stable/Mantur-Agent-Windows-x64.exe` 和 `stable/latest.yml`，也支持已获授权的未签名交付。官网手动下载使用该 stable EXE 和 `stable/Mantur-Agent-macOS-arm64.dmg`；固定地址禁止缓存并拒绝降级。未包含的平台保留该平台最后发布的安装包。更新元数据引用不可变的版本文件。0.1.18 及更早版本在 GitHub 不可达时需手动安装一次新版。新加坡桶在国内各地域的网络性能仍需验收。
 
 稳定版本使用 `latest[-mac].yml` 清单及 TOS 的 `stable/` 目录；带编号的 `-rc.N` 版本使用 `rc[-mac].yml` 和 `rc/`，手动安装包地址也互相隔离。RC 发布不会推进稳定版下载或 GitHub Latest。发布脚本的 `--check` 在不写入的情况下验证本地文件、必需配置、远端版本及不可变对象哈希；工作流完成此预检后才创建 GitHub release。选中 Windows 时必须包含已验证的安装包、blockmap 和清单。仅发布 Mac 不表示 Windows 已通过签名。同步工作流仍仅支持稳定版本。预检不能保证后续网络操作成功，也不能让 GitHub 与 TOS 发布成为原子操作；发布开始后失败仍需维护者核对并处理。打包客户端保留配置的稳定版更新源；发布 RC 对象不会让客户端自动订阅 RC 更新。
 
@@ -132,7 +140,7 @@ Main 管理客户端会话浏览器登录、刷新和系统加密账号存储。
 
 已打包应用会在 macOS 的原生应用菜单和 Windows 的帮助菜单中显示当前版本与**检查更新…**。菜单会显示检查中、下载进度、可安装、已是最新版与失败状态；手动检查还会打开本地化的结果或错误对话框。应用启动后会开始检查，并每六小时重复。所有客户端（包括预发布构建）都检查 `stable/latest[-mac].yml`。初始化在首次自动或手动检查前选择 `latest`，随后禁用降级和预发布偏好。相同或更旧的版本不提供更新；RC 可以升级到相同主次补丁版本的正式版。generic provider 不会通过 `allowPrerelease` 过滤预发布元数据，因此稳定目录必须只包含稳定版本。元数据缺失和网络故障仍报错，不回退到其他通道。参见[稳定更新路由决策](../../.agents/notes/implemented/bug-fix/2026-10-24-desktop-stable-update-route.zh.md)。后台发现新版本时保持安静。通用设置提供已安装版本、手动检查与重试操作。漫途侧栏仅在发现新版、下载中或已有待安装版本时显示入口，展开与收起状态均支持。只有用户点击下载才开始传输，显示实际字节数，仅在已知时显示百分比。下载并校验完成后，准备重启前会请求确认。确认安装后，Main 保存原生草稿，通过所属 IPC 通道请求 Host 停机回执，再关闭账号通道并请求 Host 正常退出。Main 等待进程真正退出和诊断日志关闭后才调用安装器。不支持的 Host 组合、保存失败、取消、异常退出和超时都会阻止安装；检查和下载不会冻结工作。等待失败后 Host 清理可能继续，工作不会自动恢复。参见 [Host 更新策略](../../packages/bundle/mantur-app/README.zh.md#use-this-package)。选择稍后会保留重启安装入口，不重复弹窗。侧栏和原生菜单共用主进程确认；保存失败会保留已校验的下载并报告错误。关闭 updater 会抑制后续安装。
 
-macOS Intel、macOS Apple Silicon 与 Windows 使用同一个更新控制器。macOS release 更新需要已签名并 notarize 的应用，以及生成的 ZIP 与更新元数据；DMG 仍是人工安装产物。Windows 对外更新需要代码签名身份、受保护的发布凭据与生成的 NSIS 更新产物；本仓库不提供或绕过这些前置条件。
+macOS Intel、macOS Apple Silicon 与 Windows 使用同一个更新控制器。macOS release 更新需要已签名并 notarize 的应用，以及生成的 ZIP 与更新元数据；DMG 仍是人工安装产物。独立的未签名 Windows 交付要求 NSIS 安装包、blockmap、更新元数据、精确源码与哈希记录，以及受保护的发布凭据。更新源已发布不代表旧客户端已完成安装。
 
 ## 草稿检查点
 
@@ -154,5 +162,5 @@ Cut 的导出文件选择使用仅限主 frame 的桥接与活跃编辑器的已
 - 本地回调、加密存储、模拟 preload 和内置 CLI 测试不能证明真实网站授权。CLI 余额夹具使用受控本地响应。macOS 和 Windows 原生账号存储、浏览器返回、安装包资源、PostgreSQL 16 与经授权的测试站检查仍需分别验收；参见[浏览器授权决策](../../.agents/notes/implemented/architecture/2026-09-08-browser-account-authorization.zh.md)。
 - `Desktop package` 产物仍是未签名的内部安装包。macOS Gatekeeper 与 Windows SmartScreen 可能对这些文件显示警告；对外分发 macOS 客户端时只能使用 `Desktop release` 产物。
 - 原生图标源是 1024 像素 RGBA PNG，带透明圆角和居中的蓝色无限环徽记。Web 客户端单独使用透明徽标。macOS 和 Windows 安装包在原生构建时生成各自平台的图标格式；尚无矢量源文件。
-- 已签名的 release 工作流只发布 macOS arm64。Windows 在具备代码签名身份与受保护的发布路径之前不支持外部更新。
+- 已签名 release 工作流发布 macOS arm64。独立的 Windows 交付记录明确的 `NotSigned` 身份，不宣称具有可信 Authenticode 发布者或已完成人工升级验收。
 - 每个目标只在其原生 runner 同时完成打包和 smoke 后有效。一个架构上的构建不能作为另一目标的证据。

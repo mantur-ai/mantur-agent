@@ -14,6 +14,8 @@ The [Windows media candidate workflow](../../../../.github/workflows/desktop-win
 
 This workflow has read-only repository permission and no publication credentials. It retains failure evidence and does not change installers, tags or update channels. A separate native job reads the exact published Windows baseline's update configuration without installing or launching it. The [source-delivery policy](2026-10-26-desktop-release-sources.md) continues to govern product source archives; [paired desktop signing](2026-09-15-paired-desktop-signing.md) continues to govern that separate workflow.
 
+Windows packaging selects its own source manifest and verifies the media archive, corresponding sources and PE imports on native Windows x64. Default npm lookup paths contain verified copies of the selected files, avoiding a dependency on user symlink privileges. macOS keeps its relative aliases and Mach-O verification. The packaged Windows media probe exercises the packaged adapter's short H.264/AAC export and the Remotion executable's metadata operation; these observations do not establish interactive editing or an automatic desktop upgrade.
+
 ## Alternatives considered
 
 **Reuse the Mac archive.** Mach-O binaries cannot supply Windows runtime evidence or executable inputs.
