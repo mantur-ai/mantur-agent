@@ -255,7 +255,9 @@ class Build:
                               '-DHB_HAVE_FREETYPE=ON', '-DHB_HAVE_GLIB=OFF', '-DHB_HAVE_ICU=OFF',
                               '-DHB_HAVE_CAIRO=OFF', '-DHB_HAVE_CORETEXT=OFF'])
         self.run('zimg-autogen', ['bash', './autogen.sh'], self.sources['zimg'])
-        self.autotools('zimg', [host, '--disable-shared', '--enable-static', '--disable-test-apps'])
+        # pkg-config must select the same static C++ runtime as the FFmpeg link.
+        self.autotools('zimg', [host, '--disable-shared', '--enable-static', '--disable-test-apps',
+                               'STL_LIBS=-l:libstdc++.a'])
         self.cmake('aom', ['-DENABLE_TESTS=OFF', '-DENABLE_EXAMPLES=OFF', '-DENABLE_TOOLS=OFF',
                           '-DENABLE_DOCS=OFF', '-DCONFIG_AV1_ENCODER=0'])
 

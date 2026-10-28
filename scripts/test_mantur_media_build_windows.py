@@ -135,6 +135,21 @@ class WindowsMediaBuildTests(unittest.TestCase):
                                      ['--windres=windres --use-temp-file'])
                     locked = build.lock['compositorConfigure' if compositor else 'ffmpegConfigure']
                     self.assertEqual(flags[-len(locked):], locked)
+                    if compositor:
+                        self.assertIn('--enable-shared', flags)
+                        self.assertIn('--enable-libzimg', flags)
+                        self.assertNotIn('-static', next(flag for flag in flags if flag.startswith('--extra-ldflags=')).split())
+
+    def test_zimg_pkgconfig_names_the_static_cpp_archive_without_changing_ffmpeg_link_modes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            build = media.Build(Path(directory), 4)
+            build.sources.update({'zimg': build.work / 'zimg', 'bzip2': build.work / 'bzip2'})
+            with patch.object(build, 'autotools') as autotools, patch.object(build, 'cmake'), \
+                    patch.object(build, 'run'), patch.object(media.shutil, 'copy2'):
+                build.dependencies()
+            zimg_calls = [call.args for call in autotools.call_args_list if call.args[0] == 'zimg']
+            self.assertEqual(zimg_calls, [('zimg', ['--host=x86_64-w64-mingw32', '--disable-shared',
+                             '--enable-static', '--disable-test-apps', 'STL_LIBS=-l:libstdc++.a'])])
 
     def test_failed_ffmpeg_configuration_retains_the_actual_compiler_log(self):
         with tempfile.TemporaryDirectory() as directory:
