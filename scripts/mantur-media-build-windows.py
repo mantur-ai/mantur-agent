@@ -259,19 +259,42 @@ class Build:
         self.cmake('aom', ['-DENABLE_TESTS=OFF', '-DENABLE_EXAMPLES=OFF', '-DENABLE_TOOLS=OFF',
                           '-DENABLE_DOCS=OFF', '-DCONFIG_AV1_ENCODER=0'])
 
-    def ffmpeg(self, compositor=False):
-        """Build a static GPL CLI or independent LGPL shared libraries with separate ABI names."""
+    def configure_ffmpeg(self, compositor=False):
+        """Check each FFmpeg dependency set and preserve compiler diagnostics even on failure."""
         name = 'ffmpegCompositor' if compositor else 'ffmpeg'
         prefix = self.work / 'compositor-prefix' if compositor else self.prefix
         flags = self.lock['compositorConfigure' if compositor else 'ffmpegConfigure']
         ldflags = f'-L{self.prefix}/lib -static-libgcc -static-libstdc++'
         if not compositor:
             ldflags += ' -static'
-        self.autotools(name, [f'--extra-cflags=-I{self.prefix}/include', f'--extra-ldflags={ldflags}',
-                            '--windres=windres --use-temp-file',
-                            '--extra-libs=-Wl,-Bstatic -lstdc++ -lwinpthread -Wl,-Bdynamic', *flags], prefix)
+        source = self.sources[name]
+        configure_error = None
+        try:
+            self.run(name + '-configure', ['bash', './configure', f'--prefix={prefix}',
+                     f'--extra-cflags=-I{self.prefix}/include', f'--extra-ldflags={ldflags}',
+                     '--windres=windres --use-temp-file',
+                     '--extra-libs=-Wl,-Bstatic -lstdc++ -lwinpthread -Wl,-Bdynamic', *flags], source)
+        except BaseException as error:
+            configure_error = error
+            raise
+        finally:
+            config_log = source / 'ffbuild/config.log'
+            try:
+                if config_log.is_file():
+                    shutil.copy2(config_log, self.evidence / (name + '-ffbuild-config.log'))
+            except OSError as copy_error:
+                if configure_error is None:
+                    raise
+                print(json.dumps({'label': name + '-config-log-copy', 'error': str(copy_error)}), file=sys.stderr)
         for filename in ('config.h', 'config_components.h', 'ffbuild/config.mak', 'ffbuild/config.log'):
-            shutil.copy2(self.sources[name] / filename, self.evidence / (name + '-' + filename.replace('/', '-')))
+            shutil.copy2(source / filename, self.evidence / (name + '-' + filename.replace('/', '-')))
+
+    def ffmpeg(self, compositor=False):
+        """Build the configured GPL CLI or independent LGPL libraries with separate ABI names."""
+        name = 'ffmpegCompositor' if compositor else 'ffmpeg'
+        source = self.sources[name]
+        self.run(name + '-make', ['make', f'-j{self.jobs}'], source)
+        self.run(name + '-install', ['make', 'install'], source)
 
     def package(self):
         """Keep only new FFmpeg binaries, selected Remotion files and the complete notices."""
@@ -412,6 +435,8 @@ def main():
     (build.evidence / 'platform-identity.json').write_text(json.dumps(identity, indent=2) + '\n')
     build.prepare()
     build.dependencies()
+    build.configure_ffmpeg(compositor=True)
+    build.configure_ffmpeg()
     build.ffmpeg()
     build.ffmpeg(compositor=True)
     build.package()

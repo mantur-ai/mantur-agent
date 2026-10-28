@@ -123,15 +123,60 @@ class WindowsMediaBuildTests(unittest.TestCase):
             for compositor, name in ((False, 'ffmpeg'), (True, 'ffmpegCompositor')):
                 with self.subTest(compositor=compositor):
                     build.sources[name] = build.work / name
-                    with patch.object(build, 'autotools') as compile_library, patch.object(media.shutil, 'copy2'):
-                        build.ffmpeg(compositor=compositor)
-                    actual_name, flags, prefix = compile_library.call_args.args
-                    self.assertEqual(actual_name, name)
-                    self.assertEqual(prefix, build.work / 'compositor-prefix' if compositor else build.prefix)
+                    with patch.object(build, 'run') as configure, patch.object(media.shutil, 'copy2'):
+                        build.configure_ffmpeg(compositor=compositor)
+                    label, command, source = configure.call_args.args
+                    self.assertEqual(label, name + '-configure')
+                    self.assertEqual(command[:3], ['bash', './configure',
+                                     f'--prefix={build.work / "compositor-prefix" if compositor else build.prefix}'])
+                    self.assertEqual(source, build.sources[name])
+                    flags = command[3:]
                     self.assertEqual([flag for flag in flags if flag.startswith('--windres=')],
                                      ['--windres=windres --use-temp-file'])
                     locked = build.lock['compositorConfigure' if compositor else 'ffmpegConfigure']
                     self.assertEqual(flags[-len(locked):], locked)
+
+    def test_failed_ffmpeg_configuration_retains_the_actual_compiler_log(self):
+        with tempfile.TemporaryDirectory() as directory:
+            build = media.Build(Path(directory), 4)
+            source = build.work / 'ffmpeg-compositor'
+            build.sources['ffmpegCompositor'] = source
+            config_log = source / 'ffbuild/config.log'
+            config_log.parent.mkdir(parents=True)
+            diagnostic = b'actual compiler invocation and linker failure\n'
+            config_log.write_bytes(diagnostic)
+            with patch.object(build, 'run', side_effect=RuntimeError('configure failed')) as run:
+                with self.assertRaisesRegex(RuntimeError, 'configure failed'):
+                    build.configure_ffmpeg(compositor=True)
+            run.assert_called_once()
+            self.assertEqual((build.evidence / 'ffmpegCompositor-ffbuild-config.log').read_bytes(), diagnostic)
+            config_log.unlink()
+            with patch.object(build, 'run', side_effect=RuntimeError('early configure failure')):
+                with self.assertRaisesRegex(RuntimeError, 'early configure failure'):
+                    build.configure_ffmpeg(compositor=True)
+
+    def test_configure_error_survives_log_copy_failure_but_successful_configure_requires_the_log(self):
+        with tempfile.TemporaryDirectory() as directory:
+            build = media.Build(Path(directory), 4)
+            source = build.work / 'ffmpeg-compositor'
+            build.sources['ffmpegCompositor'] = source
+            config_log = source / 'ffbuild/config.log'
+            config_log.parent.mkdir(parents=True)
+            config_log.write_text('compiler diagnostic\n')
+            original = RuntimeError('configure failed')
+            stderr = io.StringIO()
+            with patch.object(build, 'run', side_effect=original), \
+                    patch.object(media.shutil, 'copy2', side_effect=OSError('log archive unavailable')), \
+                    patch.object(media.sys, 'stderr', stderr):
+                with self.assertRaises(RuntimeError) as raised:
+                    build.configure_ffmpeg(compositor=True)
+            self.assertIs(raised.exception, original)
+            self.assertEqual(json.loads(stderr.getvalue()),
+                             {'label': 'ffmpegCompositor-config-log-copy', 'error': 'log archive unavailable'})
+            with patch.object(build, 'run'), \
+                    patch.object(media.shutil, 'copy2', side_effect=OSError('log archive unavailable')):
+                with self.assertRaisesRegex(OSError, 'log archive unavailable'):
+                    build.configure_ffmpeg(compositor=True)
 
     def test_resource_probe_compiles_before_accepting_the_x64_object(self):
         with tempfile.TemporaryDirectory() as directory:
