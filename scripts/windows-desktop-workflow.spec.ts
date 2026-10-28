@@ -90,6 +90,7 @@ describe('Windows unsigned desktop candidate', () => {
         'apps/desktop/mantur-cut/source.win32-x64.json',
         '.github/workflows/desktop-windows-release.yml',
         'scripts/mantur-cut-windows-smoke.mjs',
+        'apps/desktop/scripts/smoke-installed-windows.ps1',
       ],
     })
     expect(record(record(record(triggers.workflow_dispatch).inputs).publish).default).toBe(false)

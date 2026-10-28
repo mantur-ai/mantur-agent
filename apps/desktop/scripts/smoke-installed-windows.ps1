@@ -177,7 +177,7 @@ try {
     while ([DateTime]::UtcNow -lt $deadline) {
         if ($main.HasExited) { throw "Electron main exited before readiness: $($main.ExitCode)" }
         if (Test-Path -LiteralPath $logPath) {
-            $log = Get-Content -LiteralPath $logPath -Raw
+            [string]$log = Get-Content -LiteralPath $logPath -Raw
             $match = [regex]::Match($log, '(?m)^dsh web: (http://127\.0\.0\.1:\d+/\?token=[^\s]+)')
             if ($match.Success) { $readyUrl = [uri]$match.Groups[1].Value; break }
         }
