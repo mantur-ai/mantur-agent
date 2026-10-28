@@ -136,11 +136,26 @@ try {
   const ffprobe = join(privateMedia, 'bin/ffprobe.exe')
   report.executedMedia = {}
   for (const path of [ffmpeg, ffprobe, join(privateMedia, 'compositor/remotion.exe')]) report.executedMedia[path] = hash(await readFile(path))
-  await command('synthetic-input', ffmpeg, ['-nostdin', '-v', 'error', '-f', 'lavfi', '-i', 'color=red:s=64x64:r=30:d=1', '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000:duration=1', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', join(media, 'red.mp4')])
+  const input = join(temporary, 'red.mp4')
+  await command('synthetic-input', ffmpeg, ['-nostdin', '-v', 'error', '-f', 'lavfi', '-i', 'color=red:s=64x64:r=30:d=1', '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000:duration=1', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', input])
+  const inputBytes = await readFile(input)
+  report.input = { file: input, bytes: inputBytes.length, sha256: hash(inputBytes) }
+  const uploadResponse = await fetch(`${origin}/upload?name=red.mp4&assetId=red&ifAbsent=1`, {
+    method: 'POST', headers: { Origin: origin, 'Sec-Fetch-Site': 'none', 'Content-Type': 'video/mp4' },
+    body: inputBytes, signal: AbortSignal.timeout(30_000),
+  })
+  report.uploadStatus = uploadResponse.status
+  if (!uploadResponse.ok) throw new Error(await uploadResponse.text())
+  const uploaded = await uploadResponse.json()
+  report.upload = uploaded
+  assert.equal(uploaded.created, true)
+  assert.equal(uploaded.bytes, inputBytes.length)
+  assert.equal(uploaded.contentHash, report.input.sha256)
+  assert.equal(uploaded.path, '/media/uploads/red.mp4')
   const state = {
     id: 'windows-native', name: 'Windows native smoke', order: 0, fps: 30, width: 64, height: 64,
     selectedId: null, trackOrder: ['v1'], tracks: { v1: { kind: 'video' } },
-    items: [{ id: 'red', kind: 'video', track: 'v1', sourceAssetId: 'red', name: 'red', src: '/media/uploads/red.mp4', volume: 1, width: 64, height: 64, startFrame: 0, durationInFrames: 30 }],
+    items: [{ id: 'red', kind: 'video', track: 'v1', sourceAssetId: 'red', name: 'red', src: uploaded.path, volume: 1, width: 64, height: 64, startFrame: 0, durationInFrames: 30 }],
   }
   const response = await fetch(`${origin}/export`, {
     method: 'POST', headers: { Origin: origin, 'Sec-Fetch-Site': 'none', 'Content-Type': 'application/json' },

@@ -26,6 +26,7 @@ on:
     paths:
       - apps/desktop/mantur-cut/source.win32-x64.json
       - .github/workflows/desktop-windows-release.yml
+      - scripts/mantur-cut-windows-smoke.mjs
 
 permissions:
   contents: read

@@ -86,7 +86,11 @@ describe('Windows unsigned desktop candidate', () => {
     const triggers = record(workflow.on)
     expect(record(triggers.push)).toEqual({
       branches: ['feat/desktop-windows-release-1-0-0-harness'],
-      paths: ['apps/desktop/mantur-cut/source.win32-x64.json', '.github/workflows/desktop-windows-release.yml'],
+      paths: [
+        'apps/desktop/mantur-cut/source.win32-x64.json',
+        '.github/workflows/desktop-windows-release.yml',
+        'scripts/mantur-cut-windows-smoke.mjs',
+      ],
     })
     expect(record(record(record(triggers.workflow_dispatch).inputs).publish).default).toBe(false)
   })
