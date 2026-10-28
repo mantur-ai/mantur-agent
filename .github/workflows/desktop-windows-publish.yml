@@ -1,0 +1,74 @@
+name: Publish approved Windows desktop candidate
+
+on:
+  push:
+    tags:
+      - v1.0.0-windows.*
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: desktop-publication
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Promote exact unsigned Windows 1.0.0 bytes
+    runs-on: ubuntu-latest
+    environment: macos-release
+    timeout-minutes: 45
+    env:
+      MANTUR_WINDOWS_RELEASE_APPROVAL: ${{ vars.MANTUR_WINDOWS_RELEASE_APPROVAL }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install exact publisher dependencies
+        run: python -m pip install --disable-pip-version-check --no-cache-dir boto3==1.42.97 PyYAML==6.0.3
+
+      - name: Verify approval and safely download the exact candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/desktop-windows-promote.py --directory "$RUNNER_TEMP/windows-promotion" --prepare
+
+      - name: Preflight Windows publication without remote writes
+        env:
+          TOS_ACCESS_KEY: ${{ secrets.TOS_ACCESS_KEY }}
+          TOS_SECRET_KEY: ${{ secrets.TOS_SECRET_KEY }}
+          TOS_REGION: ap-southeast-1
+          TOS_ENDPOINT: https://tos-s3-ap-southeast-1.volces.com
+          TOS_BUCKET: mantur-pro
+          TOS_PREFIX: mantur-agent
+          TOS_PUBLIC_URL: https://mantur-pro.tos-accelerate.volces.com/mantur-agent
+        run: python scripts/desktop-windows-promote.py --directory "$RUNNER_TEMP/windows-promotion" --check-only
+
+      - name: Publish the approved Windows objects and update feed
+        env:
+          TOS_ACCESS_KEY: ${{ secrets.TOS_ACCESS_KEY }}
+          TOS_SECRET_KEY: ${{ secrets.TOS_SECRET_KEY }}
+          TOS_REGION: ap-southeast-1
+          TOS_ENDPOINT: https://tos-s3-ap-southeast-1.volces.com
+          TOS_BUCKET: mantur-pro
+          TOS_PREFIX: mantur-agent
+          TOS_PUBLIC_URL: https://mantur-pro.tos-accelerate.volces.com/mantur-agent
+        run: python scripts/desktop-windows-promote.py --directory "$RUNNER_TEMP/windows-promotion" --publish
+
+      - name: Retain exact promotion evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-promotion-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/windows-promotion/REMOTE.json
+            ${{ runner.temp }}/windows-promotion/VERIFIED.json
+            ${{ runner.temp }}/windows-promotion/PREFLIGHT.json
+            ${{ runner.temp }}/windows-promotion/PUBLISHED.json
+          if-no-files-found: warn
+          retention-days: 90
