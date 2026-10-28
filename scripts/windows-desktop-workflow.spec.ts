@@ -86,9 +86,19 @@ describe('Windows unsigned desktop candidate', () => {
     const triggers = record(workflow.on)
     expect(record(triggers.push)).toEqual({
       branches: ['feat/desktop-windows-release-1-0-0-harness'],
-      paths: ['apps/desktop/mantur-cut/source.win32-x64.json'],
+      paths: ['apps/desktop/mantur-cut/source.win32-x64.json', '.github/workflows/desktop-windows-release.yml'],
     })
     expect(record(record(record(triggers.workflow_dispatch).inputs).publish).default).toBe(false)
+  })
+
+  it('resolves runner paths in a step after job dispatch', () => {
+    for (const value of Object.values(record(windows.env))) {
+      expect(String(value)).not.toMatch(/\$\{\{\s*(?:runner|env|steps|job)\b/)
+    }
+    const initialize = step('Initialize Windows candidate paths')
+    expect(initialize.run).toContain('"MANTUR_MEDIA_INPUT_DIR=$(Join-Path $env:RUNNER_TEMP \'windows-media-inputs\')" >> $env:GITHUB_ENV')
+    expect(initialize.run).toContain('"WINDOWS_RELEASE_EVIDENCE=$(Join-Path $env:RUNNER_TEMP \'windows-release-evidence\')" >> $env:GITHUB_ENV')
+    expect(steps.indexOf(initialize)).toBeLessThan(steps.indexOf(step('Validate approved media run and committed source pins')))
   })
 
   it('uses full Git history, exact artifact identity and pinned native input paths', () => {

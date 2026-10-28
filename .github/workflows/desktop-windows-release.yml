@@ -25,6 +25,7 @@ on:
       - feat/desktop-windows-release-1-0-0-harness
     paths:
       - apps/desktop/mantur-cut/source.win32-x64.json
+      - .github/workflows/desktop-windows-release.yml
 
 permissions:
   contents: read
@@ -45,14 +46,17 @@ jobs:
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       DSH_TELEMETRY_DISABLED: '1'
-      MANTUR_MEDIA_INPUT_DIR: ${{ runner.temp }}/windows-media-inputs
-      WINDOWS_RELEASE_EVIDENCE: ${{ runner.temp }}/windows-release-evidence
       MAC_BASELINE: cd7d91f370a03d60e713c213b5fb9c70b8f78ea0
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           persist-credentials: false
+
+      - name: Initialize Windows candidate paths
+        run: |
+          "MANTUR_MEDIA_INPUT_DIR=$(Join-Path $env:RUNNER_TEMP 'windows-media-inputs')" >> $env:GITHUB_ENV
+          "WINDOWS_RELEASE_EVIDENCE=$(Join-Path $env:RUNNER_TEMP 'windows-release-evidence')" >> $env:GITHUB_ENV
 
       - name: Validate approved media run and committed source pins
         id: media
