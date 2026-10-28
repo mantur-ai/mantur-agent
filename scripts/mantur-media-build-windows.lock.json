@@ -1,0 +1,190 @@
+{
+  "formatVersion": 1,
+  "target": "win32-x64",
+  "toolchain": "MSYS2 UCRT64; exact installed package versions and compiler identity retained in build evidence",
+  "sources": [
+    {
+      "name": "ffmpeg",
+      "version": "6.1.6",
+      "url": "https://ffmpeg.org/releases/ffmpeg-6.1.6.tar.xz",
+      "archive": "ffmpeg-6.1.6.tar.xz",
+      "sha256": "d4fcb164028dd3beee5d92c0ac72e46aac6973c75ea12dc14de07bf8f407370a",
+      "bytes": 10497884,
+      "directory": "ffmpeg-6.1.6"
+    },
+    {
+      "name": "ffmpegCompositor",
+      "version": "7.1.5",
+      "url": "https://ffmpeg.org/releases/ffmpeg-7.1.5.tar.xz",
+      "archive": "ffmpeg-7.1.5.tar.xz",
+      "sha256": "de668509caf9e35e3cd162473441fdb29538c6d96ed080292b3cf9e6fc5d558f",
+      "bytes": 11050340,
+      "directory": "ffmpeg-7.1.5"
+    },
+    {
+      "name": "zimg",
+      "version": "3.0.6",
+      "url": "https://github.com/sekrit-twc/zimg/archive/refs/tags/release-3.0.6.tar.gz",
+      "archive": "zimg-3.0.6.tar.gz",
+      "sha256": "be89390f13a5c9b2388ce0f44a5e89364a20c1c57ce46d382b1fcc3967057577",
+      "bytes": 326725,
+      "directory": "zimg-release-3.0.6"
+    },
+    {
+      "name": "x264",
+      "version": "b35605ace3ddf7c1a5d67a2eb553f034aef41d55",
+      "url": "https://code.videolan.org/videolan/x264/-/archive/b35605ace3ddf7c1a5d67a2eb553f034aef41d55/x264-b35605ace3ddf7c1a5d67a2eb553f034aef41d55.tar.gz",
+      "archive": "x264-b35605ace3ddf7c1a5d67a2eb553f034aef41d55.tar.gz",
+      "sha256": "cd71a7515b0e9a012e1ac9b1f8415bebcaf6fc97d4db32286642ac4c0fbe24f9",
+      "bytes": 1040327,
+      "directory": "x264-b35605ace3ddf7c1a5d67a2eb553f034aef41d55"
+    },
+    {
+      "name": "vpx",
+      "version": "1.15.2",
+      "url": "https://github.com/webmproject/libvpx/archive/refs/tags/v1.15.2.tar.gz",
+      "archive": "libvpx-1.15.2.tar.gz",
+      "sha256": "26fcd3db88045dee380e581862a6ef106f49b74b6396ee95c2993a260b4636aa",
+      "bytes": 5630368,
+      "directory": "libvpx-1.15.2"
+    },
+    {
+      "name": "opus",
+      "version": "1.5.2",
+      "url": "https://downloads.xiph.org/releases/opus/opus-1.5.2.tar.gz",
+      "archive": "opus-1.5.2.tar.gz",
+      "sha256": "65c1d2f78b9f2fb20082c38cbe47c951ad5839345876e46941612ee87f9a7ce1",
+      "bytes": 7839412,
+      "directory": "opus-1.5.2"
+    },
+    {
+      "name": "lame",
+      "version": "3.100",
+      "url": "https://downloads.sourceforge.net/project/lame/lame/3.100/lame-3.100.tar.gz",
+      "archive": "lame-3.100.tar.gz",
+      "sha256": "ddfe36cab873794038ae2c1210557ad34857a4b6bdc515785d1da9e175b1da1e",
+      "bytes": 1524133,
+      "directory": "lame-3.100"
+    },
+    {
+      "name": "freetype",
+      "version": "2.13.3",
+      "url": "https://downloads.sourceforge.net/project/freetype/freetype2/2.13.3/freetype-2.13.3.tar.xz",
+      "archive": "freetype-2.13.3.tar.xz",
+      "sha256": "0550350666d427c74daeb85d5ac7bb353acba5f76956395995311a9c6f063289",
+      "bytes": 2617564,
+      "directory": "freetype-2.13.3"
+    },
+    {
+      "name": "harfbuzz",
+      "version": "10.4.0",
+      "url": "https://github.com/harfbuzz/harfbuzz/releases/download/10.4.0/harfbuzz-10.4.0.tar.xz",
+      "archive": "harfbuzz-10.4.0.tar.xz",
+      "sha256": "480b6d25014169300669aa1fc39fb356c142d5028324ea52b3a27648b9beaad8",
+      "bytes": 18120656,
+      "directory": "harfbuzz-10.4.0"
+    },
+    {
+      "name": "aom",
+      "version": "3.12.1",
+      "url": "https://storage.googleapis.com/aom-releases/libaom-3.12.1.tar.gz",
+      "archive": "libaom-3.12.1.tar.gz",
+      "sha256": "9e9775180dec7dfd61a79e00bda3809d43891aee6b2e331ff7f26986207ea22e",
+      "bytes": 5497367,
+      "directory": "libaom-3.12.1"
+    },
+    {
+      "name": "zlib",
+      "version": "1.3.2",
+      "url": "https://zlib.net/zlib-1.3.2.tar.xz",
+      "archive": "zlib-1.3.2.tar.xz",
+      "sha256": "d7a0654783a4da529d1bb793b7ad9c3318020af77667bcae35f95d0e42a792f3",
+      "bytes": 1320064,
+      "directory": "zlib-1.3.2"
+    },
+    {
+      "name": "bzip2",
+      "version": "1.0.8",
+      "url": "https://sourceware.org/pub/bzip2/bzip2-1.0.8.tar.gz",
+      "archive": "bzip2-1.0.8.tar.gz",
+      "sha256": "ab5a03176ee106d3f0fa90e381da478ddae405918153cca248e682cd0c4a2269",
+      "bytes": 810029,
+      "directory": "bzip2-1.0.8"
+    }
+  ],
+  "ffmpegConfigure": [
+    "--enable-gpl",
+    "--disable-nonfree",
+    "--disable-autodetect",
+    "--disable-libfdk-aac",
+    "--disable-debug",
+    "--disable-doc",
+    "--disable-ffplay",
+    "--disable-postproc",
+    "--enable-libx264",
+    "--enable-libvpx",
+    "--enable-libopus",
+    "--enable-libmp3lame",
+    "--enable-libfreetype",
+    "--enable-libharfbuzz",
+    "--enable-libaom",
+    "--enable-zlib",
+    "--enable-bzlib",
+    "--pkg-config-flags=--static",
+    "--enable-libzimg",
+    "--disable-encoder=libaom_av1",
+    "--target-os=mingw32",
+    "--arch=x86_64",
+    "--enable-schannel",
+    "--disable-pthreads",
+    "--enable-w32threads",
+    "--enable-static",
+    "--disable-shared"
+  ],
+  "compositorConfigure": [
+    "--disable-nonfree",
+    "--disable-autodetect",
+    "--disable-libfdk-aac",
+    "--disable-debug",
+    "--disable-doc",
+    "--disable-postproc",
+    "--enable-libvpx",
+    "--enable-libopus",
+    "--enable-libmp3lame",
+    "--enable-libfreetype",
+    "--enable-libharfbuzz",
+    "--enable-libaom",
+    "--enable-zlib",
+    "--enable-bzlib",
+    "--pkg-config-flags=--static",
+    "--enable-libzimg",
+    "--disable-encoder=libaom_av1",
+    "--disable-gpl",
+    "--disable-version3",
+    "--disable-libx264",
+    "--disable-programs",
+    "--target-os=mingw32",
+    "--arch=x86_64",
+    "--enable-schannel",
+    "--disable-pthreads",
+    "--enable-w32threads",
+    "--disable-static",
+    "--enable-shared"
+  ],
+  "remotion": {
+    "version": "4.0.509",
+    "url": "https://registry.npmjs.org/@remotion/compositor-win32-x64-msvc/-/compositor-win32-x64-msvc-4.0.509.tgz",
+    "archive": "compositor-win32-x64-msvc-4.0.509.tgz",
+    "sha256": "3ebbb3ed40991e13b6610586d63c840f5775ddeb82e7cda5b43b080e2a531211",
+    "bytes": 11081632,
+    "integrity": "sha512-chMy5iaeIgqhPAzHVtg0cLkLABbPFHg6J9lO601pgFVX+fXTB4swYbYjL464cr0SF9FUDmpuZsU8f9MA5tWf1w==",
+    "retainedFiles": [
+      "README.md",
+      "index.d.ts",
+      "index.js",
+      "index.mjs",
+      "package.json",
+      "remotion.exe"
+    ]
+  }
+}

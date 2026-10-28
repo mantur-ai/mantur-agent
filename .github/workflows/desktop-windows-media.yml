@@ -1,0 +1,99 @@
+name: Windows desktop media candidate
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/desktop-windows-release-1-0-0-harness
+    paths:
+      - .github/workflows/desktop-windows-media.yml
+      - scripts/mantur-media-build-windows*
+      - scripts/inspect-windows-update-baseline.ps1
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-media-candidate-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  baseline:
+    name: Inspect published Windows update policy
+    runs-on: windows-2025
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Inspect exact 0.1.20 installer without executing it
+        run: ./scripts/inspect-windows-update-baseline.ps1 -OutputDirectory "$env:RUNNER_TEMP/windows-baseline-evidence"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: windows-baseline-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/windows-baseline-evidence/
+          if-no-files-found: error
+          retention-days: 90
+
+  media:
+    name: Native Windows x64 media inputs
+    runs-on: windows-2025
+    timeout-minutes: 150
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Install UCRT64 build tools
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            python make autoconf automake libtool patch diffutils git curl tar
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-nasm
+            mingw-w64-ucrt-x86_64-pkgconf
+
+      - name: Build and verify Windows media candidate
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          mkdir -p .cache/windows-native-media-build/evidence
+          pacman -Q > .cache/windows-native-media-build/evidence/toolchain-packages.txt
+          git rev-parse HEAD > .cache/windows-native-media-build/evidence/harness-commit.txt
+          git rev-parse 'HEAD^{tree}' > .cache/windows-native-media-build/evidence/harness-tree.txt
+          /usr/bin/python3 scripts/mantur-media-build-windows.py --task "$PWD/.cache/windows-native-media-build" --jobs 4
+
+      - name: Retain native build and probe evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-media-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .cache/windows-native-media-build/evidence/
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Retain unsigned media inputs and corresponding sources
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-media-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            .cache/windows-native-media-build/artifacts/Mantur-Media-Windows-x64.tar.gz
+            .cache/windows-native-media-build/artifacts/Mantur-Media-Windows-corresponding-source.tar.gz
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Describe candidate scope
+        run: |
+          'Unsigned Windows media inputs only; this workflow does not publish installers or update channels.' >> $env:GITHUB_STEP_SUMMARY
+          'Native compilation and captured probes are distinct from installed desktop or interactive upgrade verification.' >> $env:GITHUB_STEP_SUMMARY
