@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import platform
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -291,6 +292,49 @@ class Build:
         for filename in ('config.h', 'config_components.h', 'ffbuild/config.mak', 'ffbuild/config.log'):
             shutil.copy2(source / filename, self.evidence / (name + '-' + filename.replace('/', '-')))
 
+    def pin_pthread_archives(self):
+        """Make the two generated pkg-config consumers select the existing static pthread runtime."""
+        records = []
+        for name, token in (('vpx.pc', '-lpthread'), ('harfbuzz.pc', '-pthread')):
+            path = self.prefix / 'lib/pkgconfig' / name
+            before = path.read_text()
+            count = 0
+            def replace_private(match):
+                nonlocal count
+                changed, replacements = re.subn(r'(?<!\S)' + re.escape(token) + r'(?!\S)',
+                                                '-l:libwinpthread.a', match.group(0))
+                count += replacements
+                return changed
+            after = re.sub(r'(?m)^Libs\.private:[^\r\n]*', replace_private, before)
+            if count != 1:
+                raise ValueError(f'Expected one {token} in {name} Libs.private, found {count}')
+            path.write_text(after)
+            records.append({'file': str(path.relative_to(self.prefix)), 'before': before, 'after': after})
+        (self.evidence / 'pthread-pkgconfig.json').write_text(json.dumps(records, indent=2) + '\n')
+
+    def probe_dependency_dll(self):
+        """Link the actual threaded codec/font dependencies as a DLL before the long FFmpeg build."""
+        flags = shlex.split(self.run('dependency-pkgconfig', ['pkg-config', '--static', '--cflags', '--libs',
+                                                             'vpx', 'harfbuzz', 'zimg']))
+        if any(flag in flags for flag in ('-lpthread', '-pthread', '-lwinpthread', '-lstdc++')):
+            raise ValueError('Dependency pkg-config still selects an unpinned C++ or pthread runtime')
+        source = self.evidence / 'dependency-probe.c'
+        source.write_text('#include <vpx/vp8dx.h>\n#include <hb.h>\n#include <zimg.h>\n'
+                          '__declspec(dllexport) int mantur_dependency_probe(void) {\n'
+                          '  vpx_codec_iface_t *codec = vpx_codec_vp8_dx();\n'
+                          '  hb_buffer_t *buffer = hb_buffer_create();\n'
+                          '  unsigned version = zimg_get_api_version(0, 0);\n'
+                          '  hb_buffer_destroy(buffer);\n'
+                          '  return codec != 0 && version != 0;\n}\n')
+        output = self.work / 'dependency-probe.dll'
+        self.run('dependency-dll-link', ['gcc', '-shared', '-static-libgcc', '-static-libstdc++',
+                 '-Wl,--no-undefined', source, '-o', output, *flags,
+                 '-Wl,-Bstatic', '-lstdc++', '-lwinpthread', '-Wl,-Bdynamic'])
+        pe = self.run('dependency-dll-imports', ['objdump', '-p', output])
+        runtime_dlls = {'libwinpthread-1.dll', 'libstdc++-6.dll', 'libgcc_s_seh-1.dll'}
+        if 'file format pei-x86-64' not in pe or runtime_dlls.intersection(name.lower() for name in dll_dependencies(pe)):
+            raise ValueError('Dependency DLL must be x64 with static compiler/pthread runtimes')
+
     def ffmpeg(self, compositor=False):
         """Build the configured GPL CLI or independent LGPL libraries with separate ABI names."""
         name = 'ffmpegCompositor' if compositor else 'ffmpeg'
@@ -437,6 +481,8 @@ def main():
     (build.evidence / 'platform-identity.json').write_text(json.dumps(identity, indent=2) + '\n')
     build.prepare()
     build.dependencies()
+    build.pin_pthread_archives()
+    build.probe_dependency_dll()
     build.configure_ffmpeg(compositor=True)
     build.configure_ffmpeg()
     build.ffmpeg()

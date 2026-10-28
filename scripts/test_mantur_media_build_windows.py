@@ -151,6 +151,55 @@ class WindowsMediaBuildTests(unittest.TestCase):
             self.assertEqual(zimg_calls, [('zimg', ['--host=x86_64-w64-mingw32', '--disable-shared',
                              '--enable-static', '--disable-test-apps', 'STL_LIBS=-l:libstdc++.a'])])
 
+    def test_generated_pkgconfig_pins_both_observed_pthread_inputs_and_records_the_delta(self):
+        with tempfile.TemporaryDirectory() as directory:
+            build = media.Build(Path(directory), 4)
+            pkgconfig = build.prefix / 'lib/pkgconfig'
+            pkgconfig.mkdir(parents=True)
+            originals = {'vpx.pc': 'Libs: -lvpx -lm\nLibs.private: -lm -lpthread\nCflags: -I${includedir}\n',
+                         'harfbuzz.pc': 'Libs: -lharfbuzz\nLibs.private: -pthread\nRequires.private: freetype2\n'}
+            for name, value in originals.items():
+                (pkgconfig / name).write_text(value)
+            build.pin_pthread_archives()
+            for name, token in (('vpx.pc', '-lpthread'), ('harfbuzz.pc', '-pthread')):
+                self.assertEqual((pkgconfig / name).read_text(), originals[name].replace(token, '-l:libwinpthread.a'))
+            records = json.loads((build.evidence / 'pthread-pkgconfig.json').read_text())
+            self.assertEqual([record['before'] for record in records], list(originals.values()))
+            for invalid in ('Libs.private: -lm\n', 'Libs.private: -lpthread -lpthread\n', 'Cflags: -lpthread\n'):
+                (pkgconfig / 'vpx.pc').write_text(invalid)
+                with self.subTest(invalid=invalid), self.assertRaisesRegex(ValueError, 'Expected one -lpthread'):
+                    build.pin_pthread_archives()
+                self.assertEqual((pkgconfig / 'vpx.pc').read_text(), invalid)
+
+    def test_dependency_dll_probe_rejects_dynamic_runtime_inputs_and_actual_imports(self):
+        with tempfile.TemporaryDirectory() as directory:
+            build = media.Build(Path(directory), 4)
+            flags = '-I/private/include -lvpx -lharfbuzz -lzimg -l:libstdc++.a -l:libwinpthread.a'
+            pe = 'file format pei-x86-64\nDLL Name: KERNEL32.dll\n'
+            with patch.object(build, 'run', side_effect=[flags, '', pe]) as run:
+                build.probe_dependency_dll()
+            link = run.call_args_list[1].args[1]
+            self.assertIn('-shared', link)
+            self.assertNotIn('-static', link)
+            self.assertIn('-l:libwinpthread.a', link)
+            self.assertEqual(link[-4:], ['-Wl,-Bstatic', '-lstdc++', '-lwinpthread', '-Wl,-Bdynamic'])
+            self.assertIn('vpx_codec_vp8_dx()', (build.evidence / 'dependency-probe.c').read_text())
+            self.assertIn('hb_buffer_create()', (build.evidence / 'dependency-probe.c').read_text())
+            for token in ('-lpthread', '-pthread', '-lwinpthread', '-lstdc++'):
+                with patch.object(build, 'run', return_value=flags + ' ' + token) as run:
+                    with self.subTest(token=token), self.assertRaisesRegex(ValueError, 'unpinned'):
+                        build.probe_dependency_dll()
+                run.assert_called_once()
+            for invalid in (pe.replace('pei-x86-64', 'pei-i386'),
+                            *(pe + f'DLL Name: {name}\n' for name in ('libwinpthread-1.dll', 'libstdc++-6.dll', 'libgcc_s_seh-1.dll'))):
+                with patch.object(build, 'run', side_effect=[flags, '', invalid]):
+                    with self.subTest(invalid=invalid), self.assertRaisesRegex(ValueError, 'static compiler/pthread'):
+                        build.probe_dependency_dll()
+            with patch.object(build, 'run', side_effect=[flags, RuntimeError('link failed')]) as run:
+                with self.assertRaisesRegex(RuntimeError, 'link failed'):
+                    build.probe_dependency_dll()
+            self.assertEqual(run.call_count, 2)
+
     def test_failed_ffmpeg_configuration_retains_the_actual_compiler_log(self):
         with tempfile.TemporaryDirectory() as directory:
             build = media.Build(Path(directory), 4)
