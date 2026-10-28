@@ -62,13 +62,20 @@ def runtime_identity():
 
 def verify_runtime(identity):
     """Require MSYS2's POSIX Python in a native Windows x64 UCRT64 shell."""
-    # MSYS2 uname uses MSYSTEM as its prefix, so UCRT64 reports UCRT64_NT-*.
+    # UCRT64 shells also report MINGW64_NT-* on the installed MSYS2 runtime.
     if (identity['sysPlatform'] != 'cygwin' or identity['osName'] != 'posix'
-            or identity['msystem'] != 'UCRT64' or not identity['system'].startswith('UCRT64_NT-')
+            or identity['msystem'] != 'UCRT64'
+            or not identity['system'].startswith(('UCRT64_NT-', 'MINGW64_NT-'))
             or identity['machine'] != 'x86_64' or identity['uname'] is None
             or identity['uname']['sysname'] != identity['system']
             or identity['uname']['machine'] != 'x86_64'):
         raise ValueError('Run with /usr/bin/python3 in native Windows MSYS2 UCRT64')
+
+
+def verify_compiler(path, target):
+    """Require the resolved UCRT64 compiler directory and native Windows x64 target."""
+    if path.parent != Path('/ucrt64/bin') or target.strip() != 'x86_64-w64-mingw32':
+        raise ValueError('Media compiler must come from /ucrt64/bin and target x86_64-w64-mingw32')
 
 
 def build_environment(work, prefix):
@@ -164,6 +171,13 @@ class Build:
 
     def prepare(self):
         """Resolve only the lock's source archives and record the actual native toolchain."""
+        for name in ('gcc', 'g++'):
+            executable = shutil.which(name, path=self.env['PATH'])
+            if executable is None:
+                raise ValueError('Missing UCRT64 compiler: ' + name)
+            path = Path(executable).resolve()
+            target = self.run('toolchain-target-' + name, [path, '-dumpmachine'])
+            verify_compiler(path, target)
         for source in self.lock['sources']:
             helpers.extract_archive(self.obtain(source), self.work)
             self.sources[source['name']] = self.work / source['directory']

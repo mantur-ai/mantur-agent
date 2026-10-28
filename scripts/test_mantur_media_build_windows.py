@@ -18,11 +18,13 @@ spec.loader.exec_module(media)
 class WindowsMediaBuildTests(unittest.TestCase):
     """Keep candidate inputs and imported DLLs within their declared owners."""
 
-    def test_native_ucrt64_uses_the_shell_uname_prefix_and_posix_python(self):
-        identity = {'sysPlatform': 'cygwin', 'osName': 'posix', 'system': 'UCRT64_NT-10.0-26100',
-                    'machine': 'x86_64', 'msystem': 'UCRT64', 'executable': '/usr/bin/python3',
-                    'uname': {'sysname': 'UCRT64_NT-10.0-26100', 'machine': 'x86_64'}}
+    def test_native_ucrt64_accepts_the_observed_mingw64_uname_with_posix_python(self):
+        identity = {'sysPlatform': 'cygwin', 'osName': 'posix', 'system': 'MINGW64_NT-10.0-26100',
+                    'machine': 'x86_64', 'msystem': 'UCRT64', 'executable': '/usr/bin/python3.exe',
+                    'uname': {'sysname': 'MINGW64_NT-10.0-26100', 'machine': 'x86_64'}}
         media.verify_runtime(identity)
+        media.verify_runtime({**identity, 'system': 'UCRT64_NT-10.0-26100',
+                              'uname': {'sysname': 'UCRT64_NT-10.0-26100', 'machine': 'x86_64'}})
         for changed in ({'sysPlatform': 'win32', 'osName': 'nt'},
                         {'sysPlatform': 'linux', 'system': 'Linux'},
                         {'sysPlatform': 'darwin', 'system': 'Darwin'},
@@ -31,6 +33,16 @@ class WindowsMediaBuildTests(unittest.TestCase):
                         {'uname': None}, {'uname': {'sysname': 'UCRT64_NT-10.0-26100', 'machine': 'i686'}}):
             with self.subTest(changed=changed), self.assertRaisesRegex(ValueError, 'MSYS2 UCRT64'):
                 media.verify_runtime({**identity, **changed})
+
+    def test_media_compiler_requires_the_ucrt64_directory_and_x64_windows_target(self):
+        media.verify_compiler(Path('/ucrt64/bin/gcc.exe'), 'x86_64-w64-mingw32\n')
+        media.verify_compiler(Path('/ucrt64/bin/g++.exe'), 'x86_64-w64-mingw32\n')
+        for path, target in [('/mingw64/bin/gcc.exe', 'x86_64-w64-mingw32'),
+                             ('/usr/bin/gcc.exe', 'x86_64-pc-cygwin'),
+                             ('/ucrt64/bin/gcc.exe', 'aarch64-w64-mingw32'),
+                             ('/ucrt64/bin/gcc.exe', 'x86_64-linux-gnu')]:
+            with self.subTest(path=path, target=target), self.assertRaisesRegex(ValueError, '/ucrt64/bin'):
+                media.verify_compiler(Path(path), target)
 
     def test_runtime_diagnostic_records_only_platform_fields(self):
         identity = media.runtime_identity()
